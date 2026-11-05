@@ -1,5 +1,6 @@
 """Synthetic tests for the experimental Agilent interop facade."""
 
+from itertools import permutations
 from types import ModuleType, SimpleNamespace
 
 import numpy as np
@@ -246,3 +247,45 @@ def test_facade_rejects_incompatible_merge_and_2d_profile(monkeypatch, tmp_path)
     normalized[str((tmp_path / "two_d").resolve())] = bad
     with pytest.raises(ValueError, match="1D"):
         read_agilent_interop(tmp_path / "two_d")
+
+
+@pytest.mark.parametrize("order", list(permutations((0, 1, 2))))
+@pytest.mark.parametrize("field", ["carrier_hz", "axis_reference"])
+def test_merge_rejects_conflicting_known_values_even_with_unknown_first(
+    monkeypatch, tmp_path, order, field
+):
+    paths = [_acquisition(tmp_path, str(index)) for index in range(3)]
+    normalized = {str(path.resolve()): _normalized(path) for path in paths}
+    for path, value in zip(paths, (None, 11000.0, 12000.0), strict=True):
+        item = normalized[str(path.resolve())]
+        if field == "carrier_hz":
+            item.acquisition[field] = value
+        else:
+            item.axes[0].reference.observation_frequency = value
+    _install_fake_nmrglue(monkeypatch, normalized)
+
+    with pytest.raises(ValueError, match="incompatible"):
+        read_agilent_interop(*(paths[index] for index in order), merge=True)
+
+
+@pytest.mark.parametrize("order", list(permutations((0, 1, 2))))
+def test_merge_accepts_consistent_known_values_and_preserves_unknowns(
+    monkeypatch, tmp_path, order
+):
+    paths = [_acquisition(tmp_path, str(index)) for index in range(3)]
+    normalized = {str(path.resolve()): _normalized(path) for path in paths}
+    for path, value in zip(paths, (None, 11000.0, 11000.0), strict=True):
+        normalized[str(path.resolve())].acquisition["carrier_hz"] = value
+    _install_fake_nmrglue(monkeypatch, normalized)
+
+    result = read_agilent_interop(*(paths[index] for index in order), merge=True)
+
+    assert result.shape == (3, 4)
+    assert result.meta.acquisition_order == tuple(str(paths[index]) for index in order)
+    assert tuple(
+        item["carrier_hz"] for item in result.meta.individual_acquisition
+    ) == tuple((None, 11000.0, 11000.0)[index] for index in order)
+    for path in paths:
+        np.testing.assert_array_equal(
+            result.data[0], normalized[str(path.resolve())].data
+        )

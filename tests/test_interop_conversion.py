@@ -107,3 +107,103 @@ def test_from_interop_rejects_descriptive_result_and_invalid_contract():
     invalid.applied_operations = ({},)
     with pytest.raises(ValueError, match="operation"):
         from_interop(invalid)
+
+
+def test_from_interop_rejects_masked_samples_instead_of_dropping_the_mask():
+    source = _normalized(
+        np.ma.array([1 + 2j, 3 + 4j, 5 + 6j], mask=[False, True, False])
+    )
+
+    with pytest.raises(ValueError, match="unmasked"):
+        from_interop(source)
+
+
+@pytest.mark.parametrize(
+    "values",
+    [
+        np.arange(2),
+        np.arange(3).reshape(1, 3),
+        [0, np.nan, 2],
+        [0, np.inf, 2],
+        [0 + 1j, 1 + 1j, 2 + 1j],
+        ["0", "1", "2"],
+    ],
+)
+def test_from_interop_rejects_invalid_time_coordinates(values):
+    with pytest.raises(ValueError, match="axis"):
+        from_interop(_normalized(axis_values=values))
+
+
+def test_from_interop_rejects_frequency_axis_on_time_domain_data():
+    source = _normalized(axis_values=np.arange(3))
+    source.axes[0].domain = "frequency"
+
+    with pytest.raises(ValueError, match="axis"):
+        from_interop(source)
+
+
+def test_from_interop_detaches_nested_array_metadata():
+    source = _normalized(axis_values=np.arange(3) / 2000.0)
+    source.metadata = {"nested": {"coefficients": np.array([1.0, 2.0])}}
+    source.provenance["checksums"] = np.array([1, 2])
+    source.diagnostics = (
+        SimpleNamespace(
+            code="note",
+            severity="info",
+            message="test",
+            context={"values": np.array([3.0, 4.0])},
+        ),
+    )
+
+    result = from_interop(source)
+
+    result.meta.source_metadata["nested"]["coefficients"][0] = 99
+    result.meta.provenance["checksums"][0] = 99
+    result.meta.diagnostics[0]["context"]["values"][0] = 99
+    result.coordset[0].data[1] = 99
+    np.testing.assert_array_equal(source.metadata["nested"]["coefficients"], [1, 2])
+    np.testing.assert_array_equal(source.provenance["checksums"], [1, 2])
+    np.testing.assert_array_equal(source.diagnostics[0].context["values"], [3, 4])
+    np.testing.assert_array_equal(source.axes[0].values, np.arange(3) / 2000.0)
+
+
+def test_from_interop_accepts_an_unmasked_array_and_unknown_axis():
+    source = _normalized(np.ma.array([1 + 2j, 3 + 4j], mask=False))
+    source.axes[0].direction = "unknown"
+
+    result = from_interop(source)
+
+    np.testing.assert_array_equal(result.data, source.data.data)
+    np.testing.assert_array_equal(result.coordset[0].data, [0, 1])
+    assert result.coordset[0].units is None
+    assert result.meta.interop_axes[0]["direction"] == "unknown"
+
+
+def test_from_interop_rejects_masked_coordinates():
+    source = _normalized(
+        axis_values=np.ma.array([0.0, 0.1, 0.2], mask=[False, True, False])
+    )
+
+    with pytest.raises(ValueError, match="axis.*unmasked"):
+        from_interop(source)
+
+
+@pytest.mark.parametrize("unit", ["Hz", "ppm", "m"])
+@pytest.mark.parametrize("axis_values", [None, np.arange(3)])
+def test_from_interop_rejects_non_time_units_for_time_coordinates(unit, axis_values):
+    source = _normalized(axis_values=axis_values)
+    source.axes[0].unit = unit
+
+    with pytest.raises(ValueError, match="axis units"):
+        from_interop(source)
+
+
+@pytest.mark.parametrize("unit", ["s", "us"])
+def test_from_interop_preserves_explicit_time_units(unit):
+    source = _normalized(axis_values=np.arange(3))
+    source.axes[0].unit = unit
+
+    result = from_interop(source)
+
+    assert result.coordset[0].units == scp.ur.Unit(unit)
+    np.testing.assert_array_equal(result.coordset[0].data, source.axes[0].values)

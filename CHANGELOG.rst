@@ -25,6 +25,11 @@ Added
 Fixed
 ~~~~~
 
+* Reject incompatible Agilent interop references across all acquisitions when
+  stacking, even when the first acquisition has unknown reference metadata.
+* Reject masked interop samples and invalid time coordinates instead of losing
+  masks or accepting inconsistent axes. Copy array-valued metadata so edits to
+  converted datasets cannot modify the normalized source.
 * Pair Agilent 2D States phase branches along successive indirect traces,
   preserving the full direct complex axis.
 
