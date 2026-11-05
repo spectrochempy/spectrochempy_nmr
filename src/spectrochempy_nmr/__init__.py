@@ -630,11 +630,31 @@ def __getattr__(name: str):
 
         return Experiment
     if name == "process_agilent_noesy_states_tppi":
-        from .processing.agilent_noesy import (  # noqa: PLC0415
+        from .adapters.agilent_noesy import (  # noqa: PLC0415
             process_agilent_noesy_states_tppi,
         )
 
         return process_agilent_noesy_states_tppi
+    if name == "process_agilent_noesy_states_tppi_channels":
+        from .adapters.agilent_noesy import (  # noqa: PLC0415
+            process_agilent_noesy_states_tppi_channels,
+        )
+
+        return process_agilent_noesy_states_tppi_channels
+    if name == "extract_noesy_components":
+        from .processing.complex_channels import (  # noqa: PLC0415
+            extract_complex_components,
+        )
+
+        return extract_complex_components
+    if name == "from_interop":
+        from .interop import from_interop  # noqa: PLC0415
+
+        return from_interop
+    if name == "read_agilent_interop":
+        from .readers.read_agilent_interop import read_agilent_interop  # noqa: PLC0415
+
+        return read_agilent_interop
     msg = f"module {__name__!r} has no attribute {name!r}"
     raise AttributeError(msg)
 
@@ -644,6 +664,10 @@ def __dir__() -> list[str]:
         "NMRPlugin",
         "Experiment",
         "process_agilent_noesy_states_tppi",
+        "process_agilent_noesy_states_tppi_channels",
+        "extract_noesy_components",
+        "from_interop",
+        "read_agilent_interop",
         "read",
         "read_topspin",
         "read_agilent",

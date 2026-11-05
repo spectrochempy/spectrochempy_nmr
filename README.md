@@ -102,6 +102,84 @@ public processing workflow. The input must also declare `ntraces=1`; returned
 coordinates are provisional index coordinates and are not a calibrated physical
 frequency claim. Raw acquisition values are retained under `raw_acquisition`.
 
+The first vendor-neutral channel representation is also available:
+
+```python
+channels = scp.nmr.process_agilent_noesy_states_tppi_channels(raw_dataset)
+components = scp.nmr.extract_noesy_components(channels)
+```
+
+`channels` is a standard complex `NDDataset` with dimensions `("c", "y",
+"x")` and channel labels `S_R`, `S_I`. The `c` axis is mathematical and
+non-physical. The component mapping is explicit: `RR=Re(S_R)`, `RI=Re(S_I)`,
+`IR=Im(S_R)`, and `II=Im(S_I)`. This path uses ordinary core FFTs and does not
+use quaternion storage. Time-domain input must be unmasked; masks may be
+applied to the final spectrum and are retained by component extraction and
+native NDDataset persistence. The Agilent metadata and transport operation are
+an adapter boundary; the common channel engine receives only the normalized
+3D dataset and an explicit reconstruction profile.
+
+States-TPPI is the indirect-dimension acquisition mode; NOESY is only the
+first experimentally validated sequence using this adapter. The common engine
+does not select its calculation from the sequence or vendor identity. The
+normalized contract records `quadrature_mode="states-tppi"`, explicit `E1/E2`
+branch order, the validated `f1coef`, TPPI alternation state, normalization
+state and F2 transform convention. Other sequences are not thereby claimed to
+be experimentally validated.
+
+The implementation is split into three layers:
+
+- `processing/complex_channels.py` owns the normalized NDDataset contract,
+  the two core FFT calls and channel/component views;
+- `processing/quadrature.py` owns the single validated `states-tppi`
+  reconstruction equation;
+- `adapters/agilent_noesy.py` owns the provisional Agilent metadata validation,
+  transport conversion and branch demultiplexing.
+
+The Agilent adapter is transitional. The common engine does not import readers,
+vendor adapters or `spectrochempy_hypercomplex`; future `nmrglue-ng`
+normalization will feed it through the same normalized-channel boundary.
+
+### Experimental neutral interop conversion
+
+The plugin also exposes a generic converter for a validated normalized
+acquisition supplied by `nmrglue.interop`:
+
+```python
+dataset = scp.nmr.from_interop(normalized_acquisition)
+```
+
+The first supported profile is a storage-normalized complex 1D FID. The
+converter accepts the neutral contract rather than a vendor or sequence name,
+preserves axes, provenance, acquisition metadata and applied operations, and
+does not perform FFT, scaling, conjugation, phasing or merging. A descriptive
+`ReadResult` is rejected until a profile-specific normalization step has
+established its guarantees. Existing `read_agilent`, `read_topspin` and merge
+behavior are unchanged in this experimental bridge.
+
+### Experimental Agilent interop facade
+
+The complete normalized 1D path can be exercised without replacing the public
+reader:
+
+```python
+dataset = scp.nmr.read_agilent_interop("experiment/", merge=False)
+stacked = scp.nmr.read_agilent_interop(
+    "experiment_01/", "experiment_02/", merge=True
+)
+```
+
+The facade accepts acquisition directories or direct `fid` paths, delegates
+decoding and normalization to `nmrglue-ng`, returns a `ScpObjectList` for
+multiple acquisitions with `merge=False`, and uses the existing core `stack()`
+only after compatibility checks for `merge=True`. It does not replace
+`read_agilent()`, discover arbitrary recursive directories, or interpret the
+stacked axis as spectral F1. Its role is `acquisition_index` unless a
+validated experimental parameter is supplied by a future extension.
+Pseudo-2D acquisition is not implemented here. Stacked output retains the
+shared normalization contract and each acquisition's individual provenance,
+operation history, diagnostics, axis references and encoding.
+
 ## Development
 
 From the plugin directory, install the plugin against an installed compatible
