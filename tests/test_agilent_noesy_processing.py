@@ -3,7 +3,6 @@
 import numpy as np
 import pytest
 import spectrochempy as scp
-from spectrochempy_hypercomplex import as_float_array
 
 from spectrochempy_nmr import (
     extract_noesy_components,
@@ -11,6 +10,11 @@ from spectrochempy_nmr import (
     process_agilent_noesy_states_tppi_channels,
 )
 from spectrochempy_nmr.processing.complex_channels import process_complex_channels
+
+
+@pytest.fixture
+def as_float_array():
+    return pytest.importorskip("spectrochempy_hypercomplex").as_float_array
 
 
 def _dataset(mask=None):
@@ -51,7 +55,7 @@ def _var2pipe_reference(raw):
     return (-1) ** np.arange(raw.shape[0])[:, None] * np.conjugate(raw)
 
 
-def test_noesy_pipeline_matches_independent_complex_reference():
+def test_noesy_pipeline_matches_independent_complex_reference(as_float_array):
     source = _dataset()
     expected = _reference(source.data)
 
@@ -77,7 +81,7 @@ def test_noesy_pipeline_matches_independent_complex_reference():
     assert source.data.shape == (6, 8)
 
 
-def test_noesy_pipeline_accepts_explicit_var2pipe_transport():
+def test_noesy_pipeline_accepts_explicit_var2pipe_transport(as_float_array):
     source = _dataset()
     result = process_agilent_noesy_states_tppi(source, transport="var2pipe")
     expected = _reference(_var2pipe_reference(source.data))
@@ -116,6 +120,7 @@ def test_noesy_pipeline_rejects_non_noesy_profiles(changes):
         process_agilent_noesy_states_tppi(source)
 
 
+@pytest.mark.usefixtures("as_float_array")
 def test_noesy_pipeline_inplace_returns_none():
     source = _dataset()
 
@@ -125,6 +130,7 @@ def test_noesy_pipeline_inplace_returns_none():
     assert source.data.shape == (3, 8)
 
 
+@pytest.mark.usefixtures("as_float_array")
 def test_noesy_pipeline_out_of_place_preserves_input_metadata():
     source = _dataset()
     source.meta["marker"] = "input"
@@ -136,14 +142,20 @@ def test_noesy_pipeline_out_of_place_preserves_input_metadata():
     assert result.meta.data_domain == "frequency"
 
 
-def test_noesy_channels_match_independent_reference_and_have_explicit_contract():
+@pytest.mark.parametrize("transport", ["none", "var2pipe"])
+def test_noesy_channels_match_independent_reference_and_have_explicit_contract(
+    transport,
+):
     source = _dataset()
     source.meta.provenance = "Synthetic"
     source.meta.acquisition = {"mode": "normalized"}
     source.meta.normalization = "validated-raw"
-    expected = _reference(source.data)
+    raw = source.data if transport == "none" else _var2pipe_reference(source.data)
+    expected = _reference(raw)
 
-    result = process_agilent_noesy_states_tppi_channels(source)
+    result = scp.nmr.process_agilent_noesy_states_tppi_channels(
+        source, transport=transport
+    )
 
     assert result.shape == (2, 3, 8)
     assert result.dims == ["c", "y", "x"]
@@ -158,6 +170,7 @@ def test_noesy_channels_match_independent_reference_and_have_explicit_contract()
     assert result.meta.f1coef == (1, 0, 0, 0, 0, 0, -1, 0)
     assert result.meta.sequence == "NOESY"
     assert result.meta.vendor == "Agilent"
+    assert result.meta.transport == transport
     assert result.meta.provenance == "Synthetic"
     assert result.meta.acquisition == {"mode": "normalized"}
     assert result.meta.normalization == "validated-raw"
@@ -335,7 +348,7 @@ def test_noesy_channels_reject_masked_time_domain_input():
         process_agilent_noesy_states_tppi_channels(source)
 
 
-def test_legacy_noesy_pipeline_keeps_existing_masked_input_behavior():
+def test_legacy_noesy_pipeline_keeps_existing_masked_input_behavior(as_float_array):
     mask = np.zeros((6, 8), dtype=bool)
     mask[0, 0] = True
     source = _dataset(mask)

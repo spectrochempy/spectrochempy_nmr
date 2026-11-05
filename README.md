@@ -2,9 +2,9 @@
 
 NMR plugin for SpectroChemPy.
 
-**Extraction candidate:** publication still belongs to the SpectroChemPy
-monorepo. See [EXTRACTION.md](EXTRACTION.md) for the pinned source, validation
-scope and remaining release/documentation handover.
+The first standalone release is **0.2.0**. See [EXTRACTION.md](EXTRACTION.md)
+for the historical extraction baseline and validation scope. Development
+features described below may postdate that release.
 
 This package is the home for NMR-specific readers and tools that are useful in
 SpectroChemPy but should not live in the core package. It currently provides a
@@ -181,6 +181,23 @@ shared normalization contract and each acquisition's individual provenance,
 operation history, diagnostics, axis references and encoding.
 
 ## Development
+
+The experimental complex-channel processing path stores two complex channels
+in an ordinary `NDDataset` with shape `(2, nF1, nF2)` and dimensions
+`("c", "y", "x")`. It uses the existing core complex FFTs and does not require
+`spectrochempy-hypercomplex` or `numpy-quaternion`. The historical quaternion
+readers and processing remain available through the optional `hypercomplex`
+extra; their migration is not complete.
+
+The `complex-channels` CI matrix installs the NMR wheel against released core
+versions 1.1.0 and 1.1.3 on Python 3.11 and 3.13, without either quaternion
+package or nmrglue-ng. It covers the common 2D engine, the experimental Agilent
+adapter, component extraction and persistence, and normalized 1D interop. The
+interop facade tests supply a synthetic provider; they do not establish parity
+with a real nmrglue-ng reader. Only the five legacy quaternion tests are skipped
+when Hypercomplex is absent. Synthetic numerical agreement does not validate
+the physical quadrature of an uncharacterized acquisition or provide calibrated
+2D frequency axes.
 
 From the plugin directory, install the plugin against an installed compatible
 core (or install the desired core wheel first):
