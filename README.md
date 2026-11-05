@@ -11,7 +11,7 @@ SpectroChemPy but should not live in the core package. It currently provides a
 validated public 1D workflow for reading data and processing raw 1D FIDs
 through `scp.nmr.read(...)` and `scp.nmr.Experiment(...)`. The readers also
 load raw 2D time-domain data and vendor-processed 2D spectra and can represent
-them as hypercomplex arrays; this reading/representation scope is separate from
+associated branches as two ordinary complex channels (Unreleased); this reading/representation scope is separate from
 processing, which remains limited to validated 1D experiments.
 
 Future NMR readers or processing helpers can be added here without creating a
@@ -92,20 +92,20 @@ result = scp.nmr.process_agilent_noesy_states_tppi(
 
 The input must declare `seqfil='NOESY'`, `phase=(1, 2)`, `ni`, `np` and
 `arraydim`, with a matching complex `(arraydim, np // 2)` matrix. The
-prototype performs two ordinary complex FFTs and assembles quaternion storage
+prototype performs two ordinary complex FFTs and returns two complex channels
 in the explicitly declared **mathematical** `(RR, RI, IR, II)` order. These
 labels are not a claim that the physical Agilent quadrature convention has been
-validated. It does not perform a quaternion FFT, apodization, phasing, linear
+validated. It does not perform apodization, phasing, linear
 prediction, or universal vendor interpretation. Other Agilent sequences and
 encodings are rejected. This is experimental and is not part of the validated
 public processing workflow. The input must also declare `ntraces=1`; returned
 coordinates are provisional index coordinates and are not a calibrated physical
 frequency claim. Raw acquisition values are retained under `raw_acquisition`.
 
-The first vendor-neutral channel representation is also available:
+The returned native channels have an explicit component view:
 
 ```python
-channels = scp.nmr.process_agilent_noesy_states_tppi_channels(raw_dataset)
+channels = scp.nmr.process_agilent_noesy_states_tppi(raw_dataset)
 components = scp.nmr.extract_noesy_components(channels)
 ```
 
@@ -204,17 +204,15 @@ package.
 The experimental complex-channel processing path stores two complex channels
 in an ordinary `NDDataset` with shape `(2, nF1, nF2)` and dimensions
 `("c", "y", "x")`. It uses the existing core complex FFTs and does not require
-`spectrochempy-hypercomplex` or `numpy-quaternion`. The historical quaternion
-readers and processing remain available through the optional `hypercomplex`
-extra; their migration is not complete.
+`spectrochempy-hypercomplex` or `numpy-quaternion`. All readers and processing paths use ordinary numeric arrays. The optional
+`hypercomplex` extra and the legacy quaternion phasing handler have been removed.
+The former `_channels` NOESY function is consolidated into
+`process_agilent_noesy_states_tppi`.
 
-The `complex-channels` CI matrix installs the NMR wheel against released core
-versions 1.1.0 and 1.1.3 on Python 3.11 and 3.13, without either quaternion
-package or nmrglue-ng. It covers the common 2D engine, the experimental Agilent
-adapter, component extraction and persistence, and normalized 1D interop. The
-interop facade tests supply a synthetic provider; they do not establish parity
-with a real nmrglue-ng reader. Only the five legacy quaternion tests are skipped
-when Hypercomplex is absent. Synthetic numerical agreement does not validate
+CI covers released cores 1.1.0 and 1.1.4 without a representation plugin,
+including the four-component NMRPipe checkpoint, synthetic reader profiles,
+component extraction, persistence and normalized 1D interop.
+Synthetic numerical agreement does not validate
 the physical quadrature of an uncharacterized acquisition or provide calibrated
 2D frequency axes.
 
@@ -222,7 +220,7 @@ From the plugin directory, install the plugin against an installed compatible
 core (or install the desired core wheel first):
 
 ```bash
-python -m pip install -e ".[hypercomplex]" pytest
+python -m pip install -e . pytest
 python -m pytest tests/ -v
 ```
 

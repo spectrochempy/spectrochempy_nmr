@@ -1,24 +1,17 @@
 Compatibility and scope
 =======================
 
-This documentation documents the following contracts:
+This is **Unreleased** documentation after NMR 0.2.0. The plugin requires
+``spectrochempy>=1.1.0,<2``. CI tests its installed wheel against released
+cores 1.1.0 and 1.1.4 and the pinned core revision after quaternion retirement.
+No core source change or additional representation plugin is required.
 
-* NMR package version: ``0.2.0``;
-* Hypercomplex package version: ``0.2.0``;
-* core compatibility: ``spectrochempy>=1.1.0,<2``;
-* public processing scope: validated 1D only;
-* 2D reading/representation: documented separately from processing.
+The public processing workflow remains validated for 1D. The experimental 2D
+storage and processing contracts are described in :doc:`concepts/hypercomplex`.
+Storage decoding alone does not validate a physical quadrature convention.
 
-The exact tested Python, source revisions and documentation-tool versions are
-recorded in ``docs/compatibility.toml`` and ``docs/build-manifest.txt``.
-The latter can be refreshed with::
-
-   python -m pip freeze > docs/build-manifest.txt
-
-The build was produced from the local revisions recorded in that manifest.
-They are not the source revisions listed in the 2026-10-28 architecture audit;
-this difference is recorded explicitly and must be resolved by a release branch
-before historical publication.
-
-No core documentation source, ``docs/make.py``, RTD configuration, DNS, or
-publication pipeline is used by this build.
+``docs/compatibility.toml``, ``docs/build-manifest.txt`` and
+``docs/phase2b-validation.md`` are historical phase-2b build records. They do
+not describe the current development dependencies. The active RTD requirements
+are in ``docs/requirements-rtd.txt``. No RTD parent/subproject relationship or
+DNS setting is changed by this migration.

@@ -140,12 +140,11 @@ class TestReadAgilent:
         assert ds.origin == "agilent"
 
     def test_read_2d_fid(self):
-        pytest.importorskip("spectrochempy_hypercomplex")
         ds = _read_agilent_or_skip(str(AGILENT_DIR / "agilent_2d" / "fid"))
-        assert ds.ndim == 2
+        assert ds.ndim == 3
         assert ds.origin == "agilent"
-        assert ds.data.shape == (166, 1500)
-        assert ds.meta.td == [166, 1500]
+        assert ds.data.shape == (2, 166, 1500)
+        assert ds.meta.td == [2, 166, 1500]
         assert ds.x.size == 1500
         assert ds.y.size == 166
 
@@ -154,7 +153,7 @@ class TestReadAgilent:
         assert ds.ndim == 2
         assert ds.origin == "agilent"
         enc = ds.meta.encoding
-        assert "TPPI" in enc
+        assert "UNVALIDATED:AGILENT-TPPI" in enc
 
     def test_1d_metadata_sw(self):
         ds = _read_agilent_or_skip(str(AGILENT_DIR / "agilent_1d" / "fid"))
@@ -187,13 +186,12 @@ class TestReadAgilent:
     def test_2d_encoding(self):
         ds = _read_agilent_or_skip(str(AGILENT_DIR / "agilent_2d" / "fid"))
         enc = ds.meta.encoding
-        assert len(enc) == 2
-        assert enc[1] in ("STATES", "TPPI")
+        assert enc == ["CHANNELS", "UNVALIDATED:AGILENT-STATES", "DIRECT:QSIM"]
 
     def test_2d_iscomplex(self):
         ds = _read_agilent_or_skip(str(AGILENT_DIR / "agilent_2d" / "fid"))
         ic = ds.meta.iscomplex
-        assert len(ic) == 2
+        assert len(ic) == 3
         assert ic[-1] is True  # direct dim is complex
 
     def test_2d_has_coords(self):
@@ -214,10 +212,6 @@ class TestAgilentStatesReconstruction:
     """Synthetic tests for the documented Agilent States trace layout."""
 
     def test_pairs_traces_and_preserves_direct_complex_axis(self):
-        as_float_array = pytest.importorskip(
-            "spectrochempy_hypercomplex"
-        ).as_float_array
-
         data = np.empty((4, 3), dtype=np.complex128)
         data[0] = [1 + 2j, 3 + 4j, 5 + 6j]
         data[1] = [10 + 20j, 30 + 40j, 50 + 60j]
@@ -226,23 +220,12 @@ class TestAgilentStatesReconstruction:
 
         result = _reconstruct_agilent_states(data)
 
-        assert result.shape == (2, 3)
-        np.testing.assert_array_equal(
-            as_float_array(result),
-            np.array(
-                [
-                    [[1, 2, 10, 20], [3, 4, 30, 40], [5, 6, 50, 60]],
-                    [
-                        [100, 200, 1000, 2000],
-                        [300, 400, 3000, 4000],
-                        [500, 600, 5000, 6000],
-                    ],
-                ]
-            ),
-        )
+        assert result.shape == (2, 2, 3)
+        np.testing.assert_array_equal(result[0], data[0::2])
+        np.testing.assert_array_equal(result[1], data[1::2])
 
     def test_odd_trace_count_is_rejected_without_pairing(self):
-        with pytest.raises(ValueError, match="paired traces"):
+        with pytest.raises(ValueError, match="even row count"):
             _reconstruct_agilent_states(np.zeros((3, 4), dtype=np.complex128))
 
     @staticmethod
@@ -331,15 +314,12 @@ class TestAgilentStatesReconstruction:
             reader, "read_varian", lambda *args, **kwargs: (fake_dic, raw)
         )
 
-        with pytest.warns(UserWarning, match="unvalidated acquisition"):
+        with pytest.raises(NotImplementedError, match="Unvalidated Agilent States"):
             dataset = reader._read_agilent(scp.NDDataset(), fid_path)
-
-        assert dataset.data.shape == raw.shape
 
     def test_public_reader_reconstructs_only_valid_states_profile(
         self, tmp_path, monkeypatch
     ):
-        pytest.importorskip("spectrochempy_hypercomplex")
         from importlib import import_module
 
         reader = import_module("spectrochempy_nmr.readers.read_agilent")
@@ -358,7 +338,7 @@ class TestAgilentStatesReconstruction:
 
         dataset = reader._read_agilent(scp.NDDataset(), fid_path)
 
-        assert dataset.data.shape == (2, 3)
+        assert dataset.data.shape == (2, 2, 3)
 
     @pytest.mark.parametrize(
         ("profile", "shape", "message"),
@@ -425,4 +405,4 @@ class TestExtractAgilentMetadata:
         ds = _read_agilent_or_skip(str(AGILENT_DIR / "agilent_2d_tppi" / "fid"))
         nmr_meta = extract_agilent_metadata(ds.meta)
         assert nmr_meta.encoding is not None
-        assert "TPPI" in nmr_meta.encoding
+        assert "UNVALIDATED:AGILENT-TPPI" in nmr_meta.encoding

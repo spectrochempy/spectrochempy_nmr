@@ -8,7 +8,6 @@ python -m venv /tmp/opencode/nmr-docs-venv
 source /tmp/opencode/nmr-docs-venv/bin/activate
 python -m pip install -r docs/requirements-docs.txt
 python -m pip install -e /path/to/spectrochempy
-python -m pip install -e /path/to/spectrochempy_hypercomplex
 python -m pip install -e .
 python -m sphinx -W --keep-going -b html docs docs/_build/html
 ```

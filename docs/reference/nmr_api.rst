@@ -35,3 +35,10 @@ the plugin proxy.
 
 .. automodule:: spectrochempy_nmr.units
    :members: set_nmr_context
+
+Experimental processing
+~~~~~~~~~~~~~~~~~~~~~~~
+
+.. autofunction:: spectrochempy_nmr.process_agilent_noesy_states_tppi
+
+.. autofunction:: spectrochempy_nmr.extract_noesy_components

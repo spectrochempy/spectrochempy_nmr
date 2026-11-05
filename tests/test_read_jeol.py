@@ -174,7 +174,7 @@ class TestReadJeol:
         ds = _read_jeol_or_skip(str(JEOL_DIR / "COSY.jdf"))
         assert ds.ndim == 2
         assert ds.shape[0] == 512
-        assert ds.shape[1] == 640
+        assert ds.shape[1] == 1280
 
     def test_2d_encoding(self):
         ds = _read_jeol_or_skip(str(JEOL_DIR / "COSY.jdf"))

@@ -21,10 +21,6 @@ from spectrochempy.plugins.registry import PluginRegistry
 from spectrochempy.testing.plugins import PluginTestHarness
 
 
-def _require_reader_dependencies() -> None:
-    pytest.importorskip("quaternion")
-
-
 def _isolate_scp_plugins(monkeypatch, scp):
     registry = PluginRegistry()
     pm = PluginManager(registry=registry)
@@ -56,7 +52,6 @@ def test_plugin_compatibility():
 
 def test_registration():
     """Plugin registers the topspin reader via declarative hook."""
-    _require_reader_dependencies()
     harness = PluginTestHarness()
     harness.register(NMRPlugin())
 
@@ -69,7 +64,6 @@ def test_registration():
 
 def test_registration_is_idempotent():
     """Registering the same NMR plugin twice does not duplicate contributions."""
-    _require_reader_dependencies()
     harness = PluginTestHarness()
     plugin = NMRPlugin()
 
@@ -87,7 +81,6 @@ def test_registration_is_idempotent():
 
 def test_discovery_is_idempotent(monkeypatch):
     """Repeated discovery keeps a single active NMR reader and namespace."""
-    _require_reader_dependencies()
 
     class NMREntryPoint:
         name = "nmr"
@@ -119,7 +112,6 @@ def test_discovery_is_idempotent(monkeypatch):
 
 def test_lifecycle_state():
     """Plugin transitions to ACTIVE after registration."""
-    _require_reader_dependencies()
     harness = PluginTestHarness()
     harness.register(NMRPlugin())
     assert harness.get_plugin_state("nmr") == PluginState.ACTIVE
@@ -127,7 +119,6 @@ def test_lifecycle_state():
 
 def test_isolated_harness():
     """Each PluginTestHarness is independent."""
-    _require_reader_dependencies()
     h1 = PluginTestHarness()
     h2 = PluginTestHarness()
 
@@ -138,7 +129,6 @@ def test_isolated_harness():
 
 def test_package_namespace_exposes_topspin_reader(monkeypatch):
     """scp.nmr.read_topspin exposes the reader while preserving legacy alias."""
-    _require_reader_dependencies()
 
     pm, registry = _isolate_scp_plugins(monkeypatch, scp)
     pm.register(NMRPlugin())
@@ -157,7 +147,6 @@ def test_package_namespace_exposes_topspin_reader(monkeypatch):
 
 def test_package_namespace_exposes_short_read_alias(monkeypatch):
     """scp.nmr.read is a generic dispatcher for all NMR readers."""
-    _require_reader_dependencies()
 
     pm, _registry = _isolate_scp_plugins(monkeypatch, scp)
     pm.register(NMRPlugin())
@@ -193,7 +182,6 @@ def test_top_level_stub_is_actionable_without_registered_nmr(monkeypatch):
 
 def test_read_topspin_root_alias_works():
     """scp.read_topspin remains a working alias with no DeprecationWarning."""
-    _require_reader_dependencies()
 
     with warnings.catch_warnings(record=True) as captured:
         warnings.simplefilter("always", DeprecationWarning)
@@ -211,7 +199,6 @@ def test_read_topspin_root_alias_works():
 
 def test_io_namespace_topspin_and_agilent(monkeypatch):
     """scp.topspin.read and scp.agilent.read expose the namespaced readers."""
-    _require_reader_dependencies()
 
     pm, _registry = _isolate_scp_plugins(monkeypatch, scp)
     pm.register(NMRPlugin())
@@ -227,7 +214,6 @@ def test_io_namespace_topspin_and_agilent(monkeypatch):
 
 def test_nmr_reader_is_not_dataset_accessor_namespace(monkeypatch):
     """Readers are package-level APIs, not dataset accessor methods."""
-    _require_reader_dependencies()
 
     pm, _registry = _isolate_scp_plugins(monkeypatch, scp)
     pm.register(NMRPlugin())

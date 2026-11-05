@@ -77,7 +77,7 @@ def _has_readdir_nmr_data():
 @pytest.mark.skipif(not NMRDATA.exists(), reason="NMR test data not available")
 def test_read_topspin():
     nd = _read_topspin_or_skip(_require_path(nmrdir / "exam2d_HC/3/pdata/1/2rr"))
-    assert str(nd) == "NDDataset: [quaternion] count (shape: (y:1024, x:1024))"
+    assert str(nd) == "NDDataset: [complex128] count (shape: (c:2, y:1024, x:1024))"
     assert nd.y.size == 1024
     assert nd.x.size == 1024
 
@@ -90,10 +90,10 @@ def test_read_topspin():
     assert nd.x.size == 16384
 
     nd = _read_topspin_or_skip(_require_path(nmrdir / "topspin_2d/1/ser"))
-    assert str(nd) == "NDDataset: [quaternion] count (shape: (y:96, x:946))"
+    assert str(nd) == "NDDataset: [complex128] count (shape: (c:2, y:96, x:946))"
 
     nd = _read_topspin_or_skip(_require_path(nmrdir / "topspin_2d/1/pdata/1/2rr"))
-    assert str(nd) == "NDDataset: [quaternion] count (shape: (y:1024, x:2048))"
+    assert str(nd) == "NDDataset: [complex128] count (shape: (c:2, y:1024, x:2048))"
 
     nd1 = _read_topspin_or_skip(_require_path(nmrdir / "topspin_2d"), expno=1, procno=1)
     assert nd1 == nd
@@ -107,8 +107,7 @@ def test_read_topspin():
 
     nd = _read_topspin_or_skip(_require_path(nmrdir), glob="topspin*/*/pdata/*/[12]r*")
     assert isinstance(nd, list)
-    assert str(nd[0]) == "NDDataset: [complex128] count (size: 16384)"
-    assert str(nd[1]) == "NDDataset: [quaternion] count (shape: (y:1024, x:2048))"
+    assert {item.shape for item in nd} == {(16384,), (2, 1024, 2048)}
 
 
 @pytest.mark.data
@@ -171,35 +170,27 @@ def test_2d_ser_metadata():
     """Indirect dimension encoding must come from acqu2s, not acqus."""
     nd = _read_topspin_or_skip(_require_path(nmrdir / "topspin_2d/1/ser"))
     assert nd.meta.datatype == "SER"
-    assert nd.meta.encoding == ["STATES-TPPI", "DQD"]
-    assert nd.meta.isfreq == [False, False]
-    assert nd.meta.iscomplex == [True, True]
-    assert nd.meta.nuc1 == ["31P", "27Al"]
-    # FnMODE index 0 = indirect dimension (from acqu2s)
-    assert nd.meta.fnmode[0] == 5  # STATES-TPPI
+    assert nd.meta.encoding == ["CHANNELS", "PENDING-F2:STATES-TPPI", "DIRECT:DQD"]
+    assert nd.meta.isfreq == [False, False, False]
+    assert nd.meta.iscomplex == [False, True, True]
+    assert nd.meta.nuc1 == [None, "31P", "27Al"]
+    # FnMODE for the indirect physical dimension comes from acqu2s
+    assert nd.meta.fnmode[-2] == 5  # STATES-TPPI
     # Direct dimension uses AQ_mod
-    assert nd.meta.aq_mod[1] == 3  # DQD
-    # Shape depends on whether spectrochempy-hypercomplex is installed:
-    # with it, paired F1 rows become a single quaternion row (96, 946);
-    # without it, the raw (192, 946) is returned.
-    try:
-        import spectrochempy_hypercomplex  # noqa: F401
-
-        assert nd.shape == (96, 946)
-    except ImportError:
-        assert nd.shape == (192, 946)
+    assert nd.meta.aq_mod[-1] == 3  # DQD
+    assert nd.shape == (2, 96, 946)
 
 
 @pytest.mark.skipif(not NMRDATA.exists(), reason="NMR test data not available")
 def test_2d_processed_metadata():
     nd = _read_topspin_or_skip(_require_path(nmrdir / "topspin_2d/1/pdata/1/2rr"))
     assert nd.meta.datatype == "2D"
-    assert nd.meta.isfreq == [True, True]
-    assert nd.meta.iscomplex == [False, False]
+    assert nd.meta.isfreq == [False, True, True]
+    assert nd.meta.iscomplex == [False, False, False]
     assert nd.meta.si == list(nd.shape)
     assert Experiment(nd).domains == ("frequency", "frequency")
     assert Experiment(nd).source_kind == "processed_2d"
-    assert nd.shape == (1024, 2048)
+    assert nd.shape == (2, 1024, 2048)
 
 
 @pytest.mark.skipif(not NMRDATA.exists(), reason="NMR test data not available")
@@ -211,7 +202,7 @@ def test_fft_on_processed_topspin_reports_frequency_domain():
         nd.fft(dim="x")
 
     np.testing.assert_array_equal(np.asarray(nd.data), before)
-    assert nd.meta.isfreq == [True, True]
+    assert nd.meta.isfreq == [False, True, True]
 
 
 @pytest.mark.skipif(not NMRDATA.exists(), reason="NMR test data not available")
@@ -220,16 +211,16 @@ def test_fft_partial_topspin_domain_guard_preserves_remaining_dimension():
     original = np.asarray(ds.data).copy()
 
     f2 = ds.fft(dim="x")
-    assert f2.meta.isfreq == [False, True]
+    assert f2.meta.isfreq == [False, False, True]
     assert Experiment(f2).domains == ("time", "frequency")
     np.testing.assert_array_equal(np.asarray(ds.data), original)
-    assert ds.meta.isfreq == [False, False]
+    assert ds.meta.isfreq == [False, False, False]
 
     with pytest.raises(SpectroChemPyError, match="dimension 'x'.*frequency domain"):
         f2.fft(dim="x")
 
     f1 = f2.fft(dim="y")
-    assert f1.meta.isfreq == [True, True]
+    assert f1.meta.isfreq == [False, True, True]
     assert Experiment(f1).domains == ("frequency", "frequency")
 
 
@@ -237,16 +228,16 @@ def test_fft_partial_topspin_domain_guard_preserves_remaining_dimension():
 def test_fft_domain_guard_resolves_transposed_dimensions():
     ds = _read_topspin_or_skip(_require_path(nmrdir / "topspin_2d/1/ser"))
     f2 = ds.fft(dim="x")
-    transposed = f2.T
+    transposed = f2.swapdims("x", "y")
 
-    assert transposed.dims == ["x", "y"]
-    assert transposed.meta.isfreq == [True, False]
+    assert transposed.dims == ["c", "x", "y"]
+    assert transposed.meta.isfreq == [False, True, False]
 
     with pytest.raises(SpectroChemPyError, match="dimension 'x'.*frequency domain"):
         transposed.fft(dim="x")
 
     transformed = transposed.fft(dim="y")
-    assert transformed.meta.isfreq == [True, True]
+    assert transformed.meta.isfreq == [False, True, True]
 
 
 @pytest.mark.skipif(not NMRDATA.exists(), reason="NMR test data not available")
@@ -322,8 +313,11 @@ def test_use_list_returns_time_axis():
 
 @pytest.mark.skipif(not NMRDATA.exists(), reason="NMR test data not available")
 def test_read_topspin_missing_file():
-    with pytest.raises(FileNotFoundError):
-        scp.read_topspin(nmrdir / "nonexistent" / "1" / "fid")
+    from importlib import import_module
+
+    reader = import_module("spectrochempy_nmr.readers.read_topspin")
+    with pytest.raises(OSError, match="does not exist"):
+        reader._read_topspin(scp.NDDataset(), nmrdir / "nonexistent" / "1" / "fid")
 
 
 @pytest.mark.skipif(not NMRDATA.exists(), reason="NMR test data not available")
@@ -756,7 +750,7 @@ def test_processed_1d_axis_uses_offset_from_procs():
         _require_path(nmrdir / "topspin_1d/1/pdata/1/1r"), proc_axis=True
     )
     assert nd.meta.offset is not None
-    offset = float(nd.meta.offset[0])
+    offset = float(nd.meta.offset[-1])
     x_first = float(nd.x.data[0])
     assert x_first == pytest.approx(offset, abs=0.001)
 
@@ -768,8 +762,8 @@ def test_processed_2d_axes_use_offset_from_proc_files():
         _require_path(nmrdir / "topspin_2d/1/pdata/1/2rr"), proc_axis=True
     )
     assert nd.meta.offset is not None
-    offset_x = float(nd.meta.offset[1])
-    offset_y = float(nd.meta.offset[0])
+    offset_x = float(nd.meta.offset[-1])
+    offset_y = float(nd.meta.offset[-2])
     x_first = float(nd.x.data[0])
     y_first = float(nd.y.data[0])
     assert x_first == pytest.approx(offset_x, abs=0.001)
@@ -791,7 +785,7 @@ def test_processed_axis_endpoints_match_offset_formula():
     nd = _read_topspin_or_skip(
         _require_path(nmrdir / "topspin_2d/1/pdata/1/2rr"), proc_axis=True
     )
-    for axis_idx, coord in [(0, nd.y), (1, nd.x)]:
+    for axis_idx, coord in [(1, nd.y), (2, nd.x)]:
         offset = float(nd.meta.offset[axis_idx])
         sw_p = float(nd.meta.sw_p[axis_idx])
         sf = float(nd.meta.sf[axis_idx].m)
@@ -851,8 +845,8 @@ def test_exam2d_hc_axes_match_offset():
         _require_path(nmrdir / "exam2d_HC/3/pdata/1/2rr"), proc_axis=True
     )
     assert nd.meta.offset is not None
-    offset_x = float(nd.meta.offset[1])
-    offset_y = float(nd.meta.offset[0])
+    offset_x = float(nd.meta.offset[-1])
+    offset_y = float(nd.meta.offset[-2])
     x_first = float(nd.x.data[0])
     y_first = float(nd.y.data[0])
     assert x_first == pytest.approx(offset_x, abs=0.001)
@@ -865,7 +859,7 @@ def test_spectral_width_preserved_with_proc_axis():
     nd = _read_topspin_or_skip(
         _require_path(nmrdir / "topspin_2d/1/pdata/1/2rr"), proc_axis=True
     )
-    for axis_idx, coord in [(0, nd.y), (1, nd.x)]:
+    for axis_idx, coord in [(1, nd.y), (2, nd.x)]:
         sw_p = float(nd.meta.sw_p[axis_idx])
         sf = float(nd.meta.sf[axis_idx].m)
         n = int(nd.meta.si[axis_idx])
@@ -974,9 +968,9 @@ def test_si_from_proc_file_matches_data_shape():
         for axis_idx, proc_file in enumerate(proc_files):
             si_file = _read_procs_si(_require_path(proc_file))
             if si_file is not None:
-                assert nd.data.shape[axis_idx] == si_file, (
+                assert nd.data.shape[axis_idx + nd.ndim - len(proc_files)] == si_file, (
                     f"{path}: data.shape[{axis_idx}]="
-                    f"{nd.data.shape[axis_idx]} != SI in "
+                    f"{nd.data.shape[axis_idx + nd.ndim - len(proc_files)]} != SI in "
                     f"{proc_file.name} ({si_file})"
                 )
 
@@ -1006,8 +1000,8 @@ def test_offset_populated_in_metadata():
     nd = _read_topspin_or_skip(_require_path(nmrdir / "topspin_1d/1/pdata/1/1r"))
     assert nd.meta.offset is not None
     assert len(nd.meta.offset) == 1
-    assert nd.meta.offset[0] is not None
-    assert float(nd.meta.offset[0]) == pytest.approx(253.0909, abs=0.01)
+    assert nd.meta.offset[-1] is not None
+    assert float(nd.meta.offset[-1]) == pytest.approx(253.0909, abs=0.01)
 
 
 @pytest.mark.skipif(not NMRDATA.exists(), reason="NMR test data not available")
@@ -1015,9 +1009,9 @@ def test_offset_populated_in_2d_metadata():
     """meta.offset has entries for both dimensions in 2D processed data."""
     nd = _read_topspin_or_skip(_require_path(nmrdir / "topspin_2d/1/pdata/1/2rr"))
     assert nd.meta.offset is not None
-    assert len(nd.meta.offset) == 2
-    assert nd.meta.offset[0] is not None
-    assert nd.meta.offset[1] is not None
+    assert len(nd.meta.offset) == 3
+    assert nd.meta.offset[-2] is not None
+    assert nd.meta.offset[-1] is not None
 
 
 # --------------------------------------------------------------------------
@@ -1057,26 +1051,26 @@ def test_non_numeric_directory_no_none_return():
 
 @pytest.mark.skipif(not NMRDATA.exists(), reason="NMR test data not available")
 def test_component_file_2ri_readable():
-    """2ri is an entry point to the full assembled quaternion spectrum."""
+    """2ri is an entry point to the full assembled complex-channel spectrum."""
     nd = _read_topspin_or_skip(_require_path(nmrdir / "topspin_2d/1/pdata/1/2ri"))
     assert nd is not None
-    assert nd.shape == (1024, 2048)
+    assert nd.shape == (2, 1024, 2048)
 
 
 @pytest.mark.skipif(not NMRDATA.exists(), reason="NMR test data not available")
 def test_component_file_2ir_readable():
-    """2ir is an entry point to the full assembled quaternion spectrum."""
+    """2ir is an entry point to the full assembled complex-channel spectrum."""
     nd = _read_topspin_or_skip(_require_path(nmrdir / "topspin_2d/1/pdata/1/2ir"))
     assert nd is not None
-    assert nd.shape == (1024, 2048)
+    assert nd.shape == (2, 1024, 2048)
 
 
 @pytest.mark.skipif(not NMRDATA.exists(), reason="NMR test data not available")
 def test_component_file_2ii_readable():
-    """2ii is an entry point to the full assembled quaternion spectrum."""
+    """2ii is an entry point to the full assembled complex-channel spectrum."""
     nd = _read_topspin_or_skip(_require_path(nmrdir / "topspin_2d/1/pdata/1/2ii"))
     assert nd is not None
-    assert nd.shape == (1024, 2048)
+    assert nd.shape == (2, 1024, 2048)
 
 
 @pytest.mark.skipif(not NMRDATA.exists(), reason="NMR test data not available")

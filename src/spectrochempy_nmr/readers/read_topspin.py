@@ -34,6 +34,8 @@ from spectrochempy.utils._logging import warning_
 from spectrochempy.utils.meta import Meta
 from spectrochempy_nmr.extern.nmrglue import read_fid
 from spectrochempy_nmr.extern.nmrglue import read_pdata
+from spectrochempy_nmr.readers._channels import pair_traces
+from spectrochempy_nmr.readers._channels import set_channel_data
 from spectrochempy_nmr.readers._metadata import apply_reader_metadata_options
 
 # ======================================================================================
@@ -994,6 +996,7 @@ def _read_topspin(*args, **kwargs):
     acqus_files = _get_files(f_expno, "acqu")
     procs_files = _get_files(f_procno, "proc")
 
+    processed_components = None
     if not processed:
         dic, data = read_fid(f_expno, acqus_files=acqus_files, procs_files=procs_files)
 
@@ -1049,23 +1052,12 @@ def _read_topspin(*args, **kwargs):
         )
         if isinstance(datalist, list):
             if datalist[0].ndim == 2:
-                data, dataRI, dataIR, dataII = datalist
-                # make quaternion
-                from spectrochempy_hypercomplex import as_quat_array  # noqa: PLC0415
-
-                shape = data.shape
-                data = as_quat_array(
-                    list(
-                        zip(
-                            data.flatten(),
-                            dataRI.flatten(),
-                            dataIR.flatten(),
-                            dataII.flatten(),
-                            strict=False,
-                        ),
-                    ),
-                )
-                data = data.reshape(shape)
+                if len(datalist) != 4:
+                    raise NotImplementedError(
+                        "TopSpin 2D pdata requires all four components"
+                    )
+                processed_components = datalist
+                data = np.array(datalist[0], dtype=float, copy=True)
 
             elif datalist[0].ndim == 1:
                 # make complex
@@ -1093,8 +1085,6 @@ def _read_topspin(*args, **kwargs):
             f" the actual number of dimensions ({data.ndim})",
         )
 
-    # Only 1D and 2D data are supported; 3D/4D would require a different
-    # hypercomplex representation than the quaternion-based one used here.
     if parmode >= 2:
         raise NotImplementedError(
             "TopSpin reader supports 1D and 2D NMR data only. "
@@ -1186,46 +1176,18 @@ def _read_topspin(*args, **kwargs):
     meta.tdeff = meta.td[:]
     meta.td = list(data.shape)
 
-    # The td adjustment for complex axes (except last) assumes quaternion/hypercomplex
-    # conversion which is handled by the spectrochempy-hypercomplex plugin. Without it
-    # the raw data shape must be preserved so that coordinates match.
-    _hypercomplex_available = False
-    if any(meta.iscomplex[:-1]):
-        try:
-            from spectrochempy_hypercomplex import (  # noqa: PLC0415
-                is_available as _hypercomplex_available,
+    paired_ser = datatype == "SER" and meta.iscomplex[0]
+    if paired_ser:
+        if meta.encoding[0] not in ("STATES", "STATES-TPPI", "ECHO-ANTIECHO"):
+            raise NotImplementedError(
+                f"TopSpin indirect encoding {meta.encoding[0]!r} has no validated channel profile"
             )
-        except ModuleNotFoundError as exc:
-            raise ImportError(
-                "Reading hypercomplex TopSpin data requires the "
-                "spectrochempy-hypercomplex plugin and its numpy-quaternion "
-                "dependency. Install spectrochempy-hypercomplex with its "
-                "dependencies before reading this dataset."
-            ) from exc
-        if not _hypercomplex_available:
-            raise ImportError(
-                "Reading hypercomplex TopSpin data requires numpy-quaternion "
-                "and the spectrochempy-hypercomplex plugin."
-            )
-
-    _needs_ser_quaternion = False
-
+        if data.shape[0] % 2:
+            raise ValueError("TopSpin States SER requires an even number of traces")
+        meta.td[0] //= 2
     for axis in range(parmode + 1):
         if meta.iscomplex[axis]:
-            if axis != parmode and _hypercomplex_available:  # noqa: SIM102
-                meta.td[axis] = meta.td[axis] // 2
-                if datatype == "SER":
-                    _needs_ser_quaternion = True
-                else:
-                    # Non-TopSpin readers still represent indirect hypercomplex
-                    # pairing as a single complex row before quaternion packing.
-                    slices = [slice(None)] * data.ndim
-                    slices[axis] = slice(0, None, 2)
-                    data_even = data[tuple(slices)]
-                    slices[axis] = slice(1, None, 2)
-                    data_odd = data[tuple(slices)]
-                    data = data_even + 1j * data_odd
-            meta.tdeff[axis] = meta.tdeff[axis] // 2
+            meta.tdeff[axis] //= 2
 
     meta.sw_h = [
         (meta.sw[axis].m * meta.sfo1[axis] * 1e-6).to("Hz")
@@ -1274,15 +1236,6 @@ def _read_topspin(*args, **kwargs):
         return dat
 
     data = _norm(data)
-
-    if _needs_ser_quaternion:
-        from spectrochempy_hypercomplex import as_quaternion  # noqa: PLC0415
-
-        # TopSpin SER is already complex along F2 after read_fid() and digital
-        # filter removal. Build quaternion directly from the paired F1 rows so
-        # the direct dimension keeps its full complex length.
-        data = as_quaternion(data[0::2], data[1::2])
-        meta.td = list(data.shape)
 
     # add some additional information in meta
     meta.expno = [int(expno) if str(expno).isdigit() else expno]
@@ -1377,32 +1330,30 @@ def _read_topspin(*args, **kwargs):
             coord.title = rf"$\delta\ {nucleus}$"
             coords.append(coord)
 
-    dataset.data = data
-
-    for axis, cplex in enumerate(meta.iscomplex[::-1]):
-        if cplex and axis > 0:
-            try:
-                dataset.hyper.set_quaternion(inplace=True)
-                # set_quaternion halves the last complex dimension.
-                # Update meta.td and rebuild the corresponding coordinate.
-                meta.td[-1] = dataset.data.shape[-1]
-                if not meta.isfreq[-1]:
-                    dw = (1.0 / meta.sw_h[-1]).to("us")
-                    coordpoints = np.arange(meta.td[-1])
-                    coords[-1] = Coord(
-                        coordpoints * dw,
-                        title=coords[-1].title,
-                    )
-            except AttributeError:
-                warning_(
-                    "2D hypercomplex NMR data requires the spectrochempy-hypercomplex "
-                    "plugin. Install it with: pip install spectrochempy-hypercomplex",
-                    stacklevel=2,
-                )
-
-    dataset.meta.update(meta)
+    if paired_ser or processed_components is not None:
+        meta.acquisition_encoding = tuple(meta.encoding)
+        if paired_ser:
+            channels = pair_traces(data)
+            meta.encoding[0] = "PENDING-F2:" + meta.encoding[0]
+            labels = ("branch_0", "branch_1")
+            stage = "acquisition"
+            profile = "bruker-states-trace-pairs"
+        else:
+            rr, ri, ir, ii = processed_components
+            gain = float(meta.rgold[-1])
+            gain = gain if gain > 0 else 1.0
+            channels = np.stack([rr + 1j * ir, ri + 1j * ii]) / gain
+            labels = ("S_R", "S_I")
+            stage = "spectrum"
+            profile = "bruker-pdata-components"
+        set_channel_data(
+            dataset, channels, coords, meta, labels=labels, stage=stage, profile=profile
+        )
+    else:
+        dataset.data = data
+        dataset.meta.update(meta)
+        dataset.set_coordset(*tuple(coords))
     dataset.meta.readonly = True
-    dataset.set_coordset(*tuple(coords))
 
     dataset.units = "count"
     dataset.title = "intensity"

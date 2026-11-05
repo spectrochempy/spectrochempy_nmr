@@ -287,18 +287,9 @@ def _read_jdf(*args, **kwargs):
     # Set data
     dataset.data = data
 
-    # Apply quaternion encoding for 2D hypercomplex data
     if ndim >= 2 and meta.iscomplex[-2]:
-        try:
-            dataset.hyper.set_quaternion(inplace=True)
-            meta.td[-1] = dataset.data.shape[-1]
-            coords[-1] = _make_coord(ndim - 1, meta.td[-1])
-        except AttributeError:
-            warning_(
-                "2D hypercomplex NMR data requires the spectrochempy-hypercomplex "
-                "plugin. Install it with: pip install spectrochempy-hypercomplex",
-                stacklevel=2,
-            )
+        meta.encoding[-2] = "UNVALIDATED:JEOL-" + str(meta.encoding[-2])
+        meta.normalization_state = "storage-decoded"
 
     # Apply metadata
     dataset.meta.update(meta)

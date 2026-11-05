@@ -1,5 +1,4 @@
 # RTD preproduction resolution for the current development documentation.
 # The NMR checkout is installed separately by .readthedocs.yaml.
 -r requirements-docs.txt
-spectrochempy==1.1.3
-spectrochempy-hypercomplex==0.2.0
+spectrochempy==1.1.4

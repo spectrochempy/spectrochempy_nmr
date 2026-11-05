@@ -7,8 +7,8 @@ SER (Serial Experiment Result) with a single known peak. Each step is
 documented, tested, and compared to analytical expectations.
 
 Pipeline:
-    quaternion raw data
-        → representation adaptation (quaternion → complex)
+    channel raw data
+        → representation adaptation (channel → complex)
         → FFT F2
         → FFT F1
         → final reconstruction
@@ -16,27 +16,32 @@ Pipeline:
 The goal is to verify that each step produces the expected result and to
 document the exact state of the data at each stage.
 
-Quaternion convention (spectrochempy-hypercomplex / numpy-quaternion):
-    as_float_array(q) → [..., 4] with order [w, x, y, z]
+Channel convention (two complex arrays):
+    _component_array(q) → [..., 4] with order [w, x, y, z]
     w = RR (real-real), x = RI (real-imag), y = IR (imag-real), z = II (imag-imag)
 """
 
 from __future__ import annotations
 
 import numpy as np
-import pytest
 from numpy.testing import assert_allclose
-from spectrochempy_nmr.processing.hypercomplex import _extract_quaternion_components
-from spectrochempy_nmr.processing.hypercomplex import _prepare_states
-from spectrochempy_nmr.processing.hypercomplex import _rebuild_quaternion
-
-quaternion = pytest.importorskip("quaternion", reason="requires numpy-quaternion")
-as_float_array = quaternion.as_float_array
+from spectrochempy_nmr.processing.encoding_channels import _extract_components
+from spectrochempy_nmr.processing.encoding_channels import _prepare_states
+from spectrochempy_nmr.processing.encoding_channels import _pack_channels
 
 
-def _make_quat(array_4d):
-    """Stack [..., 4] float array into quaternion array."""
-    return quaternion.as_quat_array(np.asarray(array_4d, dtype=np.float64))
+def _make_channels(components):
+    components = np.asarray(components, dtype=float)
+    return np.stack(
+        [
+            components[..., 0] + 1j * components[..., 1],
+            components[..., 2] + 1j * components[..., 3],
+        ]
+    )
+
+
+def _component_array(data):
+    return np.stack([data[0].real, data[0].imag, data[1].real, data[1].imag], axis=-1)
 
 
 # ---------------------------------------------------------------------------
@@ -64,7 +69,7 @@ def _make_states_ser(nf1, nf2, f1_freq, f2_freq):
 
     Returns
     -------
-    ser : quaternion array
+    ser : channel array
         Raw SER data with shape (nf1, nf2).
     """
     t1 = np.arange(nf1)
@@ -82,24 +87,24 @@ def _make_states_ser(nf1, nf2, f1_freq, f2_freq):
     IR = sin1 * cos2
     II = sin1 * sin2
 
-    return _make_quat(np.stack([RR, RI, IR, II], axis=-1))
+    return _make_channels(np.stack([RR, RI, IR, II], axis=-1))
 
 
 # ---------------------------------------------------------------------------
-# Step 1: Quaternion raw data
+# Step 1: Channel raw data
 # ---------------------------------------------------------------------------
 
 
-class TestStep1QuaternionRaw:
-    """Step 1: Verify the raw quaternion SER data."""
+class TestStep1ChannelRaw:
+    """Step 1: Verify the raw channel SER data."""
 
     def test_ser_shape_and_dtype(self):
-        """SER should have shape (nf1, nf2) and quaternion dtype."""
+        """SER should have shape (nf1, nf2) and channel dtype."""
         nf1, nf2 = 16, 32
         ser = _make_states_ser(nf1, nf2, 2.0, 5.0)
 
-        assert ser.shape == (nf1, nf2)
-        assert ser.dtype == np.quaternion
+        assert ser.shape == (2, nf1, nf2)
+        assert ser.dtype == np.complex128
 
     def test_ser_components_match_analytical(self):
         """SER components should match analytical formulas."""
@@ -107,7 +112,7 @@ class TestStep1QuaternionRaw:
         f1_freq, f2_freq = 2.0, 5.0
         ser = _make_states_ser(nf1, nf2, f1_freq, f2_freq)
 
-        RR, RI, IR, II = _extract_quaternion_components(ser)
+        RR, RI, IR, II = _extract_components(ser)
 
         t1 = np.arange(nf1)
         t2 = np.arange(nf2)
@@ -131,14 +136,14 @@ class TestStep1QuaternionRaw:
 
 
 class TestStep2RepresentationAdaptation:
-    """Step 2: Verify quaternion → complex subspectra adaptation."""
+    """Step 2: Verify channel → complex subspectra adaptation."""
 
     def test_states_adaptation_produces_two_subspectra(self):
         """STATES adaptation should produce two complex subspectra."""
         nf1, nf2 = 8, 16
         ser = _make_states_ser(nf1, nf2, 2.0, 5.0)
 
-        RR, RI, IR, II = _extract_quaternion_components(ser)
+        RR, RI, IR, II = _extract_components(ser)
         sr, si = _prepare_states(RR, RI, IR, II)
 
         assert sr.shape == (nf1, nf2)
@@ -151,7 +156,7 @@ class TestStep2RepresentationAdaptation:
         nf1, nf2 = 8, 16
         ser = _make_states_ser(nf1, nf2, 2.0, 5.0)
 
-        RR, RI, IR, II = _extract_quaternion_components(ser)
+        RR, RI, IR, II = _extract_components(ser)
         sr, si = _prepare_states(RR, RI, IR, II)
 
         expected_sr = (RR - 1j * RI) / 2.0
@@ -166,7 +171,7 @@ class TestStep2RepresentationAdaptation:
         f1_freq, f2_freq = 2.0, 5.0
         ser = _make_states_ser(nf1, nf2, f1_freq, f2_freq)
 
-        RR, RI, IR, II = _extract_quaternion_components(ser)
+        RR, RI, IR, II = _extract_components(ser)
         sr, si = _prepare_states(RR, RI, IR, II)
 
         # sr = (RR - 1j*RI)/2 = cos(w1*t1) * (cos(w2*t2) - 1j*sin(w2*t2)) / 2
@@ -198,22 +203,22 @@ class TestStep3FFTF2:
         f1_freq, f2_freq = 2.0, 5.0
         ser = _make_states_ser(nf1, nf2, f1_freq, f2_freq)
 
-        RR, RI, IR, II = _extract_quaternion_components(ser)
+        RR, RI, IR, II = _extract_components(ser)
         sr, si = _prepare_states(RR, RI, IR, II)
 
         # FFT F2
         fr = np.fft.fftshift(np.fft.fft(sr, axis=-1), axes=-1)
         fi = np.fft.fftshift(np.fft.fft(si, axis=-1), axes=-1)
 
-        # Rebuild quaternion
-        f2_result = _rebuild_quaternion(fr, fi)
+        # Rebuild channel
+        f2_result = _pack_channels(fr, fi)
 
         # Check shape and dtype
-        assert f2_result.shape == (nf1, nf2)
-        assert f2_result.dtype == np.quaternion
+        assert f2_result.shape == (2, nf1, nf2)
+        assert f2_result.dtype == np.complex128
 
         # The peak should be visible in the RR component
-        w, x, y, z = _extract_quaternion_components(f2_result)
+        w, x, y, z = _extract_components(f2_result)
 
         # After fftshift, the positive frequency peak is at n//2 + f2_freq
         # or the negative frequency peak at n//2 - f2_freq
@@ -232,7 +237,7 @@ class TestStep3FFTF2:
         f1_freq, f2_freq = 2.0, 5.0
         ser = _make_states_ser(nf1, nf2, f1_freq, f2_freq)
 
-        RR, RI, IR, II = _extract_quaternion_components(ser)
+        RR, RI, IR, II = _extract_components(ser)
         sr, si = _prepare_states(RR, RI, IR, II)
 
         # FFT F2
@@ -270,7 +275,7 @@ class TestStep4FFTF1:
         ser = _make_states_ser(nf1, nf2, f1_freq, f2_freq)
 
         # Step 2: Representation adaptation
-        RR, RI, IR, II = _extract_quaternion_components(ser)
+        RR, RI, IR, II = _extract_components(ser)
         sr, si = _prepare_states(RR, RI, IR, II)
 
         # Step 3: FFT F2
@@ -315,7 +320,7 @@ class TestStep4FFTF1:
         ser = _make_states_ser(nf1, nf2, f1_freq, f2_freq)
 
         # Full pipeline
-        RR, RI, IR, II = _extract_quaternion_components(ser)
+        RR, RI, IR, II = _extract_components(ser)
         sr, si = _prepare_states(RR, RI, IR, II)
         fr = np.fft.fftshift(np.fft.fft(sr, axis=-1), axes=-1)
         fi = np.fft.fftshift(np.fft.fft(si, axis=-1), axes=-1)
@@ -356,7 +361,7 @@ class TestStep5FullPipeline:
         ser = _make_states_ser(nf1, nf2, f1_freq, f2_freq)
 
         # Step 2: Representation adaptation
-        RR, RI, IR, II = _extract_quaternion_components(ser)
+        RR, RI, IR, II = _extract_components(ser)
         sr, si = _prepare_states(RR, RI, IR, II)
 
         # Step 3: FFT F2
@@ -391,7 +396,7 @@ class TestStep5FullPipeline:
         ser = _make_states_ser(nf1, nf2, f1_freq, f2_freq)
 
         # Energy in time domain
-        RR, RI, IR, II = _extract_quaternion_components(ser)
+        RR, RI, IR, II = _extract_components(ser)
         energy_td = np.sum(RR**2 + RI**2 + IR**2 + II**2)
 
         # Full pipeline
@@ -433,15 +438,15 @@ class TestStep6ComparisonWithManual:
         ser = _make_states_ser(nf1, nf2, f1_freq, f2_freq)
 
         # Pipeline (using representation layer)
-        RR, RI, IR, II = _extract_quaternion_components(ser)
+        RR, RI, IR, II = _extract_components(ser)
         sr, si = _prepare_states(RR, RI, IR, II)
         fr = np.fft.fftshift(np.fft.fft(sr, axis=-1), axes=-1)
         fi = np.fft.fftshift(np.fft.fft(si, axis=-1), axes=-1)
         f1_fr = np.fft.fftshift(np.fft.fft(fr, axis=0), axes=0)
         f1_fi = np.fft.fftshift(np.fft.fft(fi, axis=0), axes=0)
 
-        # Manual workflow (direct quaternion manipulation)
-        fa = as_float_array(ser)
+        # Manual workflow (direct channel manipulation)
+        fa = _component_array(ser)
         w, x, y, z = fa[..., 0], fa[..., 1], fa[..., 2], fa[..., 3]
 
         # Manual STATES decomposition (alternative pairing)
@@ -473,15 +478,15 @@ class TestStep6ComparisonWithManual:
 
 
 # ---------------------------------------------------------------------------
-# Step 7: End-to-end fft() on NDDataset with quaternion data
+# Step 7: End-to-end fft() on NDDataset with channel data
 # ---------------------------------------------------------------------------
 
 
 class TestStep7EndToEndFFT:
-    """Step 7: Verify that the actual fft() function works on 2D quaternion NDDataset."""
+    """Step 7: Verify that the actual fft() function works on 2D channel NDDataset."""
 
-    def test_fft_f2_on_2d_quaternion_nddataset(self):
-        """fft(dim=-1) on a 2D quaternion NDDataset should return quaternion with correct peak."""
+    def test_fft_f2_on_2d_channel_nddataset(self):
+        """fft(dim=-1) on a 2D channel NDDataset should return channel with correct peak."""
         from spectrochempy import Coord
         from spectrochempy import NDDataset
 
@@ -491,17 +496,17 @@ class TestStep7EndToEndFFT:
 
         c_y = Coord.arange(nf1, unit="s")
         c_x = Coord.arange(nf2, unit="s")
-        ds = NDDataset(ser, coordset=[c_y, c_x])
-        ds.meta.encoding = ["STATES", "DQD"]
-        ds.meta.iscomplex = [True, True]
-        ds.meta.td = [nf1, nf2]
-        ds.meta.si = [nf1, nf2]
+        ds = NDDataset(ser, dims=["c", "y", "x"], coordset=[Coord.arange(2), c_y, c_x])
+        ds.meta.encoding = ["CHANNELS", "STATES", "DQD"]
+        ds.meta.iscomplex = [False, True, True]
+        ds.meta.td = [2, nf1, nf2]
+        ds.meta.si = [2, nf1, nf2]
 
         ds_f2 = ds.fft(dim=-1)
-        assert ds_f2.shape == (nf1, nf2)
-        assert "quaternion" in str(ds_f2.data.dtype)
+        assert ds_f2.shape == (2, nf1, nf2)
+        assert ds_f2.data.dtype.kind == "c"
 
-        fa = as_float_array(ds_f2.data)
+        fa = _component_array(ds_f2.data)
         magnitude = np.sqrt(
             fa[..., 0] ** 2 + fa[..., 1] ** 2 + fa[..., 2] ** 2 + fa[..., 3] ** 2
         )
@@ -517,7 +522,7 @@ class TestStep7EndToEndFFT:
         ), f"F2 peak at {peak[1]}, expected near {expected_f2_pos} or {expected_f2_neg}"
 
     def test_fft_full_2d_chain_on_nddataset(self):
-        """fft(dim=-1) then fft(dim=0) on a 2D quaternion NDDataset should find the 2D peak."""
+        """fft(dim=-1) then fft(dim=0) on a 2D channel NDDataset should find the 2D peak."""
         from spectrochempy import Coord
         from spectrochempy import NDDataset
 
@@ -527,26 +532,26 @@ class TestStep7EndToEndFFT:
 
         c_y = Coord.arange(nf1, unit="s")
         c_x = Coord.arange(nf2, unit="s")
-        ds = NDDataset(ser, coordset=[c_y, c_x])
-        ds.meta.encoding = ["STATES", "DQD"]
-        ds.meta.iscomplex = [True, True]
-        ds.meta.td = [nf1, nf2]
-        ds.meta.si = [nf1, nf2]
+        ds = NDDataset(ser, dims=["c", "y", "x"], coordset=[Coord.arange(2), c_y, c_x])
+        ds.meta.encoding = ["CHANNELS", "STATES", "DQD"]
+        ds.meta.iscomplex = [False, True, True]
+        ds.meta.td = [2, nf1, nf2]
+        ds.meta.si = [2, nf1, nf2]
 
         ds_f2 = ds.fft(dim=-1)
-        ds_2d = ds_f2.fft(dim=0)
+        ds_2d = ds_f2.fft(dim="y")
 
-        assert ds_2d.shape == (nf1, nf2)
-        assert "quaternion" in str(ds_2d.data.dtype)
+        assert ds_2d.shape == (2, nf1, nf2)
+        assert ds_2d.data.dtype.kind == "c"
 
-        fa = as_float_array(ds_2d.data)
+        fa = _component_array(ds_2d.data)
         magnitude = np.sqrt(
             fa[..., 0] ** 2 + fa[..., 1] ** 2 + fa[..., 2] ** 2 + fa[..., 3] ** 2
         )
         peak = np.unravel_index(np.argmax(magnitude), magnitude.shape)
 
         expected_f1 = (nf1 // 2 - int(f1_freq)) % nf1
-        # DQD is the direct-dimension encoding.  Its two quaternion channels
+        # DQD is the direct-dimension encoding.  Its two channel channels
         # contain positive complex exponentials, so the shifted FFT peak is on
         # the positive-frequency side.
         expected_f2 = (nf2 // 2 + int(f2_freq)) % nf2
@@ -570,14 +575,14 @@ class TestStep7EndToEndFFT:
         # fft() chain
         c_y = Coord.arange(nf1, unit="s")
         c_x = Coord.arange(nf2, unit="s")
-        ds = NDDataset(ser, coordset=[c_y, c_x])
-        ds.meta.encoding = ["STATES", "DQD"]
-        ds.meta.iscomplex = [True, True]
-        ds.meta.td = [nf1, nf2]
-        ds.meta.si = [nf1, nf2]
+        ds = NDDataset(ser, dims=["c", "y", "x"], coordset=[Coord.arange(2), c_y, c_x])
+        ds.meta.encoding = ["CHANNELS", "STATES", "DQD"]
+        ds.meta.iscomplex = [False, True, True]
+        ds.meta.td = [2, nf1, nf2]
+        ds.meta.si = [2, nf1, nf2]
 
-        ds_2d = ds.fft(dim=-1).fft(dim=0)
-        fa = as_float_array(ds_2d.data)
+        ds_2d = ds.fft(dim=-1).fft(dim="y")
+        fa = _component_array(ds_2d.data)
         pipe_mag = np.sqrt(
             fa[..., 0] ** 2 + fa[..., 1] ** 2 + fa[..., 2] ** 2 + fa[..., 3] ** 2
         )
@@ -586,7 +591,7 @@ class TestStep7EndToEndFFT:
         # Independent NumPy reference for the documented two-pass workflow.
         # The direct DQD dimension transforms the two complex channels; STATES
         # recombination belongs to the indirect second pass.
-        RR, RI, IR, II = _extract_quaternion_components(ser)
+        RR, RI, IR, II = _extract_components(ser)
         fr = np.fft.fftshift(np.fft.fft(RR + 1j * RI, axis=-1), axes=-1)
         fi = np.fft.fftshift(np.fft.fft(IR + 1j * II, axis=-1), axes=-1)
         f1_fr = np.fft.fftshift(np.fft.fft(fr, axis=0), axes=0)
@@ -606,7 +611,7 @@ class TestStep7EndToEndFFT:
 
 
 class TestStep7QSIMEncoding:
-    """Verify that QSIM encoding decomposes quaternion and produces correct peaks."""
+    """Verify that QSIM encoding decomposes channel and produces correct peaks."""
 
     def test_qsim_synthetic_2d_peak(self):
         """QSIM 2D FFT places peak at expected position."""
@@ -616,7 +621,7 @@ class TestStep7QSIMEncoding:
         fft2d = _fft_encoding_handler(ser, "QSIM", original_axis=-1)
         fft2d = _fft_encoding_handler(fft2d, "QSIM", original_axis=0)
 
-        RR, RI, IR, II = _extract_quaternion_components(fft2d)
+        RR, RI, IR, II = _extract_components(fft2d)
         mag = np.sqrt(RR**2 + RI**2 + IR**2 + II**2)
         peak = np.unravel_index(np.argmax(mag), mag.shape)
         assert mag[peak] > 0, "No peak found in QSIM 2D FFT"

@@ -154,6 +154,27 @@ def _resolve_encoding(raw_encoding: list) -> tuple[str, ...]:
     return tuple(resolved)
 
 
+def _physical_metadata(meta):
+    if getattr(meta, "component_axis", None) != "c":
+        return meta
+    physical = meta.copy()
+    physical.readonly = False
+    for key, value in list(physical.items()):
+        if isinstance(value, list) and len(value) == 3:
+            physical[key] = value[1:]
+    if physical.encoding is not None:
+        physical.encoding = [
+            value.removeprefix("PENDING-F2:")
+            .removeprefix("DIRECT:")
+            .removeprefix("INDIRECT:")
+            if isinstance(value, str)
+            else value
+            for value in physical.encoding
+        ]
+    physical.ndim = 2
+    return physical
+
+
 def extract_topspin_metadata(meta) -> NMRMetadata:
     """
     Extract :class:`NMRMetadata` from a TopSpin metadata object.
@@ -171,6 +192,8 @@ def extract_topspin_metadata(meta) -> NMRMetadata:
     """
     if meta is None or len(meta) == 0:
         return NMRMetadata(ndim=0, domains=())
+
+    meta = _physical_metadata(meta)
 
     # --- dimensionality ---
     ndim = getattr(meta, "ndim", None)
@@ -277,6 +300,8 @@ def extract_agilent_metadata(meta) -> NMRMetadata:
     """
     if meta is None or len(meta) == 0:
         return NMRMetadata(ndim=0, domains=())
+
+    meta = _physical_metadata(meta)
 
     # --- dimensionality ---
     td = getattr(meta, "td", None)

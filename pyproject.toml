@@ -17,9 +17,6 @@ dependencies = [
     # nmrglue is intentionally vendored/adapted in spectrochempy_nmr.nmrglue.
 ]
 
-[project.optional-dependencies]
-hypercomplex = ["spectrochempy-hypercomplex>=0.1,<0.3"]
-
 [project.entry-points."spectrochempy.plugins"]
 nmr = "spectrochempy_nmr:NMRPlugin"
 

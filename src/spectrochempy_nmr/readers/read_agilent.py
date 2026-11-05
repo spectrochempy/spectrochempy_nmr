@@ -33,6 +33,8 @@ from spectrochempy.core.units import ur
 from spectrochempy.utils._logging import warning_
 from spectrochempy.utils.meta import Meta
 from spectrochempy_nmr.extern.nmrglue import read_varian
+from spectrochempy_nmr.readers._channels import pair_traces
+from spectrochempy_nmr.readers._channels import set_channel_data
 from spectrochempy_nmr.readers._metadata import apply_reader_metadata_options
 
 # ======================================================================================
@@ -197,45 +199,8 @@ def _has_unvalidated_states_phase(pdic):
 
 
 def _reconstruct_agilent_states(data):
-    """Build a quaternion array from successive Agilent States traces.
-
-    Agilent ``phase=1,2`` acquisitions store the two indirect-quadrature
-    branches as successive traces for each indirect increment.  The direct
-    complex dimension must therefore remain intact while the trace dimension
-    is paired.
-
-    Parameters
-    ----------
-    data : ndarray
-        Two-dimensional complex FID data with an even number of traces.
-
-    Returns
-    -------
-    ndarray
-        Quaternion data with shape ``(data.shape[0] // 2, data.shape[1])``.
-
-    Raises
-    ------
-    ValueError
-        If the data is not two-dimensional or has an odd number of traces.
-    ImportError
-        If the optional hypercomplex plugin is unavailable.
-    """
-    if data.ndim != 2:
-        raise ValueError("Agilent 2D States data must be two-dimensional")
-    if data.shape[0] % 2:
-        raise ValueError("Agilent 2D States data requires paired traces")
-
-    try:
-        from spectrochempy_hypercomplex import as_quaternion  # noqa: PLC0415
-    except ModuleNotFoundError:
-        msg = (
-            "2D hypercomplex NMR data requires the spectrochempy-hypercomplex "
-            "plugin. Install it with: pip install spectrochempy-hypercomplex"
-        )
-        raise ImportError(msg) from None
-
-    return as_quaternion(data[0::2], data[1::2])
+    """Separate successive Agilent States traces into two complex channels."""
+    return pair_traces(data)
 
 
 def _validate_agilent_states_profile(pdic, dic, data):
@@ -421,6 +386,10 @@ def _read_agilent(*args, **kwargs):
 
     # Determine ndim from data shape
     ndim = data.ndim
+    if ndim > 2:
+        raise NotImplementedError(
+            "Agilent reader supports validated 1D and 2D storage only"
+        )
 
     # Build metadata
     meta = Meta()
@@ -435,6 +404,7 @@ def _read_agilent(*args, **kwargs):
     meta.nblocks = dic.get("nblocks", 1)
     meta.ntraces = dic.get("ntraces", 1)
     meta.np_raw = dic.get("np", 0)
+    meta.source_procpar = pdic
 
     # Procpar parameters — per-dimension lists
     meta.sw = [None] * ndim
@@ -442,7 +412,7 @@ def _read_agilent(*args, **kwargs):
     meta.dfrq = [None] * ndim
     meta.td = list(data.shape)
     meta.nucleus = [None] * ndim
-    meta.encoding = list(_detect_agilent_encoding(pdic, ndim))
+    meta.encoding = list(reversed(_detect_agilent_encoding(pdic, ndim)))
     meta.iscomplex = [False] * ndim
     meta.isfreq = [False] * ndim
 
@@ -576,53 +546,39 @@ def _read_agilent(*args, **kwargs):
     for axis in range(ndim):
         coords.append(_make_coord(axis, meta.td[axis]))
 
-    # Set data
-    dataset.data = data
-
-    # Agilent States stores the two indirect branches as successive traces.
-    # Do not use the generic setter here: it pairs adjacent direct samples,
-    # which is correct for its generic contract but not for this acquisition
-    # layout.  Other Agilent encodings remain on their existing paths until
-    # their storage conventions are independently established.
     if ndim == 2 and (
-        meta.encoding[-1] == "STATES" or _has_unvalidated_states_phase(pdic)
+        meta.encoding[0] == "STATES" or _has_unvalidated_states_phase(pdic)
     ):
         supported, reason = _validate_agilent_states_profile(pdic, dic, data)
         if not supported:
-            warning_(
-                "Agilent States quaternion reconstruction skipped for an "
-                f"unvalidated acquisition: {reason}",
-                stacklevel=2,
-            )
-        else:
-            try:
-                dataset.data = _reconstruct_agilent_states(dataset.data)
-                meta.td = list(dataset.data.shape)
-                coords = [_make_coord(axis, size) for axis, size in enumerate(meta.td)]
-            except (AttributeError, ImportError) as exc:
-                warning_(
-                    f"Agilent States quaternion reconstruction unavailable: {exc}",
-                    stacklevel=2,
-                )
-    elif ndim >= 2 and meta.iscomplex[-2]:
-        # Preserve the historical generic conversion for unvalidated Agilent
-        # layouts (including 3D and TPPI).  Their storage conventions are not
-        # interchangeable with the documented 2D States layout above.
-        try:
-            dataset.hyper.set_quaternion(inplace=True)
-            meta.td[-1] = dataset.data.shape[-1]
-            coords[-1] = _make_coord(ndim - 1, meta.td[-1])
-        except AttributeError:
-            warning_(
-                "2D hypercomplex NMR data requires the spectrochempy-hypercomplex "
-                "plugin. Install it with: pip install spectrochempy-hypercomplex",
-                stacklevel=2,
-            )
-
-    # Apply metadata
-    dataset.meta.update(meta)
+            raise NotImplementedError(f"Unvalidated Agilent States storage: {reason}")
+        channels = _reconstruct_agilent_states(data)
+        coords = [
+            _make_coord(axis, size) for axis, size in enumerate(channels.shape[1:])
+        ]
+        meta.acquisition_encoding = tuple(meta.encoding)
+        meta.encoding[0] = "UNVALIDATED:AGILENT-STATES"
+        meta.normalization_state = "storage-decoded"
+        meta.seqfil = _extract_procpar_string(pdic, "seqfil")
+        meta.phase = (1, 2)
+        meta.ni = _extract_procpar_integer(pdic, "ni")
+        meta.arraydim = _extract_procpar_integer(pdic, "arraydim")
+        set_channel_data(
+            dataset,
+            channels,
+            coords,
+            meta,
+            labels=("branch_0", "branch_1"),
+            stage="acquisition",
+            profile="agilent-phase-1-2-trace-pairs",
+        )
+    else:
+        if ndim == 2 and meta.encoding[0] == "TPPI":
+            meta.encoding[0] = "UNVALIDATED:AGILENT-TPPI"
+        dataset.data = data
+        dataset.meta.update(meta)
+        dataset.set_coordset(*tuple(coords))
     dataset.meta.readonly = True
-    dataset.set_coordset(*tuple(coords))
 
     dataset.units = "count"
     dataset.title = "intensity"

@@ -8,6 +8,20 @@ release, not capabilities available in the published 0.2.0 package.
 Unreleased
 ----------
 
+Changed
+~~~~~~~
+
+* Remove quaternion storage, the Hypercomplex extra and the quaternion phasing
+  handler. Experimental 2D branches now use ordinary complex datasets with a
+  labelled component axis. Bruker pdata preserves all four components.
+* Consolidate the experimental NOESY channel function into
+  ``process_agilent_noesy_states_tppi``; remove its legacy quaternion and
+  inplace variants and the redundant ``_channels`` entry point.
+* Keep Agilent and JEOL storage decoding distinct from quadrature normalization;
+  reject unvalidated indirect transforms instead of guessing their interpretation.
+* Require F2 before F1 for Bruker paired acquisitions and reject Fourier
+  transforms of the component axis. Inverse channel reconstruction is unsupported.
+
 Added
 ~~~~~
 

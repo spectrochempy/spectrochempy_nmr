@@ -576,9 +576,6 @@ class NMRPlugin(SpectroChemPyPlugin):
         """Register handler overrides for core extension points."""
         from .processing.fft_encodings import _fft_encoding_handler  # noqa: PLC0415
         from .processing.fft_postprocess import _fft_postprocess_result  # noqa: PLC0415
-        from .processing.quaternion_phasing import (
-            quaternion_pk_handler,  # noqa: PLC0415
-        )
 
         return {
             "coord.reversed": _nmr_coord_reversed,
@@ -589,7 +586,6 @@ class NMRPlugin(SpectroChemPyPlugin):
             "importer.infer_filetype_key": _infer_nmr_filetype_key,
             "importer.remote_download_target": _topspin_remote_download_target,
             "importer.resolve_directory_target": _resolve_nmr_directory_target,
-            "pk.execute": quaternion_pk_handler,
         }
 
 
@@ -635,12 +631,6 @@ def __getattr__(name: str):
         )
 
         return process_agilent_noesy_states_tppi
-    if name == "process_agilent_noesy_states_tppi_channels":
-        from .adapters.agilent_noesy import (  # noqa: PLC0415
-            process_agilent_noesy_states_tppi_channels,
-        )
-
-        return process_agilent_noesy_states_tppi_channels
     if name == "extract_noesy_components":
         from .processing.complex_channels import (  # noqa: PLC0415
             extract_complex_components,
@@ -664,7 +654,6 @@ def __dir__() -> list[str]:
         "NMRPlugin",
         "Experiment",
         "process_agilent_noesy_states_tppi",
-        "process_agilent_noesy_states_tppi_channels",
         "extract_noesy_components",
         "from_interop",
         "read_agilent_interop",

@@ -10,7 +10,7 @@ setting is created or changed by this phase.
 `.readthedocs.yaml` uses Ubuntu 24.04, Python 3.13, Sphinx's native HTML build,
 and `fail_on_warning`. The RTD pre-build job fetches only the verified gallery
 fixtures documented in `docs/fixtures.md`. `docs/requirements-rtd.txt` pins
-the published core (`spectrochempy==1.1.3`) and Hypercomplex (`0.2.0`); the NMR
+the published core (`spectrochempy==1.1.4`); the NMR
 package is installed from the checkout being built. Sphinx-Gallery executes the
 six approved examples on RTD; local builds remain non-executing unless
 `NMR_DOCS_EXECUTE=1` is set. No experimental 2D fixtures are fetched.
