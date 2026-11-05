@@ -29,5 +29,13 @@ where = ["src"]
 [tool.pytest.ini_options]
 testpaths = ["tests"]
 
+[tool.ruff]
+line-length = 88
+target-version = "py311"
+extend-exclude = ["src/spectrochempy_nmr/extern", "tests/data"]
+
+[tool.ruff.lint.per-file-ignores]
+"docs/conf.py" = ["E402", "F401"]
+
 [tool.spectrochempy]
 official-plugin = true

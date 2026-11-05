@@ -9,8 +9,13 @@ import spectrochempy as scp
 from spectrochempy_nmr import read_agilent_interop
 
 
-def _normalized(source, *, spectral_width=2000.0, observation_frequency=125.0, points=4):
-    data = np.arange(points, dtype=np.float32) + 1j * np.arange(points, dtype=np.float32)[::-1]
+def _normalized(
+    source, *, spectral_width=2000.0, observation_frequency=125.0, points=4
+):
+    data = (
+        np.arange(points, dtype=np.float32)
+        + 1j * np.arange(points, dtype=np.float32)[::-1]
+    )
     return SimpleNamespace(
         data=data.astype(np.complex64),
         axes=(
@@ -150,7 +155,11 @@ def test_facade_merge_true_uses_core_stack_and_records_series(monkeypatch, tmp_p
 
     def recording_stack(*datasets):
         source_snapshots.extend(
-            (dataset.data.copy(), dict(dataset.meta.provenance), dict(dataset.meta.acquisition))
+            (
+                dataset.data.copy(),
+                dict(dataset.meta.provenance),
+                dict(dataset.meta.acquisition),
+            )
             for dataset in datasets
         )
         result = original_stack(*datasets)
@@ -174,9 +183,20 @@ def test_facade_merge_true_uses_core_stack_and_records_series(monkeypatch, tmp_p
     assert result.meta.normalization_state == "storage-normalized"
     assert result.meta.normalization_profile == "agilent-fid-1d-complex-v1"
     assert len(result.meta.individual_normalization_history) == 2
-    assert result.meta.individual_normalization_history[0]["operations"][0]["name"] == "decode"
-    assert result.meta.individual_normalization_history[0]["axes"][0]["reference"]["observation_frequency"] == 125.0
-    assert result.meta.individual_normalization_history[0]["diagnostics"][0]["code"] == "acquisition.note"
+    assert (
+        result.meta.individual_normalization_history[0]["operations"][0]["name"]
+        == "decode"
+    )
+    assert (
+        result.meta.individual_normalization_history[0]["axes"][0]["reference"][
+            "observation_frequency"
+        ]
+        == 125.0
+    )
+    assert (
+        result.meta.individual_normalization_history[0]["diagnostics"][0]["code"]
+        == "acquisition.note"
+    )
     assert result.meta.individual_normalization_history[0]["domains"] == ("time",)
     assert len(source_snapshots) == 2
     assert result.history[-1].endswith("Stacked 2 normalized Agilent acquisitions")
@@ -200,12 +220,8 @@ def test_facade_rejects_incompatible_merge_and_2d_profile(monkeypatch, tmp_path)
     with pytest.raises(ValueError, match="carrier_hz"):
         read_agilent_interop(first, second, merge=True)
 
-    normalized[str(second.resolve())] = _normalized(
-        second, observation_frequency=126.0
-    )
-    normalized[str(first.resolve())] = _normalized(
-        first, observation_frequency=125.0
-    )
+    normalized[str(second.resolve())] = _normalized(second, observation_frequency=126.0)
+    normalized[str(first.resolve())] = _normalized(first, observation_frequency=125.0)
     with pytest.raises(ValueError, match="observation_frequency_mhz"):
         read_agilent_interop(first, second, merge=True)
 

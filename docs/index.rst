@@ -47,6 +47,7 @@ hypercomplex data, but general 2D processing is not yet a supported workflow.
    examples/gallery/apodization/index
    examples/gallery/nmr/index
    compatibility
+   changelog
 
 * `Main SpectroChemPy documentation <https://www.spectrochempy.fr/>`_
 * `NMR plugin source <https://github.com/spectrochempy/spectrochempy_nmr>`_

@@ -21,7 +21,9 @@ def _imported_modules(path):
 def test_common_processing_has_no_vendor_or_quaternion_imports():
     for name in ("complex_channels.py", "quadrature.py"):
         imports = _imported_modules(ROOT / "processing" / name)
-        assert not any("adapters" in module or "readers" in module for module in imports)
+        assert not any(
+            "adapters" in module or "readers" in module for module in imports
+        )
         assert not any("hypercomplex" in module for module in imports)
 
 
@@ -30,4 +32,6 @@ def test_agilent_adapter_depends_on_common_layers_not_the_reverse():
     assert "processing.complex_channels" in imports
     assert "processing.quadrature" in imports
     common_imports = _imported_modules(ROOT / "processing" / "complex_channels.py")
-    assert not any("agilent" in module or "adapters" in module for module in common_imports)
+    assert not any(
+        "agilent" in module or "adapters" in module for module in common_imports
+    )

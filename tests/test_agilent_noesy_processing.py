@@ -174,10 +174,18 @@ def test_noesy_channels_match_independent_reference_and_have_explicit_contract(
     assert result.meta.provenance == "Synthetic"
     assert result.meta.acquisition == {"mode": "normalized"}
     assert result.meta.normalization == "validated-raw"
-    np.testing.assert_allclose(result.data[0].real, expected[:, :, 0], rtol=2e-6, atol=2e-6)
-    np.testing.assert_allclose(result.data[1].real, expected[:, :, 1], rtol=2e-6, atol=2e-6)
-    np.testing.assert_allclose(result.data[0].imag, expected[:, :, 2], rtol=2e-6, atol=2e-6)
-    np.testing.assert_allclose(result.data[1].imag, expected[:, :, 3], rtol=2e-6, atol=2e-6)
+    np.testing.assert_allclose(
+        result.data[0].real, expected[:, :, 0], rtol=2e-6, atol=2e-6
+    )
+    np.testing.assert_allclose(
+        result.data[1].real, expected[:, :, 1], rtol=2e-6, atol=2e-6
+    )
+    np.testing.assert_allclose(
+        result.data[0].imag, expected[:, :, 2], rtol=2e-6, atol=2e-6
+    )
+    np.testing.assert_allclose(
+        result.data[1].imag, expected[:, :, 3], rtol=2e-6, atol=2e-6
+    )
     assert source.data.shape == (6, 8)
 
 
@@ -241,10 +249,18 @@ def test_common_channel_engine_ignores_vendor_provenance(provenance):
     assert result.meta.acquisition == {"mode": "normalized"}
     assert result.meta.normalization == "validated-branches"
     expected = _reference(source.data)
-    np.testing.assert_allclose(result.data[0].real, expected[:, :, 0], rtol=2e-6, atol=2e-6)
-    np.testing.assert_allclose(result.data[1].real, expected[:, :, 1], rtol=2e-6, atol=2e-6)
-    np.testing.assert_allclose(result.data[0].imag, expected[:, :, 2], rtol=2e-6, atol=2e-6)
-    np.testing.assert_allclose(result.data[1].imag, expected[:, :, 3], rtol=2e-6, atol=2e-6)
+    np.testing.assert_allclose(
+        result.data[0].real, expected[:, :, 0], rtol=2e-6, atol=2e-6
+    )
+    np.testing.assert_allclose(
+        result.data[1].real, expected[:, :, 1], rtol=2e-6, atol=2e-6
+    )
+    np.testing.assert_allclose(
+        result.data[0].imag, expected[:, :, 2], rtol=2e-6, atol=2e-6
+    )
+    np.testing.assert_allclose(
+        result.data[1].imag, expected[:, :, 3], rtol=2e-6, atol=2e-6
+    )
 
 
 @pytest.mark.parametrize(

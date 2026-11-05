@@ -1,0 +1,63 @@
+Changelog
+=========
+
+This changelog covers the independently versioned ``spectrochempy-nmr``
+distribution. Entries under Unreleased describe development after the latest
+release, not capabilities available in the published 0.2.0 package.
+
+Unreleased
+----------
+
+Added
+~~~~~
+
+* Declarative TopSpin 1D processing plans with explicit validation and
+  unsupported-parameter diagnostics. These plans do not execute vendor recipes.
+* Experimental conversion of descriptive Bruker processed 1D results, and a
+  separate converter for normalized complex 1D acquisitions, to ``NDDataset``.
+* Experimental Agilent 1D interop reading with optional stacking of compatible
+  independent acquisitions and preservation of their individual provenance.
+* Experimental 2D States-TPPI processing using two ordinary complex channels
+  and core FFTs, with an explicitly scoped Agilent NOESY adapter. Physical
+  quadrature validation and calibrated 2D axes remain separate requirements.
+* Standalone Sphinx documentation and Read the Docs build configuration.
+
+Fixed
+~~~~~
+
+* Pair Agilent 2D States phase branches along successive indirect traces,
+  preserving the full direct complex axis.
+
+Development
+~~~~~~~~~~~
+
+* Validate installed plugin wheels on released cores 1.1.0 and 1.1.3 without
+  Hypercomplex, numpy-quaternion or nmrglue-ng, including numerical reference,
+  component extraction, persistence and normalized interop tests.
+* Add standalone pre-commit hygiene, spelling, Ruff lint and formatting hooks
+  without version, changelog or release-generation scripts.
+
+0.2.0 — 2026-10-26
+------------------
+
+* First release from the standalone plugin repository after publication cutover.
+* Preserve the existing core compatibility bounds (``>=1.1.0,<2``).
+* Conda and Zenodo publication are not included in this release.
+
+See the `0.2.0 release
+<https://github.com/spectrochempy/spectrochempy_nmr/releases/tag/spectrochempy-nmr-v0.2.0>`_
+and `changes since 0.2.0
+<https://github.com/spectrochempy/spectrochempy_nmr/compare/spectrochempy-nmr-v0.2.0...master>`_.
+
+Release-note ownership
+----------------------
+
+Update Unreleased for user-visible plugin changes. At release time, assign those
+entries to the plugin version being published. The core changelog should record
+its own integration or compatibility changes and link to the relevant plugin
+release rather than duplicate this changelog.
+
+Future automatic aggregation into core release notes should consume an explicit
+published plugin tag or version and preserve its source link. It must not copy
+the mutable Unreleased section or imply that a plugin change ships in the core.
+No cross-repository aggregation or release automation is enabled here.

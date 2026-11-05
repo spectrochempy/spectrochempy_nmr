@@ -182,6 +182,25 @@ operation history, diagnostics, axis references and encoding.
 
 ## Development
 
+See [CHANGELOG.rst](CHANGELOG.rst) for plugin release notes, including the
+unreleased development changes. The plugin maintains its own changelog;
+SpectroChemPy release notes can link to a specific published plugin version.
+
+Install and run the standalone development hooks before submitting changes:
+
+```bash
+python -m pip install pre-commit
+pre-commit install
+pre-commit run --all-files
+```
+
+Hook revisions match the core's existing hygiene, spelling and Ruff hooks.
+The plugin configuration does not run core requirement, lazy-stub, version or
+release-note generators. Adapted third-party parsers and binary test fixtures
+are excluded from these mechanical checks. Ruff starts with its default lint
+rules rather than imposing the core's broader lint policy on the extracted
+package.
+
 The experimental complex-channel processing path stores two complex channels
 in an ordinary `NDDataset` with shape `(2, nF1, nF2)` and dimensions
 `("c", "y", "x")`. It uses the existing core complex FFTs and does not require
