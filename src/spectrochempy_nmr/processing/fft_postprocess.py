@@ -29,6 +29,10 @@ def _fft_postprocess_result(new, dim=-1, inv=False, **kwargs):
             raise NotImplementedError("The component axis is not a Fourier axis")
         if inv:
             raise NotImplementedError("Inverse channel reconstruction is not validated")
+        if transformed == "x" and new.meta.stage == "acquisition":
+            new.meta.readonly = False
+            new.meta.stage = "F2-spectrum"
+            new.meta.readonly = True
         if new.meta.storage_profile == "bruker-states-trace-pairs":
             new.meta.readonly = False
             if transformed == "x":

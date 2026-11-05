@@ -19,12 +19,17 @@ def _meta_value(meta, key, default=None):
 def _validate_profile(dataset, ni, np_raw, arraydim, ntraces):
     """Validate the deliberately narrow experimental profile."""
     data = np.asarray(dataset.data)
+    isfreq = _meta_value(dataset.meta, "isfreq")
+    if isfreq is not None and np.any(isfreq):
+        raise ValueError("Agilent NOESY processing requires time-domain input")
     if data.ndim == 3 and _meta_value(dataset.meta, "component_axis") == "c":
         if (
             data.shape[0] != 2
             or tuple(_meta_value(dataset.meta, "component_labels", ()))
             != ("branch_0", "branch_1")
             or _meta_value(dataset.meta, "stage") != "acquisition"
+            or isfreq is None
+            or tuple(isfreq) != (False, False, False)
         ):
             raise ValueError("Agilent NOESY requires acquisition-stage branch channels")
         raw = np.empty((data.shape[1] * 2, data.shape[2]), dtype=data.dtype)

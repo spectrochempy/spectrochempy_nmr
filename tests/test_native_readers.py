@@ -160,6 +160,17 @@ def test_agilent_storage_decoding_does_not_claim_quadrature_normalization(
     experimental = scp.nmr.process_agilent_noesy_states_tppi(result)
     np.testing.assert_allclose(experimental.data, expected.data)
     assert experimental.meta.processing_profile == "states-tppi-experimental"
+    f2 = result.fft(dim="x")
+    assert result.meta.stage == "acquisition"
+    assert result.meta.isfreq == [False, False, False]
+    assert f2.meta.stage == "F2-spectrum"
+    assert f2.meta.isfreq == [False, False, True]
+    with pytest.raises(ValueError, match="time-domain"):
+        scp.nmr.process_agilent_noesy_states_tppi(f2)
+    f2.meta.readonly = False
+    f2.meta.stage = "acquisition"
+    with pytest.raises(ValueError, match="time-domain"):
+        scp.nmr.process_agilent_noesy_states_tppi(f2)
 
 
 def test_jeol_retains_decoded_matrix_without_fabricating_channels(
@@ -179,3 +190,22 @@ def test_jeol_retains_decoded_matrix_without_fabricating_channels(
     assert result.meta.normalization_state == "storage-decoded"
     with pytest.raises(NotImplementedError, match="UNVALIDATED:JEOL"):
         result.fft(dim="y")
+
+
+def test_jeol_real_qf_reader_preserves_fft_support(tmp_path, monkeypatch):
+    reader = import_module("spectrochempy_nmr.readers.read_jeol")
+    path = tmp_path / "real.jdf"
+    path.touch()
+    raw = np.arange(8, dtype=float)
+    dic = {
+        "header": {"data_axis_type": ["real"]},
+        "parameters": {"x_sweep": 1000.0},
+    }
+    monkeypatch.setattr(reader, "_read_jeol_raw", lambda *a: (dic, raw.copy()))
+    dataset = reader._read_jdf(scp.NDDataset(), path)
+    assert dataset.meta.encoding == ["QF"]
+    assert dataset.dtype.kind == "f"
+    transformed = dataset.fft(dim="x")
+    expected = np.fft.fftshift(np.fft.fft(raw))
+    np.testing.assert_allclose(transformed.data, expected)
+    np.testing.assert_array_equal(dataset.data, raw)

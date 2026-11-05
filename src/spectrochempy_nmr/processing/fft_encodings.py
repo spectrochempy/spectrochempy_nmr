@@ -114,10 +114,10 @@ def _echoanti_second_pass_fft(data):
 
 
 def _fft_encoding_handler(data, encoding, **kwargs):
-    """Dispatch only explicit ordinary-complex acquisition conventions."""
+    """Dispatch explicit acquisition conventions on ordinary numeric arrays."""
     data = np.asarray(data)
-    if not np.iscomplexobj(data):
-        raise ValueError("NMR FFT encoding requires ordinary complex data")
+    if data.dtype.kind not in "iufc":
+        raise ValueError("NMR FFT encoding requires real or complex numeric data")
     encoding = "" if encoding is None else str(encoding)
     if encoding.startswith(("UNVALIDATED:", "PENDING-F2:")) or encoding == "CHANNELS":
         raise NotImplementedError(

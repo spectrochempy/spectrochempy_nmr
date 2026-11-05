@@ -21,6 +21,8 @@ Changed
   reject unvalidated indirect transforms instead of guessing their interpretation.
 * Require F2 before F1 for Bruker paired acquisitions and reject Fourier
   transforms of the component axis. Inverse channel reconstruction is unsupported.
+* Preserve real QF FID transforms and reject partially transformed input to
+  the experimental NOESY adapter.
 
 Added
 ~~~~~
