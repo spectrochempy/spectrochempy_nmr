@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 from collections.abc import Mapping
+from itertools import combinations
 from pathlib import Path
 
 import numpy as np
@@ -57,11 +58,12 @@ def _known_equal(first, second):
 
 
 def _validate_merge_compatibility(datasets):
-    reference = datasets[0]
-    for index, dataset in enumerate(datasets[1:], start=1):
+    for reference_index, index in combinations(range(len(datasets)), 2):
+        reference = datasets[reference_index]
+        dataset = datasets[index]
         if dataset.shape != reference.shape:
             raise ValueError(
-                f"Agilent acquisitions {index} and 0 have incompatible shapes"
+                f"Agilent acquisitions {index} and {reference_index} have incompatible shapes"
             )
         if dataset.dtype != reference.dtype:
             raise ValueError("Agilent acquisitions have incompatible dtypes")

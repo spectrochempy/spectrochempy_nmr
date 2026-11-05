@@ -23,6 +23,8 @@ _OPERATION_KEYS = {
 
 def _plain(value):
     """Convert neutral read-only mappings/diagnostics to copyable metadata."""
+    if isinstance(value, np.ndarray):
+        return value.copy()
     if isinstance(value, Mapping):
         return {key: _plain(item) for key, item in value.items()}
     if isinstance(value, tuple):
@@ -44,12 +46,30 @@ def _plain(value):
 def _axis_coordinate(axis, size, dim):
     import spectrochempy as scp  # noqa: PLC0415
 
+    if axis.domain != "time":
+        raise ValueError("from_interop 1D axis must be in the time domain")
+    if (
+        axis.unit is not None
+        and scp.ur.Unit(axis.unit).dimensionality != scp.ur.s.dimensionality
+    ):
+        raise ValueError("from_interop time axis units must describe time")
     if axis.values is None:
         return scp.Coord.arange(size, dims=dim, title=axis.label)
+    if np.ma.is_masked(axis.values):
+        raise ValueError("from_interop time axis must be unmasked")
+    values = np.asarray(axis.values)
+    if (
+        values.shape != (size,)
+        or values.dtype.kind not in "iuf"
+        or not np.isfinite(values).all()
+    ):
+        raise ValueError(
+            "from_interop time axis must be a finite real 1D array matching data"
+        )
     kwargs = {"title": axis.label}
     if axis.unit is not None:
         kwargs["units"] = axis.unit
-    return scp.Coord(np.asarray(axis.values), **kwargs)
+    return scp.Coord(np.array(values, copy=True), **kwargs)
 
 
 def _interop_metadata(result):
@@ -129,6 +149,8 @@ def from_interop(result):
             "from_interop requires a normalized acquisition; missing "
             + ", ".join(missing)
         )
+    if np.ma.is_masked(result.data):
+        raise ValueError("from_interop currently requires unmasked acquisition data")
     data = np.asarray(result.data)
     if data.ndim != 1 or not np.iscomplexobj(data):
         raise ValueError("from_interop currently supports one complex 1D acquisition")
