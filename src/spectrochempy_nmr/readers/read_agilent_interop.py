@@ -80,7 +80,9 @@ def _validate_merge_compatibility(datasets):
             if not _known_equal(
                 dataset.meta.acquisition.get(key), reference.meta.acquisition.get(key)
             ):
-                raise ValueError(f"Agilent acquisitions have incompatible acquisition {key}")
+                raise ValueError(
+                    f"Agilent acquisitions have incompatible acquisition {key}"
+                )
         for key in ("interop_axes", "interop_domains", "interop_encoding"):
             if not _known_equal(
                 getattr(dataset.meta, key, None), getattr(reference.meta, key, None)

@@ -56,6 +56,7 @@ Start with one of the following paths:
    examples/gallery/apodization/index
    examples/gallery/nmr/index
    compatibility
+   changelog
 
 * `Main SpectroChemPy documentation <https://www.spectrochempy.fr/>`_
 * `NMR plugin source <https://github.com/spectrochempy/spectrochempy_nmr>`_

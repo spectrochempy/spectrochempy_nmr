@@ -20,8 +20,10 @@ def test_noesy_states_tppi_reconstruction_keeps_branch_associations():
     )
 
     expected = np.stack(
-        [branches[0].real - 1j * branches[1].real,
-         branches[0].imag - 1j * branches[1].imag]
+        [
+            branches[0].real - 1j * branches[1].real,
+            branches[0].imag - 1j * branches[1].imag,
+        ]
     )
     np.testing.assert_array_equal(result, expected)
 

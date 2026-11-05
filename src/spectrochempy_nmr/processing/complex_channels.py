@@ -24,7 +24,9 @@ def _has_mask(dataset):
 def _validate_complex_channels(dataset, reconstruction):
     """Validate the normalized acquisition-channel contract."""
     if reconstruction != STATES_TPPI:
-        raise ValueError(f"unsupported complex-channel reconstruction: {reconstruction}")
+        raise ValueError(
+            f"unsupported complex-channel reconstruction: {reconstruction}"
+        )
     if tuple(dataset.dims) != ("c", "y", "x"):
         raise ValueError("complex-channel input must have dimensions ('c', 'y', 'x')")
     data = np.asarray(dataset.data)
@@ -38,18 +40,24 @@ def _validate_complex_channels(dataset, reconstruction):
         "F1",
         "F2",
     ):
-        raise ValueError("complex-channel input must declare component, F1 and F2 axis roles")
+        raise ValueError(
+            "complex-channel input must declare component, F1 and F2 axis roles"
+        )
     if _meta_value(dataset.meta, "stage") != "acquisition":
         raise ValueError("complex-channel input must have stage='acquisition'")
     labels = _meta_value(dataset.meta, "component_labels")
     if (tuple(labels) if labels is not None else ()) != ("branch_0", "branch_1"):
-        raise ValueError("complex-channel input must label branches branch_0 and branch_1")
+        raise ValueError(
+            "complex-channel input must label branches branch_0 and branch_1"
+        )
     channel_labels = dataset.coordset["c"].labels
     if channel_labels is None or tuple(str(label) for label in channel_labels) != (
         "branch_0",
         "branch_1",
     ):
-        raise ValueError("complex-channel coordinate labels must identify both branches")
+        raise ValueError(
+            "complex-channel coordinate labels must identify both branches"
+        )
     if list(_meta_value(dataset.meta, "isfreq") or ()) != [False, False, False]:
         raise ValueError("complex-channel input must be in the time domain")
     if list(_meta_value(dataset.meta, "td") or ()) != list(data.shape):
@@ -58,7 +66,9 @@ def _validate_complex_channels(dataset, reconstruction):
         raise ValueError("complex-channel input must not carry an active FFT encoding")
     quadrature = _meta_value(dataset.meta, "quadrature_mode")
     if quadrature != STATES_TPPI:
-        raise ValueError("complex-channel input must declare quadrature_mode='states-tppi'")
+        raise ValueError(
+            "complex-channel input must declare quadrature_mode='states-tppi'"
+        )
     if tuple(_meta_value(dataset.meta, "branch_order", ())) != ("E1", "E2"):
         raise ValueError("complex-channel input must declare normalized E1/E2 branches")
     if tuple(_meta_value(dataset.meta, "f1coef", ())) != STATES_TPPI_F1COEF:
