@@ -6,6 +6,20 @@ permissions:
   contents: read
 
 jobs:
+  pre-commit:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+      - uses: actions/setup-python@v7
+        with:
+          python-version: "3.13"
+      - name: Secure pip bootstrap
+        uses: spectrochempy/spectrochempy/.github/actions/verified-pip@cdb087a24f06b8c83ea91ea036192304db9329e3
+      - name: Install development hooks
+        run: python -m pip install "pre-commit==4.6.2"
+      - name: Run standalone hooks
+        run: pre-commit run --all-files --show-diff-on-failure
+
   artifacts:
     runs-on: ubuntu-latest
     steps:
@@ -90,6 +104,49 @@ jobs:
       - name: Run synthetic tests against installed artifacts
         run: |
           python -I -m pytest -ra tests/test_linear_prediction.py tests/test_fft_encodings.py tests/test_fft_2d_characterization.py tests/test_nmrpipe_oracle_conventions.py
+
+  complex-channels:
+    needs: artifacts
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        python-version: ["3.11", "3.13"]
+        spectrochempy-version: ["1.1.0", "1.1.3"]
+    steps:
+      - uses: actions/checkout@v7
+      - uses: actions/setup-python@v7
+        with:
+          python-version: ${{ matrix.python-version }}
+      - name: Secure pip bootstrap
+        uses: spectrochempy/spectrochempy/.github/actions/verified-pip@cdb087a24f06b8c83ea91ea036192304db9329e3
+      - uses: actions/download-artifact@v8
+        with:
+          name: plugin-dist
+          path: dist
+      - name: Install released core and NMR wheel without Hypercomplex
+        run: |
+          python -m pip install "spectrochempy==${{ matrix.spectrochempy-version }}" pytest
+          python -m pip install dist/*.whl
+          python -m pip check
+      - name: Verify isolated wheel installation and optional dependency absence
+        run: |
+          python -I - <<'PY'
+          from importlib.metadata import version
+          from importlib.util import find_spec
+          from pathlib import Path
+
+          assert version("spectrochempy") == "${{ matrix.spectrochempy-version }}"
+          for name in ("spectrochempy_hypercomplex", "quaternion", "nmrglue"):
+              assert find_spec(name) is None, f"unexpected optional dependency: {name}"
+          for name in ("spectrochempy", "spectrochempy_nmr"):
+              location = Path(find_spec(name).origin).resolve()
+              assert Path.cwd() not in location.parents, location
+              print(f"{name}: {location}")
+          PY
+      - name: Validate complex channels and normalized interop
+        run: |
+          python -I -m pytest -ra tests/test_complex_channels.py tests/test_quadrature.py tests/test_agilent_noesy_processing.py tests/test_interop_conversion.py tests/test_agilent_interop_facade.py tests/test_processing_architecture.py
 
   pinned-core:
     needs: artifacts

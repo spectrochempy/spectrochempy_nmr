@@ -29,7 +29,9 @@ def _plain(value):
         return tuple(_plain(item) for item in value)
     if isinstance(value, list):
         return [_plain(item) for item in value]
-    if all(hasattr(value, field) for field in ("code", "severity", "message", "context")):
+    if all(
+        hasattr(value, field) for field in ("code", "severity", "message", "context")
+    ):
         return {
             "code": value.code,
             "severity": value.severity,
@@ -130,17 +132,26 @@ def from_interop(result):
     data = np.asarray(result.data)
     if data.ndim != 1 or not np.iscomplexobj(data):
         raise ValueError("from_interop currently supports one complex 1D acquisition")
-    if tuple(result.dimensions) != ("F2",) or tuple(result.physical_dimensions) != ("F2",):
+    if tuple(result.dimensions) != ("F2",) or tuple(result.physical_dimensions) != (
+        "F2",
+    ):
         raise ValueError("from_interop 1D input must declare the F2 dimension")
     if tuple(result.domains) != ("time",):
         raise ValueError("from_interop 1D input must be in the time domain")
     if len(result.axes) != 1:
         raise ValueError("from_interop 1D input must have one physical axis")
-    if result.quadrature_mode != "complex-1d" or tuple(result.branch_order) != ("complex",):
+    if result.quadrature_mode != "complex-1d" or tuple(result.branch_order) != (
+        "complex",
+    ):
         raise ValueError("from_interop 1D input has an unsupported quadrature contract")
-    if result.normalization_state not in ("storage-normalized", "quadrature-normalized"):
+    if result.normalization_state not in (
+        "storage-normalized",
+        "quadrature-normalized",
+    ):
         raise ValueError("from_interop requires a validated normalized acquisition")
-    if not isinstance(result.provenance, Mapping) or not isinstance(result.acquisition, Mapping):
+    if not isinstance(result.provenance, Mapping) or not isinstance(
+        result.acquisition, Mapping
+    ):
         raise TypeError("from_interop provenance and acquisition must be mappings")
 
     import spectrochempy as scp  # noqa: PLC0415

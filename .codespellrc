@@ -1,0 +1,3 @@
+[codespell]
+skip = LICENSE,NMRGLUE_LICENSE.rst,*.ipynb,*.npz,*.npy,src/spectrochempy_nmr/extern/*
+ignore-words-list = ALS,COO,IST,SER,Varian,varian,ans,iif,nam,nd,ser,som,te,fro
