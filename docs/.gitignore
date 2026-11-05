@@ -1,4 +1,4 @@
 # Sphinx and Sphinx-Gallery outputs are recreated by the documented build.
-_build/
+_build*/
 examples/gallery/
 sg_execution_times.rst

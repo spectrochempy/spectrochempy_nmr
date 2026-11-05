@@ -1,7 +1,7 @@
 Compatibility and scope
 =======================
 
-This prototype documents the following contracts:
+This documentation documents the following contracts:
 
 * NMR package version: ``0.2.0``;
 * Hypercomplex package version: ``0.2.0``;
@@ -15,10 +15,10 @@ The latter can be refreshed with::
 
    python -m pip freeze > docs/build-manifest.txt
 
-The prototype was built from the local revisions recorded in that manifest.
+The build was produced from the local revisions recorded in that manifest.
 They are not the source revisions listed in the 2026-10-28 architecture audit;
-this difference is intentional for the prototype and must be resolved by the
-release branch before publication.
+this difference is recorded explicitly and must be resolved by a release branch
+before historical publication.
 
 No core documentation source, ``docs/make.py``, RTD configuration, DNS, or
 publication pipeline is used by this build.

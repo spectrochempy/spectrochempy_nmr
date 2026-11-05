@@ -25,6 +25,7 @@ language = "en"
 master_doc = "index"
 source_suffix = ".rst"
 exclude_patterns = ["_build", "_static", "**.ipynb_checkpoints"]
+templates_path = ["_templates"]
 
 core_docs_url = os.environ.get(
     "NMR_CORE_DOCS_URL", "https://www.spectrochempy.fr/latest/"
@@ -82,10 +83,13 @@ html_theme_options = {
     "navbar_start": ["navbar-logo"],
     "navbar_end": ["theme-switcher", "navbar-icon-links"],
     "navbar_persistent": ["search-button-field"],
+    "header_links_before_dropdown": 6,
     "navigation_depth": 4,
     "show_nav_level": 1,
     "show_toc_level": 2,
     "collapse_navigation": False,
+    "use_edit_page_button": True,
+    "search_bar_text": "Search the NMR documentation...",
     "icon_links": [
         {
             "name": "SpectroChemPy",
@@ -126,7 +130,8 @@ sphinx_gallery_conf = {
     ],
     "filename_pattern": r"plot_",
     "ignore_pattern": r"(^|/)(plot_processing_cp_nmr|plot_processing_nmr_2d)\.py$",
-    "plot_gallery": False,
+    "plot_gallery": os.environ.get("NMR_DOCS_EXECUTE") == "1"
+    or os.environ.get("READTHEDOCS", "").lower() == "true",
     "abort_on_example_error": True,
     "only_warn_on_example_error": False,
     "download_all_examples": False,
@@ -134,5 +139,5 @@ sphinx_gallery_conf = {
     "reference_url": {"spectrochempy": core_docs_url + "/"},
 }
 
-if os.environ.get("NMR_DOCS_EXECUTE"):
+if os.environ.get("NMR_DOCS_EXECUTE") == "1":
     sphinx_gallery_conf["plot_gallery"] = True

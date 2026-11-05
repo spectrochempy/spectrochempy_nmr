@@ -1,0 +1,45 @@
+{% set menus = [
+  ('Getting started', [
+    ('getting_started/installation', 'Installation'),
+    ('getting_started/quickstart', 'Quickstart')
+  ]),
+  ('Guides', [
+    ('userguide/reading_data', 'Reading NMR data'),
+    ('userguide/processing_1d', 'Validated 1D processing'),
+    ('concepts/quadrature', 'Quadrature'),
+    ('concepts/hypercomplex', 'Hypercomplex data')
+  ]),
+  ('API', [
+    ('reference/nmr_api', 'NMR API'),
+    ('reference/hypercomplex_api', 'Hypercomplex API')
+  ]),
+  ('Examples', [
+    ('examples/gallery/importer/index', 'Import'),
+    ('examples/gallery/apodization/index', 'Apodization'),
+    ('examples/gallery/nmr/index', 'NMR processing')
+  ]),
+  ('About', [
+    ('compatibility', 'Compatibility')
+  ])
+] %}
+{% set active_group = section_title %}
+<nav aria-label="{{ _('Main navigation') }}">
+  <ul class="bd-navbar-elements navbar-nav">
+    {% for label, pages in menus %}
+      {% set menu_id = unique_html_id('nmr-nav-menu') %}
+      <li class="nav-item dropdown{% if active_group == label %} current active{% endif %}">
+        <button class="btn dropdown-toggle nav-item" type="button"
+                data-bs-toggle="dropdown" aria-expanded="false"
+                aria-controls="{{ menu_id }}">{{ label }}</button>
+        <ul id="{{ menu_id }}" class="dropdown-menu">
+          {% for target, title in pages %}
+            {% if hasdoc(target) %}
+              <li><a class="dropdown-item{% if pagename == target %} active{% endif %}"
+                     href="{{ pathto(target) }}"{% if pagename == target %} aria-current="page"{% endif %}>{{ title }}</a></li>
+            {% endif %}
+          {% endfor %}
+        </ul>
+      </li>
+    {% endfor %}
+  </ul>
+</nav>

@@ -1,0 +1,72 @@
+# Targeted, immutable fixtures for the six public NMR gallery examples.
+# The source revision is covered by spectrochempy_data/testdata/PROVENANCE.md.
+source_repository = "https://github.com/spectrochempy/spectrochempy_data"
+source_commit = "08bb9b0cbff8f4363c48b6bff7ccb743f8140e0a"
+source_root = "testdata"
+license = "CC BY 4.0"
+attribution = "Christian Fernandez, LCS; distributed through spectrochempy_data"
+
+[[files]]
+path = "nmrdata/bruker/tests/nmr/topspin_1d/1/acqu"
+sha256 = "c1bda6ce1818e525986e33509a8235f4ee585c0aacc83265dd0c188f52f75912"
+size = 7187
+[[files]]
+path = "nmrdata/bruker/tests/nmr/topspin_1d/1/acqus"
+sha256 = "00f86298b13a4f9a116feba96b9691fde6bf163ca4d1291a84d4ac8a82d12560"
+size = 7285
+[[files]]
+path = "nmrdata/bruker/tests/nmr/topspin_1d/1/fid"
+sha256 = "a471ce0ec0c5f28b02c1ae05200f1b0300e29f042d36c3d5ff2d53c433219ed6"
+size = 100352
+[[files]]
+path = "nmrdata/bruker/tests/nmr/topspin_1d/1/pdata/1/1i"
+sha256 = "1c760d5385d0e174017e0afe07cee52f4f62e8b185a7decf3895ba6e9d88c224"
+size = 65536
+[[files]]
+path = "nmrdata/bruker/tests/nmr/topspin_1d/1/pdata/1/1r"
+sha256 = "f3a0a67aca8f3c54a250e70b3089af5d2e879dfbfd27ab2091f088b53ca6247d"
+size = 65536
+[[files]]
+path = "nmrdata/bruker/tests/nmr/topspin_1d/1/pdata/1/proc"
+sha256 = "26c5099a0e1ff3157ca9be8c1a7a723bdd922516909a02a3aa4301716851f4c3"
+size = 2030
+[[files]]
+path = "nmrdata/bruker/tests/nmr/topspin_1d/1/pdata/1/procs"
+sha256 = "7ff305739fe2df2c9dca4576786568a67d80c055a7bd5fc487aa81f467b3f065"
+size = 2231
+[[files]]
+path = "nmrdata/bruker/tests/nmr/topspin_1d/1/pdata/1/title"
+sha256 = "edc1755839741c2983db7ca5a456b64e6f72ae5debce4c1477f71940e84ae598"
+size = 7
+[[files]]
+path = "nmrdata/bruker/tests/nmr/relax/100/acqu"
+sha256 = "a03b0cbc64028bef5a9e29777d46abc8465438134655bedc184b435f931cc2e0"
+size = 7304
+[[files]]
+path = "nmrdata/bruker/tests/nmr/relax/100/acqu2"
+sha256 = "589e7df2a787d1f3eb6d6220857ee0d3f858ec228c671174de8e5d9811557135"
+size = 528
+[[files]]
+path = "nmrdata/bruker/tests/nmr/relax/100/acqu2s"
+sha256 = "be687b600baa9ded21cd8629756d922b03b3928802a63cccc2a849ff0dafb820"
+size = 534
+[[files]]
+path = "nmrdata/bruker/tests/nmr/relax/100/acqus"
+sha256 = "8bbebeb81f3570378d371f480ba4365629560d46baa218b20a117fb6537576e4"
+size = 7418
+[[files]]
+path = "nmrdata/bruker/tests/nmr/relax/100/pdata/1/proc"
+sha256 = "65712e66e165999c83da9176f7c4db66d7e17bf8fa3ccf30daad2d7b06d6edcc"
+size = 2005
+[[files]]
+path = "nmrdata/bruker/tests/nmr/relax/100/pdata/1/procs"
+sha256 = "8b32bd54e4e223753294c778a7bf62a83e6f791bfd838f870c0f93208922da33"
+size = 2009
+[[files]]
+path = "nmrdata/bruker/tests/nmr/relax/100/ser"
+sha256 = "510e264c8bf2f68449a4d1108cf28a63cdd0642299266a83cfb5d188ccef3597"
+size = 147456
+[[files]]
+path = "nmrdata/bruker/tests/nmr/relax/100/vdlist"
+sha256 = "21dc9da5fdcfb6189f201510afc8b63fff55362406ff61e9bfea8d8d5215764b"
+size = 25

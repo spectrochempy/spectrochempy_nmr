@@ -1,4 +1,4 @@
-# Building the standalone prototype
+# Building the SpectroChemPy NMR documentation
 
 The build is independent of the SpectroChemPy monorepo documentation. From
 this repository worktree:
@@ -31,10 +31,17 @@ Replace ``<compatible-core-version>`` with the deployed core documentation
 version selected for that release; release mode intentionally refuses to use
 the moving ``latest`` default.
 
-The gallery is non-executing by default, so no experimental data are
-downloaded. To execute the six public examples when the approved fixtures are
-available, set `NMR_DOCS_EXECUTE=1` and rebuild. The excluded 2D example is
-`plot_processing_nmr_2d.py`; it is intentionally not part of this gallery.
+The gallery is non-executing by default for quick local documentation checks.
+To execute the six public examples with the approved immutable fixtures:
+
+```console
+python docs/fetch_gallery_data.py
+NMR_DOCS_EXECUTE=1 python -m sphinx -W --keep-going -b html docs docs/_build/html
+```
+
+RTD sets `READTHEDOCS=True`; the configuration then executes the gallery after
+the pre-build fixture fetch. The excluded CP and 2D examples are never
+selected. See `docs/fixtures.md` for provenance and licensing.
 
 Record the tested environment with:
 

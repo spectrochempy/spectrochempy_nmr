@@ -8,12 +8,19 @@ setting is created or changed by this phase.
 ## Current build contract
 
 `.readthedocs.yaml` uses Ubuntu 24.04, Python 3.13, Sphinx's native HTML build,
-and `fail_on_warning`. `docs/requirements-rtd.txt` pins the published core
-(`spectrochempy==1.1.3`) and Hypercomplex (`0.2.0`); the NMR package is
-installed from the checkout being built. Sphinx-Gallery remains non-executing
-by default, so RTD does not download experimental fixtures.
+and `fail_on_warning`. The RTD pre-build job fetches only the verified gallery
+fixtures documented in `docs/fixtures.md`. `docs/requirements-rtd.txt` pins
+the published core (`spectrochempy==1.1.3`) and Hypercomplex (`0.2.0`); the NMR
+package is installed from the checkout being built. Sphinx-Gallery executes the
+six approved examples on RTD; local builds remain non-executing unless
+`NMR_DOCS_EXECUTE=1` is set. No experimental 2D fixtures are fetched.
 
-The local phase-1 prototype used core `1.1.4.dev21` from a checkout. The RTD
+The RTD HTML job uses a serialized Sphinx invocation instead of RTD's default
+`-j auto`: the parallel invocation reproduced a shared plugin-metadata failure
+in the relaxation example, while the same clean environment passes serially.
+This is a targeted reliability constraint, not a scientific-code change.
+
+The local phase-1 validation used core `1.1.4.dev21` from a checkout. The RTD
 resolution is intentionally recorded separately because that development core
 revision is not a published installable dependency.
 
@@ -56,8 +63,11 @@ Validate the RTD-equivalent dependency resolution with::
    . /tmp/opencode/nmr-rtd-venv/bin/activate
    python -m pip install -r docs/requirements-rtd.txt
    python -m pip install .
-   time python -m sphinx -W --keep-going -b html docs docs/_build/html
+   python docs/fetch_gallery_data.py
+   NMR_DOCS_EXECUTE=1 time python -m sphinx -W --keep-going -b html docs docs/_build/html
 
-Record Python, installed package versions, wall time, gallery generation time,
-and peak resource information from the RTD build log. Do not infer a cost
-reduction from a single local measurement.
+Record Python, installed package versions, wall time, six execution summaries,
+gallery generation time, and peak resource information from the RTD build log.
+Do not infer a cost reduction from a single local measurement.
+
+The Phase 2b local evidence is recorded in `docs/phase2b-validation.md`.

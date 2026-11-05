@@ -3,13 +3,22 @@
 SpectroChemPy NMR documentation
 ================================
 
-This is the standalone documentation prototype for the ``spectrochempy-nmr``
-and ``spectrochempy-hypercomplex`` plugins. The Python distributions remain
-independent; this site only groups their scientific documentation.
+This is the SpectroChemPy NMR documentation for the independent
+``spectrochempy-nmr`` and ``spectrochempy-hypercomplex`` plugins. The Python
+distributions remain independent; this site groups their scientific
+documentation under the SpectroChemPy identity.
 
 The NMR plugin currently provides validated **1D** reading and processing. It
 also reads 2D data and can represent phase-sensitive quadrature as
 hypercomplex data, but general 2D processing is not yet a supported workflow.
+
+Start with one of the following paths:
+
+* :doc:`getting_started/installation` and :doc:`getting_started/quickstart`;
+* :doc:`userguide/reading_data` and :doc:`userguide/processing_1d`;
+* :doc:`concepts/hypercomplex` for quaternion data;
+* :doc:`examples/gallery/nmr/index` for executable NMR examples;
+* :doc:`reference/nmr_api` and :doc:`reference/hypercomplex_api` for APIs.
 
 .. toctree::
    :maxdepth: 2

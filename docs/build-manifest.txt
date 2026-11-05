@@ -1,10 +1,13 @@
-# Standalone NMR documentation prototype build manifest
+# Phase 2b executable RTD-like gallery build manifest
 # Python: Python 3.13.13
-# spectrochempy core checkout: cdb087a24f06b8c83ea91ea036192304db9329e3
-# spectrochempy-nmr checkout: 1131deea84d03de820e6bdf554e103d3e69c5223
-# spectrochempy-hypercomplex checkout: b73067d72d41563afd3cadd2ea9e3e1c78ec4a2f
+# spectrochempy core package: 1.1.3
+# spectrochempy-nmr checkout: 30fe3b23e11a2f39913c15d41ebd1e87438ade26
+# documentation commit: b10ab3c9058cac3c4669d858b3015e421a1c13a8
+# spectrochempy-hypercomplex package: 0.2.0
+# gallery fixtures: 16 files, 417443 bytes, spectrochempy_data 08bb9b0cbff8f4363c48b6bff7ccb743f8140e0a
+# gallery execution: 6/6; strict build: PASS; elapsed: 17.53 s; max RSS: 259 MiB
 accessible-pygments==0.0.5
-alabaster==1.0.0
+alabaster==0.7.16
 asttokens==3.0.2
 babel==2.18.0
 beautifulsoup4==4.15.0
@@ -22,7 +25,7 @@ flexparser==0.4
 fonttools==4.68.0
 idna==3.20
 imagesize==2.0.1
-ipython==9.17.1
+ipython==9.18.0
 ipython_pygments_lexers==1.1.1
 jedi==0.20.1
 Jinja2==3.1.6
@@ -47,7 +50,7 @@ prompt_toolkit==3.0.53
 psutil==7.2.2
 ptyprocess==0.7.0
 pure_eval==0.2.4
-pydata-sphinx-theme==0.20.0
+pydata-sphinx-theme==0.17.1
 Pygments==2.21.0
 pyparsing==3.3.3
 python-dateutil==3.0.0
@@ -60,9 +63,11 @@ scipy==1.18.1
 six==1.17.0
 snowballstemmer==3.1.1
 soupsieve==3.0.4
-# Source packages above were installed from local editable checkouts.
-# Do not treat this trace as a portable requirements file; see compatibility.toml.
-Sphinx==8.2.3
+# The NMR package was installed from the local checkout; core and Hypercomplex
+# were installed from the pinned RTD requirements. Do not use this as a lockfile.
+spectrochempy==1.1.3
+spectrochempy-hypercomplex==0.2.0
+Sphinx==7.4.7
 sphinx-gallery==0.19.0
 sphinxcontrib-applehelp==2.0.0
 sphinxcontrib-devhelp==2.0.0

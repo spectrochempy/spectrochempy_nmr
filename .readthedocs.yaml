@@ -6,6 +6,15 @@ build:
   os: ubuntu-24.04
   tools:
     python: "3.13"
+  jobs:
+    pre_build:
+      - python docs/fetch_gallery_data.py
+    build:
+      html:
+        # Sphinx's default RTD command adds ``-j auto``. The gallery examples
+        # share plugin metadata state, so serialize this build to avoid a
+        # reproducible relaxation-example race in Sphinx-Gallery.
+        - python -m sphinx -T -W --keep-going -b html -d _build/doctrees docs $READTHEDOCS_OUTPUT/html
 
 sphinx:
   configuration: docs/conf.py

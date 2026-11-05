@@ -1,7 +1,7 @@
 Installation
 ============
 
-The documented prototype targets ``spectrochempy-nmr`` 0.2.0 and requires
+This documentation targets ``spectrochempy-nmr`` 0.2.0 and requires
 SpectroChemPy 1.1 or later, below core 2.0.
 
 .. code-block:: console
@@ -19,5 +19,5 @@ Install hypercomplex representation separately when needed:
        "spectrochempy-nmr==0.2.0" \
        "spectrochempy-hypercomplex==0.2.0"
 
-For this prototype, see :doc:`/compatibility` for the exact local build
+See :doc:`/compatibility` for the exact local build
 environment. Hypercomplex support does not depend on the NMR plugin.

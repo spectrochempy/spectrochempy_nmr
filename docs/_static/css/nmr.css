@@ -1,28 +1,150 @@
-/* Small, documented branding overlay; it does not import core CSS. */
+/*
+ * SpectroChemPy NMR variation of the core pydata-sphinx-theme overlay.
+ *
+ * The layout selectors below are a deliberately small, reviewed subset of
+ * spectrochempy/docs/_static/css/pydata-scpy.css. The NMR identity changes
+ * only the brand/accent palette; it does not import the core checkout or copy
+ * the core version-switcher implementation.
+ */
 :root {
-  --pst-color-primary: #0069d6;
-  --pst-color-primary-highlight: #074fb3;
-  --pst-color-link: #0069d6;
-  --pst-color-link-hover: #074fb3;
+  --scp-header-green: #32856b;
+  --scp-sidebar: #343131;
+  --scp-sidebar-hover: #454140;
+  --scp-sidebar-heading: #8bd5b4;
+  --scp-ink: #163c32;
+  --scp-muted: #55766b;
+  --scp-paper: #f5f7fa;
+  --scp-line: #d7e1e8;
+  --scp-accent: #8fe3bd;
+  --pst-color-primary: #087f5b;
+  --pst-color-primary-highlight: #056044;
+  --pst-color-link: #087f5b;
+  --pst-color-link-hover: #056044;
+  --pst-sidebar-secondary: 15rem;
+}
+
+body,
+.bd-container {
+  background: var(--scp-sidebar);
+}
+
+.bd-main {
+  background: var(--pst-color-background);
 }
 
 .bd-header {
-  background: #3486ba !important;
+  background: var(--scp-header-green) !important;
   border-bottom: 1px solid rgba(255, 255, 255, 0.24);
+  box-shadow: 0 0.2rem 0.7rem rgba(20, 77, 59, 0.18);
 }
 
-.bd-header a,
+.bd-header .navbar-brand .logo__title,
+.bd-header .navbar-nav > .nav-item > .nav-link,
+.bd-header .navbar-nav > .nav-item > .dropdown-toggle,
+.bd-header .navbar-icon-links a,
 .bd-header .theme-switch-button {
-  color: #fff !important;
+  color: #ffffff !important;
 }
 
-.bd-header a:hover {
-  color: #ffd36d !important;
+.bd-header .navbar-nav > .nav-item > .nav-link:hover,
+.bd-header .navbar-nav > .nav-item > .dropdown-toggle:hover,
+.bd-header .navbar-icon-links a:hover,
+.bd-header .theme-switch-button:hover {
+  color: var(--scp-accent) !important;
+}
+
+.bd-header .search-button-field {
+  border-color: rgba(255, 255, 255, 0.65);
+  background: rgba(255, 255, 255, 0.14);
+  color: #ffffff !important;
+}
+
+.bd-header .search-button-field:hover {
+  background: rgba(255, 255, 255, 0.22);
+}
+
+.navbar-brand img {
+  max-height: 48px;
+  width: auto;
+}
+
+.navbar-brand .logo__title {
+  font-size: 1.1rem;
+  font-weight: 600;
+  white-space: nowrap;
+}
+
+.navbar-nav > .nav-item > .nav-link,
+.navbar-nav > .nav-item > .dropdown-toggle {
+  font-weight: 650;
+}
+
+.bd-sidebar-primary {
+  background: var(--scp-sidebar);
+  border-right: 1px solid rgba(255, 255, 255, 0.1);
+  color: #f3f2ef;
+}
+
+.bd-sidebar-primary .bd-links a,
+.bd-sidebar-primary .sidebar-header-items a,
+.bd-sidebar-primary .sidebar-primary-item,
+.bd-sidebar-primary .sidebar-primary-item h1,
+.bd-sidebar-primary .sidebar-primary-item h2,
+.bd-sidebar-primary .sidebar-primary-item h3,
+.bd-sidebar-primary .sidebar-primary-item h4 {
+  color: #eceae7;
+}
+
+.bd-sidebar-primary .bd-links a:hover,
+.bd-sidebar-primary .sidebar-header-items a:hover {
+  background: var(--scp-sidebar-hover);
+  color: #ffffff;
+}
+
+.bd-sidebar-primary .bd-links .current > a {
+  border-left: 3px solid var(--scp-accent);
+  background: var(--scp-sidebar-hover);
+  color: #ffffff;
+  font-weight: 700;
+}
+
+.bd-sidebar-primary .bd-links p.caption,
+.bd-sidebar-primary .sidebar-header-items__title {
+  color: var(--scp-sidebar-heading);
+}
+
+.bd-footer {
+  background: var(--scp-header-green);
+  border-top-color: rgba(255, 255, 255, 0.24);
+  color: #ffffff;
+}
+
+.bd-footer p,
+.bd-footer .nav-link,
+.bd-footer .footer-item,
+.bd-footer .footer-item p {
+  color: #ffffff !important;
+}
+
+.bd-footer a {
+  color: var(--scp-accent) !important;
+}
+
+.bd-footer a:hover {
+  color: #ffffff !important;
+}
+
+code.literal {
+  font-size: 0.875em;
 }
 
 html[data-theme="dark"] {
-  --pst-color-primary: #5aa2f0;
-  --pst-color-primary-highlight: #8bbcff;
-  --pst-color-link: #74c0fc;
-  --pst-color-link-hover: #a5d8ff;
+  --scp-ink: #e7f0f5;
+  --scp-muted: #b4c7d3;
+  --scp-paper: #101c26;
+  --scp-line: #335064;
+  --pst-color-primary: #72d6ae;
+  --pst-color-primary-highlight: #a1f0cc;
+  --pst-color-link: #8be8c0;
+  --pst-color-link-hover: #b3f3d7;
 }
