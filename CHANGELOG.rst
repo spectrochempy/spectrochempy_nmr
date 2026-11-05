@@ -22,7 +22,8 @@ Changed
 * Require F2 before F1 for Bruker paired acquisitions and reject Fourier
   transforms of the component axis. Inverse channel reconstruction is unsupported.
 * Preserve real QF FID transforms and reject partially transformed input to
-  the experimental NOESY adapter.
+  the experimental NOESY adapter. Resolve its physical axes by name and verify
+  the branch coordinate order before decoding native channels.
 
 Added
 ~~~~~

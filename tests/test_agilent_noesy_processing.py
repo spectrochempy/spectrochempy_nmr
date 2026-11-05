@@ -49,6 +49,47 @@ def _var2pipe_reference(raw):
     return (-1) ** np.arange(raw.shape[0])[:, None] * np.conjugate(raw)
 
 
+@pytest.mark.parametrize("points", [4, 6])
+@pytest.mark.parametrize("transport", ["none", "var2pipe"])
+def test_native_noesy_uses_named_physical_axes(points, transport):
+    raw = np.arange(8 * points).reshape(8, points).astype(complex)
+    raw += 1j * (raw.real + 8 * points)
+    native = scp.NDDataset(
+        np.stack([raw[0::2], raw[1::2]]),
+        dims=["c", "y", "x"],
+        coordset=[
+            scp.Coord.arange(2, labels=["branch_0", "branch_1"]),
+            scp.Coord.arange(4),
+            scp.Coord.arange(points),
+        ],
+        meta={
+            "component_axis": "c",
+            "component_labels": ("branch_0", "branch_1"),
+            "stage": "acquisition",
+            "isfreq": [False, False, False],
+            "seqfil": "NOESY",
+            "phase": (1, 2),
+            "ni": 4,
+            "np": 2 * points,
+            "arraydim": 8,
+            "ntraces": 1,
+        },
+    )
+    canonical = process_agilent_noesy_states_tppi(native, transport=transport)
+    reordered = process_agilent_noesy_states_tppi(
+        native.swapdims("x", "y"), transport=transport
+    )
+    np.testing.assert_allclose(reordered.data, canonical.data)
+    with pytest.raises(ValueError):
+        process_agilent_noesy_states_tppi(native.T, transport=transport)
+    reversed_branches = native.copy()
+    reversed_branches.coordset["c"] = scp.Coord.arange(
+        2, labels=["branch_1", "branch_0"]
+    )
+    with pytest.raises(ValueError, match="coordinate labels"):
+        process_agilent_noesy_states_tppi(reversed_branches, transport=transport)
+
+
 def test_noesy_pipeline_rejects_unknown_transport():
     with pytest.raises(ValueError, match="transport"):
         process_agilent_noesy_states_tppi(_dataset(), transport="guess")

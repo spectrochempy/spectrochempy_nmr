@@ -11,6 +11,8 @@ A phase-sensitive 2D acquisition has two associated complex branches. They
 are stored in an ordinary complex ``NDDataset`` with shape ``(2, nF1, nF2)``
 and dimensions ``("c", "y", "x")``. The component axis ``c`` is not a Fourier
 axis. Keep it first when reordering the physical axes.
+The NOESY adapter restores physical axes by their names before processing and
+requires the component coordinate to retain its declared branch order.
 
 Raw Bruker States, States-TPPI and Echo-Antiecho trace pairs use channel labels
 ``branch_0`` and ``branch_1``. Transform F2 (``x``) before F1 (``y``). The

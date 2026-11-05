@@ -32,6 +32,20 @@ def _validate_profile(dataset, ni, np_raw, arraydim, ntraces):
             or tuple(isfreq) != (False, False, False)
         ):
             raise ValueError("Agilent NOESY requires acquisition-stage branch channels")
+        dims = list(dataset.dims)
+        if dims[0] != "c" or set(dims) != {"c", "y", "x"}:
+            raise ValueError(
+                "Agilent NOESY requires physical axes y/x after component c"
+            )
+        labels = dataset.coordset["c"].labels
+        if labels is None or tuple(str(label) for label in labels) != (
+            "branch_0",
+            "branch_1",
+        ):
+            raise ValueError(
+                "Agilent NOESY coordinate labels must identify both branches"
+            )
+        data = np.transpose(data, tuple(dims.index(dim) for dim in ("c", "y", "x")))
         raw = np.empty((data.shape[1] * 2, data.shape[2]), dtype=data.dtype)
         raw[0::2], raw[1::2] = data[0], data[1]
         data = raw
