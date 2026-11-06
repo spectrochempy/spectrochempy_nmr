@@ -51,6 +51,8 @@ Start with one of the following paths:
    :maxdepth: 2
    :caption: Examples and compatibility
 
+   agilent_qualification
+
    examples/gallery/importer/index
    examples/gallery/apodization/index
    examples/gallery/nmr/index

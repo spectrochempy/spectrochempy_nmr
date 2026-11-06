@@ -1,0 +1,49 @@
+name: Agilent real-provider qualification
+
+on: [push, pull_request, workflow_dispatch]
+
+permissions:
+  contents: read
+
+jobs:
+  agilent-real:
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        python-version: ["3.11", "3.13"]
+    env:
+      NMR_AGILENT_REAL_DATA: ${{ runner.temp }}/agilent-real
+    steps:
+      - uses: actions/checkout@v7
+      - uses: actions/setup-python@v7
+        with:
+          python-version: ${{ matrix.python-version }}
+      - name: Secure pip bootstrap
+        uses: spectrochempy/spectrochempy/.github/actions/verified-pip@cdb087a24f06b8c83ea91ea036192304db9329e3
+      - name: Build and install wheels with released core and pinned provider
+        run: |
+          python -m pip wheel --no-deps --wheel-dir dist .
+          python -m pip install "spectrochempy==1.1.4" pytest
+          python -m pip install -r tests/qualification/requirements.txt dist/*.whl
+          python -m pip check
+      - name: Verify provider commit and installed package isolation
+        run: |
+          python -I - <<'PY'
+          import json
+          from importlib.metadata import distribution
+          from importlib.util import find_spec
+          from pathlib import Path
+
+          metadata = distribution("nmrglue-ng")
+          provenance = json.loads(metadata.read_text("direct_url.json"))
+          assert provenance["vcs_info"]["commit_id"] == "00d9186dd757c688f22f941063f5ff5d8cf4066d"
+          for name in ("spectrochempy", "spectrochempy_nmr", "nmrglue"):
+              location = Path(find_spec(name).origin).resolve()
+              assert Path.cwd() not in location.parents, location
+              print(f"{name}: {location}")
+          PY
+      - name: Fetch original nmrML example and verify checksums
+        run: python tools/fetch_agilent_qualification.py "$NMR_AGILENT_REAL_DATA"
+      - name: Run real-provider qualification (known observed-nucleus xfail)
+        run: python -I -m pytest -ra tests/qualification/test_agilent_real.py

@@ -58,6 +58,15 @@ def _normalized(values=None, *, axis_values=None, sequence="NOESY"):
     )
 
 
+def test_from_interop_preserves_small_dwell_on_long_acquisition():
+    axis_values = np.arange(32768) / 12019.2307692
+    source = _normalized(axis_values=axis_values)
+    source.data = np.ones(len(axis_values), dtype=np.complex64)
+    result = from_interop(source)
+    np.testing.assert_allclose(result.x.data, axis_values, rtol=1e-10, atol=1e-14)
+    assert np.all(np.diff(result.x.data) > 0)
+
+
 def test_from_interop_converts_complex_fid_without_mutating_source():
     source = _normalized(axis_values=np.arange(3) / 2000.0)
     before = source.data.copy()
