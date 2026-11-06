@@ -9,7 +9,11 @@ exchange format; this does not add native Varian processed reading.
 Processed spectra
 -----------------
 
-Install the qualified optional provider and ``xmltodict`` separately::
+The qualification requirements pin provider commit
+``0a7421795a9008c57eb63d6d747debc45ecf7135`` from
+`provider PR #160 <https://github.com/spectrochempy/nmrglue-ng/pull/160>`_.
+It is an unreleased candidate, not a capability promised by older provider
+packages. Install that optional provider and ``xmltodict`` separately::
 
     import nmrglue as ng
     from spectrochempy_nmr import from_interop

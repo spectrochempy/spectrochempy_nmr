@@ -39,7 +39,7 @@ jobs:
 
           metadata = distribution("nmrglue-ng")
           provenance = json.loads(metadata.read_text("direct_url.json"))
-          assert provenance["vcs_info"]["commit_id"] == "daa32eaf9811edce464dbc8dc9bd409eb5708d9c"
+          assert provenance["vcs_info"]["commit_id"] == "0a7421795a9008c57eb63d6d747debc45ecf7135"
           for name in ("spectrochempy", "spectrochempy_nmr", "nmrglue"):
               location = Path(find_spec(name).origin).resolve()
               assert Path.cwd() not in location.parents, location
