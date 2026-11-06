@@ -51,18 +51,43 @@ def _fft_postprocess_result(new, dim=-1, inv=False, **kwargs):
         new.ndim == 1
         and new.meta.get("normalization_profile") == "agilent-fid-1d-complex-v1"
     ):
-        new.meta.data_domain = "time" if inv else "frequency"
-        reference = new.meta.get("frequency_reference")
-        if inv and reference:
-            size = new.shape[0]
-            dwell = 1 / (size * reference["bin_width_hz"])
-            coord = Coord(
-                np.arange(size) * dwell, units="s", rounding=False, sigdigits=15
-            )
-            coord.title = "time"
-            new.set_coordset(coord)
-            new.meta.last_frequency_reference = dict(reference)
-            new.meta.frequency_reference = None
+        readonly = new.meta.readonly
+        new.meta.readonly = False
+        try:
+            new.meta.data_domain = "time" if inv else "frequency"
+            reference = new.meta.get("frequency_reference")
+            if not inv:
+                new.meta.fft_bin_width_hz = None
+                sw = new.meta.get("acquisition", {}).get("spectral_width_hz")
+                if (
+                    isinstance(sw, (int, float, np.integer, np.floating))
+                    and not isinstance(sw, (bool, np.bool_))
+                    and np.isfinite(sw)
+                    and sw > 0
+                ):
+                    new.meta.fft_bin_width_hz = float(sw) / new.shape[0]
+            else:
+                width = (
+                    reference["bin_width_hz"]
+                    if reference
+                    else new.meta.get("fft_bin_width_hz")
+                )
+                if width is not None:
+                    size = new.shape[0]
+                    dwell = 1 / (size * width)
+                    coord = Coord(
+                        np.arange(size) * dwell,
+                        units="s",
+                        rounding=False,
+                        sigdigits=15,
+                    )
+                    coord.title = "time"
+                    new.set_coordset(coord)
+                if reference:
+                    new.meta.last_frequency_reference = dict(reference)
+                    new.meta.frequency_reference = None
+        finally:
+            new.meta.readonly = readonly
         return new
 
     # Only act when NMR metadata is present

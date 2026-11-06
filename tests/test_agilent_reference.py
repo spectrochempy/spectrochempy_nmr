@@ -160,8 +160,10 @@ def test_ppm_reference_and_context_survive_scp_persistence(tmp_path):
     )
 
 
-def test_inverse_restores_time_axis_without_automatic_rereferencing():
+@pytest.mark.parametrize("readonly", [False, True])
+def test_inverse_restores_time_axis_without_automatic_rereferencing(readonly):
     source = _spectrum()
+    source.meta.readonly = readonly
     referenced = reference_agilent_1d(source, reference="rfl-rfp")
     restored = referenced.ifft()
     np.testing.assert_allclose(restored.x.data, np.arange(8) / 1000, atol=1e-12)
@@ -174,3 +176,4 @@ def test_inverse_restores_time_axis_without_automatic_rereferencing():
     assert spectrum.x.units == scp.ur.Hz
     assert spectrum.meta.data_domain == "frequency"
     assert spectrum.meta.frequency_reference is None
+    assert source.meta.readonly is readonly

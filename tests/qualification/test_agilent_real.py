@@ -270,6 +270,12 @@ def test_real_fft_is_centered_hz_without_implicit_chemical_reference(
     assert spectrum.meta.acquisition == source.meta.acquisition
     with pytest.raises(DimensionalityError):
         spectrum.x.to("ppm")
+    assert spectrum.meta.readonly
+    inverse = spectrum.ifft()
+    np.testing.assert_allclose(inverse.x.data, source.x.data, rtol=1e-9, atol=1e-12)
+    np.testing.assert_allclose(inverse.data, source.data, rtol=1e-5, atol=0.2)
+    assert inverse.meta.data_domain == "time"
+    assert spectrum.meta.readonly
 
 
 @pytest.mark.parametrize("reference", ["rfl-rfp", "sfrq-reffrq"])
@@ -309,6 +315,13 @@ def test_real_frequency_reference_axis_and_persistence(
     assert result.meta.acquisition == acquisition_meta
     assert source.meta.get("frequency_reference") is None
     assert spectrum.meta.get("frequency_reference") is None
+    assert result.meta.readonly
+    direct_inverse = result.ifft()
+    np.testing.assert_allclose(
+        direct_inverse.x.data, source.x.data, rtol=1e-9, atol=1e-12
+    )
+    np.testing.assert_allclose(direct_inverse.data, source.data, rtol=1e-5, atol=0.2)
+    assert result.meta.readonly
     target = tmp_path / "referenced.scp"
     result.write(target, confirm=False)
     restored = scp.read(target)
