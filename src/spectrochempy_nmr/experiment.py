@@ -222,7 +222,7 @@ class Experiment:
         from .nmr_metadata import extract_nmr_metadata  # noqa: PLC0415
 
         meta = self._meta()
-        nmr_meta: NMRMetadata = extract_nmr_metadata(meta)
+        nmr_meta: NMRMetadata = extract_nmr_metadata(meta, ndim=self._dataset.ndim)
 
         # Fallback: when metadata is empty, infer basic shape from the
         # dataset itself.  This handles non-NMR or metadata-less datasets.
@@ -383,9 +383,14 @@ class Experiment:
 
             sfo = nmr_meta.spectrometer_freq_mhz
             if sfo is None or not any(v is not None for v in sfo):
-                report.add_error(
-                    "Missing spectrometer frequency — cannot construct ppm axis."
-                )
+                if nmr_meta.normalized_interop:
+                    report.add_warning(
+                        "Spectrometer frequency unknown; FFT remains in Hz."
+                    )
+                else:
+                    report.add_error(
+                        "Missing spectrometer frequency — cannot construct ppm axis."
+                    )
 
             encoding = self.encoding
             if encoding is not None:
@@ -452,6 +457,7 @@ class Experiment:
         phase: str | None = _DEFAULT_PHASE,
         phc0: float = _DEFAULT_PHC0,
         phc1: float = _DEFAULT_PHC1,
+        reference: str | None = None,
     ) -> NDDataset:
         """
         State-aware NMR processing.
@@ -495,6 +501,10 @@ class Experiment:
             Zero-order phase correction in degrees (manual mode).
         phc1 : float
             First-order phase correction in degrees (manual mode).
+
+        reference : str, optional
+            Explicit normalized frequency-axis candidate. Interop spectra stay
+            on the core Hz grid when omitted; no chemical zero is guessed.
 
         Returns
         -------
@@ -544,8 +554,54 @@ class Experiment:
             )
             raise NotImplementedError(msg)
 
+        if self._nmr_meta.normalized_interop and self.is_time_domain:
+            import numpy as np  # noqa: PLC0415
+            from spectrochempy import ur  # noqa: PLC0415
+
+            if not np.iscomplexobj(ds.data):
+                raise ValueError("normalized interop FFT requires complex samples")
+            axis = ds.coord(0)
+            if axis.units is None or not axis.units.is_compatible_with(ur.s):
+                raise ValueError(
+                    "normalized interop FFT requires a calibrated time axis"
+                )
+            values = np.asarray(axis.to("s").data)
+            spacing = np.diff(values)
+            acquisition = ds.meta.get("acquisition", {})
+            sw = acquisition.get("spectral_width_hz")
+            if sw is not None:
+                if isinstance(sw, (bool, np.bool_)) or not isinstance(
+                    sw, (int, float, np.integer, np.floating)
+                ):
+                    raise ValueError("invalid normalized spectral width")
+                try:
+                    sw = float(sw)
+                except (ValueError, OverflowError) as exc:
+                    raise ValueError("invalid normalized spectral width") from exc
+                if not np.isfinite(sw) or sw <= 0:
+                    raise ValueError("invalid normalized spectral width")
+            if (
+                values.size < 2
+                or not np.isfinite(values).all()
+                or np.any(spacing <= 0)
+                or not np.allclose(spacing, spacing[0], rtol=1e-9, atol=1e-14)
+                or (
+                    sw is not None
+                    and not np.allclose(spacing, 1 / sw, rtol=1e-9, atol=1e-14)
+                )
+            ):
+                raise ValueError(
+                    "normalized interop FFT requires the declared uniform time grid"
+                )
+            if np.any(ds.mask):
+                raise ValueError(
+                    "normalized interop FFT does not support masked samples"
+                )
+        if reference is not None and not self._nmr_meta.normalized_interop:
+            raise ValueError("explicit reference requires normalized interop data")
+
         if self.is_time_domain:
-            return self._process_time_domain(
+            result = self._process_time_domain(
                 ds,
                 apodization=apodization,
                 lb=lb,
@@ -558,7 +614,7 @@ class Experiment:
                 phc1=phc1,
                 explicit_arguments=explicit_arguments,
             )
-        if self.is_frequency_domain:
+        elif self.is_frequency_domain:
             self._reject_frequency_domain_apodization_requests(
                 apodization,
                 lb=lb,
@@ -566,18 +622,29 @@ class Experiment:
                 ssb=ssb,
                 pow=pow,
             )
-            return self._process_frequency_domain(
+            result = self._process_frequency_domain(
                 ds,
                 phase=phase,
                 phc0=phc0,
                 phc1=phc1,
                 explicit_arguments=explicit_arguments,
             )
-        msg = (
-            f"Cannot process data in '{self.domain}' domain. "
-            f"Current state: {' × '.join(self.domains)}"
-        )
-        raise RuntimeError(msg)
+        else:
+            msg = f"Cannot process data in '{self.domain}' domain"
+            raise RuntimeError(msg)
+        if reference is not None:
+            from .processing.interop_reference import reference_interop_1d  # noqa: PLC0415
+
+            result = reference_interop_1d(result, reference=reference)
+            trace = result.meta.nmr_processing["scp_processing"]
+            requested = dict(trace["requested"])
+            applied = dict(trace["applied"])
+            requested["reference"] = reference
+            applied["frequency_reference"] = dict(result.meta.frequency_reference)
+            result = self._attach_scp_processing_trace(
+                result, requested=requested, applied=applied
+            )
+        return result
 
     def _reject_frequency_domain_apodization_requests(
         self,
@@ -678,7 +745,11 @@ class Experiment:
             )
 
         # 5. Calibrate the final spectral axis using canonical NMR metadata.
-        calibrated = self._calibrate_1d_spectral_axis(work)
+        calibrated = (
+            work
+            if self._nmr_meta.normalized_interop
+            else self._calibrate_1d_spectral_axis(work)
+        )
         if self._axis_calibration_changed_axis(work, calibrated):
             applied["axis_calibration"] = str(calibrated.coord(0).units)
         return self._attach_scp_processing_trace(

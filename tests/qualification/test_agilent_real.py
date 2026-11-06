@@ -340,3 +340,69 @@ def test_real_frequency_reference_axis_and_persistence(
     np.testing.assert_allclose(inverse.x.data, source.x.data, rtol=1e-9, atol=1e-12)
     np.testing.assert_allclose(inverse.data, source.data, rtol=1e-5, atol=0.2)
     assert inverse.meta.data_domain == "time"
+
+
+@pytest.mark.parametrize("reference", [None, "rfl-rfp", "sfrq-reffrq"])
+def test_experiment_processing_uses_only_normalized_contract(
+    acquisition, tmp_path, reference
+):
+    from spectrochempy_nmr.experiment import Experiment
+    from spectrochempy_nmr import reference_interop_1d
+
+    source = read_agilent_interop(acquisition)
+    samples = source.data.copy()
+    original = deepcopy(dict(source.meta))
+    count = source.size * 2
+    result = Experiment(source).process(
+        apodization="em",
+        lb=1,
+        size=count,
+        phase="manual",
+        phc0=25,
+        phc1=0,
+        reference=reference,
+    )
+    manual = source.em(lb=1 * scp.ur.Hz).zf_size(size=count).fft()
+    manual = Experiment(manual).process(phase="manual", phc0=25, phc1=0)
+    if reference is not None:
+        manual = reference_interop_1d(manual, reference=reference)
+    np.testing.assert_allclose(result.data, manual.data, rtol=1e-6, atol=0.05)
+    np.testing.assert_allclose(result.x.data, manual.x.data, rtol=1e-10, atol=1e-10)
+    modified = source.copy()
+    modified.meta.readonly = False
+    modified.origin = "arbitrary-origin"
+    modified.meta.origin = "arbitrary-origin"
+    modified.meta.normalization_profile = "opaque-profile"
+    modified.meta.source_metadata = {}
+    for key in ("original_reference", "carrier_hz", "carrier_ppm", "carrier_source"):
+        modified.meta.acquisition.pop(key, None)
+    independent = Experiment(modified).process(
+        apodization="em",
+        lb=1,
+        size=count,
+        phase="manual",
+        phc0=25,
+        phc1=0,
+        reference=reference,
+    )
+    np.testing.assert_array_equal(independent.data, result.data)
+    np.testing.assert_array_equal(independent.x.data, result.x.data)
+    assert Experiment(result).is_frequency_domain
+    trace = result.meta.nmr_processing["scp_processing"]
+    assert trace["applied"]["fft"] is True
+    assert trace["applied"]["zero_filling"] == {"size": count}
+    assert (
+        result.meta.acquisition["scan_counts"] == source.meta.acquisition["scan_counts"]
+    )
+    target = tmp_path / "experiment.scp"
+    result.write(target, confirm=False)
+    restored = scp.read(target)
+    np.testing.assert_array_equal(restored.data, result.data)
+    np.testing.assert_array_equal(restored.x.data, result.x.data)
+    assert json.loads(
+        json.dumps(restored.meta.nmr_processing, default=str)
+    ) == json.loads(json.dumps(result.meta.nmr_processing, default=str))
+    np.testing.assert_array_equal(source.data, samples)
+    assert dict(source.meta) == original
+    for name, expected in zip(("fid", "procpar"), CASES[acquisition.name][:2]):
+        assert hashlib.sha256((acquisition / name).read_bytes()).hexdigest() == expected

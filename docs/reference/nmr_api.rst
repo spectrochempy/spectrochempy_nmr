@@ -44,3 +44,5 @@ Experimental processing
 .. autofunction:: spectrochempy_nmr.process_agilent_noesy_states_tppi
 
 .. autofunction:: spectrochempy_nmr.extract_noesy_components
+
+.. autofunction:: spectrochempy_nmr.reference_interop_1d
