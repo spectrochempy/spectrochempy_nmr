@@ -12,6 +12,9 @@ Unreleased
 Changed
 ~~~~~~~
 
+* Align commit-message and pull-request title prefixes with the SpectroChemPy
+  convention and add CI validation for pull-request titles.
+
 * Integrate normalized complex 1D acquisitions with Experiment, independent of
   origin, profile labels and raw vendor metadata. Keep default FFT axes in Hz
   and select ppm referencing explicitly from the producer's numeric descriptor.
