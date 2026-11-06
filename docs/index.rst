@@ -53,6 +53,7 @@ Start with one of the following paths:
 
    agilent_qualification
    processed_1d_interop
+   nmrpipe_interop
    bruker_normalized_qualification
    agilent_frequency_reference
 
