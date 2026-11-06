@@ -146,7 +146,7 @@ jobs:
           PY
       - name: Validate released-core interop and capability refusal
         run: |
-          python -I -m pytest -ra tests/test_interop_conversion.py tests/test_agilent_interop_facade.py tests/test_agilent_reference.py tests/test_processing_architecture.py tests/test_fft_prevalidation_compatibility.py
+          python -I -m pytest -ra tests/test_interop_conversion.py tests/test_agilent_interop_facade.py tests/test_agilent_reference.py tests/test_experiment_interop.py tests/test_processing_architecture.py tests/test_fft_prevalidation_compatibility.py
 
   pinned-core-tests:
     needs: artifacts
@@ -185,7 +185,7 @@ jobs:
           python -m pip check
       - name: Run synthetic tests against installed artifacts
         run: |
-          python -I -m pytest -ra tests/test_linear_prediction.py tests/test_fft_encodings.py tests/test_fft_2d_characterization.py tests/test_nmrpipe_oracle_conventions.py tests/test_nmrpipe_states_tppi_oracle.py tests/test_native_readers.py tests/test_fft_prevalidation_compatibility.py tests/test_complex_channels.py tests/test_quadrature.py tests/test_agilent_noesy_processing.py tests/test_interop_conversion.py tests/test_agilent_interop_facade.py tests/test_agilent_reference.py tests/test_processing_architecture.py
+          python -I -m pytest -ra tests/test_linear_prediction.py tests/test_fft_encodings.py tests/test_fft_2d_characterization.py tests/test_nmrpipe_oracle_conventions.py tests/test_nmrpipe_states_tppi_oracle.py tests/test_native_readers.py tests/test_fft_prevalidation_compatibility.py tests/test_complex_channels.py tests/test_quadrature.py tests/test_agilent_noesy_processing.py tests/test_interop_conversion.py tests/test_agilent_interop_facade.py tests/test_agilent_reference.py tests/test_experiment_interop.py tests/test_processing_architecture.py
 
   pinned-core:
     needs: pinned-core-tests

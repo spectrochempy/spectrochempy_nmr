@@ -23,6 +23,13 @@ def _spectrum(size=8):
             "acquisition": {
                 "spectral_width_hz": 1000.0,
                 "observation_frequency_mhz": 100.00012,
+                "frequency_axis": {
+                    "schema": "normalized-frequency-axis-v1",
+                    "bin_sign": -1,
+                    "reference_enabled": True,
+                    "reference_frequency_mhz": 100.0,
+                    "offsets_hz": {"rfl-rfp": 120.0, "sfrq-reffrq": 120.0},
+                },
                 "original_reference": {
                     "reffrq": 100.0,
                     "rfl": 400.0,
@@ -62,10 +69,9 @@ def test_reference_has_independent_expected_ppm_axis(reference):
 def test_explicit_single_source_does_not_invent_other_evidence(reference, missing):
     source = _spectrum()
     if missing == "observation":
-        source.meta.acquisition["observation_frequency_mhz"] = None
+        source.meta.acquisition["frequency_axis"]["offsets_hz"].pop("sfrq-reffrq")
     else:
-        source.meta.acquisition["original_reference"].pop("rfl")
-        source.meta.acquisition["original_reference"].pop("rfp")
+        source.meta.acquisition["frequency_axis"]["offsets_hz"].pop("rfl-rfp")
     result = reference_agilent_1d(source, reference=reference)
     assert result.meta.frequency_reference["disagreement_hz"] is None
     assert result.meta.frequency_reference["consistent_within_0_1_hz"] is None
@@ -92,7 +98,7 @@ def test_dft_grid_spacing_and_zero_bin_not_endpoint_linspace(size):
 
 def test_conflicting_models_require_explicit_choice_and_retain_evidence():
     source = _spectrum()
-    source.meta.acquisition["observation_frequency_mhz"] = 100.0005
+    source.meta.acquisition["frequency_axis"]["offsets_hz"]["sfrq-reffrq"] = 500.0
     with pytest.raises(TypeError, match="reference"):
         reference_agilent_1d(source)
     graphical = reference_agilent_1d(source, reference="rfl-rfp")
@@ -105,11 +111,14 @@ def test_conflicting_models_require_explicit_choice_and_retain_evidence():
     np.testing.assert_array_equal(absolute.data, graphical.data)
 
 
-@pytest.mark.parametrize("parameter", ["reffrq", "rfl", "rfp"])
+@pytest.mark.parametrize("parameter", ["frequency", "offset"])
 @pytest.mark.parametrize("value", [float("nan"), float("inf"), True, "bad", 10**400])
 def test_bad_reference_refuses_without_mutating_input(parameter, value):
     source = _spectrum()
-    source.meta.acquisition["original_reference"][parameter] = value
+    if parameter == "frequency":
+        source.meta.acquisition["frequency_axis"]["reference_frequency_mhz"] = value
+    else:
+        source.meta.acquisition["frequency_axis"]["offsets_hz"]["rfl-rfp"] = value
     before = source.data.copy()
     coordinates = source.x.data.copy()
     with pytest.raises(ValueError):
@@ -122,14 +131,14 @@ def test_bad_reference_refuses_without_mutating_input(parameter, value):
 @pytest.mark.parametrize("value", [0, -1, None])
 def test_missing_or_nonpositive_reference_frequency_refuses(value):
     source = _spectrum()
-    source.meta.acquisition["original_reference"]["reffrq"] = value
-    with pytest.raises(ValueError, match="reffrq"):
+    source.meta.acquisition["frequency_axis"]["reference_frequency_mhz"] = value
+    with pytest.raises(ValueError, match="reference_frequency_mhz"):
         reference_agilent_1d(source, reference="rfl-rfp")
 
 
 def test_disabled_referencing_and_wrong_domain_refuse():
     source = _spectrum()
-    source.meta.source_metadata["procpar"]["refpos"]["values"] = ["n"]
+    source.meta.acquisition["frequency_axis"]["reference_enabled"] = False
     with pytest.raises(ValueError, match="disabled"):
         reference_agilent_1d(source, reference="rfl-rfp")
     source.meta.isfreq = [False]

@@ -57,11 +57,11 @@ Explicit application after FFT
 
 .. code-block:: python
 
-   from spectrochempy_nmr import read_agilent_interop, reference_agilent_1d
+   from spectrochempy_nmr import read_agilent_interop, reference_interop_1d
 
    fid = read_agilent_interop("acquisition.fid")
    spectrum = fid.fft()  # centered Hz, not a chemical reference
-   referenced = reference_agilent_1d(spectrum, reference="rfl-rfp")
+   referenced = reference_interop_1d(spectrum, reference="rfl-rfp")
    # An explicit alternative is reference="sfrq-reffrq".
    # units="Hz" keeps a referenced Hz axis with the same ppm context.
 
@@ -133,3 +133,36 @@ NMRPipe headers. This verifies numerical conventions for an explicitly supplied
 reference, not the validity of the chemical standard or a vendor processing
 recipe. Originals are hash-checked before/after; no binaries or spectra are
 redistributed. NMRPipe remains optional and is not required by CI.
+
+Normalized Experiment workflow (Unreleased)
+-------------------------------------------
+
+The reader is format-specific; the normalized processing workflow is not::
+
+   from spectrochempy_nmr import read_agilent_interop
+   from spectrochempy_nmr.experiment import Experiment
+
+   fid = read_agilent_interop("/path/to/acquisition.fid")
+   spectrum_hz = Experiment(fid).process(apodization="em", lb=1, size=65536)
+   spectrum_ppm = Experiment(fid).process(reference="rfl-rfp")
+
+``Experiment`` classifies normalized input using its structural contract and
+current domain. It consumes ``acquisition.frequency_axis`` for explicit
+referencing. Candidate labels are opaque: a different producer can provide
+other labels, either frequency sign, and its own chemical-zero frequency.
+Changing or omitting origin, the descriptive profile name, or raw metadata does
+not select a different processing path. Archived ``interop_domains`` describes
+the input; ``data_domain`` tracks the current processed state.
+
+Without ``reference``, FFT output remains on the centered Hz grid. Missing
+reference evidence does not prevent a calibrated time-domain FFT. A selected
+reference requires the normalized numeric descriptor; raw procpar fields are
+never interpreted by this workflow. Older provider results can still be
+transformed but must be read again with the qualified provider to reference.
+``reference_agilent_1d`` remains a compatibility name for the generic helper.
+
+Only one complex 1D acquisition is supported here. Independent acquisition
+stacks, uncalibrated or nonuniform time axes and masked FIDs are rejected.
+The processing trace records explicit operations and the selected reference;
+source samples and acquisition metadata are preserved. This does not switch
+legacy readers to interop or qualify arbitrary vendors or multidimensional data.

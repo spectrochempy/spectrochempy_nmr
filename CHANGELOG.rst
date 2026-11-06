@@ -5,11 +5,19 @@ This changelog covers the independently versioned ``spectrochempy-nmr``
 distribution. Entries under Unreleased describe development after the latest
 release, not capabilities available in the published 0.2.0 package.
 
+
 Unreleased
 ----------
 
 Changed
 ~~~~~~~
+
+* Integrate normalized complex 1D acquisitions with Experiment, independent of
+  origin, profile labels and raw vendor metadata. Keep default FFT axes in Hz
+  and select ppm referencing explicitly from the producer's numeric descriptor.
+  Validate the processing chain and persistence on both real Agilent acquisitions.
+  The experimental ``reference_agilent_1d`` helper now delegates to the generic
+  ``reference_interop_1d`` helper and requires the normalized frequency descriptor.
 
 * Reject unsupported channel FFT/IFFT requests before any in-place preparation,
   preserving samples, axes, coordinates, masks and metadata on refusal. Native

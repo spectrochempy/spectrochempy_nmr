@@ -47,9 +47,9 @@ def _fft_postprocess_result(new, dim=-1, inv=False, **kwargs):
                 new.coordset["c"] = Coord.arange(2, dims="c", labels=["F1_R", "F1_I"])
             new.meta.readonly = True
 
-    if (
-        new.ndim == 1
-        and new.meta.get("normalization_profile") == "agilent-fid-1d-complex-v1"
+    if new.ndim == 1 and (
+        new.meta.get("quadrature_mode") == "complex-1d"
+        or new.meta.get("acquisition", {}).get("frequency_axis") is not None
     ):
         readonly = new.meta.readonly
         new.meta.readonly = False

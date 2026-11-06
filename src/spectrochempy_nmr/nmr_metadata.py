@@ -76,6 +76,9 @@ class NMRMetadata:
     spectrometer_freq_mhz: tuple[float | None, ...] | None = None
     """Spectrometer frequency in MHz per dimension (plain float or None)."""
 
+    normalized_interop: bool = False
+    """Whether the canonical normalized interop contract supplies this state."""
+
 
 # ---------------------------------------------------------------------------
 # Source-kind inference (shared logic)
@@ -685,12 +688,13 @@ _EXTRACTORS = {
 }
 
 
-def extract_nmr_metadata(meta) -> NMRMetadata:
+def extract_nmr_metadata(meta, *, ndim=None) -> NMRMetadata:
     """
     Extract :class:`NMRMetadata` from any supported NMR metadata object.
 
-    Dispatches to the correct vendor-specific extractor based on
-    ``meta.origin``.
+    Normalized interop metadata is consumed structurally before the legacy
+    extractors, which dispatch on ``meta.origin``. Origin and raw metadata do
+    not influence the normalized path.
 
     Parameters
     ----------
@@ -704,6 +708,33 @@ def extract_nmr_metadata(meta) -> NMRMetadata:
     """
     if meta is None or len(meta) == 0:
         return NMRMetadata(ndim=0, domains=())
+
+    if meta.get("interop_dimensions") is not None:
+        physical = tuple(meta.get("interop_physical_dimensions", ()))
+        dimensions = tuple(meta.get("interop_dimensions", ()))
+        if (
+            physical != ("F2",)
+            or dimensions != ("F2",)
+            or meta.get("quadrature_mode") != "complex-1d"
+        ):
+            raise ValueError("unsupported normalized interop structure")
+        actual_ndim = 1 if ndim is None else ndim
+        if actual_ndim != 1:
+            raise NotImplementedError(
+                "normalized interop Experiment currently requires one 1D acquisition"
+            )
+        domain = meta.get("data_domain", "unknown")
+        acquisition = meta.get("acquisition", {})
+        return NMRMetadata(
+            normalized_interop=True,
+            ndim=1,
+            domains=(domain,),
+            source_kind=infer_source_kind(1, (domain,)),
+            nuclei=(acquisition.get("nucleus"),),
+            iscomplex=(True,),
+            spectral_width_hz=(acquisition.get("spectral_width_hz"),),
+            spectrometer_freq_mhz=(acquisition.get("observation_frequency_mhz"),),
+        )
 
     origin = getattr(meta, "origin", None)
     extractor = _EXTRACTORS.get(origin)
