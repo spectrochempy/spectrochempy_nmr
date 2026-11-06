@@ -643,6 +643,10 @@ def __getattr__(name: str):
         from .interop import from_interop  # noqa: PLC0415
 
         return from_interop
+    if name == "reference_agilent_1d":
+        from .processing.agilent_reference import reference_agilent_1d
+
+        return reference_agilent_1d
     if name == "read_agilent_interop":
         from .readers.read_agilent_interop import read_agilent_interop  # noqa: PLC0415
 
@@ -658,6 +662,7 @@ def __dir__() -> list[str]:
         "process_agilent_noesy_states_tppi",
         "extract_noesy_components",
         "from_interop",
+        "reference_agilent_1d",
         "read_agilent_interop",
         "read",
         "read_topspin",

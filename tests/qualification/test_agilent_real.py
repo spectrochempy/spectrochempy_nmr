@@ -18,6 +18,8 @@ import pytest
 import spectrochempy as scp
 
 from spectrochempy_nmr import from_interop, read_agilent_interop
+from spectrochempy_nmr import reference_agilent_1d
+from pint.errors import DimensionalityError
 
 HOP = "FAM013_AHTM.PROTON_04.fid"
 CASES = {
@@ -252,3 +254,89 @@ def test_observed_nucleus_uses_transmitter_not_decoupler(provider):
     assert result.meta.source_metadata["procpar"]["dn"]["values"] == ["C13"]
     assert result.meta.acquisition["nucleus"] == "H1"
     assert result.x.title == "H1"
+
+
+def test_real_fft_is_centered_hz_without_implicit_chemical_reference(
+    acquisition, provider
+):
+    source = read_agilent_interop(acquisition)
+    spectrum = source.fft()
+    expected = np.fft.fftshift(np.fft.fft(_binary_oracle(acquisition)))
+    np.testing.assert_allclose(spectrum.data, expected, rtol=1e-6, atol=1e-5)
+    assert spectrum.x.units == scp.ur.Hz
+    assert spectrum.meta.data_domain == "frequency"
+    assert spectrum.meta.get("frequency_reference") is None
+    assert spectrum.x.meta.get("acquisition_frequency") is None
+    assert spectrum.meta.acquisition == source.meta.acquisition
+    with pytest.raises(DimensionalityError):
+        spectrum.x.to("ppm")
+    assert spectrum.meta.readonly
+    inverse = spectrum.ifft()
+    generic = spectrum.copy()
+    generic.meta.readonly = False
+    generic.meta.normalization_profile = None
+    generic.meta.readonly = True
+    expected_inverse = generic.ifft()
+    np.testing.assert_array_equal(inverse.x.data, expected_inverse.x.data)
+    np.testing.assert_array_equal(inverse.data, expected_inverse.data)
+    assert inverse.meta.data_domain == "time"
+    assert spectrum.meta.readonly
+
+
+@pytest.mark.parametrize("reference", ["rfl-rfp", "sfrq-reffrq"])
+def test_real_frequency_reference_axis_and_persistence(
+    acquisition, provider, reference, tmp_path
+):
+    source = read_agilent_interop(acquisition)
+    spectrum = source.fft()
+    acquisition_meta = source.meta.acquisition
+    reference_mhz = {HOP: 599.826355589, "agilent_1d": 125.6808291}[acquisition.name]
+    centers = {
+        HOP: {"rfl-rfp": 4806.1110128254, "sfrq-reffrq": 4806.111000107194},
+        "agilent_1d": {"rfl-rfp": 0.0, "sfrq-reffrq": 281.6000000080976},
+    }
+    result = reference_agilent_1d(spectrum, reference=reference)
+    center = centers[acquisition.name][reference]
+    width = acquisition_meta["spectral_width_hz"]
+    count = result.size
+    expected = (
+        center - (np.arange(count) - count // 2) * width / count
+    ) / reference_mhz
+    np.testing.assert_allclose(result.x.data, expected, rtol=1e-10, atol=1e-10)
+    np.testing.assert_allclose(
+        np.diff(result.x.data), -width / (count * reference_mhz), rtol=1e-9, atol=1e-11
+    )
+    assert result.x.data[count // 2] == pytest.approx(center / reference_mhz)
+    assert result.x.units == scp.ur.ppm and result.x.reversed
+    assert result.meta.frequency_reference["reference"] == reference
+    assert result.meta.frequency_reference["reference_frequency_mhz"] == reference_mhz
+    disagreement = result.meta.frequency_reference["disagreement_hz"]
+    if acquisition.name == HOP:
+        assert disagreement < 0.001
+    else:
+        assert disagreement == pytest.approx(281.6, abs=1e-6)
+        assert not result.meta.frequency_reference["consistent_within_0_1_hz"]
+    np.testing.assert_array_equal(result.data, spectrum.data)
+    assert result.meta.acquisition == acquisition_meta
+    assert source.meta.get("frequency_reference") is None
+    assert spectrum.meta.get("frequency_reference") is None
+    assert result.meta.readonly
+    direct_inverse = result.ifft()
+    np.testing.assert_allclose(
+        direct_inverse.x.data, source.x.data, rtol=1e-9, atol=1e-12
+    )
+    np.testing.assert_allclose(direct_inverse.data, source.data, rtol=1e-5, atol=0.2)
+    assert result.meta.readonly
+    target = tmp_path / "referenced.scp"
+    result.write(target, confirm=False)
+    restored = scp.read(target)
+    np.testing.assert_array_equal(restored.data, spectrum.data)
+    np.testing.assert_allclose(restored.x.data, expected, atol=1e-10)
+    np.testing.assert_allclose(
+        restored.x.to("Hz").data, expected * reference_mhz, atol=1e-7
+    )
+    assert restored.meta.frequency_reference == result.meta.frequency_reference
+    inverse = restored.ifft()
+    np.testing.assert_allclose(inverse.x.data, source.x.data, rtol=1e-9, atol=1e-12)
+    np.testing.assert_allclose(inverse.data, source.data, rtol=1e-5, atol=0.2)
+    assert inverse.meta.data_domain == "time"
