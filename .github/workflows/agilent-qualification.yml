@@ -37,7 +37,7 @@ jobs:
 
           metadata = distribution("nmrglue-ng")
           provenance = json.loads(metadata.read_text("direct_url.json"))
-          assert provenance["vcs_info"]["commit_id"] == "7e9a44291a7ea366b05e250e8c5461806f5143ad"
+          assert provenance["vcs_info"]["commit_id"] == "4677f37e870ed4b5cc65c5da99da8ad961c821e4"
           for name in ("spectrochempy", "spectrochempy_nmr", "nmrglue"):
               location = Path(find_spec(name).origin).resolve()
               assert Path.cwd() not in location.parents, location
@@ -47,3 +47,5 @@ jobs:
         run: python tools/fetch_agilent_qualification.py "$NMR_AGILENT_REAL_DATA"
       - name: Run real-provider qualification
         run: python -I -m pytest -ra tests/qualification/test_agilent_real.py
+      - name: Run synthetic Bruker normalized-provider qualification
+        run: python -I -m pytest -ra tests/qualification/test_bruker_normalized.py -k synthetic
