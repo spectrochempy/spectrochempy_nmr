@@ -7,7 +7,7 @@ It does not replace public Agilent reader dispatch. No core changes or new
 runtime dependencies are needed for this 1D path, including on core 1.1.4.
 
 The qualification pins provider commit
-``00d9186dd757c688f22f941063f5ff5d8cf4066d`` in
+``27df3405b087297c4a347cd3f1c415262078b8e1`` in
 ``tests/qualification/requirements.txt``. The CI job installs both packages
 as wheels, verifies the provider's VCS provenance and imports outside the
 checkout, then runs the real-provider tests on Python 3.11 and 3.13.
@@ -66,21 +66,22 @@ A controlled copy with added ``ns=4`` and ``ne=2`` demonstrates that the
 historical reader divides samples by eight while interop preserves them.
 This is a metadata variant of the hop acquisition, not another real experiment.
 
-Known blocker: observed nucleus
--------------------------------
+Observed nucleus and remaining scope
+------------------------------------
 
-The pinned provider selects ``dn`` before ``tn``. In the hop proton acquisition,
-``tn=H1`` while ``dn=C13``; the normalized acquisition consequently reports
-``C13``. The bridge faithfully preserves this metadata, but its scientific
-interpretation is wrong. A strict expected-failure test records the required
-observed-nucleus behavior. A provider upgrade that fixes it must update this
-test and the pin deliberately.
+The pinned provider includes the correction from nmrglue-ng PR #153: both the
+acquisition nucleus and time-axis label use the observed transmitter ``tn``,
+without falling back to the decoupler ``dn``. Missing or empty ``tn`` remains
+unknown. For the hop proton acquisition, ``tn=H1`` and ``dn=C13`` now produce
+``H1``. An ordinary passing regression checks both exported fields and retains
+both original procpar values.
 
 This qualification establishes sample and time-axis preservation on two real
-1D acquisitions, not complete scientific metadata correctness or readiness to
-replace the public reader. Resolve the observed-nucleus selection and the
-meaning of scan-count/reference fields upstream before considering dispatch
-migration. It does not qualify 2D data or calibrated frequency-domain axes.
+1D acquisitions and correct observed-nucleus selection on the hop file. It
+does not establish complete scientific metadata correctness or readiness to
+replace the public reader. Resolve the meaning of scan-count/reference fields
+before considering dispatch migration. It does not qualify 2D data or calibrated
+frequency-domain axes.
 
 Reproduce locally
 -----------------

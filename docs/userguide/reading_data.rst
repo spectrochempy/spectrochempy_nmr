@@ -24,5 +24,4 @@ the latter is outside the current public workflow.
 
 The separate experimental ``read_agilent_interop`` facade is characterized on
 real acquisitions with a pinned external provider. See
-:doc:`../agilent_qualification` for reproducible checks and the known
-observed-nucleus metadata blocker.
+:doc:`../agilent_qualification` for reproducible checks, observed-nucleus handling and remaining limitations.

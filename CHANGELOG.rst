@@ -35,8 +35,9 @@ Added
 
 * Real-provider Agilent 1D qualification with pinned nmrglue-ng, checksummed
   external acquisitions, independent binary sample checks and wheel-based CI.
-  Record the provider's observed-nucleus defect explicitly; public reader
-  dispatch remains unchanged.
+  The pinned provider includes the observed-nucleus correction from
+  nmrglue-ng PR #153, covered by a passing regression for acquisition metadata
+  and axis labels. Public reader dispatch remains unchanged.
 
 * Declarative TopSpin 1D processing plans with explicit validation and
   unsupported-parameter diagnostics. These plans do not execute vendor recipes.
