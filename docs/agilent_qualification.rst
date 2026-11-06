@@ -1,5 +1,5 @@
 Agilent 1D interop qualification
-===============================
+================================
 
 This **Unreleased, experimental** bridge uses the external ``nmrglue-ng``
 provider through ``ReadResult → normalize_agilent_fid → from_interop``.
@@ -14,7 +14,7 @@ checkout, then runs the real-provider tests on Python 3.11 and 3.13.
 The usual synthetic facade tests remain separate.
 
 Real acquisitions and provenance
--------------------------------
+--------------------------------
 
 * The public `nmrML hop example <https://nmrml.org/examples/1/>`_,
   ``FAM013_AHTM.PROTON_04.fid``, contains 32768 complex points, spectral width
@@ -67,7 +67,7 @@ historical reader divides samples by eight while interop preserves them.
 This is a metadata variant of the hop acquisition, not another real experiment.
 
 Known blocker: observed nucleus
-------------------------------
+-------------------------------
 
 The pinned provider selects ``dn`` before ``tn``. In the hop proton acquisition,
 ``tn=H1`` while ``dn=C13``; the normalized acquisition consequently reports
