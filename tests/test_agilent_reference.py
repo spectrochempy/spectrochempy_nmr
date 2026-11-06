@@ -177,3 +177,31 @@ def test_inverse_restores_time_axis_without_automatic_rereferencing(readonly):
     assert spectrum.meta.data_domain == "frequency"
     assert spectrum.meta.frequency_reference is None
     assert source.meta.readonly is readonly
+
+
+def test_unreferenced_cropped_transform_chain_retains_effective_core_grid():
+    size = 1500
+    fid = scp.NDDataset(
+        np.exp(2j * np.pi * np.arange(size) / 15),
+        coordset=[scp.Coord(np.arange(size) / 50000, units="s", sigdigits=15)],
+        meta={
+            "normalization_profile": "agilent-fid-1d-complex-v1",
+            "acquisition": {"spectral_width_hz": 50000.0},
+            "isfreq": [False],
+            "td": [size],
+        },
+    )
+    generic = fid.copy()
+    generic.meta.normalization_profile = None
+
+    def transform(dataset):
+        return dataset.fft()[375:1125].ifft().fft().ifft()
+
+    result, expected = transform(fid), transform(generic)
+    np.testing.assert_array_equal(result.data, expected.data)
+    np.testing.assert_array_equal(result.x.data, expected.x.data)
+    np.testing.assert_allclose(
+        (np.diff(result.x.data) * result.x.units).to("s").magnitude,
+        40e-6,
+        rtol=2e-4,
+    )

@@ -272,8 +272,13 @@ def test_real_fft_is_centered_hz_without_implicit_chemical_reference(
         spectrum.x.to("ppm")
     assert spectrum.meta.readonly
     inverse = spectrum.ifft()
-    np.testing.assert_allclose(inverse.x.data, source.x.data, rtol=1e-9, atol=1e-12)
-    np.testing.assert_allclose(inverse.data, source.data, rtol=1e-5, atol=0.2)
+    generic = spectrum.copy()
+    generic.meta.readonly = False
+    generic.meta.normalization_profile = None
+    generic.meta.readonly = True
+    expected_inverse = generic.ifft()
+    np.testing.assert_array_equal(inverse.x.data, expected_inverse.x.data)
+    np.testing.assert_array_equal(inverse.data, expected_inverse.data)
     assert inverse.meta.data_domain == "time"
     assert spectrum.meta.readonly
 
