@@ -1,2 +1,2 @@
 # Test-only provider: never a plugin runtime dependency.
-nmrglue-ng @ git+https://github.com/spectrochempy/nmrglue-ng.git@a5c280907dff0f7d9ac6971bf98ecdee49aedaad
+nmrglue-ng @ git+https://github.com/spectrochempy/nmrglue-ng.git@14a66a05c7c2c1e04ee61505dde4db8ad7f71167

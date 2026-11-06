@@ -1,5 +1,5 @@
 NMRPipe 1D interop qualification (Unreleased)
-===========================================
+=============================================
 
 The optional external nmrglue-ng provider can import complete, already transformed
 NMRPipe 1D spectra into the generic Experiment path::
