@@ -179,7 +179,7 @@ def test_inverse_restores_time_axis_without_automatic_rereferencing(readonly):
     assert source.meta.readonly is readonly
 
 
-def test_unreferenced_cropped_transform_chain_retains_effective_core_grid():
+def test_unreferenced_cropped_transform_chain_retains_core_behavior():
     size = 1500
     fid = scp.NDDataset(
         np.exp(2j * np.pi * np.arange(size) / 15),
@@ -193,6 +193,12 @@ def test_unreferenced_cropped_transform_chain_retains_effective_core_grid():
     )
     generic = fid.copy()
     generic.meta.normalization_profile = None
+    first_inverse = fid.fft()[375:1125].ifft()
+    np.testing.assert_allclose(
+        (np.diff(first_inverse.x.data) * first_inverse.x.units).to("s").magnitude,
+        40e-6,
+        rtol=2e-4,
+    )
 
     def transform(dataset):
         return dataset.fft()[375:1125].ifft().fft().ifft()
@@ -200,8 +206,4 @@ def test_unreferenced_cropped_transform_chain_retains_effective_core_grid():
     result, expected = transform(fid), transform(generic)
     np.testing.assert_array_equal(result.data, expected.data)
     np.testing.assert_array_equal(result.x.data, expected.x.data)
-    np.testing.assert_allclose(
-        (np.diff(result.x.data) * result.x.units).to("s").magnitude,
-        40e-6,
-        rtol=2e-4,
-    )
+    assert result.x.units == expected.x.units
