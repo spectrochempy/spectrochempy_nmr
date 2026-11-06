@@ -208,12 +208,10 @@ def test_controlled_scan_count_variant_is_not_a_new_real_acquisition(
     assert result.meta.applied_operations[0]["scale"] is None
 
 
-@pytest.mark.xfail(
-    strict=True,
-    reason="pinned nmrglue-ng selects decoupler dn, not observed tn (nmrML proton)",
-)
-def test_observed_nucleus_known_provider_defect(provider):
+def test_observed_nucleus_uses_transmitter_not_decoupler(provider):
     source = Path(os.environ["NMR_AGILENT_REAL_DATA"]) / HOP
     result = read_agilent_interop(source)
     assert result.meta.source_metadata["procpar"]["tn"]["values"] == ["H1"]
+    assert result.meta.source_metadata["procpar"]["dn"]["values"] == ["C13"]
     assert result.meta.acquisition["nucleus"] == "H1"
+    assert result.x.title == "H1"
