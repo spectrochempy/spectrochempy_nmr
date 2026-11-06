@@ -13,7 +13,7 @@ jobs:
       matrix:
         python-version: ["3.11", "3.13"]
     env:
-      NMR_AGILENT_REAL_DATA: ${{ runner.temp }}/agilent-real
+      NMR_AGILENT_REAL_DATA: /tmp/agilent-real
     steps:
       - uses: actions/checkout@v7
       - uses: actions/setup-python@v7
