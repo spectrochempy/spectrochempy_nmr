@@ -21,3 +21,8 @@ be a replayable historical processing recipe. Compatibility aliases
 The reader scope includes 1D and 2D raw/processed data. 2D reading and
 native complex-channel storage must not be confused with validated 2D processing;
 the latter is outside the current public workflow.
+
+The separate experimental ``read_agilent_interop`` facade is characterized on
+real acquisitions with a pinned external provider. See
+:doc:`../agilent_qualification` for reproducible checks and the known
+observed-nucleus metadata blocker.

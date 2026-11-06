@@ -66,7 +66,11 @@ def _axis_coordinate(axis, size, dim):
         raise ValueError(
             "from_interop time axis must be a finite real 1D array matching data"
         )
-    kwargs = {"title": axis.label}
+    # Coord's display rounding can collapse short dwell intervals when the
+    # acquisition spans seconds. Keep the physical time values accessible.
+    # The core can reconstruct Coord during assignment, so also retain a high
+    # significant-digit setting if it restores display rounding on that copy.
+    kwargs = {"title": axis.label, "rounding": False, "sigdigits": 15}
     if axis.unit is not None:
         kwargs["units"] = axis.unit
     return scp.Coord(np.array(values, copy=True), **kwargs)
