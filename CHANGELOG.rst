@@ -33,6 +33,12 @@ Changed
 Added
 ~~~~~
 
+* Experimental explicit Agilent 1D frequency referencing after interop FFT,
+  with a required choice of reference model, preserved disagreement evidence,
+  calibrated Hz/ppm coordinates and SCP persistence. Qualify the two real
+  acquisitions against an optional external NMRPipe oracle, keeping samples
+  unchanged and chemical-reference ambiguity explicit.
+
 * Real-provider Agilent 1D qualification with pinned nmrglue-ng, checksummed
   external acquisitions, independent binary sample checks and wheel-based CI.
   The pinned provider includes the observed-nucleus correction from
@@ -55,6 +61,9 @@ Added
 
 Fixed
 ~~~~~
+
+* Keep Agilent interop time/frequency metadata coherent through FFT and restore
+  the time coordinate after inverse FFT of an explicitly referenced spectrum.
 
 * Preserve accessible normalized 1D time coordinates instead of collapsing small
   dwell intervals through default coordinate rounding.

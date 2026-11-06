@@ -4,6 +4,8 @@ from __future__ import annotations
 
 import re
 
+import numpy as np
+
 from spectrochempy.core.dataset.coord import Coord  # noqa: PLC0415
 
 
@@ -44,6 +46,24 @@ def _fft_postprocess_result(new, dim=-1, inv=False, **kwargs):
                 new.meta.component_labels = ("F1_R", "F1_I")
                 new.coordset["c"] = Coord.arange(2, dims="c", labels=["F1_R", "F1_I"])
             new.meta.readonly = True
+
+    if (
+        new.ndim == 1
+        and new.meta.get("normalization_profile") == "agilent-fid-1d-complex-v1"
+    ):
+        new.meta.data_domain = "time" if inv else "frequency"
+        reference = new.meta.get("frequency_reference")
+        if inv and reference:
+            size = new.shape[0]
+            dwell = 1 / (size * reference["bin_width_hz"])
+            coord = Coord(
+                np.arange(size) * dwell, units="s", rounding=False, sigdigits=15
+            )
+            coord.title = "time"
+            new.set_coordset(coord)
+            new.meta.last_frequency_reference = dict(reference)
+            new.meta.frequency_reference = None
+        return new
 
     # Only act when NMR metadata is present
     if not hasattr(new.meta, "sfo1") or new.meta.sfo1 is None:

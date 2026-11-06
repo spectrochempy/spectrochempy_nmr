@@ -52,6 +52,7 @@ Start with one of the following paths:
    :caption: Examples and compatibility
 
    agilent_qualification
+   agilent_frequency_reference
 
    examples/gallery/importer/index
    examples/gallery/apodization/index

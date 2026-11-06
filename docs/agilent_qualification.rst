@@ -97,9 +97,10 @@ This qualification establishes sample and time-axis preservation on two real
 selection on the hop file. It
 does not establish complete scientific metadata correctness or readiness to
 replace the public reader. Physical amplitude normalization, receiver-gain and
-nonzero binary-scale corrections, and frequency-reference interpretation
-remain unqualified. It does not qualify 2D data or calibrated frequency-domain
-axes.
+nonzero binary-scale corrections remain unqualified. Explicit frequency
+referencing, ppm axes and their source ambiguities are qualified separately
+in :doc:`agilent_frequency_reference`. Neither qualification resolves the
+conflicting chemical-reference evidence or covers 2D processing.
 
 Reproduce locally
 -----------------
