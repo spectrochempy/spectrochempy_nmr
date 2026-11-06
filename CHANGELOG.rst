@@ -14,7 +14,7 @@ Changed
 
 * Qualify explicit nmrML 1D raw/processed interop through the generic Experiment
   consumer, including dtype/count/sign/axis conventions and SCP persistence.
-  Add no runtime provider dependency or automatic reader dispatch.
+  Add no runtime provider dependency or automatic reader dispatch. (#34)
 
 * Qualify explicit optional NMRPipe processed 1D interop with Experiment on real
   Agilent/Bruker reference inputs transformed by NMRPipe; preserve real/complex
