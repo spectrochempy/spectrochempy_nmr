@@ -14,6 +14,7 @@ jobs:
         python-version: ["3.11", "3.13"]
     env:
       NMR_AGILENT_REAL_DATA: /tmp/agilent-real
+      NMRML_QUALIFICATION_DATA: /tmp/nmrml-real
       NMR_PDATA_TOMATO_DATA: /tmp/pdata-real/MMBBI_10M12-CE01-1a/1/pdata/1
     steps:
       - uses: actions/checkout@v7
@@ -38,7 +39,7 @@ jobs:
 
           metadata = distribution("nmrglue-ng")
           provenance = json.loads(metadata.read_text("direct_url.json"))
-          assert provenance["vcs_info"]["commit_id"] == "14a66a05c7c2c1e04ee61505dde4db8ad7f71167"
+          assert provenance["vcs_info"]["commit_id"] == "0a7421795a9008c57eb63d6d747debc45ecf7135"
           for name in ("spectrochempy", "spectrochempy_nmr", "nmrglue"):
               location = Path(find_spec(name).origin).resolve()
               assert Path.cwd() not in location.parents, location
@@ -57,3 +58,8 @@ jobs:
 
       - name: Run synthetic NMRPipe normalized-provider qualification
         run: python -I -m pytest -ra tests/qualification/test_nmrpipe_interop.py -k synthetic
+
+      - name: Fetch checksum-pinned nmrML XML and native reference examples
+        run: python tools/fetch_nmrml_qualification.py "$NMRML_QUALIFICATION_DATA"
+      - name: Run nmrML raw and processed interop qualification
+        run: python -I -m pytest -ra tests/qualification/test_nmrml_interop.py

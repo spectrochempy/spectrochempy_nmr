@@ -28,3 +28,6 @@ real acquisitions with a pinned external provider. See
 
 For the explicit, optional NMRPipe processed 1D interop path, see
 :doc:`../nmrpipe_interop`. This does not change automatic reader dispatch.
+
+See :doc:`../nmrml_interop` for explicit 1D nmrML exchange-format profiles,
+writer round trips and the required convention choices.
