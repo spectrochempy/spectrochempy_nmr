@@ -76,6 +76,69 @@ def _axis_coordinate(axis, size, dim):
     return scp.Coord(np.array(values, copy=True), **kwargs)
 
 
+def _frequency_coordinate(axis, size):
+    """Preserve an explicitly calibrated normalized frequency grid."""
+    import spectrochempy as scp  # noqa: PLC0415
+
+    if (
+        axis.domain != "frequency"
+        or axis.unit not in ("Hz", "ppm")
+        or axis.values is None
+    ):
+        raise ValueError("normalized spectrum requires explicit Hz or ppm coordinates")
+    if np.ma.is_masked(axis.values):
+        raise ValueError("normalized frequency axis must be unmasked")
+    values = np.asarray(axis.values)
+    if (
+        values.shape != (size,)
+        or values.dtype.kind not in "iuf"
+        or not np.isfinite(values).all()
+    ):
+        raise ValueError(
+            "normalized frequency axis must be finite and match the spectrum"
+        )
+    floating = values.astype(float)
+    if not np.isfinite(floating).all():
+        raise ValueError("normalized frequency coordinates exceed floating-point range")
+    if values.dtype.kind in "iu" and not np.array_equal(
+        values.astype(object), floating.astype(object)
+    ):
+        raise ValueError(
+            "normalized integer frequency coordinates exceed floating-point precision"
+        )
+    values = floating
+    differences = np.diff(values)
+    if size < 2 or not (np.all(differences > 0) or np.all(differences < 0)):
+        raise ValueError("normalized frequency axis must be strictly monotonic")
+    coord = scp.Coord(
+        values.copy(), units=axis.unit, title=axis.label, rounding=False, sigdigits=15
+    )
+    reference = getattr(axis, "reference", None)
+    if reference is not None and reference.observation_frequency is not None:
+        frequency = reference.observation_frequency
+        if isinstance(frequency, (bool, np.bool_)) or not isinstance(
+            frequency, (int, float, np.integer, np.floating)
+        ):
+            raise ValueError(
+                "normalized reference frequency must be a positive MHz scalar"
+            )
+        try:
+            frequency = float(frequency)
+        except (ValueError, OverflowError) as exc:
+            raise ValueError("invalid normalized reference frequency") from exc
+        if (
+            not np.isfinite(frequency)
+            or frequency <= 0
+            or reference.observation_frequency_unit != "MHz"
+        ):
+            raise ValueError(
+                "normalized reference frequency must be a positive MHz scalar"
+            )
+        coord.meta["acquisition_frequency"] = float(frequency) * scp.ur.MHz
+        coord.meta["reference_source"] = reference.source
+    return coord
+
+
 def _interop_metadata(result):
     operations = []
     for operation in result.applied_operations:
@@ -123,7 +186,7 @@ def _interop_metadata(result):
 
 
 def from_interop(result):
-    """Convert one normalized 1D acquisition into a complex NDDataset.
+    """Convert a normalized complex FID or real/complex 1D spectrum.
 
     The converter consumes the neutral normalized protocol by attributes and
     deliberately does not import nmrglue-ng or inspect vendor metadata. A raw
@@ -156,19 +219,22 @@ def from_interop(result):
     if np.ma.is_masked(result.data):
         raise ValueError("from_interop currently requires unmasked acquisition data")
     data = np.asarray(result.data)
-    if data.ndim != 1 or not np.iscomplexobj(data):
-        raise ValueError("from_interop currently supports one complex 1D acquisition")
+    if data.ndim != 1 or data.dtype.kind not in "iufc":
+        raise ValueError("from_interop currently supports one numeric 1D acquisition")
+    domain = tuple(result.domains)
+    if domain not in (("time",), ("frequency",)):
+        raise ValueError("from_interop 1D input must declare time or frequency domain")
+    complex_data = np.iscomplexobj(data)
+    if domain == ("time",) and not complex_data:
+        raise ValueError("from_interop time-domain input requires complex samples")
     if tuple(result.dimensions) != ("F2",) or tuple(result.physical_dimensions) != (
         "F2",
     ):
         raise ValueError("from_interop 1D input must declare the F2 dimension")
-    if tuple(result.domains) != ("time",):
-        raise ValueError("from_interop 1D input must be in the time domain")
     if len(result.axes) != 1:
         raise ValueError("from_interop 1D input must have one physical axis")
-    if result.quadrature_mode != "complex-1d" or tuple(result.branch_order) != (
-        "complex",
-    ):
+    mode = "complex" if complex_data else "real"
+    if result.quadrature_mode != mode + "-1d" or tuple(result.branch_order) != (mode,):
         raise ValueError("from_interop 1D input has an unsupported quadrature contract")
     if result.normalization_state not in (
         "storage-normalized",
@@ -185,12 +251,16 @@ def from_interop(result):
     axis = result.axes[0]
     dataset = scp.NDDataset(
         np.array(data, copy=True),
-        coordset=[_axis_coordinate(axis, data.size, "x")],
+        coordset=[
+            _axis_coordinate(axis, data.size, "x")
+            if domain == ("time",)
+            else _frequency_coordinate(axis, data.size)
+        ],
         dims=["x"],
     )
     dataset.meta.update(_interop_metadata(result))
     dataset.meta.axis_roles = ("F2",)
-    dataset.meta.data_domain = "time"
-    dataset.meta.isfreq = [False]
+    dataset.meta.data_domain = domain[0]
+    dataset.meta.isfreq = [domain == ("frequency",)]
     dataset.meta.td = [int(data.size)]
     return dataset

@@ -490,7 +490,8 @@ class Experiment:
             accepted by the public API. If omitted, the selected core
             apodization function uses its own default.
         size : int, optional
-            Zero-fill target size.  Only applied to time-domain data.
+            Zero-fill target size. Only applied to time-domain data; normalized
+            frequency spectra reject a non-null target size.
         phase : str, optional
             ``'manual'`` to apply explicit ``phc0``/``phc1``,
             ``'metadata'`` to apply the dataset's current phase metadata via
@@ -615,6 +616,15 @@ class Experiment:
                 explicit_arguments=explicit_arguments,
             )
         elif self.is_frequency_domain:
+            if self._nmr_meta.normalized_interop:
+                if size is not None:
+                    raise ValueError(
+                        "normalized frequency spectra cannot request time-domain zero filling"
+                    )
+                if phase is not None and not self._nmr_meta.iscomplex[0]:
+                    raise ValueError(
+                        "phase correction requires an available imaginary component"
+                    )
             self._reject_frequency_domain_apodization_requests(
                 apodization,
                 lb=lb,

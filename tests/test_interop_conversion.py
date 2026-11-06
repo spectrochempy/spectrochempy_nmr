@@ -109,7 +109,7 @@ def test_from_interop_rejects_descriptive_result_and_invalid_contract():
 
     invalid = _normalized()
     invalid.domains = ("frequency",)
-    with pytest.raises(ValueError, match="time domain"):
+    with pytest.raises(ValueError, match="explicit Hz or ppm"):
         from_interop(invalid)
 
     invalid = _normalized()

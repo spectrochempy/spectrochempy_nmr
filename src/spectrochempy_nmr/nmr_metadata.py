@@ -715,7 +715,7 @@ def extract_nmr_metadata(meta, *, ndim=None) -> NMRMetadata:
         if (
             physical != ("F2",)
             or dimensions != ("F2",)
-            or meta.get("quadrature_mode") != "complex-1d"
+            or meta.get("quadrature_mode") not in ("complex-1d", "real-1d")
         ):
             raise ValueError("unsupported normalized interop structure")
         actual_ndim = 1 if ndim is None else ndim
@@ -731,7 +731,7 @@ def extract_nmr_metadata(meta, *, ndim=None) -> NMRMetadata:
             domains=(domain,),
             source_kind=infer_source_kind(1, (domain,)),
             nuclei=(acquisition.get("nucleus"),),
-            iscomplex=(True,),
+            iscomplex=(meta.get("quadrature_mode") == "complex-1d",),
             spectral_width_hz=(acquisition.get("spectral_width_hz"),),
             spectrometer_freq_mhz=(acquisition.get("observation_frequency_mhz"),),
         )

@@ -52,6 +52,7 @@ Start with one of the following paths:
    :caption: Examples and compatibility
 
    agilent_qualification
+   processed_1d_interop
    bruker_normalized_qualification
    agilent_frequency_reference
 
