@@ -7,7 +7,7 @@ It does not replace public Agilent reader dispatch. No core changes or new
 runtime dependencies are needed for this 1D path, including on core 1.1.4.
 
 The qualification pins provider commit
-``27df3405b087297c4a347cd3f1c415262078b8e1`` in
+``202bb5df1aa04893ec3feb839cf90af64c2c1d9d`` in
 ``tests/qualification/requirements.txt``. The CI job installs both packages
 as wheels, verifies the provider's VCS provenance and imports outside the
 checkout, then runs the real-provider tests on Python 3.11 and 3.13.
@@ -58,9 +58,25 @@ acquisitions is refused because they have different sizes and spectral widths.
 The profile is storage-normalized: no scan scaling, conjugation, FFT or phase
 correction is applied. Both original procpar files lack ``ns`` and ``ne``,
 so the historical reader's fallback divisor is one and sample parity is
-expected. In particular, the hop file's ``nt=160`` is preserved in raw
-metadata but is not mapped to ``NS`` by this provider. Sample parity is not
-evidence of correct physical amplitude normalization.
+expected. ``NS``/``NE`` remain literal vendor ``ns``/``ne`` fields and are
+not replaced by requested or acquired counts. Sample parity is not evidence
+of correct physical amplitude normalization.
+
+The pinned provider includes nmrglue-ng PR #154. Its
+``dataset.meta.acquisition['scan_counts']`` keeps requested ``nt``, informational
+procpar ``ct``, binary block ``ctcount`` and scale evidence separate. Both
+original acquisitions agree at 160 (hop) and 512 (historical carbon) scans,
+with block scale zero and status ``consistent``. Tests independently read the
+binary header and verify these values, their source and status through the
+facade, stacking metadata and SCP save/reload. Serialized tuples may become
+lists; their values remain identical.
+
+The provider leaves the convenience completed count unknown when evidence is
+conflicting, invalid, missing or ambiguous. It never substitutes requested
+scans for acquired scans. The plugin preserves this contract without using
+the count to scale samples. These real-file tests cover consistent counts
+only; stopped acquisitions and invalid/conflicting counters have synthetic
+provider coverage, not additional real-acquisition validation here.
 
 A controlled copy with added ``ns=4`` and ``ne=2`` demonstrates that the
 historical reader divides samples by eight while interop preserves them.
@@ -77,11 +93,13 @@ unknown. For the hop proton acquisition, ``tn=H1`` and ``dn=C13`` now produce
 both original procpar values.
 
 This qualification establishes sample and time-axis preservation on two real
-1D acquisitions and correct observed-nucleus selection on the hop file. It
+1D acquisitions, sourced scan-count preservation and correct observed-nucleus
+selection on the hop file. It
 does not establish complete scientific metadata correctness or readiness to
-replace the public reader. Resolve the meaning of scan-count/reference fields
-before considering dispatch migration. It does not qualify 2D data or calibrated
-frequency-domain axes.
+replace the public reader. Physical amplitude normalization, receiver-gain and
+nonzero binary-scale corrections, and frequency-reference interpretation
+remain unqualified. It does not qualify 2D data or calibrated frequency-domain
+axes.
 
 Reproduce locally
 -----------------
