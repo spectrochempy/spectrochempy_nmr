@@ -38,6 +38,9 @@ Added
   The pinned provider includes the observed-nucleus correction from
   nmrglue-ng PR #153, covered by a passing regression for acquisition metadata
   and axis labels. Public reader dispatch remains unchanged.
+* Qualify sourced Agilent scan counts from nmrglue-ng PR #154 through the
+  experimental facade, independent-acquisition stacking and SCP persistence.
+  Counts of 160 and 512 remain metadata; samples are not scan-normalized.
 
 * Declarative TopSpin 1D processing plans with explicit validation and
   unsupported-parameter diagnostics. These plans do not execute vendor recipes.

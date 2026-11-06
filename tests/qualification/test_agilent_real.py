@@ -157,11 +157,45 @@ def test_real_legacy_parity_without_claiming_scan_normalization(acquisition, pro
     assert legacy.meta.ns == legacy.meta.ne == 1
 
 
+def _assert_real_scan_counts(dataset, acquisition):
+    expected = {HOP: 160, "agilent_1d": 512}[acquisition.name]
+    scale, _, _, _, ctcount, _, _, _, _ = struct.unpack(
+        ">4hi4f", (acquisition / "fid").read_bytes()[32:60]
+    )
+    assert ctcount == expected and scale == 0
+    counts = dataset.meta.acquisition["scan_counts"]
+    # SCP serialization preserves values but represents tuples as JSON lists.
+    assert json.loads(json.dumps(counts)) == {
+        "requested": expected,
+        "procpar_completed": expected,
+        "block_completed": [expected],
+        "block_scales": [0],
+        "completed": expected,
+        "source": "fid.blockheader.ctcount",
+        "status": "consistent",
+        "invalid": [],
+    }
+    for key in ("nt", "ct"):
+        assert dataset.meta.source_metadata["procpar"][key]["values"] == [str(expected)]
+    assert dataset.meta.acquisition["NS"] is None
+    assert dataset.meta.acquisition["NE"] is None
+    assert dataset.meta.acquisition["normalization"] == "none"
+    assert dataset.meta.applied_operations[0]["scale"] is None
+
+
+def test_real_scan_count_evidence_preserved_without_scaling(acquisition, provider):
+    result = read_agilent_interop(acquisition)
+    _assert_real_scan_counts(result, acquisition)
+    np.testing.assert_array_equal(result.data, _binary_oracle(acquisition))
+
+
 def test_real_persistence(acquisition, provider, tmp_path):
     result = read_agilent_interop(acquisition)
+    _assert_real_scan_counts(result, acquisition)
     target = tmp_path / "real-fid.scp"
     result.write(target, confirm=False)
     restored = scp.read(target)
+    _assert_real_scan_counts(restored, acquisition)
     np.testing.assert_array_equal(restored.data, result.data)
     np.testing.assert_array_equal(restored.x.data, result.x.data)
     for field in ("acquisition", "provenance", "source_metadata", "interop_axes"):
@@ -180,6 +214,9 @@ def test_real_compatible_copies_stack_and_incompatible_acquisitions_refuse(
     assert stacked.shape == (2, 32768)
     assert stacked.meta.series_axis_role == "acquisition_index"
     assert len(stacked.meta.individual_provenance) == 2
+    assert [
+        item["scan_counts"]["completed"] for item in stacked.meta.individual_acquisition
+    ] == [160, 160]
     assert stacked.meta.acquisition_order == tuple(str(path) for path in copies)
     np.testing.assert_array_equal(stacked.data[0], stacked.data[1])
     local = os.environ.get("NMR_AGILENT_LEGACY_DATA")
