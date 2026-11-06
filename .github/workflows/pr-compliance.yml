@@ -1,0 +1,40 @@
+name: PR Compliance
+
+on:
+  pull_request:
+    types: [opened, edited, synchronize, reopened, labeled, unlabeled]
+
+permissions:
+  contents: read
+
+jobs:
+  check-prefix:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v7
+
+      - name: Extract allowed prefixes from CONTRIBUTING.md
+        id: prefixes
+        run: |
+          PREFIXES=$(awk -F'`' '/^\| `[A-Z]+:`[[:space:]]*\|/ { print $2 }' CONTRIBUTING.md | tr '\n' '|' | sed 's/|$//')
+          if [[ -z "$PREFIXES" ]]; then
+            echo "::error::No PR title prefixes could be extracted from CONTRIBUTING.md."
+            exit 1
+          fi
+          echo "regex=^(${PREFIXES})" >> "$GITHUB_OUTPUT"
+          echo "Allowed prefixes: ${PREFIXES}"
+
+      - name: Check PR title prefix
+        if: ${{ github.event.pull_request.user.login != 'dependabot[bot]' && !contains(github.event.pull_request.labels.*.name, 'non-standard-prefix') }}
+        env:
+          TITLE: ${{ github.event.pull_request.title }}
+          PREFIX_REGEX: ${{ steps.prefixes.outputs.regex }}
+        run: |
+          if [[ ! "$TITLE" =~ $PREFIX_REGEX ]]; then
+            echo "::error::PR title must start with a valid prefix defined in CONTRIBUTING.md."
+            echo "::error::Current title: '$TITLE'"
+            echo "::error::If this PR intentionally uses a non-standard prefix, add the label 'non-standard-prefix' to bypass the check."
+            exit 1
+          fi
+          echo "Title prefix OK."
