@@ -1,0 +1,147 @@
+"""Installed nmrML provider through generic interop/Experiment, without routing."""
+
+from copy import deepcopy
+import hashlib
+import os
+from pathlib import Path
+
+import numpy as np
+import pytest
+import spectrochempy as scp
+
+from spectrochempy_nmr import from_interop
+from spectrochempy_nmr.experiment import Experiment
+
+FIXTURE = Path(__file__).parent / "fixtures" / "nmrml_synthetic.nmrML"
+
+
+@pytest.fixture(scope="module")
+def provider():
+    pytest.importorskip("xmltodict")
+    return pytest.importorskip("nmrglue")
+
+
+def check_frequency(provider, raw, expected, tmp_path, monkeypatch):
+    normalized = provider.interop.normalize_nmrml_1d(raw)
+    source = from_interop(normalized)
+    before = deepcopy(dict(source.meta))
+
+    def no_fft(*args, **kwargs):
+        raise AssertionError("processed nmrML must not FFT again")
+
+    monkeypatch.setattr(scp.NDDataset, "fft", no_fft, raising=False)
+    result = Experiment(source).process()
+    np.testing.assert_array_equal(result.data, expected)
+    np.testing.assert_allclose(
+        result.x.data, raw.axes[0].values, rtol=1e-12, atol=1e-12
+    )
+    if raw.axes[0].reference.observation_frequency is not None:
+        obs = raw.axes[0].reference.observation_frequency
+        np.testing.assert_allclose(result.x.to("ppm").data, raw.axes[0].values / obs)
+    changed = source.copy()
+    changed.meta.readonly = False
+    changed.origin = "opaque-origin"
+    changed.meta.normalization_profile = "opaque-profile"
+    changed.meta.source_metadata = {}
+    np.testing.assert_array_equal(Experiment(changed).process().data, expected)
+    path = tmp_path / "normalized.scp"
+    result.write(path, confirm=False)
+    restored = scp.read(path)
+    np.testing.assert_array_equal(restored.data, expected)
+    np.testing.assert_array_equal(restored.x.data, result.x.data)
+    assert (
+        restored.meta.source_metadata["profile_options"]["axis_endpoint"]
+        == raw.acquisition["axis_endpoint"]
+    )
+    assert restored.meta.interop_axes[0]["reference"]["source"] == "unknown"
+    assert dict(source.meta) == before
+
+
+@pytest.mark.parametrize("complex_data", [False, True])
+@pytest.mark.parametrize("obs", [None, 400.0])
+def test_synthetic_processed_nmrml(provider, tmp_path, monkeypatch, complex_data, obs):
+    document, _ = provider.nmrml.read(FIXTURE, read_processed=True, strict=True)
+    values = np.arange(8, dtype="f8")
+    if complex_data:
+        values = values + 1j * np.arange(8, dtype="f8")
+    path = tmp_path / "spectrum.nmrML"
+    provider.nmrml.write(path, document, values, write_processed=True)
+    raw = provider.interop.read_nmrml_1d(
+        path,
+        read_processed=True,
+        axis_endpoint="last-point",
+        observation_frequency_mhz=obs,
+    )
+    check_frequency(provider, raw, values, tmp_path, monkeypatch)
+
+
+@pytest.mark.parametrize("sign", ["none", "conjugate"])
+def test_synthetic_raw_nmrml(provider, tmp_path, sign):
+    document, _ = provider.nmrml.read(FIXTURE, strict=True)
+    values = np.exp(2j * np.pi * 0.125 * np.arange(8)).astype("complex128")
+    path = tmp_path / "fid.nmrML"
+    provider.nmrml.write(path, document, values)
+    raw = provider.interop.read_nmrml_1d(path, raw_point_count="scalar")
+    normalized = provider.interop.normalize_nmrml_1d(raw, conjugation=sign)
+    source = from_interop(normalized)
+    expected = values.conj() if sign == "conjugate" else values
+    np.testing.assert_array_equal(source.data, expected)
+    np.testing.assert_array_equal(source.x.data, np.arange(8) / 2000)
+    result = Experiment(source).process()
+    assert Experiment(result).source_kind == "processed_1d"
+    assert result.shape == expected.shape
+    analytical = np.zeros(8, dtype="complex128")
+    peak = 5 if sign == "none" else 3
+    analytical[peak] = 8
+    np.testing.assert_allclose(result.data, analytical, rtol=0, atol=1e-14)
+    assert result.x.data[peak] == (250 if sign == "none" else -250)
+    np.testing.assert_array_equal(source.data, expected)
+    persisted = tmp_path / "fid.scp"
+    source.write(persisted, confirm=False)
+    restored = scp.read(persisted)
+    np.testing.assert_array_equal(restored.data, expected)
+    np.testing.assert_array_equal(restored.x.data, source.x.data)
+
+
+def test_real_bayesil_nmrml(provider, tmp_path, monkeypatch):
+    root = os.environ.get("NMRML_QUALIFICATION_DATA")
+    if not root:
+        pytest.skip(
+            "set NMRML_QUALIFICATION_DATA to the checksum-pinned public examples"
+        )
+    path = Path(root) / "biosample_quantification.nmrML"
+    original = path.read_bytes()
+    assert (
+        hashlib.sha256(original).hexdigest()
+        == "38712b01526635b3bf2639a5b08c7e00e15c4e56d0c1174295595b9ab939c448"
+    )
+    raw = provider.interop.read_nmrml_1d(
+        path, read_processed=True, axis_endpoint="last-point"
+    )
+    expected = provider.nmrml.read(path, read_processed=True, strict=True)[1]
+    check_frequency(provider, raw, expected, tmp_path, monkeypatch)
+    assert path.read_bytes() == original
+
+
+def test_real_hop_nmrml(provider, tmp_path):
+    root = os.environ.get("NMRML_QUALIFICATION_DATA")
+    if not root:
+        pytest.skip(
+            "set NMRML_QUALIFICATION_DATA to official nmrML and native examples"
+        )
+    path = Path(root) / "hop.nmrML"
+    original = path.read_bytes()
+    assert (
+        hashlib.sha256(original).hexdigest()
+        == "2f8a0b7cdc4ca8083aecb2df1ab6d81fbede5891ee2c3b562cc8dd079f8837d0"
+    )
+    raw = provider.interop.read_nmrml_1d(
+        path, data_dtype="<c8", raw_point_count="scalar"
+    )
+    _, expected = provider.varian.read(Path(root) / "hop-native")
+    source = from_interop(provider.interop.normalize_nmrml_1d(raw, conjugation="none"))
+    np.testing.assert_array_equal(source.data, expected)
+    np.testing.assert_allclose(source.x.data, np.arange(expected.size) / 12019.2307692)
+    result = Experiment(source).process()
+    assert Experiment(result).source_kind == "processed_1d"
+    assert path.read_bytes() == original
