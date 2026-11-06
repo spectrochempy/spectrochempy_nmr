@@ -16,10 +16,13 @@ project = "SpectroChemPy NMR"
 copyright = "2014-2026, Laboratoire Catalyse et Spectrochimie (LCS)"
 
 import spectrochempy  # noqa: E402
-import spectrochempy_hypercomplex  # noqa: E402
 import spectrochempy_nmr  # noqa: E402
 
-version = spectrochempy_nmr.NMRPlugin.version
+version = (
+    spectrochempy_nmr.NMRPlugin.version
+    if os.environ.get("NMR_DOCS_RELEASE")
+    else "Unreleased"
+)
 release = version
 language = "en"
 master_doc = "index"

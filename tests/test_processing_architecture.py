@@ -35,3 +35,13 @@ def test_agilent_adapter_depends_on_common_layers_not_the_reverse():
     assert not any(
         "agilent" in module or "adapters" in module for module in common_imports
     )
+
+
+def test_entire_runtime_has_no_quaternion_dependency():
+    for path in ROOT.rglob("*.py"):
+        imports = _imported_modules(path)
+        assert not any(
+            module.split(".")[0] in {"quaternion", "spectrochempy_hypercomplex"}
+            for module in imports
+        ), path
+    assert not (ROOT / "processing" / "quaternion_phasing.py").exists()

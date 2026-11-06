@@ -19,5 +19,5 @@ be a replayable historical processing recipe. Compatibility aliases
 ``scp.nmr.read_topspin`` and ``scp.read_topspin`` remain available.
 
 The reader scope includes 1D and 2D raw/processed data. 2D reading and
-hypercomplex representation must not be confused with validated 2D processing;
+native complex-channel storage must not be confused with validated 2D processing;
 the latter is outside the current public workflow.

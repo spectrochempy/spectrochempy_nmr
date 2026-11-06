@@ -1,14 +1,9 @@
-Hypercomplex API
-================
+Former Hypercomplex API
+=======================
 
-This page identifies APIs owned by ``spectrochempy-hypercomplex``. The
-``dataset.hyper`` accessor is registered dynamically on the core dataset.
+This historical page is retained as a link target. The development NMR plugin
+uses ordinary complex channels and no longer exposes or requires Hypercomplex
+APIs. See :doc:`/concepts/hypercomplex` for the Unreleased storage contract.
 
-.. currentmodule:: spectrochempy_hypercomplex
-
-.. autoclass:: HyperAccessor
-   :members:
-
-.. autofunction:: as_quaternion
-.. autofunction:: as_quat_array
-.. autofunction:: as_float_array
+The published NMR 0.2.0 representation belongs to that historical release;
+it is not the development processing path.

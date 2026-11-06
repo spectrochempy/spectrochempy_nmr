@@ -33,7 +33,7 @@ It illustrates:
 
 * reading raw 2D SER data;
 * automatic handling of Bruker encodings such as ``STATES-TPPI``;
-* quaternion-aware 2D FFT processing;
+* complex-channel 2D FFT processing;
 * how to obtain a spectrum comparable to the processed ``2rr`` reference.
 
 Requires the official ``spectrochempy-nmr`` plugin.
@@ -49,7 +49,7 @@ import spectrochempy as scp
 # Read raw 2D SER data
 # --------------------
 # The raw SER file contains time-domain data together with the acquisition
-# metadata needed to decode the hypercomplex encoding in F1.
+# metadata needed to decode the quadrature encoding in F1.
 
 ser = scp.nmr.read(
     "nmrdata/bruker/tests/nmr/topspin_2d",
@@ -62,7 +62,7 @@ ser = scp.nmr.read(
 ser
 
 # %%
-# Plot the raw time-domain data (quaternion representation)
+# Plot the raw time-domain data (native complex channels)
 _ = ser.plot_map()
 
 # %%

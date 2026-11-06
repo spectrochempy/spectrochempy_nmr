@@ -23,6 +23,28 @@ def _fft_postprocess_result(new, dim=-1, inv=False, **kwargs):
     the spectral axis when the dataset carries NMR metadata (``sfo1``,
     ``bf1``, ``sw_h``, ``nuc1``).
     """
+    if getattr(new.meta, "component_axis", None) == "c":
+        transformed = new.dims[-1]
+        if transformed == "x" and new.meta.stage == "acquisition":
+            new.meta.readonly = False
+            new.meta.stage = "F2-spectrum"
+            new.meta.readonly = True
+        if new.meta.storage_profile == "bruker-states-trace-pairs":
+            new.meta.readonly = False
+            if transformed == "x":
+                idx = new.dims.index("y")
+                pending = new.meta.encoding[idx]
+                if pending.startswith("PENDING-F2:"):
+                    new.meta.encoding[idx] = "INDIRECT:" + pending.removeprefix(
+                        "PENDING-F2:"
+                    )
+                    new.meta.stage = "F2-spectrum"
+            elif transformed == "y":
+                new.meta.stage = "spectrum"
+                new.meta.component_labels = ("F1_R", "F1_I")
+                new.coordset["c"] = Coord.arange(2, dims="c", labels=["F1_R", "F1_I"])
+            new.meta.readonly = True
+
     # Only act when NMR metadata is present
     if not hasattr(new.meta, "sfo1") or new.meta.sfo1 is None:
         return new

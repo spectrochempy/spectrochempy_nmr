@@ -11,7 +11,7 @@ Covers:
   - JEOL COSY, HSQC
 
 Known limitations (not tested here):
-  - pk() on 2D quaternion data (meta.phased is None)
+  - pk() on 2D channel data (meta.phased is None)
   - em() on JEOL data (coords lack time units)
 """
 
@@ -25,7 +25,6 @@ from spectrochempy_nmr.processing.linear_prediction import _linear_predict_after
 
 import spectrochempy as scp
 
-quaternion = pytest.importorskip("quaternion", reason="requires numpy-quaternion")
 
 EXTRA_DATADIR = scp.preferences.datadir.parent / "testdata-extra"
 EXTRA_NMR = EXTRA_DATADIR / "testdata" / "nmrdata"
@@ -146,11 +145,13 @@ def _normalized_overlap(left, right):
     )
 
 
-def _mag_from_quat_or_complex(ds):
-    """Extract magnitude from quaternion or complex dataset."""
-    if ds.dtype.kind == "V":
-        qarr = quaternion.as_float_array(ds.data)
-        return np.sqrt(np.sum(qarr**2, axis=-1))
+def _channel_slots(data):
+    return np.stack([data[0].real, data[0].imag, data[1].real, data[1].imag], axis=-1)
+
+
+def _magnitude(ds):
+    if ds.meta.component_axis == "c":
+        return np.sqrt(np.sum(np.abs(ds.data) ** 2, axis=0))
     return np.abs(ds.data)
 
 
@@ -175,12 +176,20 @@ class TestFFT2DTopSpin:
         reference = scp.read_topspin(pdata)
         raw = scp.nmr.read(TOPSPIN_2D, expno=1, remove_digital_filter=True)
 
-        f2 = raw.em(lb="50 Hz", dim="x").fft(dim="x", size=reference.shape[1])
-        f2.data[0, :] *= 0.5
-        result = f2.zf_size(size=reference.shape[0], dim="y").fft(dim="y")
+        f2 = raw.em(lb="50 Hz", dim="x").fft(dim="x", size=reference.shape[-1])
+        f2.data[:, 0, :] *= 0.5
+        result = f2.zf_size(size=reference.shape[-2], dim="y").fft(dim="y")
 
-        actual_slots = quaternion.as_float_array(result.data)
-        reference_slots = quaternion.as_float_array(reference.data)
+        actual_slots = _channel_slots(result.data)
+        reference_slots = np.stack(
+            [
+                reference.data[0].real,
+                reference.data[1].real,
+                reference.data[0].imag,
+                reference.data[1].imag,
+            ],
+            axis=-1,
+        )
         limits = (0.06, 0.06, 0.11, 0.11)
         for actual, expected, limit in zip(
             np.moveaxis(actual_slots, -1, 0),
@@ -199,19 +208,19 @@ class TestFFT2DTopSpin:
         ds = scp.read_topspin(TOPSPIN_2D, expno=1, remove_digital_filter=True)
         fft = ds.fft()
 
-        assert fft.ndim == 2
+        assert fft.ndim == 3
         assert fft.shape[0] > 0 and fft.shape[1] > 0
 
-        mag = _mag_from_quat_or_complex(fft)
+        mag = _magnitude(fft)
         idx, maxval = _peak_info(mag)
         assert maxval > 0, "No peak found after TopSpin 2D FFT"
-        assert all(0 <= i < s for i, s in zip(idx, fft.shape, strict=False))
+        assert all(0 <= i < s for i, s in zip(idx, mag.shape, strict=False))
 
     @pytest.mark.skipif(not _has_topspin_2d(), reason="TopSpin 2D data not available")
     def test_topspin_2d_fft_encoding(self):
         ds = scp.read_topspin(TOPSPIN_2D, expno=1, remove_digital_filter=True)
         assert "encoding" in ds.meta
-        assert len(ds.meta.encoding) == 2
+        assert len(ds.meta.encoding) == 3
         fft = ds.fft()
         assert fft.shape == ds.shape
 
@@ -224,10 +233,10 @@ class TestFFT2DAgilent:
         ds = scp.read_agilent(EXTRA_NMR / "agilent" / "agilent_2d")
         fft = ds.fft()
 
-        assert fft.ndim == 2
+        assert fft.ndim == 3
         assert fft.shape[0] > 0 and fft.shape[1] > 0
 
-        mag = _mag_from_quat_or_complex(fft)
+        mag = _magnitude(fft)
         idx, maxval = _peak_info(mag)
         assert maxval > 0, "No peak found after Agilent 2D STATES FFT"
 
@@ -238,19 +247,16 @@ class TestFFT2DAgilent:
         assert fft.ndim == 2
         assert fft.shape[0] > 0 and fft.shape[1] > 0
 
-        mag = _mag_from_quat_or_complex(fft)
+        mag = _magnitude(fft)
         idx, maxval = _peak_info(mag)
         assert np.isfinite(mag).all(), "Non-finite values after Agilent 2D TPPI FFT"
         assert maxval > 0, "No peak found after Agilent 2D TPPI FFT"
 
-    def test_agilent_2d_tppi_two_step_fft_stays_finite(self):
-        ds = scp.read_agilent(EXTRA_NMR / "agilent" / "agilent_2d_tppi")
-
-        result = ds.fft(dim="x").fft(dim="y")
-
-        assert result.shape == ds.shape
-        assert np.isfinite(result.data).all()
-        assert np.max(np.abs(result.data)) > 0
+    def test_agilent_2d_indirect_fft_rejects_unvalidated_profiles(self):
+        for name in ("agilent_2d", "agilent_2d_tppi"):
+            ds = scp.read_agilent(EXTRA_NMR / "agilent" / name)
+            with pytest.raises(NotImplementedError, match="UNVALIDATED"):
+                ds.fft(dim="x").fft(dim="y")
 
     def test_agilent_2d_fft_encoding_preserved(self):
         ds = scp.read_agilent(EXTRA_NMR / "agilent" / "agilent_2d")
@@ -270,7 +276,7 @@ class TestFFT2DJEOL:
         assert fft.ndim == 2
         assert fft.shape[0] > 0 and fft.shape[1] > 0
 
-        mag = _mag_from_quat_or_complex(fft)
+        mag = _magnitude(fft)
         idx, maxval = _peak_info(mag)
         assert maxval > 0, "No peak found after JEOL COSY FFT"
 
@@ -281,7 +287,7 @@ class TestFFT2DJEOL:
         assert fft.ndim == 2
         assert fft.shape[0] > 0 and fft.shape[1] > 0
 
-        mag = _mag_from_quat_or_complex(fft)
+        mag = _magnitude(fft)
         idx, maxval = _peak_info(mag)
         assert maxval > 0, "No peak found after JEOL HSQC FFT"
 
@@ -300,8 +306,8 @@ class TestEmFFT2DTopSpin:
         ds.em(lb=2.0, inplace=True)
         fft = ds.fft()
 
-        assert fft.ndim == 2
-        mag = _mag_from_quat_or_complex(fft)
+        assert fft.ndim == 3
+        mag = _magnitude(fft)
         idx, maxval = _peak_info(mag)
         assert maxval > 0, "No peak found after em + FFT"
 
@@ -310,8 +316,8 @@ class TestEmFFT2DTopSpin:
         ds.em(lb=0.0, inplace=True)
         fft = ds.fft()
 
-        assert fft.ndim == 2
-        mag = _mag_from_quat_or_complex(fft)
+        assert fft.ndim == 3
+        mag = _magnitude(fft)
         _, maxval = _peak_info(mag)
         assert maxval > 0, "No peak found after em(lb=0) + FFT"
 
@@ -323,12 +329,12 @@ class TestEmFFT2DTopSpin:
         f2 = ds.em(lb=2.0).fft(size=2048)
         f1 = f2.zf_size(size=1024, dim="y").em(lb=5.0, dim="y").fft(dim="y")
 
-        mag = _mag_from_quat_or_complex(f1)
+        mag = _magnitude(f1)
         idx, _ = _peak_info(mag)
         y_peak = float(f1.y.data[idx[0]])
         x_peak = float(f1.x.data[idx[1]])
 
-        ref_mag = _mag_from_quat_or_complex(ref)
+        ref_mag = _magnitude(ref)
         ref_idx, _ = _peak_info(ref_mag)
         ref_y = float(ref.y.data[ref_idx[0]])
         ref_x = float(ref.x.data[ref_idx[1]])
@@ -338,9 +344,9 @@ class TestEmFFT2DTopSpin:
 
         # A bad STATES/STATES-TPPI reconstruction leaves a strong mirror image
         # around the center of the F1 window.  Keep it well below the main peak.
-        mirror_i = f1.shape[0] - 1 - idx[0]
-        row_slice = slice(max(0, mirror_i - 3), min(f1.shape[0], mirror_i + 4))
-        col_slice = slice(max(0, idx[1] - 3), min(f1.shape[1], idx[1] + 4))
+        mirror_i = f1.shape[-2] - 1 - idx[0]
+        row_slice = slice(max(0, mirror_i - 3), min(f1.shape[-2], mirror_i + 4))
+        col_slice = slice(max(0, idx[1] - 3), min(f1.shape[-1], idx[1] + 4))
         mirror_max = float(mag[row_slice, col_slice].max())
 
         assert mirror_max / float(mag[idx]) < 0.2
@@ -482,15 +488,15 @@ class TestEmFFT2DBrukerEchoAntiecho:
         ds = scp.read_topspin(BRUKER_ECHOANTI_2D, expno=3, remove_digital_filter=True)
         ref = scp.read_topspin(BRUKER_ECHOANTI_2D / "3" / "pdata" / "1" / "2rr")
 
-        f2 = ds.em(lb=2.0).fft(size=ref.shape[1])
-        f1 = f2.zf_size(size=ref.shape[0], dim="y").em(lb=2.0, dim="y").fft(dim="y")
+        f2 = ds.em(lb=2.0).fft(size=ref.shape[-1])
+        f1 = f2.zf_size(size=ref.shape[-2], dim="y").em(lb=2.0, dim="y").fft(dim="y")
 
-        mag = _mag_from_quat_or_complex(f1)
+        mag = _magnitude(f1)
         idx, _ = _peak_info(mag)
         y_peak = float(f1.y.data[idx[0]])
         x_peak = float(f1.x.data[idx[1]])
 
-        ref_mag = _mag_from_quat_or_complex(ref)
+        ref_mag = _magnitude(ref)
         ref_idx, _ = _peak_info(ref_mag)
         ref_y = float(ref.y.data[ref_idx[0]])
         ref_x = float(ref.x.data[ref_idx[1]])
@@ -504,7 +510,7 @@ class TestEmFFT2DBrukerEchoAntiecho:
         ref = scp.read_topspin(BRUKER_ECHOANTI_2D / "3" / "pdata" / "1" / "2rr")
 
         with pytest.raises(NotImplementedError, match="only validated 1D experiments"):
-            scp.nmr.Experiment(ds).process(apodization="em", lb=2.0, size=ref.shape[1])
+            scp.nmr.Experiment(ds).process(apodization="em", lb=2.0, size=ref.shape[-1])
 
 
 @pytest.mark.skipif(not _has_agilent_data(), reason="Agilent test data not available")
@@ -516,8 +522,8 @@ class TestEmFFT2DAgilent:
         ds.em(lb=2.0, inplace=True)
         fft = ds.fft()
 
-        assert fft.ndim == 2
-        mag = _mag_from_quat_or_complex(fft)
+        assert fft.ndim == 3
+        mag = _magnitude(fft)
         _, maxval = _peak_info(mag)
         assert maxval > 0, "No peak found after Agilent 2D STATES em + FFT"
 
@@ -527,31 +533,31 @@ class TestEmFFT2DAgilent:
         fft = ds.fft()
 
         assert fft.ndim == 2
-        mag = _mag_from_quat_or_complex(fft)
+        mag = _magnitude(fft)
         _, maxval = _peak_info(mag)
         assert maxval > 0, "No peak found after Agilent 2D TPPI em + FFT"
 
 
 # ---------------------------------------------------------------------------
-# Phase metadata initialization on quaternion data
+# Phase metadata initialization on channel data
 # ---------------------------------------------------------------------------
 
 
 @pytest.mark.skipif(not _has_topspin_2d(), reason="TopSpin 2D data not available")
 class TestPhaseMetadata2D:
-    """Verify phase metadata is initialized after 2D FFT on quaternion data."""
+    """Verify phase metadata is initialized after 2D FFT on channel data."""
 
     def test_topspin_2d_fft_sets_phased(self):
         ds = scp.read_topspin(TOPSPIN_2D, expno=1, remove_digital_filter=True)
         fft = ds.fft()
         assert fft.meta.phased is not None
-        assert len(fft.meta.phased) == 2
+        assert len(fft.meta.phased) == 3
 
     def test_topspin_2d_fft_sets_phc0(self):
         ds = scp.read_topspin(TOPSPIN_2D, expno=1, remove_digital_filter=True)
         fft = ds.fft()
         assert fft.meta.phc0 is not None
-        assert len(fft.meta.phc0) == 2
+        assert len(fft.meta.phc0) == 3
 
 
 # ---------------------------------------------------------------------------
@@ -569,7 +575,7 @@ class TestJEOLEmChain:
         fft = ds.fft()
 
         assert fft.ndim == 2
-        mag = _mag_from_quat_or_complex(fft)
+        mag = _magnitude(fft)
         _, maxval = _peak_info(mag)
         assert maxval > 0, "No peak found after JEOL COSY em + FFT"
 
@@ -579,13 +585,13 @@ class TestJEOLEmChain:
         fft = ds.fft()
 
         assert fft.ndim == 2
-        mag = _mag_from_quat_or_complex(fft)
+        mag = _magnitude(fft)
         _, maxval = _peak_info(mag)
         assert maxval > 0, "No peak found after JEOL HSQC em + FFT"
 
 
 # ---------------------------------------------------------------------------
-# Quaternion 2D phasing (auto-phase + manual pk)
+# Channel 2D phasing (auto-phase + manual pk)
 # ---------------------------------------------------------------------------
 
 
@@ -594,63 +600,63 @@ def _has_topspin_2d() -> bool:
 
 
 @pytest.mark.skipif(not _has_topspin_2d(), reason="TopSpin 2D data not available")
-class TestQuaternionPhasing:
-    """Verify quaternion 2D auto-phasing via plugin pk.execute handler."""
+class TestChannelPhasing:
+    """Verify channel 2D auto-phasing via plugin pk.execute handler."""
 
     def test_fft_auto_phase_sets_meta(self):
-        """fft() auto-phases F2 (direct dim) of quaternion data."""
+        """fft() auto-phases F2 (direct dim) of channel data."""
         ds = scp.read_topspin(TOPSPIN_2D, expno=1, remove_digital_filter=True)
         fft = ds.fft()
 
-        assert fft.dtype == quaternion.quaternion
-        assert fft.ndim == 2
+        assert fft.dtype == np.complex128
+        assert fft.ndim == 3
         # F2 should be auto-phased
         assert fft.meta.phased[-1] is True
         assert fft.meta.phc0[-1].magnitude == 0.0
 
     def test_fft_auto_phase_pivot(self):
-        """Auto-phase computes pivot from quaternion modulus."""
+        """Auto-phase computes pivot from channel modulus."""
         ds = scp.read_topspin(TOPSPIN_2D, expno=1, remove_digital_filter=True)
         fft = ds.fft()
 
         assert fft.meta.pivot[-1] is not None
-        assert fft.ndim == 2
+        assert fft.ndim == 3
 
-    def test_manual_pk_on_2d_quaternion(self):
-        """Explicit pk(pivot=, phc0=) works on quaternion 2D data."""
+    def test_manual_pk_on_2d_channel(self):
+        """Explicit pk(pivot=, phc0=) works on channel 2D data."""
         ds = scp.read_topspin(TOPSPIN_2D, expno=1, remove_digital_filter=True)
         fft = ds.fft()
         phased = fft.pk(pivot=0, phc0=45.0)
 
-        assert phased.dtype == quaternion.quaternion
+        assert phased.dtype == np.complex128
         assert phased.meta.phased[-1] is True
-        assert phased.ndim == 2
-        # Quaternion modulus is invariant under phase rotation,
-        # so compare raw quaternion components directly.
+        assert phased.ndim == 3
+        # Channel modulus is invariant under phase rotation,
+        # so compare raw channel components directly.
         assert not np.allclose(
-            quaternion.as_float_array(fft.data),
-            quaternion.as_float_array(phased.data),
-        ), "pk() did not modify the quaternion data"
+            _channel_slots(fft.data),
+            _channel_slots(phased.data),
+        ), "pk() did not modify the channel data"
 
     def test_em_fft_auto_phase_chain(self):
-        """Full chain: em() → fft() auto-phases quaternion data."""
+        """Full chain: em() → fft() auto-phases channel data."""
         ds = scp.read_topspin(TOPSPIN_2D, expno=1, remove_digital_filter=True)
         ds.em(lb=2.0, inplace=True)
         fft = ds.fft()
 
-        assert fft.dtype == quaternion.quaternion
+        assert fft.dtype == np.complex128
         assert fft.meta.phased[-1] is True
-        mag = _mag_from_quat_or_complex(fft)
+        mag = _magnitude(fft)
         _, maxval = _peak_info(mag)
         assert maxval > 0, "No peak found after em + fft + auto-phase"
 
-    def test_quaternion_phasc0_from_bruker(self):
+    def test_channel_phasc0_from_bruker(self):
         """F1 (indirect dim) phc0 is preserved from Bruker processing params."""
         ds = scp.read_topspin(TOPSPIN_2D, expno=1, remove_digital_filter=True)
         fft = ds.fft()
 
         # F1 phc0 should come from acqu2s (Bruker), not be reset to 0
-        f1_phc0 = fft.meta.phc0[0].magnitude
+        f1_phc0 = fft.meta.phc0[-2].magnitude
         # Bruker typically stores a non-zero value; just check it's a number
         assert isinstance(f1_phc0, (int, float))
 
@@ -659,13 +665,13 @@ class TestQuaternionPhasing:
         ds = scp.read_topspin(TOPSPIN_2D, expno=1, remove_digital_filter=True)
 
         f2 = ds.fft()
-        assert f2.meta.isfreq == [False, True]
+        assert f2.meta.isfreq == [False, False, True]
         assert str(f2.x.units) == "ppm"
         assert f2.y.units == scp.ur.microsecond
         assert "27" in f2.x.title
 
         f1 = f2.zf_size(size=256, dim="y").fft(dim="y")
-        assert f1.meta.isfreq == [True, True]
+        assert f1.meta.isfreq == [False, True, True]
         assert str(f1.x.units) == "ppm"
         assert str(f1.y.units) == "ppm"
         assert "27" in f1.x.title

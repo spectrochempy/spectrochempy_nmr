@@ -8,6 +8,28 @@ release, not capabilities available in the published 0.2.0 package.
 Unreleased
 ----------
 
+Changed
+~~~~~~~
+
+* Reject unsupported channel FFT/IFFT requests before any in-place preparation,
+  preserving samples, axes, coordinates, masks and metadata on refusal. Native
+  channels and guarded indirect profiles require a core exposing
+  ``FFT_PREVALIDATION_API >= 1``; older cores retain the ordinary 1D workflow.
+
+* Remove quaternion storage, the Hypercomplex extra and the quaternion phasing
+  handler. Experimental 2D branches now use ordinary complex datasets with a
+  labelled component axis. Bruker pdata preserves all four components.
+* Consolidate the experimental NOESY channel function into
+  ``process_agilent_noesy_states_tppi``; remove its legacy quaternion and
+  inplace variants and the redundant ``_channels`` entry point.
+* Keep Agilent and JEOL storage decoding distinct from quadrature normalization;
+  reject unvalidated indirect transforms instead of guessing their interpretation.
+* Require F2 before F1 for Bruker paired acquisitions and reject Fourier
+  transforms of the component axis. Inverse channel reconstruction is unsupported.
+* Preserve real QF FID transforms and reject partially transformed input to
+  the experimental NOESY adapter. Resolve its physical axes by name and verify
+  the branch coordinate order before decoding native channels.
+
 Added
 ~~~~~
 
