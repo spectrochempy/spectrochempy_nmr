@@ -166,6 +166,10 @@ jobs:
           ref: 2417f2c1003cd78834ec25777b6895ae783c98bc
           path: baseline-core
           fetch-depth: 0
+      - name: Fetch verified core release tag for SCM versioning
+        run: |
+          git -C baseline-core fetch --no-tags https://github.com/spectrochempy/spectrochempy.git refs/tags/spectrochempy-v1.1.4:refs/tags/spectrochempy-v1.1.4
+          test "$(git -C baseline-core rev-parse 'spectrochempy-v1.1.4^{commit}')" = a96cb8a6ec076da2fbd9f0e34f24f9955705cf1a
       - name: Secure pip bootstrap
         uses: spectrochempy/spectrochempy/.github/actions/verified-pip@cdb087a24f06b8c83ea91ea036192304db9329e3
       - uses: actions/download-artifact@v8
