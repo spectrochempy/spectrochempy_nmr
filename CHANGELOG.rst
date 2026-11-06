@@ -15,6 +15,11 @@ Changed
 * Align commit-message and pull-request title prefixes with the SpectroChemPy
   convention and add CI validation for pull-request titles.
 
+* Qualify Bruker QSIM/DQD 1D via the same normalized Experiment workflow as
+  Agilent, with explicit filter/canonical-conjugation provenance, source
+  independence and SCP persistence. Keep vendor interpretation in nmrglue-ng;
+  add no vendor-specific processing branch to the plugin.
+
 * Integrate normalized complex 1D acquisitions with Experiment, independent of
   origin, profile labels and raw vendor metadata. Keep default FFT axes in Hz
   and select ppm referencing explicitly from the producer's numeric descriptor.
