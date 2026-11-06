@@ -1,5 +1,5 @@
 # Test-only provider: never a plugin runtime dependency.
-nmrglue-ng @ git+https://github.com/spectrochempy/nmrglue-ng.git@8540ca0898ca3568162f9c133885efb049a86ed1
+nmrglue-ng @ git+https://github.com/spectrochempy/nmrglue-ng.git@daa32eaf9811edce464dbc8dc9bd409eb5708d9c
 
 # Optional XML reader used only by nmrML qualification.
 xmltodict
