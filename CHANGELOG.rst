@@ -15,6 +15,7 @@ Changed
 * Qualify explicit optional NMRPipe processed 1D interop with Experiment on real
   Agilent/Bruker reference inputs transformed by NMRPipe; preserve real/complex
   samples, last-point references and SCP persistence. Document unsupported cases.
+  (#33)
 
 * Accept normalized real or complex processed 1D spectra, preserving their
   supplied frequency axes and processing references without another FFT or
