@@ -12,6 +12,12 @@ Unreleased
 Changed
 ~~~~~~~
 
+* Accept normalized real or complex processed 1D spectra, preserving their
+  supplied frequency axes and processing references without another FFT or
+  implicit recalibration. Reject phase requests when imaginary data are absent.
+  Qualify complete Bruker pdata spectra on two real acquisitions.
+
+
 * Align commit-message and pull-request title prefixes with the SpectroChemPy
   convention and add CI validation for pull-request titles.
 

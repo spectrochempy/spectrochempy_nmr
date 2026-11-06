@@ -14,6 +14,7 @@ jobs:
         python-version: ["3.11", "3.13"]
     env:
       NMR_AGILENT_REAL_DATA: /tmp/agilent-real
+      NMR_PDATA_TOMATO_DATA: /tmp/pdata-real/MMBBI_10M12-CE01-1a/1/pdata/1
     steps:
       - uses: actions/checkout@v7
       - uses: actions/setup-python@v7
@@ -37,7 +38,7 @@ jobs:
 
           metadata = distribution("nmrglue-ng")
           provenance = json.loads(metadata.read_text("direct_url.json"))
-          assert provenance["vcs_info"]["commit_id"] == "4677f37e870ed4b5cc65c5da99da8ad961c821e4"
+          assert provenance["vcs_info"]["commit_id"] == "b1c1f0e5814a3a05654978cfc5847f1bf8064f04"
           for name in ("spectrochempy", "spectrochempy_nmr", "nmrglue"):
               location = Path(find_spec(name).origin).resolve()
               assert Path.cwd() not in location.parents, location
@@ -49,3 +50,7 @@ jobs:
         run: python -I -m pytest -ra tests/qualification/test_agilent_real.py
       - name: Run synthetic Bruker normalized-provider qualification
         run: python -I -m pytest -ra tests/qualification/test_bruker_normalized.py -k synthetic
+      - name: Fetch checksum-pinned nmrML processed spectrum
+        run: python tools/fetch_pdata_qualification.py /tmp/pdata-real
+      - name: Run processed-spectrum real-provider qualification
+        run: python -I -m pytest -ra tests/qualification/test_pdata_real.py
