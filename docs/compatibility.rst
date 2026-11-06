@@ -2,9 +2,11 @@ Compatibility and scope
 =======================
 
 This is **Unreleased** documentation after NMR 0.2.0. The plugin requires
-``spectrochempy>=1.1.0,<2``. CI tests its installed wheel against released
-cores 1.1.0 and 1.1.4 and the pinned core revision after quaternion retirement.
-No core source change or additional representation plugin is required.
+``spectrochempy>=1.1.0,<2``. CI tests ordinary 1D/interop support on released cores 1.1.0 and 1.1.4.
+Guarded native-channel workflows additionally require the generic core FFT
+prevalidation hook, exposed as ``FFT_PREVALIDATION_API >= 1``. Their installed
+wheel tests use the exact candidate core commit pinned in CI. No representation
+plugin is required; merge the companion core PR before releasing these paths.
 
 The public processing workflow remains validated for 1D. The experimental 2D
 storage and processing contracts are described in :doc:`concepts/hypercomplex`.

@@ -67,8 +67,9 @@ def test_bruker_raw_preserves_all_samples_and_physical_metadata(tmp_path, monkey
 def test_bruker_guards_component_axis_and_transform_order(tmp_path, monkeypatch):
     dataset, _ = _bruker_raw(tmp_path, monkeypatch)
     original = dataset.data.copy()
-    cancelled = dataset.fft(dim="c")
-    np.testing.assert_array_equal(cancelled.data, original)
+    with pytest.raises(NotImplementedError, match="component axis"):
+        dataset.fft(dim="c")
+    np.testing.assert_array_equal(dataset.data, original)
     with pytest.raises(NotImplementedError, match="PENDING-F2"):
         dataset.fft(dim="y")
     f2 = dataset.fft(dim="x")
@@ -81,6 +82,65 @@ def test_bruker_guards_component_axis_and_transform_order(tmp_path, monkeypatch)
     np.testing.assert_array_equal(dataset.data, original)
     with pytest.raises(NotImplementedError, match="Inverse"):
         f2.ifft(dim="x")
+
+
+def _assert_rejected_transform_preserves_dataset(dataset, before):
+    np.testing.assert_array_equal(dataset.data, before.data)
+    np.testing.assert_array_equal(dataset.mask, before.mask)
+    assert dataset.shape == before.shape
+    assert dataset.dims == before.dims
+    assert dataset.meta == before.meta
+    assert dataset.meta.readonly == before.meta.readonly
+    assert dataset.history == before.history
+    assert dataset.units == before.units
+    for dim in before.dims:
+        actual, expected = dataset.coordset[dim], before.coordset[dim]
+        np.testing.assert_array_equal(actual.data, expected.data)
+        np.testing.assert_array_equal(actual.labels, expected.labels)
+        assert actual.units == expected.units
+        assert actual.title == expected.title
+        assert actual.meta == expected.meta
+
+
+@pytest.mark.parametrize("entry", ["method", "functional"])
+@pytest.mark.parametrize("size", [None, 2, 8])
+@pytest.mark.parametrize("inverse", [False, True])
+def test_rejected_inplace_channel_fft_preserves_dataset(
+    tmp_path, monkeypatch, entry, size, inverse
+):
+    dataset, _ = _bruker_raw(tmp_path, monkeypatch)
+    if inverse:
+        dataset = dataset.fft(dim="x")
+    before = dataset.copy()
+    name = "ifft" if inverse else "fft"
+    kwargs = {"dim": "x" if inverse else "y", "inplace": True, "size": size}
+    with pytest.raises(NotImplementedError, match="Inverse|PENDING-F2"):
+        if entry == "method":
+            getattr(dataset, name)(**kwargs)
+        else:
+            getattr(scp, name)(dataset, **kwargs)
+    _assert_rejected_transform_preserves_dataset(dataset, before)
+
+
+@pytest.mark.parametrize("entry", ["method", "functional"])
+@pytest.mark.parametrize("size", [None, 2, 8])
+@pytest.mark.parametrize(
+    "encoding", ["UNVALIDATED:AGILENT-STATES", "UNVALIDATED:JEOL-STATES"]
+)
+def test_unvalidated_inplace_fft_preserves_dataset(
+    tmp_path, monkeypatch, entry, size, encoding
+):
+    dataset, _ = _bruker_raw(tmp_path, monkeypatch)
+    dataset.meta.readonly = False
+    dataset.meta.encoding[1] = encoding
+    dataset.meta.readonly = True
+    before = dataset.copy()
+    with pytest.raises(NotImplementedError, match="UNVALIDATED"):
+        if entry == "method":
+            dataset.fft(axis=1, inplace=True, size=size)
+        else:
+            scp.fft(dataset, axis=1, inplace=True, size=size)
+    _assert_rejected_transform_preserves_dataset(dataset, before)
 
 
 def test_bruker_processed_preserves_four_components_and_persistence(

@@ -4,11 +4,14 @@ from __future__ import annotations
 
 import numpy as np
 
+from spectrochempy_nmr.processing.fft_validation import _require_fft_prevalidation
+
 
 def set_channel_data(dataset, data, coords, meta, *, labels, stage, profile):
     """Attach two complex channels without treating their axis as physical."""
     import spectrochempy as scp
 
+    _require_fft_prevalidation()
     data = np.asarray(data)
     if data.ndim != 3 or data.shape[0] != 2 or not np.iscomplexobj(data):
         raise ValueError("channel storage requires a complex (2, nF1, nF2) array")

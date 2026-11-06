@@ -103,9 +103,9 @@ jobs:
           python -m pip check
       - name: Run synthetic tests against installed artifacts
         run: |
-          python -I -m pytest -ra tests/test_linear_prediction.py tests/test_fft_encodings.py tests/test_fft_2d_characterization.py tests/test_nmrpipe_oracle_conventions.py tests/test_nmrpipe_states_tppi_oracle.py tests/test_native_readers.py
+          python -I -m pytest -ra tests/test_linear_prediction.py tests/test_fft_encodings.py tests/test_fft_2d_characterization.py tests/test_nmrpipe_oracle_conventions.py tests/test_nmrpipe_states_tppi_oracle.py tests/test_native_readers.py::test_jeol_real_qf_reader_preserves_fft_support tests/test_fft_prevalidation_compatibility.py
 
-  complex-channels:
+  released-interop:
     needs: artifacts
     runs-on: ubuntu-latest
     strategy:
@@ -144,22 +144,26 @@ jobs:
               assert Path.cwd() not in location.parents, location
               print(f"{name}: {location}")
           PY
-      - name: Validate complex channels and normalized interop
+      - name: Validate released-core interop and capability refusal
         run: |
-          python -I -m pytest -ra tests/test_complex_channels.py tests/test_quadrature.py tests/test_agilent_noesy_processing.py tests/test_interop_conversion.py tests/test_agilent_interop_facade.py tests/test_processing_architecture.py
+          python -I -m pytest -ra tests/test_interop_conversion.py tests/test_agilent_interop_facade.py tests/test_processing_architecture.py tests/test_fft_prevalidation_compatibility.py
 
   pinned-core:
     needs: artifacts
     runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        python-version: ["3.11", "3.13"]
     steps:
       - uses: actions/checkout@v7
       - uses: actions/setup-python@v7
         with:
-          python-version: "3.13"
+          python-version: ${{ matrix.python-version }}
       - uses: actions/checkout@v7
         with:
-          repository: spectrochempy/spectrochempy
-          ref: c24f488cae850f7307fc99dece96d023b5045826
+          repository: fernandezc/spectrochempy
+          ref: 2417f2c1003cd78834ec25777b6895ae783c98bc
           path: baseline-core
           fetch-depth: 0
       - name: Secure pip bootstrap
@@ -177,4 +181,4 @@ jobs:
           python -m pip check
       - name: Run synthetic tests against installed artifacts
         run: |
-          python -I -m pytest -ra tests/test_linear_prediction.py tests/test_fft_encodings.py tests/test_fft_2d_characterization.py tests/test_nmrpipe_oracle_conventions.py tests/test_nmrpipe_states_tppi_oracle.py tests/test_native_readers.py
+          python -I -m pytest -ra tests/test_linear_prediction.py tests/test_fft_encodings.py tests/test_fft_2d_characterization.py tests/test_nmrpipe_oracle_conventions.py tests/test_nmrpipe_states_tppi_oracle.py tests/test_native_readers.py tests/test_fft_prevalidation_compatibility.py tests/test_complex_channels.py tests/test_quadrature.py tests/test_agilent_noesy_processing.py tests/test_interop_conversion.py tests/test_agilent_interop_facade.py tests/test_processing_architecture.py

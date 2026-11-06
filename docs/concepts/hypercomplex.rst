@@ -14,6 +14,16 @@ axis. Keep it first when reordering the physical axes.
 The NOESY adapter restores physical axes by their names before processing and
 requires the component coordinate to retain its declared branch order.
 
+Native channel workflows and unvalidated indirect acquisition profiles require
+a core exposing ``FFT_PREVALIDATION_API >= 1``. The published cores 1.1.0 and
+1.1.4 do not provide it, so the affected readers and processing helpers refuse
+these workflows before returning native data. Ordinary 1D support remains
+available on those cores. The core and plugin changes must be deployed together.
+
+Unsupported inverse, component-axis and indirect transforms are rejected by
+the read-only ``fft.validate_input`` hook before any axis permutation, resizing
+or sample change, including when ``inplace=True`` is requested.
+
 Raw Bruker States, States-TPPI and Echo-Antiecho trace pairs use channel labels
 ``branch_0`` and ``branch_1``. Transform F2 (``x``) before F1 (``y``). The
 indirect transform reconstructs the appropriate complex pairs; its resulting

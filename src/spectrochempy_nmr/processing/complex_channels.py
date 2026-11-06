@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import numpy as np
 
+from .fft_validation import _require_fft_prevalidation
 from .quadrature import STATES_TPPI
 from .quadrature import STATES_TPPI_F1COEF
 from .quadrature import STATES_TPPI_F2_CONVENTION
@@ -135,6 +136,7 @@ def _make_channel_dataset(data, *, labels, y_coord, x_coord, stage, meta=None):
 
 def process_complex_channels(dataset, *, reconstruction):
     """Process normalized channels with ordinary core FFTs on ``x`` and ``y``."""
+    _require_fft_prevalidation()
     _validate_complex_channels(dataset, reconstruction)
     import spectrochempy as scp  # noqa: PLC0415
 

@@ -25,10 +25,6 @@ def _fft_postprocess_result(new, dim=-1, inv=False, **kwargs):
     """
     if getattr(new.meta, "component_axis", None) == "c":
         transformed = new.dims[-1]
-        if transformed == "c":
-            raise NotImplementedError("The component axis is not a Fourier axis")
-        if inv:
-            raise NotImplementedError("Inverse channel reconstruction is not validated")
         if transformed == "x" and new.meta.stage == "acquisition":
             new.meta.readonly = False
             new.meta.stage = "F2-spectrum"

@@ -285,11 +285,16 @@ def _read_jdf(*args, **kwargs):
         coords.append(_make_coord(axis, meta.td[axis]))
 
     # Set data
-    dataset.data = data
-
     if ndim >= 2 and meta.iscomplex[-2]:
+        from spectrochempy_nmr.processing.fft_validation import (
+            _require_fft_prevalidation,
+        )
+
+        _require_fft_prevalidation()
         meta.encoding[-2] = "UNVALIDATED:JEOL-" + str(meta.encoding[-2])
         meta.normalization_state = "storage-decoded"
+
+    dataset.data = data
 
     # Apply metadata
     dataset.meta.update(meta)

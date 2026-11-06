@@ -11,6 +11,11 @@ Unreleased
 Changed
 ~~~~~~~
 
+* Reject unsupported channel FFT/IFFT requests before any in-place preparation,
+  preserving samples, axes, coordinates, masks and metadata on refusal. Native
+  channels and guarded indirect profiles require a core exposing
+  ``FFT_PREVALIDATION_API >= 1``; older cores retain the ordinary 1D workflow.
+
 * Remove quaternion storage, the Hypercomplex extra and the quaternion phasing
   handler. Experimental 2D branches now use ordinary complex datasets with a
   labelled component axis. Bruker pdata preserves all four components.

@@ -204,14 +204,19 @@ package.
 The experimental complex-channel processing path stores two complex channels
 in an ordinary `NDDataset` with shape `(2, nF1, nF2)` and dimensions
 `("c", "y", "x")`. It uses the existing core complex FFTs and does not require
-`spectrochempy-hypercomplex` or `numpy-quaternion`. All readers and processing paths use ordinary numeric arrays. The optional
+`spectrochempy-hypercomplex` or `numpy-quaternion`. Native channel paths require a core exposing `FFT_PREVALIDATION_API >= 1`;
+they refuse to start on published cores 1.1.0/1.1.4, which retain ordinary 1D
+and interop support. The read-only prevalidation hook rejects unsupported
+FFT/IFFT requests before in-place changes. All readers and processing paths
+use ordinary numeric arrays. The optional
 `hypercomplex` extra and the legacy quaternion phasing handler have been removed.
 The former `_channels` NOESY function is consolidated into
 `process_agilent_noesy_states_tppi`.
 
-CI covers released cores 1.1.0 and 1.1.4 without a representation plugin,
-including the four-component NMRPipe checkpoint, synthetic reader profiles,
-component extraction, persistence and normalized 1D interop.
+CI covers ordinary numeric/1D and interop support on released cores 1.1.0
+and 1.1.4 without a representation plugin. Native reader profiles, in-place
+refusal regressions, channel processing and persistence also run against the
+exact companion core commit with FFT prevalidation.
 Synthetic numerical agreement does not validate
 the physical quadrature of an uncharacterized acquisition or provide calibrated
 2D frequency axes.

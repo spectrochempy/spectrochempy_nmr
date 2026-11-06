@@ -33,6 +33,7 @@ from spectrochempy.core.units import ur
 from spectrochempy.utils._logging import warning_
 from spectrochempy.utils.meta import Meta
 from spectrochempy_nmr.extern.nmrglue import read_varian
+from spectrochempy_nmr.processing.fft_validation import _require_fft_prevalidation
 from spectrochempy_nmr.readers._channels import pair_traces
 from spectrochempy_nmr.readers._channels import set_channel_data
 from spectrochempy_nmr.readers._metadata import apply_reader_metadata_options
@@ -574,6 +575,7 @@ def _read_agilent(*args, **kwargs):
         )
     else:
         if ndim == 2 and meta.encoding[0] == "TPPI":
+            _require_fft_prevalidation()
             meta.encoding[0] = "UNVALIDATED:AGILENT-TPPI"
         dataset.data = data
         dataset.meta.update(meta)
