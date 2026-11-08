@@ -208,6 +208,33 @@ frequency grids from the resulting NMRPipe headers::
 
    python -I -m pytest tests/qualification/test_nmrpipe_interop.py::test_nmrpipe_raw_qf_experiment_reference
 
+Import a States-TPPI acquisition
+--------------------------------
+
+For a known States-TPPI acquisition with adjacent E1/E2 traces and the
+acquired alternation intact::
+
+   stored = ng.interop.read("states-tppi.fid")
+   normalized = ng.interop.normalize(stored, confirm_time_grid=True)
+   fid = from_interop(normalized, profile="states-tppi")
+
+The explicit profile asserts the acquisition convention. An NMRPipe States
+storage header alone does not identify States-TPPI. The importer expects the
+normalized ``rr, ri, ir, ii`` planes in F1/F2 order. It packs them into two
+complex planes labelled E1 and E2 on ``(c, y, x)``, preserves the signs and
+time grids, and records that alternation is still encoded. It performs no
+reconstruction, alternation correction, or FFT. Processing via
+``Experiment`` requires a separate qualification.
+
+CI uses a synthetic NMRPipe file with distinct real and imaginary values in
+both branches. The opt-in Bruker proton-exchange reference uses the original
+SER and acquisition files with pinned checksums. Its 800 acquired words per
+trace are packed into a temporary NMRPipe file, omitting storage padding.
+Set ``NMR_BRUKER_STATES_TPPI_REFERENCE`` to the original acquisition
+directory to run the real case::
+
+   python -I -m pytest tests/qualification/test_nmrpipe_interop.py -k states_tppi_import
+
 Report reproducible import/processing problems in the
 `spectrochempy_nmr issue tracker
 <https://github.com/spectrochempy/spectrochempy_nmr/issues>`_, including versions,
