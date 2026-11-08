@@ -45,9 +45,12 @@ def _check_parity(path, monkeypatch, *, migrate, filtered, dc):
         assert got.units == want.units
 
 
-@pytest.mark.parametrize("mode", [1, 5, 6])
-@pytest.mark.parametrize("complete", [True, False])
-def test_synthetic_public_ser_parity(tmp_path, monkeypatch, mode, complete):
+@pytest.mark.parametrize(
+    ("mode", "complete", "nus"),
+    [(mode, complete, False) for mode in (1, 5, 6) for complete in (True, False)]
+    + [(5, True, True)],
+)
+def test_synthetic_public_ser_parity(tmp_path, monkeypatch, mode, complete, nus):
     path = tmp_path / "bruker" / "1"
     path.mkdir(parents=True)
     (path / "acqus").write_text(
@@ -55,7 +58,8 @@ def test_synthetic_public_ser_parity(tmp_path, monkeypatch, mode, complete):
         f"##$TD= {240 if complete else 256}\n##$SW= 16\n##$SW_h= 2000\n##$SFO1= 125\n"
         "##$BF1= 125\n##$O1= 0\n##$AQ_mod= 3\n##$DECIM= 16\n"
         "##$DSPFVS= 12\n##$GRPDLY= 2.5\n##$BYTORDA= 1\n##$DTYPA= 0\n"
-        "##$PARMODE= 1\n##$NUC1= <13C>\n##$NS= 4\n##$RG= 3\n##END=\n"
+        "##$PARMODE= 1\n##$NUC1= <13C>\n##$NS= 4\n##$RG= 3\n"
+        f"##$FnTYPE= {2 if nus else 0}\n##END=\n"
     )
     (path / "acqu2s").write_text(
         "##TITLE= Synthetic Bruker indirect acquisition\n"
@@ -64,7 +68,12 @@ def test_synthetic_public_ser_parity(tmp_path, monkeypatch, mode, complete):
     )
     samples = np.arange(8 * 256, dtype=np.int32)
     (path / "ser").write_bytes((samples * (samples % 7 - 3)).astype(">i4").tobytes())
-    _check_parity(path, monkeypatch, migrate=complete, filtered=True, dc=True)
+    if nus:
+        # The legacy path ignores this directory, while nmrglue-ng opens it.
+        (path / "nuslist").mkdir()
+    _check_parity(
+        path, monkeypatch, migrate=complete and not nus, filtered=True, dc=True
+    )
 
 
 @pytest.mark.parametrize(

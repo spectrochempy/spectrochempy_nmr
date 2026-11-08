@@ -1009,7 +1009,14 @@ def _read_processed_data(directory, acqus_files, procs_files):
 
 
 def _read_raw_data(directory, filename, acqus_files, procs_files):
-    if filename == "fid" or (filename == "ser" and not (directory / "fid").is_file()):
+    migrate_ser = filename == "ser" and not (directory / "fid").is_file()
+    if migrate_ser:
+        acqus_path = directory / "acqus"
+        if acqus_path.is_file():
+            acqus = read_acqus_file(directory, [acqus_path])["acqus"]
+            migrate_ser = acqus.get("FnTYPE", 0) != 2
+
+    if filename == "fid" or migrate_ser:
         from nmrglue import bruker  # noqa: PLC0415
 
         try:
