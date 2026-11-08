@@ -372,18 +372,52 @@ def _from_states_tppi(result, data):
             "States-TPPI requires normalized F1/F2 time-domain component planes"
         )
 
-    import spectrochempy as scp  # noqa: PLC0415
-
-    y, x = (
-        _raw_time_coordinate(axis, size, dim)
-        for axis, size, dim in zip(result.axes, data.shape[1:], ("y", "x"), strict=True)
-    )
     channels = np.empty(
         (2, *data.shape[1:]), dtype=np.result_type(data.dtype, np.complex64)
     )
     channels.real = data[::2]
     channels.imag = data[1::2]
-    labels = ("E1", "E2")
+    dataset = _raw_channel_dataset(result, channels, ("E1", "E2"))
+    dataset.meta.quadrature_mode = "states-tppi"
+    dataset.meta.tppi_alternation_state = "encoded"
+    return dataset
+
+
+def _from_echo_antiecho(result, data):
+    """Preserve both complex branches in their declared storage order."""
+    channel_axis = getattr(result, "channel_axis", None)
+    if (
+        tuple(result.physical_dimensions) != ("F1", "F2")
+        or tuple(result.dimensions) != ("channels", "F1", "F2")
+        or tuple(result.domains) != ("time", "time")
+        or tuple(result.encoding) != ("echo-antiecho", "complex")
+        or tuple(result.branch_order) != ("first", "second")
+        or result.normalization_state != "storage-normalized"
+        or not isinstance(channel_axis, (int, np.integer))
+        or isinstance(channel_axis, bool)
+        or channel_axis != 0
+        or len(result.axes) != 2
+        or data.ndim != 3
+        or data.shape[0] != 2
+        or data.dtype.kind != "c"
+        or data.dtype.itemsize not in (8, 16)
+        or not np.isfinite(data).all()
+    ):
+        raise ValueError(
+            "Echo/anti-echo requires normalized F1/F2 time-domain complex branches"
+        )
+    return _raw_channel_dataset(result, data.copy(), tuple(result.branch_order))
+
+
+def _raw_channel_dataset(result, channels, labels):
+    import spectrochempy as scp  # noqa: PLC0415
+
+    y, x = (
+        _raw_time_coordinate(axis, size, dim)
+        for axis, size, dim in zip(
+            result.axes, channels.shape[1:], ("y", "x"), strict=True
+        )
+    )
     dataset = scp.NDDataset(channels, dtype=channels.dtype, dims=["c", "y", "x"])
     dataset.set_coordset(c=scp.Coord(labels=list(labels)), y=y, x=x)
     dataset.meta.update(_interop_metadata(result))
@@ -393,8 +427,6 @@ def _from_states_tppi(result, data):
             "component_axis": "c",
             "component_labels": labels,
             "stage": "acquisition",
-            "quadrature_mode": "states-tppi",
-            "tppi_alternation_state": "encoded",
             "data_domain": "time",
             "isfreq": [False, False, False],
             "td": list(channels.shape),
@@ -415,6 +447,8 @@ def from_interop(result, *, profile=None):
     Raw 2D QF requires explicit provider normalization. For a known
     States-TPPI acquisition, profile="states-tppi" confirms that the
     input channels are adjacent E1/E2 pairs with alternation still encoded.
+    Explicitly normalized echo/anti-echo input retains both complex branches
+    in storage order.
     """
     required = (
         "data",
@@ -446,6 +480,8 @@ def from_interop(result, *, profile=None):
         return _from_states_tppi(result, data)
     if profile is not None:
         raise ValueError(f"unsupported interop profile: {profile!r}")
+    if result.quadrature_mode == "echo-antiecho-stored-2d":
+        return _from_echo_antiecho(result, data)
     if data.ndim == 2 or (
         data.ndim == 3 and result.quadrature_mode == "stored-components-2d"
     ):

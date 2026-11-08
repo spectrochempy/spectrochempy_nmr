@@ -373,3 +373,60 @@ def test_import_time_plane_requires_qf_marker():
     source.domains = ("time", "time")
     with pytest.raises(ValueError, match="requires a normalized"):
         from_interop(source)
+
+
+@pytest.fixture
+def echo_antiecho():
+    indirect = _normalized(axis_values=np.arange(3) * 0.001).axes[0]
+    source = _normalized(axis_values=np.arange(4) * 0.00025)
+    grid = np.arange(12).reshape(3, 4)
+    source.data = np.stack((grid + 1j * (grid + 1), -grid - 2 - 1j * grid))
+    source.axes = (indirect, *source.axes)
+    source.physical_dimensions = ("F1", "F2")
+    source.dimensions = ("channels", "F1", "F2")
+    source.domains = ("time", "time")
+    source.quadrature_mode = "echo-antiecho-stored-2d"
+    source.encoding = ("echo-antiecho", "complex")
+    source.branch_order = ("first", "second")
+    source.channel_axis = 0
+    source.normalization_profile = "opaque-profile"
+    return source
+
+
+@pytest.mark.parametrize("dtype", [np.complex64, np.complex128])
+def test_import_echo_antiecho_preserves_branches(echo_antiecho, dtype):
+    echo_antiecho.data = echo_antiecho.data.astype(dtype)
+    dataset = from_interop(echo_antiecho)
+    assert dataset.dims == ["c", "y", "x"]
+    assert dataset.dtype == dtype
+    assert dataset.meta.stage == "acquisition"
+    assert dataset.meta.isfreq == [False, False, False]
+    assert dataset.meta.component_axis == "c"
+    assert tuple(dataset.meta.component_labels) == ("first", "second")
+    assert dataset.meta.quadrature_mode == "echo-antiecho-stored-2d"
+    np.testing.assert_array_equal(dataset.c.labels, ["first", "second"])
+    np.testing.assert_array_equal(dataset.data, echo_antiecho.data)
+    assert not np.shares_memory(dataset.data, echo_antiecho.data)
+    for coordinate, axis in zip(
+        (dataset.y, dataset.x), echo_antiecho.axes, strict=True
+    ):
+        assert coordinate.units == scp.ur.s
+        np.testing.assert_array_equal(coordinate.data, axis.values)
+
+
+@pytest.mark.parametrize(
+    ("field", "value"),
+    [
+        ("branch_order", ("second", "first")),
+        ("channel_axis", False),
+        ("domains", ("time", "frequency")),
+        ("encoding", ("complex", "complex")),
+        ("normalization_state", "quadrature-normalized"),
+        ("data", np.zeros((2, 3, 4))),
+        ("data", np.full((2, 3, 4), complex(1, np.inf))),
+    ],
+)
+def test_import_echo_antiecho_rejects_unsupported_contract(echo_antiecho, field, value):
+    setattr(echo_antiecho, field, value)
+    with pytest.raises(ValueError, match="requires normalized F1/F2"):
+        from_interop(echo_antiecho)
