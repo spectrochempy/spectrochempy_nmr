@@ -125,11 +125,8 @@ class Experiment:
     validation, and state-aware processing orchestration.  Does **not**
     copy, subclass, or mutate the underlying dataset.
 
-    The current public processing workflow is intentionally limited to
-    validated 1D experiments.  Multi-dimensional datasets may still be
-    classified and inspected, but their processing remains outside the
-    public supported scope until the scientific characterization work is
-    complete.
+    Public processing covers validated 1D experiments and FFT-only
+    processing of explicitly normalized raw 2D QF acquisitions.
 
     Parameters
     ----------
@@ -349,6 +346,12 @@ class Experiment:
         """
         return self.domain in ("time", "frequency")
 
+    @property
+    def _supports_qf_fft(self) -> bool:
+        return (
+            self.ndim == 2 and self._nmr_meta.normalized_interop and self.is_time_domain
+        )
+
     # ------------------------------------------------------------------
     # Validation
     # ------------------------------------------------------------------
@@ -420,10 +423,13 @@ class Experiment:
             report.add_info("Raw 1D FID detected.")
         elif self.source_kind == "ser":
             report.add_info("Raw 2D SER detected.")
-            report.add_warning(
-                "Multi-dimensional NMR processing is not part of the current "
-                "public supported workflow."
-            )
+            if self._supports_qf_fft:
+                report.add_info("Normalized 2D QF FFT processing is available.")
+            else:
+                report.add_warning(
+                    "Multi-dimensional NMR processing is not part of the current "
+                    "public supported workflow."
+                )
         elif self.source_kind == "processed_1d":
             report.add_info("Processed 1D spectrum detected — no FFT required.")
         elif self.source_kind == "processed_2d":
@@ -465,8 +471,8 @@ class Experiment:
         Applies only operations that are scientifically appropriate for the
         current data domain.  Never modifies the source dataset.
 
-        The supported public processing workflow currently covers validated
-        1D experiments only.
+        Processing covers validated 1D experiments and FFT-only processing
+        of explicitly normalized raw 2D QF acquisitions.
 
         Parameters
         ----------
@@ -517,8 +523,8 @@ class Experiment:
         RuntimeError
             If the data domain does not support the requested operations.
         NotImplementedError
-            If the dataset is multi-dimensional and therefore outside the
-            current public supported processing scope.
+            If the dataset is multi-dimensional and outside the normalized
+            raw 2D QF processing profile.
         ValueError
             If an apodization parameter combination is incompatible with the
             selected apodization mode.
@@ -547,11 +553,33 @@ class Experiment:
         phc0 = 0.0 if phc0 is _UNSET_ZERO else phc0
         phc1 = 0.0 if phc1 is _UNSET_ZERO else phc1
 
+        if self._supports_qf_fft:
+            if (
+                any(
+                    value is not None
+                    for value in (apodization, lb, gb, ssb, pow, size, phase, reference)
+                )
+                or phc0
+                or phc1
+            ):
+                raise ValueError("normalized 2D QF processing supports FFT only")
+            from .processing.qf_interop import process_qf_fft  # noqa: PLC0415
+
+            result = process_qf_fft(ds, self._nmr_meta.spectral_width_hz)
+            return self._attach_scp_processing_trace(
+                result,
+                requested={},
+                applied={
+                    "fft": True,
+                    "fft_order": ("F2", "F1"),
+                    "fft_convention": ("NMRPipe FT -nodf", "NMRPipe FT -neg"),
+                },
+            )
+
         if self.ndim > 1:
             msg = (
-                "Public NMR processing currently supports only validated 1D "
-                "experiments. Multi-dimensional NMR processing remains out of "
-                "public scope pending further scientific characterization."
+                "Outside normalized raw 2D QF, public NMR processing supports "
+                "only validated 1D experiments."
             )
             raise NotImplementedError(msg)
 
@@ -1185,7 +1213,9 @@ class Experiment:
         if self.encoding:
             lines.append(f"  encoding: {' × '.join(self.encoding)}")
         lines.append(f"  processable: {'yes' if self.is_processable else 'no'}")
-        if self.ndim >= 2:
+        if self._supports_qf_fft:
+            lines.append("  public processing: normalized 2D QF FFT only")
+        elif self.ndim >= 2:
             lines.append("  public processing: 1D only")
         return "\n".join(lines)
 

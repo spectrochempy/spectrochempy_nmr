@@ -493,3 +493,69 @@ def test_nmrpipe_raw_qf_2d_reference(provider, tmp_path):
     assert restored.meta.interop_complex_axis == "F2"
     assert restored.meta.acquisition["indirect_sampling"] == "qf"
     assert path.read_bytes() == original
+
+
+def test_nmrpipe_raw_qf_experiment_reference(provider, tmp_path, monkeypatch):
+    from spectrochempy_nmr.processing import qf_interop
+
+    configured = os.environ.get("NMR_PIPE_QF_2D_REFERENCE")
+    executable = os.environ.get("NMR_PIPE_EXECUTABLE") or shutil.which("nmrPipe")
+    if not configured or not executable:
+        pytest.skip("configure a complete QF FID and the NMRPipe executable")
+    source = Path(configured)
+    before = hashlib.sha256(source.read_bytes()).hexdigest()
+    result = provider.interop.normalize(
+        provider.interop.read(source), confirm_time_grid=True
+    )
+    dataset = from_interop(result)
+    stages = []
+    transform = qf_interop._fft_stage
+
+    def record(values, axis, *, direct):
+        output = transform(values, axis, direct=direct)
+        stages.append(output.copy())
+        return output
+
+    monkeypatch.setattr(qf_interop, "_fft_stage", record)
+    spectrum = Experiment(dataset).process()
+    current = source
+    outputs = {}
+    for name, options in (
+        ("f2", ("FT", "-nodf")),
+        ("transposed", ("TP",)),
+        ("f1", ("FT", "-neg")),
+        ("final", ("TP",)),
+    ):
+        target = tmp_path / (name + ".ft2")
+        subprocess.run(
+            [
+                executable,
+                "-in",
+                str(current),
+                "-fn",
+                *options,
+                "-out",
+                str(target),
+                "-ov",
+            ],
+            check=True,
+            capture_output=True,
+        )
+        outputs[name] = provider.pipe.read(str(target))
+        current = target
+    for actual, expected in zip(
+        stages, (outputs["f2"][1], outputs["f1"][1].T), strict=True
+    ):
+        np.testing.assert_allclose(actual, expected, rtol=5e-6, atol=1e-3)
+    header, data = outputs["final"]
+    np.testing.assert_allclose(spectrum.data, data, rtol=5e-6, atol=1e-3)
+    for coord, role, count in zip(
+        (spectrum.y, spectrum.x), ("F1", "F2"), data.shape, strict=True
+    ):
+        prefix = "FD" + role
+        origin = header[prefix + "ORIG"]
+        carrier = header[prefix + "CAR"] * header[prefix + "OBS"]
+        width = header[prefix + "SW"]
+        relative = origin + (count - 1 - np.arange(count)) * (width / count) - carrier
+        np.testing.assert_allclose(coord.data, relative, rtol=1e-6, atol=1e-3)
+    assert hashlib.sha256(source.read_bytes()).hexdigest() == before
