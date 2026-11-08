@@ -1,4 +1,4 @@
-# Test-only provider: never a plugin runtime dependency.
+# Pin the runtime provider for reproducible qualification.
 nmrglue-ng==1.2.0
 
 # Optional XML reader used only by nmrML qualification.

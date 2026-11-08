@@ -1,7 +1,7 @@
 NMRPipe interop qualification (Unreleased)
 ==========================================
 
-The optional external nmrglue-ng provider can import complete, already transformed
+The nmrglue-ng provider can import complete, already transformed
 NMRPipe 1D spectra into the generic Experiment path::
 
    import nmrglue as ng
@@ -14,8 +14,7 @@ NMRPipe 1D spectra into the generic Experiment path::
 
 This requires the provider release pinned in
 ``tests/qualification/requirements.txt`` (or a later compatible release).
-The provider is an optional integration dependency; it is not bundled or
-installed by the plugin. This path is explicit and does not change
+The plugin installs nmrglue-ng as a dependency. This path is explicit and does not change
 ``scp.nmr.read`` dispatch. No core change is required for this 1D integration.
 
 Supported contract

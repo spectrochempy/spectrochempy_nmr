@@ -242,5 +242,6 @@ python -m build
 ```
 
 Both distributions include `LICENSE` (CeCILL-B) and `NMRGLUE_LICENSE.rst`
-(the notice for the adapted/vendorized parsers). Repository extraction does not
-change those parsers or introduce a dependency on nmrglue-ng.
+(the notice for the remaining adapted parsers). The plugin depends on
+nmrglue-ng for qualified Bruker processed 2D spectra. SpectroChemPy core
+does not require the NMR plugin or nmrglue-ng.

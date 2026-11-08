@@ -12,6 +12,9 @@ Unreleased
 Changed
 ~~~~~~~
 
+* Depend on nmrglue-ng and delegate qualified Bruker 2D ``pdata`` decoding
+  to it while preserving the public TopSpin reader's channels and axes.
+
 * Offer phase- and time-domain Bruker F2 group-delay corrections for imported
   2D echo/anti-echo FIDs. Resolve the delay from acquisition metadata when
   available and qualify both methods on the official HSQC.

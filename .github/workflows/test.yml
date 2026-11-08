@@ -137,9 +137,9 @@ jobs:
           from pathlib import Path
 
           assert version("spectrochempy") == "${{ matrix.spectrochempy-version }}"
-          for name in ("spectrochempy_hypercomplex", "quaternion", "nmrglue"):
+          for name in ("spectrochempy_hypercomplex", "quaternion"):
               assert find_spec(name) is None, f"unexpected optional dependency: {name}"
-          for name in ("spectrochempy", "spectrochempy_nmr"):
+          for name in ("spectrochempy", "spectrochempy_nmr", "nmrglue"):
               location = Path(find_spec(name).origin).resolve()
               assert Path.cwd() not in location.parents, location
               print(f"{name}: {location}")
