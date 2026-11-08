@@ -225,5 +225,52 @@ def test_import_real_plane_preserves_order_precision_and_independent_storage(
 def test_import_real_plane_rejects_unsupported_contract(field, value):
     source = _real_plane()
     setattr(source, field, value)
-    with pytest.raises(ValueError, match="normalized real F1/F2"):
+    with pytest.raises(ValueError, match="from_interop 2D requires"):
+        from_interop(source)
+
+
+def _complex_plane():
+    source = _real_plane()
+    source.data = np.stack((source.data, -source.data - 1))
+    source.dimensions = ("channels", *source.physical_dimensions)
+    source.encoding = ("real", "complex")
+    source.quadrature_mode = "stored-components-2d"
+    source.branch_order = ("rr", "ri")
+    source.channel_axis = 0
+    return source
+
+
+@pytest.mark.parametrize("dtype", [np.float32, np.float64])
+def test_import_singly_complex_plane_preserves_components(dtype):
+    source = _complex_plane()
+    source.data = source.data.astype(dtype)
+    source.data[1, 0, 0] = -0.0
+    dataset = from_interop(source)
+    assert dataset.dtype == np.result_type(dtype, np.complex64)
+    assert dataset.meta.interop_complex_axis == "F2"
+    assert dataset.meta.axis_roles == ("F1", "F2")
+    assert dataset.meta.td == [3, 8]
+    np.testing.assert_array_equal(dataset.data.real, source.data[0])
+    np.testing.assert_array_equal(dataset.data.imag, source.data[1])
+    assert np.signbit(dataset.data.imag[0, 0])
+    assert not np.shares_memory(dataset.data, source.data)
+
+
+@pytest.mark.parametrize(
+    ("field", "value"),
+    [
+        ("encoding", ("complex", "complex")),
+        ("branch_order", ("ri", "rr")),
+        ("branch_order", ("rr", "ir")),
+        ("channel_axis", 1),
+        ("data", np.zeros((4, 3, 8), dtype=np.float32)),
+        ("data", np.zeros((2, 3, 8), dtype=np.int32)),
+        ("domains", ("time", "frequency")),
+        ("dimensions", ("channels", "F2", "F1")),
+    ],
+)
+def test_import_singly_complex_plane_rejects_unsupported_contract(field, value):
+    source = _complex_plane()
+    setattr(source, field, value)
+    with pytest.raises(ValueError, match="from_interop 2D requires"):
         from_interop(source)

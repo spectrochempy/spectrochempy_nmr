@@ -98,9 +98,38 @@ and checks an SCP round trip. To run the test locally, set
 
    python -I -m pytest tests/qualification/test_nmrpipe_interop.py::test_real_nmrpipe_cosy_plane
 
-This qualifies direct conversion to ``NDDataset``. Raw and mixed-domain
-2D inputs, complex or hypercomplex planes, and 2D processing through
-``Experiment`` are outside this bridge's scope.
+Import a processed 2D plane with one complex axis
+-------------------------------------------------
+
+Use the NMRPipe storage reader for a fully frequency-domain plane with
+exactly one complex dimension::
+
+   raw = ng.interop.read_nmrpipe_2d_storage("complex.ft2")
+   spectrum = from_interop(ng.interop.normalize(raw))
+
+The adapter combines ``rr`` with ``ri`` for a complex column axis, or
+``rr`` with ``ir`` for a complex row axis. It keeps the stored imaginary
+sign and the physical order of the axes. Float32 and float64 component
+planes become complex64 and complex128, respectively. The physical complex
+axis is recorded in ``spectrum.meta.interop_complex_axis``. The input
+encoding and branch order remain available in the interop metadata.
+
+CI generates small frequency-domain NMRPipe files covering F1 and F2
+quadrature in both physical axis orders. For local qualification, set
+``NMR_PIPE_COSY_REFERENCE`` as above and ``NMR_PIPE_EXECUTABLE`` to the
+NMRPipe executable. Then run::
+
+   python -I -m pytest tests/qualification/test_nmrpipe_interop.py::test_nmrpipe_singly_complex_cosy_reference
+
+This test creates a temporary complex reference with NMRPipe
+``-fn HT -auto`` on the pinned real COSY. It was qualified with NMRPipe
+13.0 Rev 2026.072.12.03. The generated imaginary plane tests binary import
+and SCP persistence. It is a Hilbert transform of the real spectrum, so it
+does not establish the original acquired quadrature.
+
+These paths qualify conversion to ``NDDataset``. Raw and mixed-domain 2D
+inputs, four-component planes, and 2D processing through ``Experiment``
+remain outside the bridge.
 
 Report reproducible import/processing problems in the
 `spectrochempy_nmr issue tracker

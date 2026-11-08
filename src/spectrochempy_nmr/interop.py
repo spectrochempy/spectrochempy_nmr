@@ -194,42 +194,71 @@ def _interop_metadata(result):
     }
 
 
-def _from_real_2d(result, data):
-    """Convert one real frequency plane in its supplied physical axis order."""
-    dimensions = tuple(result.dimensions)
+def _from_2d(result, data):
+    """Convert a real or singly complex plane in its physical axis order."""
+    dimensions = tuple(result.physical_dimensions)
+    encoding = tuple(result.encoding)
+    branches = tuple(result.branch_order)
+    channel_axis = getattr(result, "channel_axis", None)
+    mode = result.quadrature_mode
     if (
         dimensions not in (("F1", "F2"), ("F2", "F1"))
-        or tuple(result.physical_dimensions) != dimensions
         or len(result.axes) != 2
         or tuple(result.domains) != ("frequency", "frequency")
-        or tuple(result.encoding) != ("real", "real")
-        or result.quadrature_mode != "real-2d"
-        or tuple(result.branch_order) != ("real",)
-        or getattr(result, "channel_axis", None) is not None
         or result.normalization_state != "storage-normalized"
         or data.dtype.kind not in "iuf"
         or not np.isfinite(data).all()
     ):
-        raise ValueError(
-            "from_interop 2D requires a normalized real F1/F2 frequency plane"
+        raise ValueError("from_interop 2D requires a normalized F1/F2 frequency plane")
+
+    complex_axis = None
+    if (
+        mode == "real-2d"
+        and data.ndim == 2
+        and tuple(result.dimensions) == dimensions
+        and encoding == ("real", "real")
+        and branches == ("real",)
+        and channel_axis is None
+    ):
+        plane = np.array(data, copy=True)
+    elif (
+        mode == "stored-components-2d"
+        and data.ndim == 3
+        and data.shape[0] == 2
+        and isinstance(channel_axis, (int, np.integer))
+        and not isinstance(channel_axis, bool)
+        and channel_axis == 0
+        and tuple(result.dimensions) == ("channels", *dimensions)
+        and data.dtype.kind == "f"
+        and data.dtype.itemsize in (4, 8)
+        and (encoding, branches)
+        in (
+            (("real", "complex"), ("rr", "ri")),
+            (("complex", "real"), ("rr", "ir")),
         )
+    ):
+        complex_axis = dimensions[encoding.index("complex")]
+        plane = np.empty(data.shape[1:], dtype=np.result_type(data.dtype, np.complex64))
+        plane.real, plane.imag = data
+    else:
+        raise ValueError("from_interop 2D requires a real plane or one complex axis")
 
     import spectrochempy as scp  # noqa: PLC0415
 
     coords = [
         _frequency_coordinate(axis, size, linearize_below=0.0)
-        for axis, size in zip(result.axes, data.shape, strict=True)
+        for axis, size in zip(result.axes, plane.shape, strict=True)
     ]
-    dataset = scp.NDDataset(
-        np.array(data, copy=True), dtype=data.dtype, dims=["y", "x"]
-    )
+    dataset = scp.NDDataset(plane, dtype=plane.dtype, dims=["y", "x"])
     # Named assignment retains the configured Coord instead of rebuilding it.
     dataset.set_coordset(y=coords[0], x=coords[1])
     dataset.meta.update(_interop_metadata(result))
     dataset.meta.axis_roles = dimensions
     dataset.meta.data_domain = "frequency"
     dataset.meta.isfreq = [True, True]
-    dataset.meta.td = list(data.shape)
+    dataset.meta.td = list(plane.shape)
+    if complex_axis is not None:
+        dataset.meta.interop_complex_axis = complex_axis
     return dataset
 
 
@@ -240,7 +269,7 @@ def from_interop(result):
     deliberately does not import nmrglue-ng or inspect vendor metadata. A raw
     descriptive ``ReadResult`` is rejected because it has not established the
     normalization guarantees required by this conversion. Frequency spectra
-    can be real or complex in 1D and real in 2D.
+    can be real or complex in 1D, and real or complex along one axis in 2D.
     """
     required = (
         "data",
@@ -268,11 +297,13 @@ def from_interop(result):
     if np.ma.is_masked(result.data):
         raise ValueError("from_interop currently requires unmasked acquisition data")
     data = np.asarray(result.data)
-    if data.ndim == 2:
-        return _from_real_2d(result, data)
+    if data.ndim == 2 or (
+        data.ndim == 3 and result.quadrature_mode == "stored-components-2d"
+    ):
+        return _from_2d(result, data)
     if data.ndim != 1 or data.dtype.kind not in "iufc":
         raise ValueError(
-            "from_interop requires a numeric 1D acquisition or a real 2D frequency plane"
+            "from_interop requires a numeric 1D acquisition or a supported 2D frequency plane"
         )
     domain = tuple(result.domains)
     if domain not in (("time",), ("frequency",)):
