@@ -1,15 +1,18 @@
 """Installed-provider real processed 1D qualification with independent bytes."""
 
 from copy import deepcopy
+from importlib import import_module
 from importlib.metadata import distribution
 import hashlib
 import json
 import os
 from pathlib import Path
+import shutil
 
 import numpy as np
 import pytest
 import spectrochempy as scp
+from spectrochempy.utils.jsonutils import json_encoder
 
 from spectrochempy_nmr import from_interop
 from spectrochempy_nmr.experiment import Experiment
@@ -146,3 +149,49 @@ def test_original_pdata_import_process_and_persistence(
         json.dumps(result.meta.nmr_processing)
     )
     assert dict(source.meta) == before
+
+
+@pytest.mark.parametrize("proc_axis", [False, True])
+@pytest.mark.parametrize("complex_data", [False, True])
+def test_public_read_topspin_pdata_parity(
+    acquisition, provider, complex_data, proc_axis, monkeypatch, tmp_path
+):
+    path, _ = acquisition
+    if not complex_data:
+        experiment = tmp_path / "bruker" / "1"
+        real_only = experiment / "pdata" / "1"
+        real_only.mkdir(parents=True)
+        shutil.copy2(path.parents[1] / "acqus", experiment / "acqus")
+        for name in ("1r", "procs"):
+            shutil.copy2(path / name, real_only / name)
+        path = real_only
+    component = path / ("1i" if complex_data else "1r")
+    reader = import_module("spectrochempy_nmr.readers.read_topspin")
+
+    def unsupported(*args, **kwargs):
+        raise ValueError("unqualified profile")
+
+    with monkeypatch.context() as legacy:
+        legacy.setattr(provider.interop, "read_bruker_pdata", unsupported)
+        expected = scp.read_topspin(component, proc_axis=proc_axis)
+
+    def reject_legacy(*args, **kwargs):
+        pytest.fail("qualified 1D pdata should not use the vendored payload decoder")
+
+    with monkeypatch.context() as migrated:
+        migrated.setattr(reader, "read_pdata", reject_legacy)
+        actual = scp.read_topspin(component, proc_axis=proc_axis)
+
+    assert actual is not None and expected is not None
+    assert np.iscomplexobj(actual.data) is complex_data
+    assert actual.dtype == expected.dtype
+    assert actual.dims == expected.dims
+    assert actual.units == expected.units
+    assert actual.origin == expected.origin
+    assert actual.name == expected.name
+    assert json_encoder(actual.meta) == json_encoder(expected.meta)
+    np.testing.assert_array_equal(actual.data, expected.data)
+    np.testing.assert_array_equal(actual.x.data, expected.x.data)
+    assert actual.x.units == expected.x.units
+    assert actual.x.title == expected.x.title
+    assert json_encoder(actual.x.meta) == json_encoder(expected.x.meta)

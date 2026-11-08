@@ -970,25 +970,36 @@ def _validate_proc_axis(dic, data, parmode):
 
 
 def _read_processed_data(directory, acqus_files, procs_files):
-    names = ("2rr", "2ri", "2ir", "2ii")
-    if not (directory / "1r").is_file() and all(
-        (directory / name).is_file() for name in names
-    ):
-        from nmrglue import interop  # noqa: PLC0415
+    from nmrglue import interop  # noqa: PLC0415
 
-        from spectrochempy_nmr.interop import from_interop  # noqa: PLC0415
+    from spectrochempy_nmr.interop import from_interop  # noqa: PLC0415
 
-        try:
+    one_dimensional = (directory / "1r").is_file()
+    try:
+        if one_dimensional:
+            stored = interop.read_bruker_pdata(
+                directory,
+                acqus_files=acqus_files,
+                procs_files=procs_files,
+                all_components=True,
+            )
+            normalized = interop.normalize_bruker_pdata(stored)
+        elif all((directory / name).is_file() for name in ("2rr", "2ri", "2ir", "2ii")):
             stored = interop.read_bruker_pdata_2d(directory)
-        except ValueError:
-            # The calibrated profile is narrower than the historical reader.
-            pass
+            normalized = interop.normalize_bruker_pdata_2d(stored)
         else:
-            planes = from_interop(interop.normalize_bruker_pdata_2d(stored))
-            # Keep the public reader's parameter selection, axes and gain.
-            metadata = read_procs_file(directory, procs_files)
-            metadata.update(read_acqus_file(directory, acqus_files))
-            return metadata, list(planes.data)
+            normalized = None
+    except ValueError:
+        # The calibrated profiles are narrower than the historical reader.
+        normalized = None
+
+    if normalized is not None:
+        del stored
+        converted = from_interop(normalized)
+        # Keep the public reader's parameter selection, axes and gain.
+        metadata = read_procs_file(directory, procs_files)
+        metadata.update(read_acqus_file(directory, acqus_files))
+        return metadata, converted.data if one_dimensional else list(converted.data)
 
     return read_pdata(
         directory, acqus_files=acqus_files, procs_files=procs_files, all_components=True
