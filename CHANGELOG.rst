@@ -12,6 +12,10 @@ Unreleased
 Changed
 ~~~~~~~
 
+* Qualify complete Bruker processed 2D spectra through ``from_interop()``.
+  Preserve the four original plane names, calibrated axes and selected
+  storage scale.
+
 * Import fully processed four-component 2D spectra through ``from_interop()``
   as labelled real planes, preserving the input dtype at import. Branch order
   and axis calibration survive SCP persistence without requiring Hypercomplex.

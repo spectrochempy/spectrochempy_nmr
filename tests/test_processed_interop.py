@@ -318,3 +318,18 @@ def test_import_four_component_plane_rejects_unsupported_contract(field, value):
     setattr(source, field, value)
     with pytest.raises(ValueError, match="from_interop 2D requires"):
         from_interop(source)
+
+
+@pytest.mark.parametrize("dtype", [np.int32, np.float64])
+def test_import_bruker_named_planes_without_reinterpreting_labels(dtype):
+    source = _four_component_plane()
+    source.encoding = ("stored", "stored")
+    source.branch_order = ("2rr", "2ri", "2ir", "2ii")
+    source.data = source.data.astype(dtype)
+    dataset = from_interop(source)
+    assert tuple(dataset.c.labels) == source.branch_order
+    assert dataset.dtype == source.data.dtype
+    np.testing.assert_array_equal(dataset.data, source.data)
+    source.branch_order = ("2rr", "2ir", "2ri", "2ii")
+    with pytest.raises(ValueError, match="from_interop 2D requires"):
+        from_interop(source)

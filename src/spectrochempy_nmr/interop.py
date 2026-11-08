@@ -218,9 +218,8 @@ def _from_2d(result, data):
         and not isinstance(channel_axis, bool)
         and channel_axis == 0
         and tuple(result.dimensions) == ("channels", *dimensions)
-        and data.dtype.kind == "f"
-        and data.dtype.itemsize in (4, 8)
     )
+    float_components = data.dtype.kind == "f" and data.dtype.itemsize in (4, 8)
     complex_axis = None
     component_labels = None
     if (
@@ -235,6 +234,7 @@ def _from_2d(result, data):
     elif (
         stored_components
         and data.shape[0] == 2
+        and float_components
         and (encoding, branches)
         in (
             (("real", "complex"), ("rr", "ri")),
@@ -247,8 +247,19 @@ def _from_2d(result, data):
     elif (
         stored_components
         and data.shape[0] == 4
-        and encoding == ("complex", "complex")
-        and branches == ("rr", "ri", "ir", "ii")
+        and (
+            (
+                float_components
+                and encoding == ("complex", "complex")
+                and branches == ("rr", "ri", "ir", "ii")
+            )
+            or (
+                dimensions == ("F1", "F2")
+                and encoding == ("stored", "stored")
+                and branches == ("2rr", "2ri", "2ir", "2ii")
+                and (data.dtype.kind, data.dtype.itemsize) in (("i", 4), ("f", 8))
+            )
+        )
     ):
         component_labels = branches
         plane = np.array(data, copy=True)
