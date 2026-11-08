@@ -76,7 +76,7 @@ def _axis_coordinate(axis, size, dim):
     return scp.Coord(np.array(values, copy=True), **kwargs)
 
 
-def _frequency_coordinate(axis, size):
+def _frequency_coordinate(axis, size, **coord_options):
     """Preserve an explicitly calibrated normalized frequency grid."""
     import spectrochempy as scp  # noqa: PLC0415
 
@@ -111,7 +111,12 @@ def _frequency_coordinate(axis, size):
     if size < 2 or not (np.all(differences > 0) or np.all(differences < 0)):
         raise ValueError("normalized frequency axis must be strictly monotonic")
     coord = scp.Coord(
-        values.copy(), units=axis.unit, title=axis.label, rounding=False, sigdigits=15
+        values.copy(),
+        units=axis.unit,
+        title=axis.label,
+        rounding=False,
+        sigdigits=15,
+        **coord_options,
     )
     reference = getattr(axis, "reference", None)
     if reference is not None and reference.observation_frequency is not None:
@@ -140,6 +145,10 @@ def _frequency_coordinate(axis, size):
 
 
 def _interop_metadata(result):
+    if not isinstance(result.provenance, Mapping) or not isinstance(
+        result.acquisition, Mapping
+    ):
+        raise TypeError("from_interop provenance and acquisition must be mappings")
     operations = []
     for operation in result.applied_operations:
         if not isinstance(operation, Mapping) or not _OPERATION_KEYS <= set(operation):
@@ -185,13 +194,53 @@ def _interop_metadata(result):
     }
 
 
+def _from_real_2d(result, data):
+    """Convert one real frequency plane in its supplied physical axis order."""
+    dimensions = tuple(result.dimensions)
+    if (
+        dimensions not in (("F1", "F2"), ("F2", "F1"))
+        or tuple(result.physical_dimensions) != dimensions
+        or len(result.axes) != 2
+        or tuple(result.domains) != ("frequency", "frequency")
+        or tuple(result.encoding) != ("real", "real")
+        or result.quadrature_mode != "real-2d"
+        or tuple(result.branch_order) != ("real",)
+        or getattr(result, "channel_axis", None) is not None
+        or result.normalization_state != "storage-normalized"
+        or data.dtype.kind not in "iuf"
+        or not np.isfinite(data).all()
+    ):
+        raise ValueError(
+            "from_interop 2D requires a normalized real F1/F2 frequency plane"
+        )
+
+    import spectrochempy as scp  # noqa: PLC0415
+
+    coords = [
+        _frequency_coordinate(axis, size, linearize_below=0.0)
+        for axis, size in zip(result.axes, data.shape, strict=True)
+    ]
+    dataset = scp.NDDataset(
+        np.array(data, copy=True), dtype=data.dtype, dims=["y", "x"]
+    )
+    # Named assignment retains the configured Coord instead of rebuilding it.
+    dataset.set_coordset(y=coords[0], x=coords[1])
+    dataset.meta.update(_interop_metadata(result))
+    dataset.meta.axis_roles = dimensions
+    dataset.meta.data_domain = "frequency"
+    dataset.meta.isfreq = [True, True]
+    dataset.meta.td = list(data.shape)
+    return dataset
+
+
 def from_interop(result):
-    """Convert a normalized complex FID or real/complex 1D spectrum.
+    """Convert a normalized complex 1D FID or a supported frequency spectrum.
 
     The converter consumes the neutral normalized protocol by attributes and
     deliberately does not import nmrglue-ng or inspect vendor metadata. A raw
     descriptive ``ReadResult`` is rejected because it has not established the
-    normalization guarantees required by this conversion.
+    normalization guarantees required by this conversion. Frequency spectra
+    can be real or complex in 1D and real in 2D.
     """
     required = (
         "data",
@@ -219,8 +268,12 @@ def from_interop(result):
     if np.ma.is_masked(result.data):
         raise ValueError("from_interop currently requires unmasked acquisition data")
     data = np.asarray(result.data)
+    if data.ndim == 2:
+        return _from_real_2d(result, data)
     if data.ndim != 1 or data.dtype.kind not in "iufc":
-        raise ValueError("from_interop currently supports one numeric 1D acquisition")
+        raise ValueError(
+            "from_interop requires a numeric 1D acquisition or a real 2D frequency plane"
+        )
     domain = tuple(result.domains)
     if domain not in (("time",), ("frequency",)):
         raise ValueError("from_interop 1D input must declare time or frequency domain")
@@ -241,11 +294,6 @@ def from_interop(result):
         "quadrature-normalized",
     ):
         raise ValueError("from_interop requires a validated normalized acquisition")
-    if not isinstance(result.provenance, Mapping) or not isinstance(
-        result.acquisition, Mapping
-    ):
-        raise TypeError("from_interop provenance and acquisition must be mappings")
-
     import spectrochempy as scp  # noqa: PLC0415
 
     axis = result.axes[0]

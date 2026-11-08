@@ -12,6 +12,10 @@ Unreleased
 Changed
 ~~~~~~~
 
+* Accept normalized real 2D frequency spectra through ``from_interop()``.
+  Preserve physical axis order, sample dtype and calibration. Qualify the
+  conversion and SCP persistence with a real NMRPipe COSY spectrum.
+
 * Qualify explicit nmrML 1D raw/processed interop through the generic Experiment
   consumer, including dtype/count/sign/axis conventions and SCP persistence.
   Add no runtime provider dependency or automatic reader dispatch. (#34)
