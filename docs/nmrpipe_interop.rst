@@ -12,8 +12,8 @@ NMRPipe 1D spectra into the generic Experiment path::
    source = from_interop(ng.interop.normalize_nmrpipe_1d(raw))
    spectrum = Experiment(source).process()
 
-This requires the provider revision pinned in
-``tests/qualification/requirements.txt`` (or a later compatible revision).
+This requires the provider release pinned in
+``tests/qualification/requirements.txt`` (or a later compatible release).
 The provider is an optional integration dependency; it is not bundled or
 installed by the plugin. This path is explicit and does not change
 ``scp.nmr.read`` dispatch. No core change is required for this 1D integration.

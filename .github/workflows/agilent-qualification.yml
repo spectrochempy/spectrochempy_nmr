@@ -24,23 +24,20 @@ jobs:
           python-version: ${{ matrix.python-version }}
       - name: Secure pip bootstrap
         uses: spectrochempy/spectrochempy/.github/actions/verified-pip@cdb087a24f06b8c83ea91ea036192304db9329e3
-      - name: Build and install wheels with released core and pinned provider
+      - name: Build and install wheels with released core and provider wheel
         run: |
           python -m pip wheel --no-deps --wheel-dir dist .
           python -m pip install "spectrochempy==1.1.4" pytest
-          python -m pip install -r tests/qualification/requirements.txt dist/*.whl
+          python -m pip install --only-binary nmrglue-ng -r tests/qualification/requirements.txt dist/*.whl
           python -m pip check
-      - name: Verify provider commit and installed package isolation
+      - name: Verify provider release and installed package isolation
         run: |
           python -I - <<'PY'
-          import json
-          from importlib.metadata import distribution
+          from importlib.metadata import version
           from importlib.util import find_spec
           from pathlib import Path
 
-          metadata = distribution("nmrglue-ng")
-          provenance = json.loads(metadata.read_text("direct_url.json"))
-          assert provenance["vcs_info"]["commit_id"] == "14f5ee8b06592060a987cbd12f79c6e9a36c8a20"
+          assert version("nmrglue-ng") == "1.2.0"
           for name in ("spectrochempy", "spectrochempy_nmr", "nmrglue"):
               location = Path(find_spec(name).origin).resolve()
               assert Path.cwd() not in location.parents, location
