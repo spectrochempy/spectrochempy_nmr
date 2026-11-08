@@ -222,9 +222,8 @@ The explicit profile asserts the acquisition convention. An NMRPipe States
 storage header alone does not identify States-TPPI. The importer expects the
 normalized ``rr, ri, ir, ii`` planes in F1/F2 order. It packs them into two
 complex planes labelled E1 and E2 on ``(c, y, x)``, preserves the signs and
-time grids, and records that alternation is still encoded. It performs no
-reconstruction, alternation correction, or FFT. Processing via
-``Experiment`` requires a separate qualification.
+time grids, and records that alternation is still encoded. Import leaves reconstruction, alternation correction and FFT to
+processing.
 
 CI uses a synthetic NMRPipe file with distinct real and imaginary values in
 both branches. The opt-in Bruker proton-exchange reference uses the original
@@ -234,6 +233,25 @@ Set ``NMR_BRUKER_STATES_TPPI_REFERENCE`` to the original acquisition
 directory to run the real case::
 
    python -I -m pytest tests/qualification/test_nmrpipe_interop.py -k states_tppi_import
+
+Process the imported States-TPPI FID
+------------------------------------
+
+Use ``Experiment(fid).process()`` on the imported E1/E2 dataset. The FFT-only
+path follows the NMRPipe ``FT -nodf``, ``TP``, and ``FT -alt`` conventions.
+It transforms F2, forms cross-pairs from the real and imaginary parts of
+both branches, and applies the alternating sign once before the F1 FFT.
+The result stores four real planes labelled rr, ri, ir and ii, with
+descending Hz grids centred on zero at the central bin. The grid uses
+the NMRPipe bin spacing. Absolute offsets and chemical referencing are
+outside this processing path.
+
+CI compares each complex checkpoint with the existing pinned NMRPipe
+oracle. Its zero-filled grids are supplied as already padded inputs.
+The real Bruker qualification additionally runs NMRPipe when
+``NMR_PIPE_EXECUTABLE`` is set and compares both FFT stages, the cross-pairs,
+and the centred frequency grids. Keep the imported dataset dimension
+order when processing.
 
 Report reproducible import/processing problems in the
 `spectrochempy_nmr issue tracker

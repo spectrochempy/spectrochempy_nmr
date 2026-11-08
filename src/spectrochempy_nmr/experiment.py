@@ -126,7 +126,7 @@ class Experiment:
     copy, subclass, or mutate the underlying dataset.
 
     Public processing covers validated 1D experiments and FFT-only
-    processing of explicitly normalized raw 2D QF acquisitions.
+    processing of explicitly normalized raw 2D QF and States-TPPI acquisitions.
 
     Parameters
     ----------
@@ -352,6 +352,12 @@ class Experiment:
             self.ndim == 2 and self._nmr_meta.normalized_interop and self.is_time_domain
         )
 
+    @property
+    def _supports_states_tppi_fft(self) -> bool:
+        return (
+            self.ndim == 3 and self._nmr_meta.normalized_interop and self.is_time_domain
+        )
+
     # ------------------------------------------------------------------
     # Validation
     # ------------------------------------------------------------------
@@ -425,6 +431,10 @@ class Experiment:
             report.add_info("Raw 2D SER detected.")
             if self._supports_qf_fft:
                 report.add_info("Normalized 2D QF FFT processing is available.")
+            elif self._supports_states_tppi_fft:
+                report.add_info(
+                    "Normalized States-TPPI 2D FFT processing is available."
+                )
             else:
                 report.add_warning(
                     "Multi-dimensional NMR processing is not part of the current "
@@ -472,7 +482,7 @@ class Experiment:
         current data domain.  Never modifies the source dataset.
 
         Processing covers validated 1D experiments and FFT-only processing
-        of explicitly normalized raw 2D QF acquisitions.
+        of explicitly normalized raw 2D QF and States-TPPI acquisitions.
 
         Parameters
         ----------
@@ -524,7 +534,7 @@ class Experiment:
             If the data domain does not support the requested operations.
         NotImplementedError
             If the dataset is multi-dimensional and outside the normalized
-            raw 2D QF processing profile.
+            raw 2D processing profiles.
         ValueError
             If an apodization parameter combination is incompatible with the
             selected apodization mode.
@@ -553,7 +563,7 @@ class Experiment:
         phc0 = 0.0 if phc0 is _UNSET_ZERO else phc0
         phc1 = 0.0 if phc1 is _UNSET_ZERO else phc1
 
-        if self._supports_qf_fft:
+        if self._supports_qf_fft or self._supports_states_tppi_fft:
             if (
                 any(
                     value is not None
@@ -562,7 +572,24 @@ class Experiment:
                 or phc0
                 or phc1
             ):
-                raise ValueError("normalized 2D QF processing supports FFT only")
+                raise ValueError("normalized 2D processing supports FFT only")
+            if self._supports_states_tppi_fft:
+                from .processing.states_tppi_interop import process_states_tppi_fft  # noqa: PLC0415
+
+                result = process_states_tppi_fft(ds, self._nmr_meta.spectral_width_hz)
+                return self._attach_scp_processing_trace(
+                    result,
+                    requested={},
+                    applied={
+                        "fft": True,
+                        "fft_order": ("F2", "F1"),
+                        "fft_convention": (
+                            "NMRPipe FT -nodf",
+                            "NMRPipe TP",
+                            "NMRPipe FT -alt",
+                        ),
+                    },
+                )
             from .processing.qf_interop import process_qf_fft  # noqa: PLC0415
 
             result = process_qf_fft(ds, self._nmr_meta.spectral_width_hz)
@@ -578,7 +605,7 @@ class Experiment:
 
         if self.ndim > 1:
             msg = (
-                "Outside normalized raw 2D QF, public NMR processing supports "
+                "Outside normalized raw 2D QF and States-TPPI, public NMR processing supports "
                 "only validated 1D experiments."
             )
             raise NotImplementedError(msg)
@@ -1215,6 +1242,8 @@ class Experiment:
         lines.append(f"  processable: {'yes' if self.is_processable else 'no'}")
         if self._supports_qf_fft:
             lines.append("  public processing: normalized 2D QF FFT only")
+        elif self._supports_states_tppi_fft:
+            lines.append("  public processing: normalized States-TPPI 2D FFT only")
         elif self.ndim >= 2:
             lines.append("  public processing: 1D only")
         return "\n".join(lines)

@@ -12,6 +12,10 @@ Unreleased
 Changed
 ~~~~~~~
 
+* Process imported States-TPPI acquisitions with ``Experiment.process()``.
+  Qualify both FFTs and the cross-pairs against NMRPipe and return four
+  labelled real spectral planes with centred Hz axes.
+
 * Import explicitly declared States-TPPI acquisitions as two labelled
   complex channels, preserving the acquired alternation and time axes.
 

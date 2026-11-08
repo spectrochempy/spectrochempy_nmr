@@ -93,3 +93,86 @@ def test_states_tppi_nmrpipe_checkpoint_preserves_all_components():
     # magnitude-only comparison can make this test pass.
     for component in range(4):
         assert np.linalg.norm(final_components[..., component]) > 0
+
+
+def test_experiment_imported_states_tppi_matches_raw_nmrpipe_checkpoints(monkeypatch):
+    from types import SimpleNamespace
+
+    from spectrochempy_nmr import from_interop
+    from spectrochempy_nmr.experiment import Experiment
+    from spectrochempy_nmr.processing import states_tppi_interop
+
+    fixture = ORACLE / "states_tppi_oracle.npz"
+    manifest = json.loads((ORACLE / "states_tppi_oracle_manifest.json").read_text())
+    assert (
+        hashlib.sha256(fixture.read_bytes()).hexdigest() == manifest["fixture_sha256"]
+    )
+    with np.load(fixture) as oracle:
+        raw, f2, tp, final = (oracle[key] for key in ("input", "f2", "tp", "final"))
+    # The checkpoints zero-fill both axes; supply the same padded input.
+    rows, cols = final.shape[-1], f2.shape[-1]
+    padded = np.zeros((4, rows, cols), dtype=np.float32)
+    for index, plane in enumerate(
+        (raw[::2].real, raw[::2].imag, raw[1::2].real, raw[1::2].imag)
+    ):
+        padded[index, : plane.shape[0], : plane.shape[1]] = plane
+    widths = (3200.0, 10000.0)
+    axes = tuple(
+        SimpleNamespace(
+            values=np.arange(size) / width,
+            unit="s",
+            label=dim,
+            domain="time",
+            direction="increasing",
+            reference=None,
+        )
+        for size, width, dim in zip((rows, cols), widths, ("F1", "F2"), strict=True)
+    )
+    source = from_interop(
+        SimpleNamespace(
+            data=padded,
+            axes=axes,
+            dimensions=("channels", "F1", "F2"),
+            physical_dimensions=("F1", "F2"),
+            domains=("time", "time"),
+            encoding=("complex", "complex"),
+            quadrature_mode="stored-components-2d",
+            branch_order=("rr", "ri", "ir", "ii"),
+            channel_axis=0,
+            normalization_state="storage-normalized",
+            normalization_profile="oracle",
+            applied_operations=(),
+            provenance={},
+            acquisition={"spectral_width_hz": widths},
+            metadata={},
+            diagnostics=(),
+        ),
+        profile="states-tppi",
+    )
+    stages = []
+    cross_pairs = states_tppi_interop._cross_pairs
+
+    def record(values):
+        cross = cross_pairs(values)
+        stages.extend((values.copy(), cross.copy()))
+        return cross
+
+    monkeypatch.setattr(states_tppi_interop, "_cross_pairs", record)
+    spectrum = Experiment(source).process()
+    for actual, expected in zip(stages[0], (f2[::2], f2[1::2]), strict=True):
+        np.testing.assert_allclose(
+            actual[: raw.shape[0] // 2], expected, rtol=5e-6, atol=2e-4
+        )
+    for actual, expected in zip(stages[1], (tp[::2], tp[1::2]), strict=True):
+        np.testing.assert_allclose(
+            actual[: raw.shape[0] // 2].T, expected, rtol=5e-6, atol=2e-4
+        )
+    rr, ri, ir, ii = spectrum.data
+    np.testing.assert_allclose((rr + 1j * ir).T, final[::2], rtol=5e-6, atol=2e-4)
+    np.testing.assert_allclose((ri + 1j * ii).T, final[1::2], rtol=5e-6, atol=2e-4)
+    assert tuple(spectrum.c.labels) == ("rr", "ri", "ir", "ii")
+    assert spectrum.meta.tppi_alternation_state == "applied"
+    assert source.meta.tppi_alternation_state == "encoded"
+    assert Experiment(spectrum).source_kind == "processed_2d"
+    np.testing.assert_array_equal(source.data.real, padded[::2])
+    np.testing.assert_array_equal(source.data.imag, padded[1::2])
