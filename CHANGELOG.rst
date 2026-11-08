@@ -12,6 +12,10 @@ Unreleased
 Changed
 ~~~~~~~
 
+* Process explicitly normalized raw 2D QF acquisitions with
+  ``Experiment.process()``. Qualify the complex F2 and F1 FFTs against
+  NMRPipe and return carrier-relative Hz axes.
+
 * Import explicitly normalized raw 2D QF NMRPipe acquisitions through
   ``from_interop()``, preserving both time axes and the complex F2 samples.
 

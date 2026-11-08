@@ -119,3 +119,133 @@ def test_qf_checkpoint_matches_nmrpipe_oracle():
 
     magnitude_scp = scp.NDDataset(f1).mc().T.data
     np.testing.assert_allclose(magnitude, magnitude_scp, rtol=5e-6, atol=1e-3)
+
+
+def _normalized_qf(values, widths, *, transposed):
+    from types import SimpleNamespace
+
+    from spectrochempy_nmr import from_interop
+
+    order = ("F1", "F2")
+    encoding, branches = ("real", "complex"), ("rr", "ri")
+    if transposed:
+        values, order, widths = values.T, order[::-1], widths[::-1]
+        encoding, branches = encoding[::-1], ("rr", "ir")
+    axes = tuple(
+        SimpleNamespace(
+            values=np.arange(size) / width,
+            unit="s",
+            label=dim,
+            domain="time",
+            direction="increasing",
+            reference=None,
+        )
+        for dim, size, width in zip(order, values.shape, widths, strict=True)
+    )
+    return from_interop(
+        SimpleNamespace(
+            data=np.stack((values.real, values.imag)),
+            axes=axes,
+            dimensions=("channels", *order),
+            physical_dimensions=order,
+            domains=("time", "time"),
+            quadrature_mode="stored-components-2d",
+            branch_order=branches,
+            channel_axis=0,
+            normalization_state="storage-normalized",
+            normalization_profile="test-qf",
+            applied_operations=(),
+            provenance={},
+            acquisition={"spectral_width_hz": widths, "indirect_sampling": "qf"},
+            metadata={},
+            encoding=encoding,
+            diagnostics=(),
+        )
+    )
+
+
+def test_experiment_qf_ffts_match_nmrpipe_checkpoints(monkeypatch):
+    from copy import deepcopy
+
+    import pytest
+    from spectrochempy_nmr.experiment import Experiment
+    from spectrochempy_nmr.processing import qf_interop
+
+    manifest = json.loads((ORACLE / "qf_oracle_manifest.json").read_text())
+    fixture = ORACLE / "qf_oracle.npz"
+    assert (
+        hashlib.sha256(fixture.read_bytes()).hexdigest() == manifest["fixture_sha256"]
+    )
+    with np.load(fixture) as oracle:
+        raw, direct, indirect = (oracle[key] for key in ("input", "f2", "f1"))
+    # The existing oracle includes explicit zero filling. Supply the same
+    # padded input to the FFT-only path, with unchanged acquisition spacing.
+    padded = np.zeros((indirect.shape[1], direct.shape[1]), dtype=raw.dtype)
+    padded[: raw.shape[0], : raw.shape[1]] = raw
+    stages = []
+    transform = qf_interop._fft_stage
+
+    def record(values, axis, *, direct):
+        transformed = transform(values, axis, direct=direct)
+        stages.append(transformed.copy())
+        return transformed
+
+    monkeypatch.setattr(qf_interop, "_fft_stage", record)
+    for transposed in (False, True):
+        stages.clear()
+        source = _normalized_qf(padded, (3200, 10000), transposed=transposed)
+        before = deepcopy(dict(source.meta))
+        experiment = Experiment(source)
+        assert experiment.source_kind == "ser"
+        with pytest.raises(ValueError, match="FFT only"):
+            experiment.process(phase="manual")
+        spectrum = experiment.process()
+        f2, f1 = [stage.T if transposed else stage for stage in stages]
+        np.testing.assert_allclose(f2[: len(raw)], direct, rtol=5e-6, atol=1e-3)
+        np.testing.assert_array_equal(f2[len(raw) :], 0)
+        np.testing.assert_allclose(f1, indirect.T, rtol=5e-6, atol=1e-3)
+        np.testing.assert_array_equal(spectrum.data, stages[-1])
+        assert Experiment(spectrum).source_kind == "processed_2d"
+        assert spectrum.meta.nmr_processing["scp_processing"]["applied"][
+            "fft_order"
+        ] == ("F2", "F1")
+        for coordinate, role in zip(
+            (spectrum.y, spectrum.x), source.meta.axis_roles, strict=True
+        ):
+            width = {"F1": 3200, "F2": 10000}[role]
+            assert coordinate.units == scp.ur.Hz
+            assert coordinate.meta.get("acquisition_frequency") is None
+            np.testing.assert_allclose(
+                coordinate.data,
+                width / 2 - np.arange(coordinate.size) * width / coordinate.size,
+                rtol=1e-12,
+                atol=1e-12,
+            )
+        assert dict(source.meta) == before
+        np.testing.assert_array_equal(source.data, padded.T if transposed else padded)
+
+
+def test_experiment_qf_refuses_unqualified_grid_and_mask():
+    import pytest
+    from spectrochempy_nmr.experiment import Experiment
+
+    source = _normalized_qf(
+        np.ones((3, 4), dtype=np.complex64), (1000, 4000), transposed=False
+    )
+    source.meta.acquisition["spectral_width_hz"] = (2000, 4000)
+    with pytest.raises(ValueError, match="uniform time grids"):
+        Experiment(source).process()
+    source.mask = np.eye(3, 4, dtype=bool)
+    with pytest.raises(ValueError, match="unmasked complex samples"):
+        Experiment(source).process()
+
+
+def test_experiment_qf_refuses_dataset_transpose_with_stale_axis_roles():
+    import pytest
+    from spectrochempy_nmr.experiment import Experiment
+
+    source = _normalized_qf(
+        np.ones((4, 4), dtype=np.complex64), (1000, 1000), transposed=False
+    )
+    with pytest.raises(ValueError, match="imported dataset dimension order"):
+        Experiment(source.T).process()

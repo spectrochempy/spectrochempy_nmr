@@ -12,6 +12,7 @@ Bruker-specific field names (``nuc1``, ``pulprog``, ``FnMODE``,
 
 from __future__ import annotations
 
+from collections.abc import Mapping
 from dataclasses import dataclass
 from typing import TYPE_CHECKING
 
@@ -712,6 +713,33 @@ def extract_nmr_metadata(meta, *, ndim=None) -> NMRMetadata:
     if meta.get("interop_dimensions") is not None:
         physical = tuple(meta.get("interop_physical_dimensions", ()))
         dimensions = tuple(meta.get("interop_dimensions", ()))
+        acquisition = meta.get("acquisition", {})
+        if (
+            ndim == 2
+            and physical in (("F1", "F2"), ("F2", "F1"))
+            and dimensions == ("channels", *physical)
+            and tuple(meta.get("axis_roles", ())) == physical
+            and meta.get("quadrature_mode") == "stored-components-2d"
+            and meta.get("normalization_state") == "storage-normalized"
+            and isinstance(acquisition, Mapping)
+            and acquisition.get("indirect_sampling") == "qf"
+            and meta.get("interop_complex_axis") == "F2"
+        ):
+            domain = meta.get("data_domain")
+            if domain in ("time", "frequency"):
+                domains = (domain, domain)
+                widths = acquisition.get("spectral_width_hz")
+                return NMRMetadata(
+                    normalized_interop=True,
+                    ndim=2,
+                    domains=domains,
+                    source_kind=infer_source_kind(2, domains),
+                    encoding=tuple("QF" if dim == "F1" else "DQD" for dim in physical),
+                    iscomplex=tuple(dim == "F2" for dim in physical),
+                    spectral_width_hz=tuple(widths)
+                    if isinstance(widths, (tuple, list))
+                    else None,
+                )
         if (
             physical != ("F2",)
             or dimensions != ("F2",)

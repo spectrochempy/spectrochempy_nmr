@@ -176,8 +176,37 @@ to compare the stored samples and both time grids and check SCP persistence::
 
    python -I -m pytest tests/qualification/test_nmrpipe_interop.py::test_nmrpipe_raw_qf_2d_reference
 
-These paths qualify conversion to ``NDDataset``. Processing these 2D inputs
-through ``Experiment`` remains a separate qualification.
+Process the normalized QF FID
+------------------------------
+
+Use ``Experiment(fid).process()`` for the FFT-only QF path::
+
+   from spectrochempy_nmr.experiment import Experiment
+
+   spectrum = Experiment(fid).process()
+
+The transform runs along physical F2 first, then F1, in either physical axis
+order supplied at import. Keep the imported dataset dimension order when
+calling ``process()``. The direct step uses the centered, unnormalized
+positive-sign DFT corresponding to NMRPipe ``FT -nodf``. The indirect
+step uses the conjugate of the centered negative-sign DFT corresponding
+to ``FT -neg``. The result keeps complex values and physical axis order,
+with descending carrier-relative Hz axes. The supplied spectral widths
+must agree with the uniform time grids. The original FID is preserved.
+
+This entry point uses the input grid size. Apodization, zero-filling,
+phase, magnitude and explicit referencing are outside this FFT-only path.
+The returned axes describe relative frequencies and carry no implicit
+chemical-shift calibration.
+
+CI compares both complex FFT stages directly with checksum-pinned NMRPipe
+checkpoints. The checkpoint data include zero-filling, so the test supplies
+an already padded input with the original dwell times. With
+``NMR_PIPE_QF_2D_REFERENCE`` configured as above and ``NMR_PIPE_EXECUTABLE``
+pointing to NMRPipe, the external test also compares both stages and the
+frequency grids from the resulting NMRPipe headers::
+
+   python -I -m pytest tests/qualification/test_nmrpipe_interop.py::test_nmrpipe_raw_qf_experiment_reference
 
 Report reproducible import/processing problems in the
 `spectrochempy_nmr issue tracker
