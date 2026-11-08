@@ -330,3 +330,126 @@ def test_nmrpipe_singly_complex_cosy_reference(provider, tmp_path):
         provider, path, words[:, :2048], words[:, 2048:], ("F1", "F2"), "F2", tmp_path
     )
     assert source.read_bytes() == original
+
+
+def _check_four_component_nmrpipe(provider, path, order, rows, cols, tmp_path):
+    words = np.frombuffer(path.read_bytes(), dtype="<f4")
+    binary = words[512:].reshape(2 * rows, 2 * cols)
+    expected = np.stack(
+        (
+            binary[::2, :cols],
+            binary[::2, cols:],
+            binary[1::2, :cols],
+            binary[1::2, cols:],
+        )
+    )
+    raw = provider.interop.read_nmrpipe_2d_storage(path)
+    dataset = from_interop(provider.interop.normalize_nmrpipe_2d(raw))
+    labels = ("rr", "ri", "ir", "ii")
+    assert dataset.dims == ["c", "y", "x"]
+    assert dataset.meta.axis_roles == ("component", *order)
+    assert dataset.dtype == expected.dtype
+    assert tuple(dataset.c.labels) == labels
+    np.testing.assert_array_equal(dataset.data, expected)
+    offsets = {"F1": (249, 229, 218), "F2": (101, 100, 119)}
+    for coord, dim, size in zip(
+        (dataset.y, dataset.x), order, (rows, cols), strict=True
+    ):
+        origin, width, obs = (float(words[index]) for index in offsets[dim])
+        hz = origin + (size - 1 - np.arange(size)) * (width / size)
+        assert coord.units == scp.ur.Hz
+        np.testing.assert_allclose(coord.data, hz, rtol=1e-12, atol=1e-9)
+        np.testing.assert_allclose(
+            coord.to("ppm").data, hz / obs, rtol=1e-12, atol=1e-10
+        )
+
+    target = tmp_path / (path.stem + ".scp")
+    dataset.write(target, confirm=False)
+    restored = scp.read(target)
+    np.testing.assert_array_equal(restored.data, expected)
+    assert tuple(restored.c.labels) == labels
+    assert tuple(restored.meta.component_labels) == labels
+    assert tuple(restored.meta.axis_roles) == ("component", *order)
+    for original, reloaded in zip(
+        (dataset.y, dataset.x), (restored.y, restored.x), strict=True
+    ):
+        np.testing.assert_array_equal(reloaded.data, original.data)
+        assert reloaded.units == original.units
+        assert (
+            reloaded.meta.acquisition_frequency == original.meta.acquisition_frequency
+        )
+
+
+@pytest.mark.parametrize("transposed", [False, True])
+def test_synthetic_nmrpipe_four_component_2d(provider, transposed, tmp_path):
+    rows, cols = (4, 3) if transposed else (3, 4)
+    order = ("F2", "F1") if transposed else ("F1", "F2")
+    header = provider.pipe.create_empty_dic()
+    header.update(
+        FDDIMCOUNT=2.0,
+        FD2DPHASE=2.0,
+        FDTRANSPOSED=float(transposed),
+        FDDIMORDER1=float(order[1][-1]),
+        FDDIMORDER2=float(order[0][-1]),
+        FDSPECNUM=float(2 * rows),
+        FDSIZE=float(cols),
+        FDQUADFLAG=0.0,
+        FDF1QUADFLAG=0.0,
+        FDF2QUADFLAG=0.0,
+        FDF1FTFLAG=1.0,
+        FDF2FTFLAG=1.0,
+        FDF1FTSIZE=3.0,
+        FDF2FTSIZE=4.0,
+        FDF1SW=600.0,
+        FDF2SW=2000.0,
+        FDF1OBS=125.0,
+        FDF2OBS=500.0,
+        FDF1ORIG=-150.0,
+        FDF2ORIG=-625.0,
+    )
+    payload = (np.arange(4 * rows * cols, dtype="<f4") - 22).astype("<f4")
+    path = tmp_path / "four-components.ft2"
+    path.write_bytes(
+        provider.pipe.dic2fdata(header).astype("<f4").tobytes() + payload.tobytes()
+    )
+    _check_four_component_nmrpipe(provider, path, order, rows, cols, tmp_path)
+
+
+def test_nmrpipe_four_component_reference(provider, tmp_path):
+    configured = os.environ.get("NMR_PIPE_2D_FID_REFERENCE")
+    executable = os.environ.get("NMR_PIPE_EXECUTABLE") or shutil.which("nmrPipe")
+    if not configured or not executable:
+        pytest.skip("configure the checksum-pinned 2D FID and nmrPipe executable")
+    source = Path(configured)
+    original = source.read_bytes()
+    assert hashlib.sha256(original).hexdigest() == (
+        "d9e235117599161e9c9e7f2d48dfd061dbc86dfa850ea01ccf23c4a411fa74da"
+    )
+    current = source
+    for name, options in (
+        ("direct-ft", ("FT", "-auto")),
+        ("transposed", ("TP",)),
+        ("indirect-ft", ("FT", "-auto")),
+        ("physical-order", ("TP",)),
+    ):
+        target = tmp_path / (name + ".ft2")
+        subprocess.run(
+            [
+                executable,
+                "-in",
+                str(current),
+                "-fn",
+                *options,
+                "-out",
+                str(target),
+                "-ov",
+            ],
+            check=True,
+            capture_output=True,
+        )
+        current = target
+    _check_four_component_nmrpipe(
+        provider, tmp_path / "indirect-ft.ft2", ("F2", "F1"), 8, 2, tmp_path
+    )
+    _check_four_component_nmrpipe(provider, current, ("F1", "F2"), 2, 8, tmp_path)
+    assert source.read_bytes() == original

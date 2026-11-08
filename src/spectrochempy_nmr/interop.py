@@ -195,7 +195,7 @@ def _interop_metadata(result):
 
 
 def _from_2d(result, data):
-    """Convert a real or singly complex plane in its physical axis order."""
+    """Convert a supported frequency spectrum in its physical axis order."""
     dimensions = tuple(result.physical_dimensions)
     encoding = tuple(result.encoding)
     branches = tuple(result.branch_order)
@@ -211,7 +211,18 @@ def _from_2d(result, data):
     ):
         raise ValueError("from_interop 2D requires a normalized F1/F2 frequency plane")
 
+    stored_components = (
+        mode == "stored-components-2d"
+        and data.ndim == 3
+        and isinstance(channel_axis, (int, np.integer))
+        and not isinstance(channel_axis, bool)
+        and channel_axis == 0
+        and tuple(result.dimensions) == ("channels", *dimensions)
+        and data.dtype.kind == "f"
+        and data.dtype.itemsize in (4, 8)
+    )
     complex_axis = None
+    component_labels = None
     if (
         mode == "real-2d"
         and data.ndim == 2
@@ -222,15 +233,8 @@ def _from_2d(result, data):
     ):
         plane = np.array(data, copy=True)
     elif (
-        mode == "stored-components-2d"
-        and data.ndim == 3
+        stored_components
         and data.shape[0] == 2
-        and isinstance(channel_axis, (int, np.integer))
-        and not isinstance(channel_axis, bool)
-        and channel_axis == 0
-        and tuple(result.dimensions) == ("channels", *dimensions)
-        and data.dtype.kind == "f"
-        and data.dtype.itemsize in (4, 8)
         and (encoding, branches)
         in (
             (("real", "complex"), ("rr", "ri")),
@@ -240,22 +244,45 @@ def _from_2d(result, data):
         complex_axis = dimensions[encoding.index("complex")]
         plane = np.empty(data.shape[1:], dtype=np.result_type(data.dtype, np.complex64))
         plane.real, plane.imag = data
+    elif (
+        stored_components
+        and data.shape[0] == 4
+        and encoding == ("complex", "complex")
+        and branches == ("rr", "ri", "ir", "ii")
+    ):
+        component_labels = branches
+        plane = np.array(data, copy=True)
     else:
-        raise ValueError("from_interop 2D requires a real plane or one complex axis")
+        raise ValueError(
+            "from_interop 2D requires a real plane or supported complex components"
+        )
 
     import spectrochempy as scp  # noqa: PLC0415
 
     coords = [
         _frequency_coordinate(axis, size, linearize_below=0.0)
-        for axis, size in zip(result.axes, plane.shape, strict=True)
+        for axis, size in zip(result.axes, plane.shape[-2:], strict=True)
     ]
-    dataset = scp.NDDataset(plane, dtype=plane.dtype, dims=["y", "x"])
+    dims = ["y", "x"]
+    coordinates = dict(zip(dims, coords, strict=True))
+    axis_roles = dimensions
+    isfreq = [True, True]
+    if component_labels is not None:
+        dims.insert(0, "c")
+        coordinates["c"] = scp.Coord(labels=list(component_labels))
+        axis_roles = ("component", *dimensions)
+        isfreq.insert(0, False)
+    dataset = scp.NDDataset(plane, dtype=plane.dtype, dims=dims)
     # Named assignment retains the configured Coord instead of rebuilding it.
-    dataset.set_coordset(y=coords[0], x=coords[1])
+    dataset.set_coordset(**coordinates)
     dataset.meta.update(_interop_metadata(result))
-    dataset.meta.axis_roles = dimensions
+    dataset.meta.axis_roles = axis_roles
     dataset.meta.data_domain = "frequency"
-    dataset.meta.isfreq = [True, True]
+    dataset.meta.isfreq = isfreq
+    if component_labels is not None:
+        dataset.meta.component_axis = "c"
+        dataset.meta.component_labels = component_labels
+        dataset.meta.stage = "spectrum"
     dataset.meta.td = list(plane.shape)
     if complex_axis is not None:
         dataset.meta.interop_complex_axis = complex_axis
@@ -269,7 +296,8 @@ def from_interop(result):
     deliberately does not import nmrglue-ng or inspect vendor metadata. A raw
     descriptive ``ReadResult`` is rejected because it has not established the
     normalization guarantees required by this conversion. Frequency spectra
-    can be real or complex in 1D, and real or complex along one axis in 2D.
+    can be real or complex in 1D. Two-dimensional spectra can be real, complex
+    along one axis, or represented as four labelled real component planes.
     """
     required = (
         "data",

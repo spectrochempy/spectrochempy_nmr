@@ -12,6 +12,10 @@ Unreleased
 Changed
 ~~~~~~~
 
+* Import fully processed four-component 2D spectra through ``from_interop()``
+  as labelled real planes, preserving the input dtype at import. Branch order
+  and axis calibration survive SCP persistence without requiring Hypercomplex.
+
 * Import fully processed 2D spectra with one complex axis through
   ``from_interop()``. Preserve the real and imaginary values, physical axis
   order and complex-axis identity, including on SCP round trips.
