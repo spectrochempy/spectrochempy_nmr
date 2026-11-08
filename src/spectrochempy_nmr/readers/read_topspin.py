@@ -1007,6 +1007,29 @@ def _read_processed_data(directory, acqus_files, procs_files):
     )
 
 
+def _read_raw_data(directory, filename, acqus_files, procs_files):
+    if filename == "fid":
+        from nmrglue import bruker  # noqa: PLC0415
+
+        try:
+            metadata, data = bruker.read(
+                directory,
+                bin_file="fid",
+                acqus_files=acqus_files,
+                procs_files=procs_files,
+                read_pulseprogram=(directory / "pulseprogram").is_file(),
+            )
+        except ValueError:
+            # Preserve the historical diagnostics for unsupported acquisitions.
+            pass
+        else:
+            parmode = metadata["acqus"].setdefault("PARMODE", 0)
+            if parmode == 0 and data.ndim == 1:
+                return metadata, data
+
+    return read_fid(directory, acqus_files=acqus_files, procs_files=procs_files)
+
+
 @_importer_method
 def _read_topspin(*args, **kwargs):
     dataset, path = args
@@ -1042,7 +1065,7 @@ def _read_topspin(*args, **kwargs):
 
     processed_components = None
     if not processed:
-        dic, data = read_fid(f_expno, acqus_files=acqus_files, procs_files=procs_files)
+        dic, data = _read_raw_data(f_expno, path.name, acqus_files, procs_files)
 
         # Keep the raw 1D FID in nmrglue's direct-complex orientation.
         # The public 1D QSIM FFT path already applies the conjugated Fourier

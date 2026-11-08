@@ -17,7 +17,9 @@ to the plugin::
    spectrum_ppm = Experiment(fid).process(size=32768, reference="acquisition")
 
 The qualification requirements pin the nmrglue-ng version used for these tests.
-The public TopSpin reader keeps its historical route for raw 1D data.
+The public TopSpin reader uses nmrglue-ng to decode raw 1D FIDs and
+applies its established filter, gain and time-axis conventions. The explicit
+interop example above uses the provider's normalized representation.
 
 Normalization explicitly trims zero padding to TD/2, optionally applies the
 existing truncated group-delay correction, and conjugates into the canonical

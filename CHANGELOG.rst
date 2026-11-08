@@ -12,6 +12,9 @@ Unreleased
 Changed
 ~~~~~~~
 
+* Delegate Bruker 1D FID decoding to nmrglue-ng. The public TopSpin reader
+  keeps its digital-filter and DC-offset options, gain normalization and axes.
+
 * Delegate qualified Bruker 1D ``pdata`` to nmrglue-ng while preserving
   TopSpin reader data, gain normalization, metadata, and axis options.
 

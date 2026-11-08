@@ -1,6 +1,7 @@
 """Installed-provider Bruker tests; real corpus remains separately opt-in."""
 
 from copy import deepcopy
+from importlib import import_module
 from importlib.metadata import distribution
 import hashlib
 import json
@@ -10,6 +11,7 @@ from pathlib import Path
 import numpy as np
 import pytest
 import spectrochempy as scp
+from spectrochempy.utils.jsonutils import json_encoder
 
 from spectrochempy_nmr import from_interop
 from spectrochempy_nmr.experiment import Experiment
@@ -192,3 +194,68 @@ def test_synthetic_provider_binary_to_experiment_chain(provider, tmp_path, filte
         result.x.data, (250 - (np.arange(64) - 32) * 2000 / 64) / 125, atol=1e-12
     )
     assert source.meta.acquisition["trimmed_padding_points"] == 96
+
+
+def _check_public_fid(provider, path, filtered, dc, monkeypatch):
+    reader = import_module("spectrochempy_nmr.readers.read_topspin")
+    legacy_read = reader.read_fid
+
+    def use_legacy(directory, *, read_pulseprogram, **kwargs):
+        return legacy_read(directory, read_pulseprogram=read_pulseprogram, **kwargs)
+
+    options = dict(remove_digital_filter=filtered, remove_dc_offset=dc)
+    with monkeypatch.context() as legacy:
+        legacy.setattr(provider.bruker, "read", use_legacy)
+        expected = scp.read_topspin(path / "fid", **options)
+
+    def reject_legacy(*args, **kwargs):
+        pytest.fail("the FID must use the nmrglue-ng binary reader")
+
+    with monkeypatch.context() as migrated:
+        migrated.setattr(reader, "read_fid", reject_legacy)
+        actual = scp.read_topspin(path / "fid", **options)
+
+    assert actual is not None and expected is not None
+    assert actual.dtype == expected.dtype
+    assert actual.units == expected.units
+    assert json_encoder(actual.meta) == json_encoder(expected.meta)
+    np.testing.assert_array_equal(actual.data, expected.data)
+    np.testing.assert_array_equal(actual.x.data, expected.x.data)
+    assert actual.x.units == expected.x.units
+
+    if actual.meta.sf is not None:
+        spectrum = Experiment(actual).process()
+        reference = Experiment(expected).process()
+        np.testing.assert_array_equal(spectrum.data, reference.data)
+        np.testing.assert_array_equal(spectrum.x.data, reference.x.data)
+
+
+@pytest.mark.parametrize("filtered", [False, True])
+@pytest.mark.parametrize("dc", [False, True])
+def test_synthetic_public_bruker_fid_parity(
+    provider, tmp_path, monkeypatch, filtered, dc
+):
+    path = tmp_path / "bruker" / "1"
+    path.mkdir(parents=True)
+    (path / "acqus").write_text(
+        "##TITLE= Synthetic Bruker acquisition\n"
+        "##$TD= 256\n##$SW= 16\n##$SW_h= 2000\n##$SFO1= 125\n"
+        "##$BF1= 125\n##$O1= 0\n##$AQ_mod= 3\n##$DECIM= 16\n"
+        "##$DSPFVS= 12\n##$GRPDLY= 2.5\n##$BYTORDA= 1\n##$DTYPA= 0\n"
+        "##$NUC1= <13C>\n##$NS= 4\n##$RG= 3\n##END=\n"
+    )
+    procs = path / "pdata" / "1" / "procs"
+    procs.parent.mkdir(parents=True)
+    procs.write_text("##TITLE= Synthetic Bruker processing\n##$SF= 125\n##END=\n")
+    samples = np.arange(256, dtype=np.int32)
+    (path / "fid").write_bytes((samples * (samples % 7 - 3)).astype(">i4").tobytes())
+    _check_public_fid(provider, path, filtered, dc, monkeypatch)
+
+
+@pytest.mark.parametrize("filtered", [False, True])
+@pytest.mark.parametrize("dc", [False, True])
+def test_real_public_bruker_fid_parity(
+    provider, acquisition, monkeypatch, filtered, dc
+):
+    path, _ = acquisition
+    _check_public_fid(provider, path, filtered, dc, monkeypatch)
