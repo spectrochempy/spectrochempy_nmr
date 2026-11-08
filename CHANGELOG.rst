@@ -12,6 +12,9 @@ Unreleased
 Changed
 ~~~~~~~
 
+* Import explicitly normalized raw 2D QF NMRPipe acquisitions through
+  ``from_interop()``, preserving both time axes and the complex F2 samples.
+
 * Qualify complete Bruker processed 2D spectra through ``from_interop()``.
   Preserve the four original plane names, calibrated axes and selected
   storage scale.

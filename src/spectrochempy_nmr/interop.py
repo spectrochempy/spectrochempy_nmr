@@ -43,7 +43,7 @@ def _plain(value):
     return value
 
 
-def _axis_coordinate(axis, size, dim):
+def _axis_coordinate(axis, size, dim, **coord_options):
     import spectrochempy as scp  # noqa: PLC0415
 
     if axis.domain != "time":
@@ -73,7 +73,7 @@ def _axis_coordinate(axis, size, dim):
     kwargs = {"title": axis.label, "rounding": False, "sigdigits": 15}
     if axis.unit is not None:
         kwargs["units"] = axis.unit
-    return scp.Coord(np.array(values, copy=True), **kwargs)
+    return scp.Coord(np.array(values, copy=True), **kwargs, **coord_options)
 
 
 def _frequency_coordinate(axis, size, **coord_options):
@@ -195,21 +195,29 @@ def _interop_metadata(result):
 
 
 def _from_2d(result, data):
-    """Convert a supported frequency spectrum in its physical axis order."""
+    """Convert a supported 2D input in its physical axis order."""
     dimensions = tuple(result.physical_dimensions)
     encoding = tuple(result.encoding)
     branches = tuple(result.branch_order)
     channel_axis = getattr(result, "channel_axis", None)
     mode = result.quadrature_mode
+    domains = tuple(result.domains)
+    time_qf = (
+        domains == ("time", "time")
+        and isinstance(result.acquisition, Mapping)
+        and result.acquisition.get("indirect_sampling") == "qf"
+    )
     if (
         dimensions not in (("F1", "F2"), ("F2", "F1"))
         or len(result.axes) != 2
-        or tuple(result.domains) != ("frequency", "frequency")
+        or (domains != ("frequency", "frequency") and not time_qf)
         or result.normalization_state != "storage-normalized"
         or data.dtype.kind not in "iuf"
         or not np.isfinite(data).all()
     ):
-        raise ValueError("from_interop 2D requires a normalized F1/F2 frequency plane")
+        raise ValueError(
+            "from_interop 2D requires a normalized F1/F2 frequency plane or QF FID"
+        )
 
     stored_components = (
         mode == "stored-components-2d"
@@ -223,7 +231,8 @@ def _from_2d(result, data):
     complex_axis = None
     component_labels = None
     if (
-        mode == "real-2d"
+        not time_qf
+        and mode == "real-2d"
         and data.ndim == 2
         and tuple(result.dimensions) == dimensions
         and encoding == ("real", "real")
@@ -234,6 +243,11 @@ def _from_2d(result, data):
     elif (
         stored_components
         and data.shape[0] == 2
+        and (
+            not time_qf
+            or encoding
+            == tuple("complex" if dim == "F2" else "real" for dim in dimensions)
+        )
         and float_components
         and (encoding, branches)
         in (
@@ -245,7 +259,8 @@ def _from_2d(result, data):
         plane = np.empty(data.shape[1:], dtype=np.result_type(data.dtype, np.complex64))
         plane.real, plane.imag = data
     elif (
-        stored_components
+        not time_qf
+        and stored_components
         and data.shape[0] == 4
         and (
             (
@@ -270,14 +285,45 @@ def _from_2d(result, data):
 
     import spectrochempy as scp  # noqa: PLC0415
 
-    coords = [
-        _frequency_coordinate(axis, size, linearize_below=0.0)
-        for axis, size in zip(result.axes, plane.shape[-2:], strict=True)
-    ]
     dims = ["y", "x"]
+    if time_qf:
+        coords = []
+        for axis, size, dim in zip(result.axes, plane.shape, dims, strict=True):
+            if (
+                axis.values is None
+                or axis.unit != "s"
+                or axis.direction != "increasing"
+            ):
+                raise ValueError(
+                    "from_interop QF requires explicit increasing time axes in seconds"
+                )
+            coord = _axis_coordinate(axis, size, dim, linearize_below=0.0)
+            values = coord.data
+            if (
+                size == 0
+                or values[0] != 0
+                or (
+                    size > 1
+                    and (
+                        values[1] <= 0
+                        or not np.allclose(
+                            values, np.arange(size) * values[1], rtol=1e-12, atol=0
+                        )
+                    )
+                )
+            ):
+                raise ValueError(
+                    "from_interop QF requires uniform time coordinates starting at zero"
+                )
+            coords.append(coord)
+    else:
+        coords = [
+            _frequency_coordinate(axis, size, linearize_below=0.0)
+            for axis, size in zip(result.axes, plane.shape[-2:], strict=True)
+        ]
     coordinates = dict(zip(dims, coords, strict=True))
     axis_roles = dimensions
-    isfreq = [True, True]
+    isfreq = [not time_qf, not time_qf]
     if component_labels is not None:
         dims.insert(0, "c")
         coordinates["c"] = scp.Coord(labels=list(component_labels))
@@ -288,7 +334,7 @@ def _from_2d(result, data):
     dataset.set_coordset(**coordinates)
     dataset.meta.update(_interop_metadata(result))
     dataset.meta.axis_roles = axis_roles
-    dataset.meta.data_domain = "frequency"
+    dataset.meta.data_domain = domains[0]
     dataset.meta.isfreq = isfreq
     if component_labels is not None:
         dataset.meta.component_axis = "c"
@@ -309,6 +355,7 @@ def from_interop(result):
     normalization guarantees required by this conversion. Frequency spectra
     can be real or complex in 1D. Two-dimensional spectra can be real, complex
     along one axis, or represented as four labelled real component planes.
+    The supported raw 2D input is an explicitly normalized QF FID.
     """
     required = (
         "data",
