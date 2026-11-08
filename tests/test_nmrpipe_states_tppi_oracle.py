@@ -101,7 +101,7 @@ def test_experiment_imported_states_tppi_matches_raw_nmrpipe_checkpoints(monkeyp
 
     from spectrochempy_nmr import from_interop
     from spectrochempy_nmr.experiment import Experiment
-    from spectrochempy_nmr.processing import states_tppi_interop
+    from spectrochempy_nmr.processing import channel_interop
 
     fixture = ORACLE / "states_tppi_oracle.npz"
     manifest = json.loads((ORACLE / "states_tppi_oracle_manifest.json").read_text())
@@ -151,14 +151,14 @@ def test_experiment_imported_states_tppi_matches_raw_nmrpipe_checkpoints(monkeyp
         profile="states-tppi",
     )
     stages = []
-    cross_pairs = states_tppi_interop._cross_pairs
+    cross_pairs = channel_interop._cross_pairs
 
     def record(values):
         cross = cross_pairs(values)
         stages.extend((values.copy(), cross.copy()))
         return cross
 
-    monkeypatch.setattr(states_tppi_interop, "_cross_pairs", record)
+    monkeypatch.setattr(channel_interop, "_cross_pairs", record)
     spectrum = Experiment(source).process()
     for actual, expected in zip(stages[0], (f2[::2], f2[1::2]), strict=True):
         np.testing.assert_allclose(

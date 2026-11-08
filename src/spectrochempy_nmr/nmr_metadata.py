@@ -714,31 +714,37 @@ def extract_nmr_metadata(meta, *, ndim=None) -> NMRMetadata:
         physical = tuple(meta.get("interop_physical_dimensions", ()))
         dimensions = tuple(meta.get("interop_dimensions", ()))
         acquisition = meta.get("acquisition", {})
+        domain = meta.get("data_domain")
+        quadrature = meta.get("quadrature_mode")
+        states_tppi = quadrature == "states-tppi" and (
+            domain,
+            meta.get("tppi_alternation_state"),
+        ) in (("time", "encoded"), ("frequency", "applied"))
+        echo_antiecho = quadrature == "echo-antiecho-stored-2d" and (
+            domain,
+            meta.get("echo_antiecho_reconstruction"),
+        ) in (("time", None), ("frequency", "bruker-rance-kay"))
         if (
             ndim == 3
             and physical == ("F1", "F2")
             and dimensions == ("channels", "F1", "F2")
             and tuple(meta.get("axis_roles", ())) == ("component", "F1", "F2")
-            and meta.get("quadrature_mode") == "states-tppi"
+            and (states_tppi or echo_antiecho)
             and meta.get("normalization_state") == "storage-normalized"
-            and (meta.get("data_domain"), meta.get("tppi_alternation_state"))
-            in (("time", "encoded"), ("frequency", "applied"))
             and isinstance(acquisition, Mapping)
         ):
-            domain = meta.get("data_domain")
             widths = acquisition.get("spectral_width_hz")
-            if domain in ("time", "frequency"):
-                return NMRMetadata(
-                    normalized_interop=True,
-                    ndim=3,
-                    domains=(domain, domain),
-                    source_kind=infer_source_kind(2, (domain, domain)),
-                    encoding=("STATES-TPPI", "DQD"),
-                    iscomplex=(True, True),
-                    spectral_width_hz=tuple(widths)
-                    if isinstance(widths, (tuple, list))
-                    else None,
-                )
+            return NMRMetadata(
+                normalized_interop=True,
+                ndim=3,
+                domains=(domain, domain),
+                source_kind=infer_source_kind(2, (domain, domain)),
+                encoding=("STATES-TPPI" if states_tppi else "ECHO-ANTIECHO", "DQD"),
+                iscomplex=(True, True),
+                spectral_width_hz=tuple(widths)
+                if isinstance(widths, (tuple, list))
+                else None,
+            )
         if (
             ndim == 2
             and physical in (("F1", "F2"), ("F2", "F1"))

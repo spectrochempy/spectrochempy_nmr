@@ -12,6 +12,10 @@ Unreleased
 Changed
 ~~~~~~~
 
+* Process imported 2D echo/anti-echo FIDs with explicit Bruker Rance–Kay
+  reconstruction in ``Experiment.process()``. Qualify the reconstruction
+  and both FFTs against NMRPipe on the official HSQC.
+
 * Import normalized raw 2D echo/anti-echo acquisitions through
   ``from_interop()``, preserving both complex branches and time axes.
 

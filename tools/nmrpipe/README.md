@@ -58,3 +58,22 @@ followed by conjugation, transpose, and the direct-dimension `reverse+roll`
 convention established by the QF campaign. No magnitude is used by the
 States-TPPI test. NMRPipe and the external nmrglue reader are manual-generation
 dependencies only; neither is required by runtime or CI.
+
+## Echo/anti-echo oracle
+
+`regenerate_echo_antiecho_oracle.py` feeds asymmetric deterministic integer
+traces to NMRPipe 13.0. The pipeline uses `bruk2pipe -AMX -swap -yMODE
+Echo-AntiEcho` for the Rance–Kay shuffling and `FT -nodf | TP | FT -nodf` for
+the two unpadded transforms. It reads the output interleaving in F1/F2 order
+and records the carrier-relative Hz axes. The checked-in NPZ contains only
+the synthetic input and NMRPipe checkpoints.
+
+```bash
+python tools/nmrpipe/regenerate_echo_antiecho_oracle.py \
+    /tmp/echo_antiecho_oracle.npz --nmrpipe-bin /path/to/pipe/bin
+```
+
+Use `--hsqc-ser /path/to/ser` with the SHA-1-checked official BMRB SER to
+generate the experimental oracle outside the repository. The AMX conversion
+preserves the raw point count and omits group-delay correction for this
+FFT-only comparison.

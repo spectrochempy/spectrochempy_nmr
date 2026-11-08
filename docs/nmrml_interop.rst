@@ -105,8 +105,26 @@ choosing these settings for another file.
 The dataset has dimensions ``(c, y, x)``. The component coordinate labels the
 first and second stored branches, and the other coordinates give F1 and F2
 times in seconds. Import preserves the real and imaginary samples, their signs,
-and their order. Reconstruction and FFT processing of this acquisition in
-``Experiment`` are separate work.
+and their order.
+
+For this acquisition, explicitly select Bruker Rance–Kay reconstruction::
+
+    from spectrochempy_nmr.experiment import Experiment
+
+    spectrum = Experiment(source).process(echo_antiecho="bruker-rance-kay")
+
+The reconstruction combines the first and second stored traces into
+``first - second`` and ``1j * (first + second)`` before the direct FFT.
+It uses the original trace lengths for both FFTs and returns the four planes
+``rr``, ``ri``, ``ir``, and ``ii`` with descending carrier-relative Hz axes.
+The profile applies no additional F1 sign alternation. On this HSQC, an
+additional alternation moves the two dominant peaks by half the F1 sweep
+width compared with the native Bruker processed spectrum. The order of
+stored traces alone cannot determine the reconstruction for another pulse
+program.
+
+This FFT-only profile leaves digital-filter delay, phase, apodization,
+zero-filling and chemical referencing to a separate processing workflow.
 
 For local qualification, download the
 `official HSQC XML <https://nmrml.org/examples/6/bmse000400-exp06.nmrML>`_
@@ -116,3 +134,11 @@ Set ``NMRML_HSQC_XML`` and ``NMRML_HSQC_SER`` to the downloaded file paths
 and run ``pytest tests/qualification/test_nmrml_interop.py -k official_hsqc``.
 The test verifies both file hashes, compares both branches against the native
 SER, and verifies SCP persistence.
+
+To qualify processing, also extract ``pdata/1/2rr``, ``pdata/1/procs``,
+and ``pdata/1/proc2s`` from that archive. Generate the NMRPipe checkpoints
+locally with ``tools/nmrpipe/regenerate_echo_antiecho_oracle.py`` and set
+``NMRML_HSQC_ORACLE`` to the resulting NPZ and ``NMRML_HSQC_PDATA`` to the
+extracted ``pdata/1`` directory. Run
+``pytest tests/test_nmrpipe_echo_antiecho_oracle.py`` to check reconstruction,
+both FFTs, axes, and the F1 placement of the two main native peaks.
