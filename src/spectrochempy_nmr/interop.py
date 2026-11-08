@@ -194,6 +194,32 @@ def _interop_metadata(result):
     }
 
 
+def _raw_time_coordinate(axis, size, dim):
+    if axis.values is None or axis.unit != "s" or axis.direction != "increasing":
+        raise ValueError(
+            "from_interop raw 2D requires explicit increasing time axes in seconds"
+        )
+    coord = _axis_coordinate(axis, size, dim, linearize_below=0.0)
+    values = coord.data
+    if (
+        size == 0
+        or values[0] != 0
+        or (
+            size > 1
+            and (
+                values[1] <= 0
+                or not np.allclose(
+                    values, np.arange(size) * values[1], rtol=1e-12, atol=0
+                )
+            )
+        )
+    ):
+        raise ValueError(
+            "from_interop raw 2D requires uniform time coordinates starting at zero"
+        )
+    return coord
+
+
 def _from_2d(result, data):
     """Convert a supported 2D input in its physical axis order."""
     dimensions = tuple(result.physical_dimensions)
@@ -287,35 +313,10 @@ def _from_2d(result, data):
 
     dims = ["y", "x"]
     if time_qf:
-        coords = []
-        for axis, size, dim in zip(result.axes, plane.shape, dims, strict=True):
-            if (
-                axis.values is None
-                or axis.unit != "s"
-                or axis.direction != "increasing"
-            ):
-                raise ValueError(
-                    "from_interop QF requires explicit increasing time axes in seconds"
-                )
-            coord = _axis_coordinate(axis, size, dim, linearize_below=0.0)
-            values = coord.data
-            if (
-                size == 0
-                or values[0] != 0
-                or (
-                    size > 1
-                    and (
-                        values[1] <= 0
-                        or not np.allclose(
-                            values, np.arange(size) * values[1], rtol=1e-12, atol=0
-                        )
-                    )
-                )
-            ):
-                raise ValueError(
-                    "from_interop QF requires uniform time coordinates starting at zero"
-                )
-            coords.append(coord)
+        coords = [
+            _raw_time_coordinate(axis, size, dim)
+            for axis, size, dim in zip(result.axes, plane.shape, dims, strict=True)
+        ]
     else:
         coords = [
             _frequency_coordinate(axis, size, linearize_below=0.0)
@@ -346,7 +347,63 @@ def _from_2d(result, data):
     return dataset
 
 
-def from_interop(result):
+def _from_states_tppi(result, data):
+    """Preserve E1/E2 in the explicitly declared States-TPPI profile."""
+    channel_axis = getattr(result, "channel_axis", None)
+    if (
+        tuple(result.physical_dimensions) != ("F1", "F2")
+        or tuple(result.dimensions) != ("channels", "F1", "F2")
+        or tuple(result.domains) != ("time", "time")
+        or tuple(result.encoding) != ("complex", "complex")
+        or tuple(result.branch_order) != ("rr", "ri", "ir", "ii")
+        or result.quadrature_mode != "stored-components-2d"
+        or result.normalization_state != "storage-normalized"
+        or not isinstance(channel_axis, (int, np.integer))
+        or isinstance(channel_axis, bool)
+        or channel_axis != 0
+        or len(result.axes) != 2
+        or data.ndim != 3
+        or data.shape[0] != 4
+        or data.dtype.kind != "f"
+        or data.dtype.itemsize not in (4, 8)
+        or not np.isfinite(data).all()
+    ):
+        raise ValueError(
+            "States-TPPI requires normalized F1/F2 time-domain component planes"
+        )
+
+    import spectrochempy as scp  # noqa: PLC0415
+
+    y, x = (
+        _raw_time_coordinate(axis, size, dim)
+        for axis, size, dim in zip(result.axes, data.shape[1:], ("y", "x"), strict=True)
+    )
+    channels = np.empty(
+        (2, *data.shape[1:]), dtype=np.result_type(data.dtype, np.complex64)
+    )
+    channels.real = data[::2]
+    channels.imag = data[1::2]
+    labels = ("E1", "E2")
+    dataset = scp.NDDataset(channels, dtype=channels.dtype, dims=["c", "y", "x"])
+    dataset.set_coordset(c=scp.Coord(labels=list(labels)), y=y, x=x)
+    dataset.meta.update(_interop_metadata(result))
+    dataset.meta.update(
+        {
+            "axis_roles": ("component", "F1", "F2"),
+            "component_axis": "c",
+            "component_labels": labels,
+            "stage": "acquisition",
+            "quadrature_mode": "states-tppi",
+            "tppi_alternation_state": "encoded",
+            "data_domain": "time",
+            "isfreq": [False, False, False],
+            "td": list(channels.shape),
+        }
+    )
+    return dataset
+
+
+def from_interop(result, *, profile=None):
     """Convert a normalized complex 1D FID or a supported frequency spectrum.
 
     The converter consumes the neutral normalized protocol by attributes and
@@ -355,7 +412,9 @@ def from_interop(result):
     normalization guarantees required by this conversion. Frequency spectra
     can be real or complex in 1D. Two-dimensional spectra can be real, complex
     along one axis, or represented as four labelled real component planes.
-    The supported raw 2D input is an explicitly normalized QF FID.
+    Raw 2D QF requires explicit provider normalization. For a known
+    States-TPPI acquisition, profile="states-tppi" confirms that the
+    input channels are adjacent E1/E2 pairs with alternation still encoded.
     """
     required = (
         "data",
@@ -383,6 +442,10 @@ def from_interop(result):
     if np.ma.is_masked(result.data):
         raise ValueError("from_interop currently requires unmasked acquisition data")
     data = np.asarray(result.data)
+    if profile == "states-tppi":
+        return _from_states_tppi(result, data)
+    if profile is not None:
+        raise ValueError(f"unsupported interop profile: {profile!r}")
     if data.ndim == 2 or (
         data.ndim == 3 and result.quadrature_mode == "stored-components-2d"
     ):

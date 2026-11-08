@@ -559,3 +559,92 @@ def test_nmrpipe_raw_qf_experiment_reference(provider, tmp_path, monkeypatch):
         relative = origin + (count - 1 - np.arange(count)) * (width / count) - carrier
         np.testing.assert_allclose(coord.data, relative, rtol=1e-6, atol=1e-3)
     assert hashlib.sha256(source.read_bytes()).hexdigest() == before
+
+
+def _check_states_tppi_import(provider, traces, widths, tmp_path):
+    rows, cols = traces.shape
+    header = provider.pipe.create_empty_dic()
+    header.update(
+        FDDIMCOUNT=2.0,
+        FD2DPHASE=2.0,
+        FDDIMORDER1=2.0,
+        FDDIMORDER2=1.0,
+        FDSIZE=float(cols),
+        FDSPECNUM=float(rows),
+        FDQUADFLAG=0.0,
+        FDF1QUADFLAG=0.0,
+        FDF2QUADFLAG=0.0,
+        FDF1TDSIZE=rows / 2,
+        FDF2TDSIZE=float(cols),
+        FDF1SW=widths[0],
+        FDF2SW=widths[1],
+        FDF1OBS=125.0,
+        FDF2OBS=500.0,
+    )
+    path = tmp_path / "states-tppi.fid"
+    provider.pipe.write(str(path), header, traces)
+    read = provider.interop.read(path)
+    normalized = provider.interop.normalize(read, confirm_time_grid=True)
+    with pytest.raises(ValueError):
+        from_interop(normalized)
+    result = from_interop(normalized, profile="states-tppi")
+    expected = np.stack((traces[::2], traces[1::2]))
+    np.testing.assert_array_equal(result.data, expected)
+    assert result.dtype == np.complex64
+    assert tuple(result.c.labels) == ("E1", "E2")
+    assert result.meta.axis_roles == ("component", "F1", "F2")
+    assert result.meta.tppi_alternation_state == "encoded"
+    for coord, size, width in zip(
+        (result.y, result.x), (rows // 2, cols), widths, strict=True
+    ):
+        assert coord.units == scp.ur.s
+        np.testing.assert_allclose(
+            coord.data, np.arange(size) / np.float32(width), rtol=1e-12
+        )
+    dest = tmp_path / "states-tppi.scp"
+    result.write(dest, confirm=False)
+    restored = scp.read(dest)
+    np.testing.assert_array_equal(restored.data, expected)
+    np.testing.assert_array_equal(restored.y.data, result.y.data)
+    np.testing.assert_array_equal(restored.x.data, result.x.data)
+    assert tuple(restored.c.labels) == ("E1", "E2")
+    assert restored.meta.tppi_alternation_state == "encoded"
+
+
+def test_synthetic_nmrpipe_states_tppi_import(provider, tmp_path):
+    values = np.arange(24, dtype=np.float32).reshape(6, 4)
+    traces = (values - 7) + 1j * (23 - 4 * values)
+    _check_states_tppi_import(provider, traces, (1000, 4000), tmp_path)
+
+
+def test_real_bruker_states_tppi_import(provider, tmp_path):
+    configured = os.environ.get("NMR_BRUKER_STATES_TPPI_REFERENCE")
+    if not configured:
+        pytest.skip("configure the checksum-pinned Bruker proton-exchange acquisition")
+    source = Path(configured)
+    hashes = {
+        "ser": "8ffc2a2afa859738d435331eefb3d142bed7fb14c3e1aca97de20340a3d9a831",
+        "acqus": "2a1c2e4ccf2f9a1a04df284939646b440963c33a9283ea9f8f838f003dd239f3",
+        "acqu2s": "cbc2394f6376805f989e32f43a7bc629a9c7fdea986f78015e6596b3f372ac13",
+    }
+
+    def check_hashes():
+        for name, digest in hashes.items():
+            assert hashlib.sha256((source / name).read_bytes()).hexdigest() == digest
+
+    check_hashes()
+    stored = provider.interop.read_bruker_ser_storage(source)
+    assert stored.metadata["acqu2s"]["FnMODE"] == 5
+    assert stored.metadata["acqus"]["AQ_mod"] == 3
+    assert stored.metadata["acqus"]["TD"] == 800
+    # 800 acquired words in each 1024-word aligned trace. The pad is excluded.
+    words = np.fromfile(source / "ser", dtype="<i4").reshape(512, 1024)
+    np.testing.assert_array_equal(stored.data, words)
+    acquired = stored.data[:, :800]
+    traces = np.empty((512, 400), dtype=np.complex64)
+    traces.real = acquired[:, ::2]
+    traces.imag = acquired[:, 1::2]
+    np.testing.assert_array_equal(traces.real, words[:, :800:2])
+    np.testing.assert_array_equal(traces.imag, words[:, 1:800:2])
+    _check_states_tppi_import(provider, traces, (40000.001010485, 10000), tmp_path)
+    check_hashes()

@@ -12,6 +12,9 @@ Unreleased
 Changed
 ~~~~~~~
 
+* Import explicitly declared States-TPPI acquisitions as two labelled
+  complex channels, preserving the acquired alternation and time axes.
+
 * Process explicitly normalized raw 2D QF acquisitions with
   ``Experiment.process()``. Qualify the complex F2 and F1 FFTs against
   NMRPipe and return carrier-relative Hz axes.
