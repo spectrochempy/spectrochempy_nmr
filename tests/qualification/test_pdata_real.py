@@ -10,6 +10,7 @@ import os
 from pathlib import Path
 import re
 import shutil
+from types import SimpleNamespace
 
 import numpy as np
 import pytest
@@ -268,3 +269,32 @@ def test_public_read_topspin_falls_back_for_degenerate_calibration(
     assert calls == [path]
     np.testing.assert_array_equal(result.data, original_data.data)
     np.testing.assert_array_equal(result.x.data, original_data.x.data)
+
+
+def test_public_read_topspin_fallback_does_not_reapply_gain(
+    acquisition, provider, monkeypatch
+):
+    if (
+        "axis_reference"
+        not in signature(provider.interop.normalize_bruker_pdata).parameters
+    ):
+        pytest.skip("requires the provider axis and gain contract")
+    path, _ = acquisition
+    converter = import_module("spectrochempy_nmr.interop")
+    expected = scp.read_topspin(path / "1r")
+    called = []
+
+    def refuse_ppm(unit):
+        called.append(unit)
+        raise ValueError("invalid coordinate presentation")
+
+    def partially_converted(result):
+        return SimpleNamespace(
+            data=result.data.copy(), x=SimpleNamespace(to=refuse_ppm)
+        )
+
+    monkeypatch.setattr(converter, "from_interop", partially_converted)
+    fallback = scp.read_topspin(path / "1r")
+    assert called == ["ppm"]
+    np.testing.assert_array_equal(fallback.data, expected.data)
+    assert fallback.meta.get("normalization_profile") is None

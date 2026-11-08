@@ -71,3 +71,22 @@ jobs:
         run: python tools/fetch_nmrml_qualification.py "$NMRML_QUALIFICATION_DATA"
       - name: Run nmrML raw and processed interop qualification
         run: python -I -m pytest -ra tests/qualification/test_nmrml_interop.py
+
+      - name: Check out the merged Bruker pdata provider contract
+        uses: actions/checkout@v7
+        with:
+          repository: spectrochempy/nmrglue-ng
+          ref: f20214fdc0eb5a49588c9f3f40a7cbec06b0f22f
+          path: provider-candidate
+          persist-credentials: false
+      - name: Qualify the public pdata route with the provider candidate
+        run: |
+          export NMRGLUE_NG_QUALIFICATION_SOURCE="$GITHUB_WORKSPACE/provider-candidate"
+          export PYTHONPATH="$NMRGLUE_NG_QUALIFICATION_SOURCE"
+          python -P - <<'PY'
+          from inspect import signature
+          from nmrglue.interop import normalize_bruker_pdata
+
+          assert "axis_reference" in signature(normalize_bruker_pdata).parameters
+          PY
+          python -P -m pytest -ra tests/qualification/test_pdata_real.py
