@@ -21,6 +21,12 @@ The public TopSpin reader uses nmrglue-ng to decode raw 1D FIDs and
 applies its established filter, gain and time-axis conventions. The explicit
 interop example above uses the provider's normalized representation.
 
+The public reader also delegates complete Bruker 2D SER decoding to
+nmrglue-ng when the decoded layout matches the historical shape. The
+plugin still applies the public reader's trace pairing, corrections, gain
+and axes. Incomplete traces and nonuniform sampling retain the historical
+reader path.
+
 Normalization explicitly trims zero padding to TD/2, optionally applies the
 existing truncated group-delay correction, and conjugates into the canonical
 DFT orientation. It preserves the original samples and raw metadata in the
