@@ -1,5 +1,5 @@
-NMRPipe 1D interop qualification (Unreleased)
-=============================================
+NMRPipe interop qualification (Unreleased)
+==========================================
 
 The optional external nmrglue-ng provider can import complete, already transformed
 NMRPipe 1D spectra into the generic Experiment path::
@@ -50,7 +50,7 @@ Qualification and limits
   precision, acquisition filter history and original vendor metadata cannot be
   reconstructed. Existing scaling and phase choices are preserved.
 * Only a single complete frequency-domain F2 spectrum is qualified. Raw NMRPipe
-  FIDs, 2D/3D/4D, transposition and extracted grids are rejected by this adapter.
+  FIDs, transposition and extracted grids are outside that 1D profile.
   Invalid flags, nonfinite values, missing calibration and mismatched payload
   sizes are rejected rather than guessed. Broader ``ng.pipe.read`` capability
   does not imply normalized qualification.
@@ -68,6 +68,39 @@ For the local external cases, set ``NMR_PIPE_AGILENT_SOURCE`` and
 test file. Each source is hashed before/after; tools write only under pytest's
 temporary directory. Missing external configuration produces explicit skips,
 which must not be reported as validated coverage.
+
+Import a processed real 2D plane
+--------------------------------
+
+Pass an explicitly normalized, entirely frequency-domain real plane to
+``from_interop()``::
+
+   import nmrglue as ng
+   from spectrochempy_nmr import from_interop
+
+   raw = ng.interop.read_nmrpipe_2d("cosy.ft2")
+   spectrum = from_interop(ng.interop.normalize(raw))
+
+The converter accepts one real F1/F2 plane and maps the supplied physical
+axis order onto the dataset's ``(y, x)`` dimensions. It preserves the
+sample dtype, orientation, calibrated axes and per-axis references.
+``spectrum.meta.axis_roles`` identifies the physical dimensions in dataset
+order, including for a transposed input. An axis already in ppm retains
+that unit. A supplied MHz observation frequency allows conversion from
+Hz to ppm using the same convention as the 1D path.
+
+The qualification compares the 512 × 2048 real COSY plane with the raw
+NMRPipe payload and checks every axis coordinate from the header. CI downloads
+the checksum-pinned `provider fixture
+<https://github.com/spectrochempy/nmrglue-ng/blob/14f5ee8b06592060a987cbd12f79c6e9a36c8a20/tests/fixtures/fileio/data/nmrpipe_2d_cosy_example.ft2>`_
+and checks an SCP round trip. To run the test locally, set
+``NMR_PIPE_COSY_REFERENCE`` to the downloaded file and run::
+
+   python -I -m pytest tests/qualification/test_nmrpipe_interop.py::test_real_nmrpipe_cosy_plane
+
+This qualifies direct conversion to ``NDDataset``. Raw and mixed-domain
+2D inputs, complex or hypercomplex planes, and 2D processing through
+``Experiment`` are outside this bridge's scope.
 
 Report reproducible import/processing problems in the
 `spectrochempy_nmr issue tracker

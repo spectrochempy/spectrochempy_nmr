@@ -167,3 +167,63 @@ def test_unsigned_nonmonotonic_or_unrepresentable_coordinates_refuse(values):
     raw.axes[0].values = np.array(values, dtype=np.uint64)
     with pytest.raises(ValueError):
         from_interop(raw)
+
+
+def _real_plane():
+    source = _spectrum(complex_data=False)
+    source.data = np.arange(24, dtype=np.float32).reshape(3, 8)
+    source.dimensions = source.physical_dimensions = ("F1", "F2")
+    source.domains = ("frequency", "frequency")
+    source.encoding = ("real", "real")
+    source.quadrature_mode = "real-2d"
+    indirect = _spectrum(complex_data=False, increasing=True, units="ppm").axes[0]
+    indirect.values = np.array([1.0, 2.0, 3.0005])
+    indirect.reference.observation_frequency = 100.0
+    source.axes = (indirect, *source.axes)
+    return source
+
+
+@pytest.mark.parametrize("transposed", [False, True])
+def test_import_real_plane_preserves_order_precision_and_independent_storage(
+    transposed,
+):
+    source = _real_plane()
+    if transposed:
+        source.data = source.data.T
+        source.axes = source.axes[::-1]
+        source.dimensions = source.physical_dimensions = source.dimensions[::-1]
+    dataset = from_interop(source)
+    assert dataset.dims == ["y", "x"]
+    assert dataset.dtype == source.data.dtype
+    np.testing.assert_array_equal(dataset.data, source.data)
+    assert not np.shares_memory(dataset.data, source.data)
+    assert dataset.meta.axis_roles == source.dimensions
+    assert dataset.meta.isfreq == [True, True]
+    assert dataset.meta.td == list(source.data.shape)
+    for coord, axis in zip((dataset.y, dataset.x), source.axes, strict=True):
+        np.testing.assert_allclose(coord.data, axis.values, rtol=1e-12, atol=1e-12)
+        assert coord.units == scp.ur.Unit(axis.unit)
+        assert (
+            coord.meta.acquisition_frequency.magnitude
+            == axis.reference.observation_frequency
+        )
+
+
+@pytest.mark.parametrize(
+    ("field", "value"),
+    [
+        ("data", np.ones((3, 8), dtype=complex)),
+        ("data", np.full((3, 8), np.nan)),
+        ("domains", ("time", "frequency")),
+        ("encoding", ("complex", "real")),
+        ("dimensions", ("F1", "F1")),
+        ("physical_dimensions", ("F2", "F1")),
+        ("branch_order", ("rr",)),
+        ("channel_axis", 0),
+    ],
+)
+def test_import_real_plane_rejects_unsupported_contract(field, value):
+    source = _real_plane()
+    setattr(source, field, value)
+    with pytest.raises(ValueError, match="normalized real F1/F2"):
+        from_interop(source)

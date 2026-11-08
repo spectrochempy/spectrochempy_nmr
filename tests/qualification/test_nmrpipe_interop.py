@@ -175,3 +175,40 @@ def test_real_nmrpipe_external_ft(
         provider, spectrum, expected, hz, obs, complex_data, monkeypatch, tmp_path
     )
     assert hashlib.sha256(original.read_bytes()).hexdigest() == before
+
+
+def test_real_nmrpipe_cosy_plane(provider, tmp_path):
+    configured = os.environ.get("NMR_PIPE_COSY_REFERENCE")
+    if not configured:
+        pytest.skip("configure the checksum-pinned COSY reference")
+    path = Path(configured)
+    payload = path.read_bytes()
+    assert hashlib.sha256(payload).hexdigest() == (
+        "d13dc13c928394d2f8c7c57c0f65bdeab510d935093793406f53d7609ee70cb5"
+    )
+    words = np.frombuffer(payload, dtype="<f4")
+    expected = words[512:].reshape(512, 2048)
+    raw = provider.interop.read_nmrpipe_2d(path)
+    dataset = from_interop(provider.interop.normalize_nmrpipe_2d(raw))
+    assert dataset.meta.axis_roles == ("F1", "F2")
+    assert dataset.dtype == expected.dtype
+    np.testing.assert_array_equal(dataset.data, expected)
+    # Header word offsets from NMRPipe fdata.h, independent of the provider axes.
+    for coord, size, origin, width, obs in (
+        (dataset.y, 512, words[249], words[229], words[218]),
+        (dataset.x, 2048, words[101], words[100], words[119]),
+    ):
+        hz = float(origin) + (size - 1 - np.arange(size)) * (float(width) / size)
+        assert coord.units == scp.ur.Hz
+        np.testing.assert_allclose(coord.data, hz, rtol=1e-12, atol=1e-9)
+        np.testing.assert_allclose(
+            coord.to("ppm").data, hz / obs, rtol=1e-12, atol=1e-10
+        )
+    target = tmp_path / "cosy.scp"
+    dataset.write(target, confirm=False)
+    restored = scp.read(target)
+    np.testing.assert_array_equal(restored.data, expected)
+    np.testing.assert_array_equal(restored.x.data, dataset.x.data)
+    np.testing.assert_array_equal(restored.y.data, dataset.y.data)
+    assert tuple(restored.meta.axis_roles) == ("F1", "F2")
+    assert path.read_bytes() == payload

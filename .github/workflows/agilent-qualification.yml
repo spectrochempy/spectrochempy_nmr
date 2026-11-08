@@ -14,6 +14,7 @@ jobs:
         python-version: ["3.11", "3.13"]
     env:
       NMR_AGILENT_REAL_DATA: /tmp/agilent-real
+      NMR_PIPE_COSY_REFERENCE: /tmp/nmrpipe_2d_cosy_example.ft2
       NMRML_QUALIFICATION_DATA: /tmp/nmrml-real
       NMR_PDATA_TOMATO_DATA: /tmp/pdata-real/MMBBI_10M12-CE01-1a/1/pdata/1
     steps:
@@ -39,7 +40,7 @@ jobs:
 
           metadata = distribution("nmrglue-ng")
           provenance = json.loads(metadata.read_text("direct_url.json"))
-          assert provenance["vcs_info"]["commit_id"] == "0a7421795a9008c57eb63d6d747debc45ecf7135"
+          assert provenance["vcs_info"]["commit_id"] == "14f5ee8b06592060a987cbd12f79c6e9a36c8a20"
           for name in ("spectrochempy", "spectrochempy_nmr", "nmrglue"):
               location = Path(find_spec(name).origin).resolve()
               assert Path.cwd() not in location.parents, location
@@ -58,6 +59,14 @@ jobs:
 
       - name: Run synthetic NMRPipe normalized-provider qualification
         run: python -I -m pytest -ra tests/qualification/test_nmrpipe_interop.py -k synthetic
+
+      - name: Fetch and qualify the checksum-pinned NMRPipe COSY spectrum
+        run: |
+          curl --fail --silent --show-error --location --retry 3 \
+            https://raw.githubusercontent.com/spectrochempy/nmrglue-ng/14f5ee8b06592060a987cbd12f79c6e9a36c8a20/tests/fixtures/fileio/data/nmrpipe_2d_cosy_example.ft2 \
+            --output "$NMR_PIPE_COSY_REFERENCE"
+          echo "d13dc13c928394d2f8c7c57c0f65bdeab510d935093793406f53d7609ee70cb5  $NMR_PIPE_COSY_REFERENCE" | sha256sum -c -
+          python -I -m pytest -ra tests/qualification/test_nmrpipe_interop.py::test_real_nmrpipe_cosy_plane
 
       - name: Fetch checksum-pinned nmrML XML and native reference examples
         run: python tools/fetch_nmrml_qualification.py "$NMRML_QUALIFICATION_DATA"

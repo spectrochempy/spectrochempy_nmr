@@ -182,6 +182,10 @@ def read_agilent_interop(
     for acquisition in acquisition_paths:
         raw = ng.interop.read_agilent_fid(str(acquisition))
         normalized = ng.interop.normalize_agilent_fid(raw)
+        if np.ndim(normalized.data) != 1:
+            raise ValueError(
+                "read_agilent_interop requires a normalized 1D acquisition"
+            )
         datasets.append(from_interop(normalized))
     if len(datasets) == 1:
         return datasets[0]
