@@ -56,6 +56,7 @@ Start with one of the following paths:
    nmrpipe_interop
    nmrml_interop
    bruker_normalized_qualification
+   bruker_pdata_2d_interop
    agilent_frequency_reference
 
    examples/gallery/importer/index
