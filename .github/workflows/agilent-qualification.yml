@@ -37,7 +37,7 @@ jobs:
           from importlib.util import find_spec
           from pathlib import Path
 
-          assert version("nmrglue-ng") == "1.2.0"
+          assert version("nmrglue-ng") == "1.2.1"
           for name in ("spectrochempy", "spectrochempy_nmr", "nmrglue"):
               location = Path(find_spec(name).origin).resolve()
               assert Path.cwd() not in location.parents, location
@@ -49,7 +49,7 @@ jobs:
         run: python -I -m pytest -ra tests/qualification/test_agilent_real.py
       - name: Run synthetic Bruker normalized-provider qualification
         run: python -I -m pytest -ra tests/qualification/test_bruker_normalized.py -k synthetic
-      - name: Fetch checksum-pinned nmrML processed spectrum
+      - name: Fetch checksum-pinned Bruker pdata reference
         run: python tools/fetch_pdata_qualification.py /tmp/pdata-real
       - name: Run processed-spectrum real-provider qualification
         run: python -I -m pytest -ra tests/qualification/test_pdata_real.py

@@ -8,7 +8,7 @@ and pass normalized results to ``from_interop()``. For supported 1D acquisitions
 Processed spectra
 -----------------
 
-The qualification tests use the nmrglue-ng 1.2.0 wheel and ``xmltodict``::
+The qualification tests use the nmrglue-ng 1.2.1 wheel and ``xmltodict``::
 
     import nmrglue as ng
     from spectrochempy_nmr import from_interop
@@ -79,7 +79,7 @@ originals. Public access supports local validation, not a redistribution claim.
 Raw 2D echo/anti-echo
 ---------------------
 
-With nmrglue-ng 1.2.0 and ``xmltodict``, the official HSQC example can be
+With nmrglue-ng 1.2.1 and ``xmltodict``, the official HSQC example can be
 read in storage order, grouped into adjacent pairs, and imported as an
 acquisition::
 
