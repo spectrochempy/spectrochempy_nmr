@@ -12,6 +12,10 @@ Unreleased
 Changed
 ~~~~~~~
 
+* Import fully processed 2D spectra with one complex axis through
+  ``from_interop()``. Preserve the real and imaginary values, physical axis
+  order and complex-axis identity, including on SCP round trips.
+
 * Accept normalized real 2D frequency spectra through ``from_interop()``.
   Preserve physical axis order, sample dtype and calibration. Qualify the
   conversion and SCP persistence with a real NMRPipe COSY spectrum.
