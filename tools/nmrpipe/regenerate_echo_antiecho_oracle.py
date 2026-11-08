@@ -14,7 +14,7 @@ from regenerate_states_tppi_oracle import _run
 from regenerate_states_tppi_oracle import _run_pipeline
 
 
-def generate(output, binaries, ser):
+def generate(output, binaries, ser, *, digital_filter=False):
     binaries = binaries.resolve()
     output = output.resolve()
     environment = os.environ.copy()
@@ -49,6 +49,7 @@ def generate(output, binaries, ser):
                 "-ov",
                 "-swap",
                 "-AMX",
+                *(["-decim", "24", "-dspfvs", "12"] if digital_filter else []),
                 "-bad",
                 "0",
                 "-xN",
@@ -90,12 +91,12 @@ def generate(output, binaries, ser):
         nmrpipe = binaries / "nmrPipe"
         f2, tp, final = (work / name for name in ("f2.ft2", "tp.ft2", "final.ft2"))
         for source, target, flags in (
-            (paired, f2, ["-fn", "FT", "-nodf"]),
+            (paired, f2, ["-fn", "FT", "-df" if digital_filter else "-nodf"]),
             (f2, tp, ["-fn", "TP"]),
             (tp, final, ["-fn", "FT", "-nodf"]),
         ):
             _run_pipeline(nmrpipe, source, target, [flags], environment=environment)
-        _, shuffled = ng.pipe.read(str(paired))
+        paired_header, shuffled = ng.pipe.read(str(paired))
         _, direct = ng.pipe.read(str(f2))
         _, cross = ng.pipe.read(str(tp))
         header, spectrum = ng.pipe.read(str(final))
@@ -109,6 +110,7 @@ def generate(output, binaries, ser):
             spectrum=np.stack((first.real, second.real, first.imag, second.imag)),
             hz_f1=ng.pipe.make_uc(header, spectrum, dim=1).hz_scale(),
             hz_f2=ng.pipe.make_uc(header, spectrum, dim=0).hz_scale(),
+            **({"group_delay": paired_header["FDDMXVAL"]} if digital_filter else {}),
         )
 
 
@@ -117,5 +119,8 @@ if __name__ == "__main__":
     parser.add_argument("output", type=Path)
     parser.add_argument("--nmrpipe-bin", type=Path, required=True)
     parser.add_argument("--hsqc-ser", type=Path)
+    parser.add_argument("--digital-filter", action="store_true")
     args = parser.parse_args()
-    generate(args.output, args.nmrpipe_bin, args.hsqc_ser)
+    generate(
+        args.output, args.nmrpipe_bin, args.hsqc_ser, digital_filter=args.digital_filter
+    )

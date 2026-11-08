@@ -123,8 +123,34 @@ width compared with the native Bruker processed spectrum. The order of
 stored traces alone cannot determine the reconstruction for another pulse
 program.
 
-This FFT-only profile leaves digital-filter delay, phase, apodization,
-zero-filling and chemical referencing to a separate processing workflow.
+When the imported result carries Bruker acquisition parameters, choose the
+method and let ``Experiment`` resolve the delay::
+
+    spectrum = Experiment(source).process(
+        echo_antiecho="bruker-rance-kay", digital_filter="phase"
+    )
+
+The delay comes from normalized acquisition metadata, ``GRPDLY`` in
+``acqus``, or a known legacy ``DSPFVS`` / ``DECIM`` table entry. For the
+official HSQC nmrML file, the parameters are in the accompanying Bruker
+``acqus``. Its ``DSPFVS=12`` and ``DECIM=24`` give a delay of 70⅙ complex F2
+points. If only the XML was imported, supply the delay explicitly::
+
+    spectrum = Experiment(source).process(
+        echo_antiecho="bruker-rance-kay",
+        digital_filter="phase",
+        bruker_group_delay=70 + 1 / 6,
+    )
+
+``"phase"`` applies the NMRPipe ``FT -df`` phase ramp before the F1
+transform and preserves all 2048 F2 bins. ``"time"`` corrects both traces
+using the historical Bruker reader algorithm before reconstruction and
+returns 1976 F2 bins for this HSQC. The methods handle the trace boundaries
+differently. Omit the filter option to process the stored traces as-is.
+The processing trace records the method, delay, its source, and the number
+of removed points. Correction requires raw traces that still contain the
+delay. Apodization, zero-filling, subsequent phase correction and chemical
+referencing remain separate steps.
 
 For local qualification, download the
 `official HSQC XML <https://nmrml.org/examples/6/bmse000400-exp06.nmrML>`_
@@ -142,3 +168,12 @@ locally with ``tools/nmrpipe/regenerate_echo_antiecho_oracle.py`` and set
 extracted ``pdata/1`` directory. Run
 ``pytest tests/test_nmrpipe_echo_antiecho_oracle.py`` to check reconstruction,
 both FFTs, axes, and the F1 placement of the two main native peaks.
+
+To also qualify the F2 group-delay correction, generate another oracle with
+``--digital-filter`` and set ``NMRML_HSQC_DMX_ORACLE`` to its path.
+Extract ``acqus`` from the BMRB archive and set ``NMRML_HSQC_ACQUS`` to
+its path to verify automatic delay resolution and the time-domain correction.
+
+The HSQC qualification also compares both F2 branches against the released
+nmrglue-ng wheel using its post-FFT correction, with the
+`phase-sign adaptation documented in nmrglue-ng #194 <https://github.com/spectrochempy/nmrglue-ng/pull/194>`_.

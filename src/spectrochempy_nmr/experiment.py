@@ -491,6 +491,8 @@ class Experiment:
         phc1: float = _DEFAULT_PHC1,
         reference: str | None = None,
         echo_antiecho: str | None = None,
+        digital_filter: str | None = None,
+        bruker_group_delay: float | None = None,
     ) -> NDDataset:
         """
         State-aware NMR processing.
@@ -543,6 +545,13 @@ class Experiment:
             Select ``"bruker-rance-kay"`` for stored pairs compatible with
             Bruker Rance–Kay shuffling with no additional F1 sign alternation.
             An explicit selection is required for imported echo/anti-echo data.
+        digital_filter : str, optional
+            Select "phase" for NMRPipe FT -df or "time" for the historical
+            reader's time-domain correction, which shortens F2.
+        bruker_group_delay : float, optional
+            Override the group delay in complex F2 samples. With a method
+            selected, the default is to resolve it from acquisition metadata.
+            Supplying a delay alone selects "phase".
 
         Returns
         -------
@@ -593,6 +602,16 @@ class Experiment:
             raise ValueError(
                 "echo_antiecho requires an imported raw echo/anti-echo FID"
             )
+        if digital_filter not in (None, "phase", "time"):
+            raise ValueError('digital_filter must be "phase" or "time"')
+        if digital_filter is not None and not supports_echo:
+            raise ValueError(
+                "digital_filter requires an imported raw echo/anti-echo FID"
+            )
+        if bruker_group_delay is not None and not supports_echo:
+            raise ValueError(
+                "bruker_group_delay requires an imported raw echo/anti-echo FID"
+            )
         if self._supports_qf_fft or self._supports_states_tppi_fft or supports_echo:
             if (
                 any(
@@ -607,24 +626,43 @@ class Experiment:
                 from .processing.channel_interop import process_echo_antiecho_fft  # noqa: PLC0415
                 from .processing.channel_interop import process_states_tppi_fft  # noqa: PLC0415
 
-                process_fft = (
-                    process_echo_antiecho_fft
-                    if supports_echo
-                    else process_states_tppi_fft
-                )
-                result = process_fft(ds, self._nmr_meta.spectral_width_hz)
-                reconstruction = (
-                    {"echo_antiecho": echo_antiecho} if supports_echo else {}
-                )
+                widths = self._nmr_meta.spectral_width_hz
+                reconstruction = {}
+                direct_fft = "NMRPipe FT -nodf"
+                filter_trace = {}
+                if supports_echo:
+                    method = digital_filter
+                    if method is None and bruker_group_delay is not None:
+                        method = "phase"
+                    result = process_echo_antiecho_fft(
+                        ds,
+                        widths,
+                        digital_filter=method,
+                        group_delay=bruker_group_delay,
+                    )
+                    reconstruction["echo_antiecho"] = echo_antiecho
+                    if digital_filter is not None:
+                        reconstruction["digital_filter"] = digital_filter
+                    if bruker_group_delay is not None:
+                        reconstruction["bruker_group_delay"] = float(bruker_group_delay)
+                    if method is not None:
+                        filter_trace["digital_filter"] = dict(
+                            result.meta.bruker_digital_filter
+                        )
+                    if method == "phase":
+                        direct_fft = "NMRPipe FT -df"
+                else:
+                    result = process_states_tppi_fft(ds, widths)
                 return self._attach_scp_processing_trace(
                     result,
                     requested=reconstruction,
                     applied={
                         **reconstruction,
+                        **filter_trace,
                         "fft": True,
                         "fft_order": ("F2", "F1"),
                         "fft_convention": (
-                            "NMRPipe FT -nodf",
+                            direct_fft,
                             "NMRPipe TP",
                             "NMRPipe FT -nodf" if supports_echo else "NMRPipe FT -alt",
                         ),
