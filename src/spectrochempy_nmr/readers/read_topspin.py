@@ -23,6 +23,7 @@ __all__ = ["read_topspin"]
 import contextlib
 import re
 from datetime import datetime
+from inspect import signature
 
 import numpy as np
 
@@ -970,7 +971,7 @@ def _validate_proc_axis(dic, data, parmode):
     return use_proc
 
 
-def _read_processed_data(directory, acqus_files, procs_files):
+def _read_processed_data(directory, acqus_files, procs_files, *, proc_axis):
     from nmrglue import interop  # noqa: PLC0415
 
     from spectrochempy_nmr.interop import from_interop  # noqa: PLC0415
@@ -985,7 +986,29 @@ def _read_processed_data(directory, acqus_files, procs_files):
                 procs_files=procs_files,
                 all_components=True,
             )
-            converted = from_interop(interop.normalize_bruker_pdata(stored))
+            normalize = interop.normalize_bruker_pdata
+            if "axis_reference" in signature(normalize).parameters:
+                normalized = normalize(
+                    stored,
+                    axis_reference="processing" if proc_axis else "acquisition",
+                    normalize_receiver_gain=True,
+                )
+                acquisition_frequency = normalized.acquisition.get(
+                    "acquisition_frequency_mhz"
+                )
+                if acquisition_frequency is None:
+                    raise ValueError("TopSpin pdata requires an acquisition frequency")
+                converted = from_interop(normalized)
+                coord = converted.x.to("ppm")
+                coord.meta["acquisition_frequency"] = acquisition_frequency * ur.MHz
+                coord.meta["reference_frequency"] = (
+                    normalized.axes[0].reference.observation_frequency * ur.MHz
+                )
+                converted.set_coordset(x=coord)
+                # Retain legacy display metadata from the same parse. Signal
+                # values, corrections and the calibrated grid come from interop.
+                return stored.metadata, converted.data, converted
+            converted = from_interop(normalize(stored))
         except ValueError:
             # The public reader also accepts spectra outside the calibrated profile.
             pass
@@ -1001,11 +1024,13 @@ def _read_processed_data(directory, acqus_files, procs_files):
         # Keep the public reader's parameter selection, axes and gain.
         metadata = read_procs_file(directory, procs_files)
         metadata.update(read_acqus_file(directory, acqus_files))
-        return metadata, converted.data if one_dimensional else list(converted.data)
+        data = converted.data if one_dimensional else list(converted.data)
+        return metadata, data, None
 
-    return read_pdata(
+    metadata, data = read_pdata(
         directory, acqus_files=acqus_files, procs_files=procs_files, all_components=True
     )
+    return metadata, data, None
 
 
 def _read_raw_data(directory, filename, acqus_files, procs_files):
@@ -1084,6 +1109,7 @@ def _read_topspin(*args, **kwargs):
     procs_files = _get_files(f_procno, "proc")
 
     processed_components = None
+    normalized_dataset = None
     if not processed:
         dic, data = _read_raw_data(f_expno, path.name, acqus_files, procs_files)
 
@@ -1131,7 +1157,9 @@ def _read_topspin(*args, **kwargs):
             data = _remove_digital_filter(dic, data)
 
     else:
-        dic, datalist = _read_processed_data(f_procno, acqus_files, procs_files)
+        dic, datalist, normalized_dataset = _read_processed_data(
+            f_procno, acqus_files, procs_files, proc_axis=bool(kwargs.get("proc_axis"))
+        )
         if isinstance(datalist, list):
             if datalist[0].ndim == 2:
                 if len(datalist) != 4:
@@ -1313,7 +1341,7 @@ def _read_topspin(*args, **kwargs):
         meta.rg[-1] = 1.0
         meta.nsold = [meta.ns[-1]]  # store the old value of NS
         meta.ns[-1] = 1
-        if fac > 0:
+        if normalized_dataset is None and fac > 0:
             dat /= fac
         return dat
 
@@ -1338,7 +1366,7 @@ def _read_topspin(*args, **kwargs):
 
     use_list = kwargs.pop("use_list", False)
     proc_axis = bool(kwargs.get("proc_axis", False)) and processed
-    if proc_axis:
+    if proc_axis and normalized_dataset is None:
         use_proc_axis = _validate_proc_axis(dic, data, parmode)
     else:
         use_proc_axis = [False] * (parmode + 1)
@@ -1378,7 +1406,9 @@ def _read_topspin(*args, **kwargs):
             offset_val = meta.get("offset", [None] * data.ndim)[axis]
             sf_val = meta.sf[axis]
 
-            if (
+            if normalized_dataset is not None:
+                coord = normalized_dataset.x
+            elif (
                 use_proc_axis[axis]
                 and sw_p_val is not None
                 and offset_val is not None
@@ -1396,7 +1426,8 @@ def _read_topspin(*args, **kwargs):
                 coord.meta["acquisition_frequency"] = meta.sfo1[axis]
                 coord.ito("ppm")
 
-            coord.meta["acquisition_frequency"] = meta.sfo1[axis]
+            if normalized_dataset is None:
+                coord.meta["acquisition_frequency"] = meta.sfo1[axis]
             if meta.nuc1 is not None:
                 nuc1 = meta.nuc1[axis]
                 regex = r"([^a-zA-Z]+)([a-zA-Z]+)"
@@ -1431,6 +1462,11 @@ def _read_topspin(*args, **kwargs):
         set_channel_data(
             dataset, channels, coords, meta, labels=labels, stage=stage, profile=profile
         )
+    elif normalized_dataset is not None:
+        dataset = normalized_dataset
+        for key, value in meta.items():
+            if key not in dataset.meta:
+                dataset.meta[key] = value
     else:
         dataset.data = data
         dataset.meta.update(meta)

@@ -12,6 +12,10 @@ Unreleased
 Changed
 ~~~~~~~
 
+* Preserve the normalized dataset in the public Bruker 1D pdata reader
+  when the provider supplies the requested axis and receiver-gain correction.
+  Distinguish the processing reference from the acquisition frequency.
+
 * Delegate compatible Bruker 2D SER decoding to nmrglue-ng and preserve
   the TopSpin reader's recovery path for incomplete acquisitions.
 

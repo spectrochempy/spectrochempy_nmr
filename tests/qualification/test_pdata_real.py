@@ -3,6 +3,7 @@
 from copy import deepcopy
 from importlib import import_module
 from importlib.metadata import distribution
+from inspect import signature
 import hashlib
 import json
 import os
@@ -57,11 +58,9 @@ def provider():
     import nmrglue as ng
 
     dist = distribution("nmrglue-ng")
-    assert (
-        Path(ng.__file__)
-        .resolve()
-        .is_relative_to(Path(dist.locate_file("nmrglue")).resolve())
-    )
+    candidate = os.environ.get("NMRGLUE_NG_QUALIFICATION_SOURCE")
+    location = Path(candidate) / "nmrglue" if candidate else dist.locate_file("nmrglue")
+    assert Path(ng.__file__).resolve().is_relative_to(Path(location).resolve())
     return ng
 
 
@@ -157,7 +156,7 @@ def test_original_pdata_import_process_and_persistence(
 def test_public_read_topspin_pdata_parity(
     acquisition, provider, complex_data, proc_axis, monkeypatch, tmp_path
 ):
-    path, _ = acquisition
+    path, case = acquisition
     if not complex_data:
         experiment = tmp_path / "bruker" / "1"
         real_only = experiment / "pdata" / "1"
@@ -179,8 +178,17 @@ def test_public_read_topspin_pdata_parity(
     def reject_legacy(*args, **kwargs):
         pytest.fail("qualified 1D pdata should not use the vendored payload decoder")
 
+    converter = import_module("spectrochempy_nmr.interop")
+    converted = []
+
+    def record_conversion(result):
+        dataset = from_interop(result)
+        converted.append(dataset)
+        return dataset
+
     with monkeypatch.context() as migrated:
         migrated.setattr(reader, "read_pdata", reject_legacy)
+        migrated.setattr(converter, "from_interop", record_conversion)
         actual = scp.read_topspin(component, proc_axis=proc_axis)
 
     assert actual is not None and expected is not None
@@ -190,12 +198,42 @@ def test_public_read_topspin_pdata_parity(
     assert actual.units == expected.units
     assert actual.origin == expected.origin
     assert actual.name == expected.name
-    assert json_encoder(actual.meta) == json_encoder(expected.meta)
     np.testing.assert_array_equal(actual.data, expected.data)
-    np.testing.assert_array_equal(actual.x.data, expected.x.data)
     assert actual.x.units == expected.x.units
     assert actual.x.title == expected.x.title
-    assert json_encoder(actual.x.meta) == json_encoder(expected.x.meta)
+    if (
+        "axis_reference"
+        not in signature(provider.interop.normalize_bruker_pdata).parameters
+    ):
+        assert json_encoder(actual.meta) == json_encoder(expected.meta)
+        np.testing.assert_array_equal(actual.x.data, expected.x.data)
+        assert json_encoder(actual.x.meta) == json_encoder(expected.x.meta)
+        return
+
+    assert len(converted) == 1 and actual is converted[0]
+    assert actual.x.meta.acquisition_frequency == expected.x.meta.acquisition_frequency
+    sfo = expected.x.meta.acquisition_frequency.to("MHz").magnitude
+    sf = expected.meta.sf[-1].to("MHz").magnitude
+    assert sfo != sf
+    frequency = sf if proc_axis else sfo
+    assert actual.x.meta.reference_frequency == frequency * scp.ur.MHz
+    np.testing.assert_allclose(actual.x.to("Hz").data, actual.x.data * frequency)
+    assert actual.x.meta.reference_source == (
+        "processing" if proc_axis else "acquisition"
+    )
+    np.testing.assert_allclose(actual.x.data, expected.x.data, rtol=0, atol=0.00051)
+    assert actual.meta.acquisition["storage_scaling"]["NC_proc"] == case["nc"]
+    assert actual.meta.applied_operations[0]["receiver_gain"] == expected.meta.rgold[-1]
+    assert actual.meta.applied_operations[0]["scale"] == 1 / expected.meta.rgold[-1]
+    processed = Experiment(actual).process()
+    np.testing.assert_array_equal(processed.data, expected.data)
+    np.testing.assert_array_equal(processed.x.data, actual.x.data)
+    assert processed.meta.nmr_processing["scp_processing"]["applied"] == {}
+    actual_meta, expected_meta = (
+        json_encoder(actual.meta)["data"],
+        json_encoder(expected.meta)["data"],
+    )
+    assert {key: actual_meta[key] for key in expected_meta} == expected_meta
 
 
 def test_public_read_topspin_falls_back_for_degenerate_calibration(
@@ -206,7 +244,13 @@ def test_public_read_topspin_falls_back_for_degenerate_calibration(
     path = experiment / "pdata" / "1"
     shutil.copytree(original, path)
     shutil.copy2(original.parents[1] / "acqus", experiment / "acqus")
-    original_data = scp.read_topspin(path / "1r")
+    with monkeypatch.context() as legacy:
+
+        def unsupported(*args, **kwargs):
+            raise ValueError("unqualified profile")
+
+        legacy.setattr(provider.interop, "read_bruker_pdata", unsupported)
+        original_data = scp.read_topspin(path / "1r")
     procs = path / "procs"
     procs.write_bytes(
         re.sub(rb"(?m)^##\$OFFSET=[^\r\n]*", b"##$OFFSET= 1e20", procs.read_bytes())
