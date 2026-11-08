@@ -126,7 +126,7 @@ class Experiment:
     copy, subclass, or mutate the underlying dataset.
 
     Public processing covers validated 1D experiments and FFT-only
-    processing of explicitly normalized raw 2D QF and States-TPPI acquisitions.
+    processing of explicitly normalized raw 2D QF, States-TPPI and echo/anti-echo acquisitions.
 
     Parameters
     ----------
@@ -355,7 +355,19 @@ class Experiment:
     @property
     def _supports_states_tppi_fft(self) -> bool:
         return (
-            self.ndim == 3 and self._nmr_meta.normalized_interop and self.is_time_domain
+            self.ndim == 3
+            and self._nmr_meta.normalized_interop
+            and self.is_time_domain
+            and self.encoding == ("STATES-TPPI", "DQD")
+        )
+
+    @property
+    def _supports_echo_antiecho_fft(self) -> bool:
+        return (
+            self.ndim == 3
+            and self._nmr_meta.normalized_interop
+            and self.is_time_domain
+            and self.encoding == ("ECHO-ANTIECHO", "DQD")
         )
 
     # ------------------------------------------------------------------
@@ -435,6 +447,10 @@ class Experiment:
                 report.add_info(
                     "Normalized States-TPPI 2D FFT processing is available."
                 )
+            elif self._supports_echo_antiecho_fft:
+                report.add_info(
+                    "Echo/anti-echo FFT requires an explicit reconstruction."
+                )
             else:
                 report.add_warning(
                     "Multi-dimensional NMR processing is not part of the current "
@@ -474,6 +490,7 @@ class Experiment:
         phc0: float = _DEFAULT_PHC0,
         phc1: float = _DEFAULT_PHC1,
         reference: str | None = None,
+        echo_antiecho: str | None = None,
     ) -> NDDataset:
         """
         State-aware NMR processing.
@@ -482,7 +499,7 @@ class Experiment:
         current data domain.  Never modifies the source dataset.
 
         Processing covers validated 1D experiments and FFT-only processing
-        of explicitly normalized raw 2D QF and States-TPPI acquisitions.
+        of explicitly normalized raw 2D QF, States-TPPI and echo/anti-echo acquisitions.
 
         Parameters
         ----------
@@ -522,6 +539,10 @@ class Experiment:
         reference : str, optional
             Explicit normalized frequency-axis candidate. Interop spectra stay
             on the core Hz grid when omitted; no chemical zero is guessed.
+        echo_antiecho : str, optional
+            Select ``"bruker-rance-kay"`` for stored pairs compatible with
+            Bruker Rance–Kay shuffling with no additional F1 sign alternation.
+            An explicit selection is required for imported echo/anti-echo data.
 
         Returns
         -------
@@ -563,7 +584,16 @@ class Experiment:
         phc0 = 0.0 if phc0 is _UNSET_ZERO else phc0
         phc1 = 0.0 if phc1 is _UNSET_ZERO else phc1
 
-        if self._supports_qf_fft or self._supports_states_tppi_fft:
+        supports_echo = self._supports_echo_antiecho_fft
+        if supports_echo and echo_antiecho != "bruker-rance-kay":
+            raise ValueError(
+                'echo/anti-echo processing requires echo_antiecho="bruker-rance-kay"'
+            )
+        if echo_antiecho is not None and not supports_echo:
+            raise ValueError(
+                "echo_antiecho requires an imported raw echo/anti-echo FID"
+            )
+        if self._supports_qf_fft or self._supports_states_tppi_fft or supports_echo:
             if (
                 any(
                     value is not None
@@ -573,20 +603,30 @@ class Experiment:
                 or phc1
             ):
                 raise ValueError("normalized 2D processing supports FFT only")
-            if self._supports_states_tppi_fft:
-                from .processing.states_tppi_interop import process_states_tppi_fft  # noqa: PLC0415
+            if self._supports_states_tppi_fft or supports_echo:
+                from .processing.channel_interop import process_echo_antiecho_fft  # noqa: PLC0415
+                from .processing.channel_interop import process_states_tppi_fft  # noqa: PLC0415
 
-                result = process_states_tppi_fft(ds, self._nmr_meta.spectral_width_hz)
+                process_fft = (
+                    process_echo_antiecho_fft
+                    if supports_echo
+                    else process_states_tppi_fft
+                )
+                result = process_fft(ds, self._nmr_meta.spectral_width_hz)
+                reconstruction = (
+                    {"echo_antiecho": echo_antiecho} if supports_echo else {}
+                )
                 return self._attach_scp_processing_trace(
                     result,
-                    requested={},
+                    requested=reconstruction,
                     applied={
+                        **reconstruction,
                         "fft": True,
                         "fft_order": ("F2", "F1"),
                         "fft_convention": (
                             "NMRPipe FT -nodf",
                             "NMRPipe TP",
-                            "NMRPipe FT -alt",
+                            "NMRPipe FT -nodf" if supports_echo else "NMRPipe FT -alt",
                         ),
                     },
                 )
@@ -605,7 +645,7 @@ class Experiment:
 
         if self.ndim > 1:
             msg = (
-                "Outside normalized raw 2D QF and States-TPPI, public NMR processing supports "
+                "Outside supported normalized raw 2D profiles, public NMR processing supports "
                 "only validated 1D experiments."
             )
             raise NotImplementedError(msg)
@@ -1244,6 +1284,10 @@ class Experiment:
             lines.append("  public processing: normalized 2D QF FFT only")
         elif self._supports_states_tppi_fft:
             lines.append("  public processing: normalized States-TPPI 2D FFT only")
+        elif self._supports_echo_antiecho_fft:
+            lines.append(
+                "  public processing: echo/anti-echo with explicit reconstruction"
+            )
         elif self.ndim >= 2:
             lines.append("  public processing: 1D only")
         return "\n".join(lines)
