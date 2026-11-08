@@ -49,6 +49,28 @@ The neutral descriptor supplies BF1/O1 acquisition referencing. Its opaque
 the processed-data reference or the initial phase. Experiment uses normalized
 properties for these choices, independent of origin or profile identity.
 
+Prepare a FID explicitly
+------------------------
+
+With a provider that exposes the deferred preparation contract, leave the
+normalizer's correction options off and apply selected operations to a copy
+before processing::
+
+   raw = ng.interop.read_bruker_fid("/path/to/acquisition")
+   fid = from_interop(ng.interop.normalize_bruker_fid(raw, preserve_storage=True))
+   prepared = Experiment(fid).prepare_fid(
+       remove_dc_offset=True, digital_filter="time", normalize_scan_gain=True
+   )
+   spectrum = Experiment(prepared).process(size=32768, reference="acquisition")
+
+The method applies complex-mean subtraction, the declared time-domain filter
+and scan/gain normalization in that order. Mean subtraction can suppress
+signal at the carrier. Existing corrections are retained. Requests that
+would put a missing correction out of order raise an error. A filter is
+skipped when the provider declares that it is unnecessary. Missing evidence
+for a requested correction raises an error. Import and the public TopSpin
+reader retain their existing behavior.
+
 Qualified local acquisitions
 ----------------------------
 

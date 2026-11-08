@@ -9,6 +9,12 @@ release, not capabilities available in the published 0.2.0 package.
 Unreleased
 ----------
 
+Added
+~~~~~
+
+* Prepare normalized complex 1D FIDs explicitly with
+  ``Experiment.prepare_fid()`` before FFT, using provider-declared corrections.
+
 Changed
 ~~~~~~~
 
