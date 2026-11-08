@@ -3,6 +3,7 @@
 from copy import deepcopy
 from importlib import import_module
 from importlib.metadata import distribution
+from inspect import signature
 import hashlib
 import json
 import os
@@ -196,60 +197,116 @@ def test_synthetic_provider_binary_to_experiment_chain(provider, tmp_path, filte
     assert source.meta.acquisition["trimmed_padding_points"] == 96
 
 
-def _check_public_fid(provider, path, filtered, dc, monkeypatch):
+def _check_public_fid(provider, path, filtered, dc, monkeypatch, *, supported=True):
     reader = import_module("spectrochempy_nmr.readers.read_topspin")
+    converter = import_module("spectrochempy_nmr.interop")
     legacy_read = reader.read_fid
+
+    supports_contract = (
+        "preserve_storage"
+        in signature(provider.interop.normalize_bruker_fid).parameters
+    )
 
     def use_legacy(directory, *, read_pulseprogram, **kwargs):
         return legacy_read(directory, read_pulseprogram=read_pulseprogram, **kwargs)
 
     options = dict(remove_digital_filter=filtered, remove_dc_offset=dc)
     with monkeypatch.context() as legacy:
+        legacy.setattr(reader, "_read_normalized_fid", lambda *args, **kwargs: None)
         legacy.setattr(provider.bruker, "read", use_legacy)
         expected = scp.read_topspin(path / "fid", **options)
 
     def reject_legacy(*args, **kwargs):
         pytest.fail("the FID must use the nmrglue-ng binary reader")
 
+    original_converter = converter.from_interop
+    converted = []
+
+    def record_conversion(result):
+        dataset = original_converter(result)
+        converted.append(dataset)
+        return dataset
+
     with monkeypatch.context() as migrated:
         migrated.setattr(reader, "read_fid", reject_legacy)
+        migrated.setattr(converter, "from_interop", record_conversion)
         actual = scp.read_topspin(path / "fid", **options)
 
     assert actual is not None and expected is not None
     assert actual.dtype == expected.dtype
     assert actual.units == expected.units
-    assert json_encoder(actual.meta) == json_encoder(expected.meta)
-    np.testing.assert_array_equal(actual.data, expected.data)
-    np.testing.assert_array_equal(actual.x.data, expected.x.data)
-    assert actual.x.units == expected.x.units
+    if not supports_contract or not supported:
+        assert not converted
+        assert json_encoder(actual.meta) == json_encoder(expected.meta)
+        np.testing.assert_array_equal(actual.data, expected.data)
+        np.testing.assert_array_equal(actual.x.data, expected.x.data)
+        return
 
-    if actual.meta.sf is not None:
-        spectrum = Experiment(actual).process()
-        reference = Experiment(expected).process()
-        np.testing.assert_array_equal(spectrum.data, reference.data)
-        np.testing.assert_array_equal(spectrum.x.data, reference.x.data)
+    assert len(converted) == 1
+    assert actual is converted[0]
+    assert actual.meta.acquisition_encoding == tuple(expected.meta.encoding)
+    assert actual.meta.rgold == expected.meta.rgold
+    assert actual.meta.nsold == expected.meta.nsold
+    assert actual.meta.acquisition["digital_filter"]["applied"] is filtered
+    assert actual.meta.acquisition["dc_offset"]["applied"] is dc
+    assert actual.meta.acquisition["scan_gain"]["divisor"] == (
+        expected.meta.rgold[0] * expected.meta.nsold[0]
+    )
+    np.testing.assert_allclose(
+        actual.data, expected.data.conj(), rtol=2e-12, atol=2e-10
+    )
+    np.testing.assert_allclose(
+        actual.x.to("us").data, expected.x.data, rtol=2e-5, atol=0.005
+    )
+
+    if expected.meta.sf is not None:
+        for actual_fft, expected_fft in (
+            (actual.fft(), expected.fft()),
+            (actual.fft(ppm=False), expected.fft(ppm=False)),
+            (Experiment(actual).process(), Experiment(expected).process()),
+        ):
+            np.testing.assert_allclose(
+                actual_fft.data, expected_fft.data, rtol=1e-10, atol=1e-7
+            )
+            assert actual_fft.x.units == expected_fft.x.units
+            np.testing.assert_allclose(
+                actual_fft.x.data, expected_fft.x.data, atol=0.001
+            )
+
+    canonical = Experiment(actual).process(reference="acquisition")
+    np.testing.assert_allclose(
+        canonical.data,
+        np.fft.fftshift(np.fft.fft(actual.data, n=canonical.size)),
+        rtol=1e-10,
+        atol=1e-7,
+    )
 
 
 @pytest.mark.parametrize("filtered", [False, True])
 @pytest.mark.parametrize("dc", [False, True])
+@pytest.mark.parametrize("supported", [True, False])
 def test_synthetic_public_bruker_fid_parity(
-    provider, tmp_path, monkeypatch, filtered, dc
+    provider, tmp_path, monkeypatch, filtered, dc, supported
 ):
     path = tmp_path / "bruker" / "1"
     path.mkdir(parents=True)
     (path / "acqus").write_text(
         "##TITLE= Synthetic Bruker acquisition\n"
-        "##$TD= 256\n##$SW= 16\n##$SW_h= 2000\n##$SFO1= 125\n"
+        f"##$TD= {256 if supported else 128}\n"
+        "##$SW= 16\n##$SW_h= 2000\n##$SFO1= 125\n"
         "##$BF1= 125\n##$O1= 0\n##$AQ_mod= 3\n##$DECIM= 16\n"
         "##$DSPFVS= 12\n##$GRPDLY= 2.5\n##$BYTORDA= 1\n##$DTYPA= 0\n"
         "##$NUC1= <13C>\n##$NS= 4\n##$RG= 3\n##END=\n"
     )
     procs = path / "pdata" / "1" / "procs"
     procs.parent.mkdir(parents=True)
-    procs.write_text("##TITLE= Synthetic Bruker processing\n##$SF= 125\n##END=\n")
+    procs.write_text(
+        "##TITLE= Synthetic Bruker processing\n"
+        "##$SF= 125\n##$PHC0= 21\n##$PHC1= -8\n##END=\n"
+    )
     samples = np.arange(256, dtype=np.int32)
     (path / "fid").write_bytes((samples * (samples % 7 - 3)).astype(">i4").tobytes())
-    _check_public_fid(provider, path, filtered, dc, monkeypatch)
+    _check_public_fid(provider, path, filtered, dc, monkeypatch, supported=supported)
 
 
 @pytest.mark.parametrize("filtered", [False, True])

@@ -747,6 +747,7 @@ class Experiment:
                 phc0=phc0,
                 phc1=phc1,
                 explicit_arguments=explicit_arguments,
+                physical_fft=reference is not None,
             )
         elif self.is_frequency_domain:
             if self._nmr_meta.normalized_interop:
@@ -833,6 +834,7 @@ class Experiment:
         phc0: float,
         phc1: float,
         explicit_arguments: dict[str, bool],
+        physical_fft: bool,
     ) -> NDDataset:
         """Process time-domain data: apodize → zero-fill → FFT → phase."""
         work = ds.copy()
@@ -872,7 +874,7 @@ class Experiment:
                 applied["zero_filling"] = {"size": int(work.shape[-1])}
 
         # 3. FFT
-        work = work.fft()
+        work = work.fft(_interop_physical_fft=physical_fft)
         applied["fft"] = True
 
         # 3b. Encoding-specific intermediate phase convention adjustments

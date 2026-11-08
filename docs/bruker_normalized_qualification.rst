@@ -17,9 +17,22 @@ to the plugin::
    spectrum_ppm = Experiment(fid).process(size=32768, reference="acquisition")
 
 The qualification requirements pin the nmrglue-ng version used for these tests.
-The public TopSpin reader uses nmrglue-ng to decode raw 1D FIDs and
-applies its established filter, gain and time-axis conventions. The explicit
-interop example above uses the provider's normalized representation.
+The public TopSpin reader uses the normalized FID contract introduced in
+nmrglue-ng PR #197 when the installed provider supports it. For qualified
+complex 1D acquisitions, ``read_topspin()`` returns the dataset produced by
+``from_interop()``. The provider preserves the decoded length, applies the
+requested DC and filter corrections in order, and divides by NS times RG.
+
+Samples use the canonical complex convention. Compared with the historical
+TopSpin FID, this reverses the sign of the imaginary channel. Acquisition
+quadrature remains available as ``meta.acquisition_encoding``. The default
+FFT reproduces the historical spectrum and display axis using the provider's
+phase and display descriptors, when available. An explicit
+``Experiment(fid).process(reference="acquisition")`` uses the physical FFT
+grid and acquisition reference without the historical initial phase.
+
+Providers without the new contract and acquisitions outside its coverage
+continue through the previous reader path.
 
 The public reader also delegates complete Bruker 2D SER decoding to
 nmrglue-ng when the decoded layout matches the historical shape. The
@@ -27,14 +40,14 @@ plugin still applies the public reader's trace pairing, corrections, gain
 and axes. Incomplete traces and nonuniform sampling retain the historical
 reader path.
 
-Normalization explicitly trims zero padding to TD/2, optionally applies the
+The direct normalization example trims zero padding to TD/2, applies the
 existing truncated group-delay correction, and conjugates into the canonical
 DFT orientation. It preserves the original samples and raw metadata in the
 input result and records the transformations in ``applied_operations``.
 The neutral descriptor supplies BF1/O1 acquisition referencing. Its opaque
-``acquisition`` candidate must be selected explicitly; no processed-data SF
-reference or vendor phase/apodization recipe is replayed. Changing origin,
-profile identity or raw metadata does not change Experiment processing.
+``acquisition`` candidate selects the physical reference. The direct example does not replay
+the processed-data reference or the initial phase. Experiment uses normalized
+properties for these choices, independent of origin or profile identity.
 
 Qualified local acquisitions
 ----------------------------

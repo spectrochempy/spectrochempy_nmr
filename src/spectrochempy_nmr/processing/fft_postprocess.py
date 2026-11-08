@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import re
+from collections.abc import Mapping
 
 import numpy as np
 
@@ -15,6 +16,60 @@ def _meta_dim_index(new, dim):
         return new.dims.index(dim)
     axis, _ = new.get_axis(dim, negative_axis=False)
     return axis
+
+
+def _apply_interop_fft_presentation(dataset, dim, *, ppm, physical):
+    acquisition = dataset.meta.get("acquisition", {})
+    display = acquisition.get("fft_display_axis")
+    if physical:
+        width = acquisition.get("spectral_width_hz")
+        if width is not None:
+            size = dataset.shape[dataset.dims.index(dim)]
+            bins = (np.arange(size, dtype=float) - size // 2) * (float(width) / size)
+            dataset.coordset[dim] = Coord(
+                bins, units="Hz", title="frequency", rounding=False, sigdigits=15
+            )
+        if acquisition.get("fft_initial_phase") is not None:
+            from spectrochempy import ur  # noqa: PLC0415
+
+            dataset.meta.phc0 = [0 * ur.degree]
+            dataset.meta.phc1 = [0 * ur.degree]
+        return
+    if display is None:
+        return
+    from spectrochempy import ur  # noqa: PLC0415
+
+    if (
+        not isinstance(display, Mapping)
+        or display.get("grid") != "inclusive-endpoints"
+        or display.get("direction") != "decreasing"
+    ):
+        raise ValueError("unsupported interop FFT display grid")
+    center = float(display["center_hz"])
+    width = float(display["spectral_width_hz"])
+    frequency = float(display["reference_frequency_mhz"])
+    if not np.isfinite([center, width, frequency]).all() or min(width, frequency) <= 0:
+        raise ValueError("invalid interop FFT display calibration")
+    axis = dataset.coordset[dim]
+    size = axis.size
+    acquisition_width = acquisition.get("spectral_width_hz")
+    if size > 1 and acquisition_width is not None:
+        measured_width = np.ptp(axis.data) * size / (size - 1)
+        if not np.isclose(measured_width, acquisition_width, rtol=1e-3, atol=0):
+            return
+    step = -width / max(size - 1, 1)
+    coord = Coord.arange(size) * (step * ur.Hz) + (center + width / 2) * ur.Hz
+    coord.name = dim
+    coord.show_datapoints = False
+    coord.meta["acquisition_frequency"] = frequency * ur.MHz
+    nucleus = acquisition.get("nucleus") or ""
+    match = re.fullmatch(r"(\d+)([a-zA-Z]+)", nucleus)
+    label = f"^{{{match[1]}}}{match[2]}" if match else nucleus
+    coord.title = f"${label}$ frequency"
+    if ppm:
+        coord.ito("ppm")
+        coord.title = rf"$\delta\ {label}$"
+    dataset.coordset[dim] = coord
 
 
 def _fft_postprocess_result(new, dim=-1, inv=False, **kwargs):
@@ -55,6 +110,14 @@ def _fft_postprocess_result(new, dim=-1, inv=False, **kwargs):
         new.meta.readonly = False
         try:
             new.meta.data_domain = "time" if inv else "frequency"
+            if not inv:
+                axis = new.dims[_meta_dim_index(new, dim)]
+                _apply_interop_fft_presentation(
+                    new,
+                    axis,
+                    ppm=kwargs.get("ppm", True),
+                    physical=kwargs.get("_interop_physical_fft", False),
+                )
             reference = new.meta.get("frequency_reference")
             if inv and reference:
                 size = new.shape[0]
@@ -69,6 +132,16 @@ def _fft_postprocess_result(new, dim=-1, inv=False, **kwargs):
                 new.set_coordset(coord)
                 new.meta.last_frequency_reference = dict(reference)
                 new.meta.frequency_reference = None
+            elif inv:
+                acquisition = new.meta.get("acquisition", {})
+                if acquisition.get("fft_display_axis") is not None:
+                    width = acquisition["spectral_width_hz"]
+                    axis = new.dims[_meta_dim_index(new, dim)]
+                    new.coordset[axis] = Coord(
+                        np.arange(new.shape[0]) * (1e6 / width),
+                        units="us",
+                        title="time",
+                    )
         finally:
             new.meta.readonly = readonly
         return new
