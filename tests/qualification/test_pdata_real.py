@@ -7,6 +7,7 @@ import hashlib
 import json
 import os
 from pathlib import Path
+import re
 import shutil
 
 import numpy as np
@@ -195,3 +196,31 @@ def test_public_read_topspin_pdata_parity(
     assert actual.x.units == expected.x.units
     assert actual.x.title == expected.x.title
     assert json_encoder(actual.x.meta) == json_encoder(expected.x.meta)
+
+
+def test_public_read_topspin_falls_back_for_degenerate_calibration(
+    acquisition, provider, monkeypatch, tmp_path
+):
+    original, _ = acquisition
+    experiment = tmp_path / "bruker" / "1"
+    path = experiment / "pdata" / "1"
+    shutil.copytree(original, path)
+    shutil.copy2(original.parents[1] / "acqus", experiment / "acqus")
+    original_data = scp.read_topspin(path / "1r")
+    procs = path / "procs"
+    procs.write_bytes(
+        re.sub(rb"(?m)^##\$OFFSET=[^\r\n]*", b"##$OFFSET= 1e20", procs.read_bytes())
+    )
+    reader = import_module("spectrochempy_nmr.readers.read_topspin")
+    legacy_read = reader.read_pdata
+    calls = []
+
+    def record_legacy(*args, **kwargs):
+        calls.append(args[0])
+        return legacy_read(*args, **kwargs)
+
+    monkeypatch.setattr(reader, "read_pdata", record_legacy)
+    result = scp.read_topspin(path / "1r")
+    assert calls == [path]
+    np.testing.assert_array_equal(result.data, original_data.data)
+    np.testing.assert_array_equal(result.x.data, original_data.x.data)

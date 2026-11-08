@@ -975,27 +975,28 @@ def _read_processed_data(directory, acqus_files, procs_files):
     from spectrochempy_nmr.interop import from_interop  # noqa: PLC0415
 
     one_dimensional = (directory / "1r").is_file()
-    try:
-        if one_dimensional:
+    converted = None
+    if one_dimensional:
+        try:
             stored = interop.read_bruker_pdata(
                 directory,
                 acqus_files=acqus_files,
                 procs_files=procs_files,
                 all_components=True,
             )
-            normalized = interop.normalize_bruker_pdata(stored)
-        elif all((directory / name).is_file() for name in ("2rr", "2ri", "2ir", "2ii")):
+            converted = from_interop(interop.normalize_bruker_pdata(stored))
+        except ValueError:
+            # The public reader also accepts spectra outside the calibrated profile.
+            pass
+    elif all((directory / name).is_file() for name in ("2rr", "2ri", "2ir", "2ii")):
+        try:
             stored = interop.read_bruker_pdata_2d(directory)
-            normalized = interop.normalize_bruker_pdata_2d(stored)
+        except ValueError:
+            pass
         else:
-            normalized = None
-    except ValueError:
-        # The calibrated profiles are narrower than the historical reader.
-        normalized = None
+            converted = from_interop(interop.normalize_bruker_pdata_2d(stored))
 
-    if normalized is not None:
-        del stored
-        converted = from_interop(normalized)
+    if converted is not None:
         # Keep the public reader's parameter selection, axes and gain.
         metadata = read_procs_file(directory, procs_files)
         metadata.update(read_acqus_file(directory, acqus_files))
