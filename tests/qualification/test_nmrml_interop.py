@@ -145,3 +145,43 @@ def test_real_hop_nmrml(provider, tmp_path):
     result = Experiment(source).process()
     assert Experiment(result).source_kind == "processed_1d"
     assert path.read_bytes() == original
+
+
+def test_official_hsqc_echo_antiecho(provider, tmp_path):
+    xml = os.environ.get("NMRML_HSQC_XML")
+    ser = os.environ.get("NMRML_HSQC_SER")
+    if not xml or not ser:
+        pytest.skip("set NMRML_HSQC_XML and NMRML_HSQC_SER to the reference files")
+    assert hashlib.sha256(Path(xml).read_bytes()).hexdigest() == (
+        "3231a4769029f362863fb57c7adaaaf6aae304a65c503839b57e5ec02b320f82"
+    )
+    raw = Path(ser).read_bytes()
+    assert hashlib.sha1(raw).hexdigest() == "a979ed42e5a28066a476557d713c76ce081541da"
+    words = np.frombuffer(raw, dtype=">i4").reshape(256, 4096)
+    traces = words[:, ::2] + 1j * words[:, 1::2]
+
+    stored = provider.interop.read_nmrml_raw_2d(
+        xml, direct_point_count="scalar", official_hsqc_compatibility=True
+    )
+    dwell = 2 * 6.63e-05
+    normalized = provider.interop.normalize_nmrml_raw_2d(
+        stored, indirect_dwell_s=dwell, confirm_adjacent_pairs=True
+    )
+    source = from_interop(normalized)
+    path = tmp_path / "hsqc.scp"
+    source.write(path, confirm=False)
+    restored = scp.read(path)
+    for dataset in (source, restored):
+        assert dataset.dims == ["c", "y", "x"]
+        assert dataset.shape == (2, 128, 2048)
+        assert dataset.dtype == np.complex128
+        assert tuple(dataset.meta.branch_order) == ("first", "second")
+        assert dataset.meta.quadrature_mode == "echo-antiecho-stored-2d"
+        np.testing.assert_array_equal(dataset.c.labels, ["first", "second"])
+        np.testing.assert_array_equal(dataset.data[0], traces[::2])
+        np.testing.assert_array_equal(dataset.data[1], traces[1::2])
+        assert dataset.y.units == dataset.x.units == scp.ur.s
+        np.testing.assert_allclose(dataset.y.data, np.arange(128) * dwell, rtol=1e-12)
+        np.testing.assert_allclose(
+            dataset.x.data, np.arange(2048) / 7002.80112044818, rtol=1e-12
+        )

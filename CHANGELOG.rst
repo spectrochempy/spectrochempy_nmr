@@ -12,6 +12,9 @@ Unreleased
 Changed
 ~~~~~~~
 
+* Import normalized raw 2D echo/anti-echo acquisitions through
+  ``from_interop()``, preserving both complex branches and time axes.
+
 * Process imported States-TPPI acquisitions with ``Experiment.process()``.
   Qualify both FFTs and the cross-pairs against NMRPipe and return four
   labelled real spectral planes with centred Hz axes.

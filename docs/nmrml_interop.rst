@@ -1,19 +1,14 @@
-Explicit nmrML 1D exchange-format qualification
-===============================================
+nmrML exchange-format qualification
+===================================
 
-This optional path consumes nmrglue-ng's normalized 1D results through the
-existing generic ``from_interop`` and ``Experiment`` APIs. It adds no runtime
-source change, provider dependency or automatic reader dispatch. nmrML is an
-exchange format; this does not add native Varian processed reading.
+nmrML is an exchange format. Install nmrglue-ng and ``xmltodict`` to read it
+and pass normalized results to ``from_interop()``. For supported 1D acquisitions,
+``Experiment`` can also perform the FFT.
 
 Processed spectra
 -----------------
 
-The qualification requirements pin provider commit
-``0a7421795a9008c57eb63d6d747debc45ecf7135`` from
-`provider PR #160 <https://github.com/spectrochempy/nmrglue-ng/pull/160>`_.
-It is an unreleased candidate, not a capability promised by older provider
-packages. Install that optional provider and ``xmltodict`` separately::
+The qualification tests use the nmrglue-ng 1.2.0 wheel and ``xmltodict``::
 
     import nmrglue as ng
     from spectrochempy_nmr import from_interop
@@ -81,6 +76,43 @@ a skipped test is not qualification. The dedicated CI path installs the pinned
 provider and XML dependency, verifies provenance and downloads checksum-pinned
 originals. Public access supports local validation, not a redistribution claim.
 
-No multidimensional, nonuniform, XY-pair, native processed Varian, universal
-conversion or unqualified chemical-reference claim is made. No package release
-or upstream publication follows from this qualification.
+Raw 2D echo/anti-echo
+---------------------
+
+With nmrglue-ng 1.2.0 and ``xmltodict``, the official HSQC example can be
+read in storage order, grouped into adjacent pairs, and imported as an
+acquisition::
+
+    import nmrglue as ng
+    from spectrochempy_nmr import from_interop
+
+    stored = ng.interop.read_nmrml_raw_2d(
+        "bmse000400-exp06.nmrML",
+        direct_point_count="scalar",
+        official_hsqc_compatibility=True,
+    )
+    normalized = ng.interop.normalize_nmrml_raw_2d(
+        stored, indirect_dwell_s=132.6e-6, confirm_adjacent_pairs=True
+    )
+    source = from_interop(normalized)
+
+The point-count convention and compatibility option are specific to this
+document. The pulse program advances the indirect evolution after each pair.
+It contains two evolution delays, giving a dwell of twice the 66.3 µs increment
+recorded in the acquisition status. Use evidence from the acquisition when
+choosing these settings for another file.
+
+The dataset has dimensions ``(c, y, x)``. The component coordinate labels the
+first and second stored branches, and the other coordinates give F1 and F2
+times in seconds. Import preserves the real and imaginary samples, their signs,
+and their order. Reconstruction and FFT processing of this acquisition in
+``Experiment`` are separate work.
+
+For local qualification, download the
+`official HSQC XML <https://nmrml.org/examples/6/bmse000400-exp06.nmrML>`_
+and extract ``ser`` from the
+`matching BMRB archive <https://bmrb.io/metabolomics/mol_summary/zip_entry_directory.php?experiment=6&id=bmse000400>`_.
+Set ``NMRML_HSQC_XML`` and ``NMRML_HSQC_SER`` to the downloaded file paths
+and run ``pytest tests/qualification/test_nmrml_interop.py -k official_hsqc``.
+The test verifies both file hashes, compares both branches against the native
+SER, and verifies SCP persistence.
