@@ -12,6 +12,9 @@ Unreleased
 Changed
 ~~~~~~~
 
+* Delegate compatible Bruker 2D SER decoding to nmrglue-ng and preserve
+  the TopSpin reader's recovery path for incomplete acquisitions.
+
 * Delegate Bruker 1D FID decoding to nmrglue-ng. The public TopSpin reader
   keeps its digital-filter and DC-offset options, gain normalization and axes.
 

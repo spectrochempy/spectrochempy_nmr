@@ -34,6 +34,7 @@ from spectrochempy.utils._logging import warning_
 from spectrochempy.utils.meta import Meta
 from spectrochempy_nmr.extern.nmrglue import read_fid
 from spectrochempy_nmr.extern.nmrglue import read_pdata
+from spectrochempy_nmr.extern.nmrglue._bruker import guess_shape
 from spectrochempy_nmr.extern.nmrglue._bruker import read_acqus_file
 from spectrochempy_nmr.extern.nmrglue._bruker import read_procs_file
 from spectrochempy_nmr.readers._channels import pair_traces
@@ -1008,13 +1009,13 @@ def _read_processed_data(directory, acqus_files, procs_files):
 
 
 def _read_raw_data(directory, filename, acqus_files, procs_files):
-    if filename == "fid":
+    if filename == "fid" or (filename == "ser" and not (directory / "fid").is_file()):
         from nmrglue import bruker  # noqa: PLC0415
 
         try:
             metadata, data = bruker.read(
                 directory,
-                bin_file="fid",
+                bin_file=filename,
                 acqus_files=acqus_files,
                 procs_files=procs_files,
                 read_pulseprogram=(directory / "pulseprogram").is_file(),
@@ -1023,9 +1024,20 @@ def _read_raw_data(directory, filename, acqus_files, procs_files):
             # Preserve the historical diagnostics for unsupported acquisitions.
             pass
         else:
-            parmode = metadata["acqus"].setdefault("PARMODE", 0)
-            if parmode == 0 and data.ndim == 1:
-                return metadata, data
+            expected_parmode = int(filename == "ser")
+            acqus = metadata["acqus"]
+            parmode = acqus.setdefault("PARMODE", expected_parmode)
+            if parmode == expected_parmode and data.ndim == expected_parmode + 1:
+                if filename == "fid":
+                    return metadata, data
+                if acqus.get("FnTYPE", 0) != 2:
+                    # nmrglue-ng can infer a 2D layout for incomplete SERs.
+                    # Keep the historical flat-read recovery for those files.
+                    shape, complex_direct = guess_shape(metadata)
+                    if complex_direct:
+                        shape = (*shape[:-1], shape[-1] // 2)
+                    if data.shape == shape:
+                        return metadata, data
 
     return read_fid(directory, acqus_files=acqus_files, procs_files=procs_files)
 

@@ -187,8 +187,10 @@ jobs:
         run: |
           python -I -m pytest -ra tests/test_linear_prediction.py tests/test_fft_encodings.py tests/test_fft_2d_characterization.py tests/test_nmrpipe_oracle_conventions.py tests/test_nmrpipe_states_tppi_oracle.py tests/test_nmrpipe_echo_antiecho_oracle.py tests/test_native_readers.py tests/test_fft_prevalidation_compatibility.py tests/test_complex_channels.py tests/test_quadrature.py tests/test_agilent_noesy_processing.py tests/test_interop_conversion.py tests/test_agilent_interop_facade.py tests/test_agilent_reference.py tests/test_experiment_interop.py tests/test_processed_interop.py tests/test_processing_architecture.py
 
-      - name: Qualify public TopSpin four-plane migration
-        run: python -I -m pytest -ra tests/qualification/test_bruker_pdata_2d.py -k "synthetic and public_reader"
+      - name: Qualify public TopSpin migrations
+        run: |
+          python -I -m pytest -ra tests/qualification/test_bruker_pdata_2d.py -k "synthetic and public_reader"
+          python -I -m pytest -ra tests/qualification/test_bruker_ser_migration.py -k synthetic
 
   pinned-core:
     needs: pinned-core-tests
