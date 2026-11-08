@@ -12,6 +12,9 @@ Unreleased
 Changed
 ~~~~~~~
 
+* Delegate qualified Bruker 1D ``pdata`` to nmrglue-ng while preserving
+  TopSpin reader data, gain normalization, metadata, and axis options.
+
 * Depend on nmrglue-ng and delegate qualified Bruker 2D ``pdata`` decoding
   to it while preserving the public TopSpin reader's channels and axes.
 

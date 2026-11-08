@@ -14,7 +14,11 @@ The same converter and Experiment accept already-frequency-domain spectra::
    ppm_axis = spectrum.coord(0).to("ppm")
 
 The qualification requirements pin the nmrglue-ng version used for these tests.
-The ordinary public readers keep their existing route; no core change is needed.
+``read_topspin()`` delegates qualified Bruker 1D ``pdata`` to nmrglue-ng
+and preserves the public reader's real or complex data, receiver gain,
+metadata and coordinate conventions. The ``proc_axis=True`` option retains
+its existing behavior. Profiles outside the calibrated contract continue
+through the historical reader.
 
 ``process()`` recognizes the supplied frequency domain and preserves samples
 and coordinates. It does not run another FFT, apodization, zero filling or
