@@ -7,6 +7,7 @@ import json
 from pathlib import Path
 
 import numpy as np
+import pytest
 import spectrochempy as scp
 
 
@@ -174,5 +175,14 @@ def test_experiment_imported_states_tppi_matches_raw_nmrpipe_checkpoints(monkeyp
     assert spectrum.meta.tppi_alternation_state == "applied"
     assert source.meta.tppi_alternation_state == "encoded"
     assert Experiment(spectrum).source_kind == "processed_2d"
+    with pytest.raises(NotImplementedError):
+        Experiment(spectrum).process()
+    with pytest.raises(ValueError, match="FFT only"):
+        Experiment(source).process(phase="manual")
+    for coord, width in zip((spectrum.y, spectrum.x), widths, strict=True):
+        assert coord.units == scp.ur.Hz
+        assert coord.data[coord.size // 2] == 0
+        np.testing.assert_allclose(np.diff(coord.data), -width / coord.size, rtol=1e-12)
+
     np.testing.assert_array_equal(source.data.real, padded[::2])
     np.testing.assert_array_equal(source.data.imag, padded[1::2])
