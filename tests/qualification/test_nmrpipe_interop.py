@@ -453,3 +453,43 @@ def test_nmrpipe_four_component_reference(provider, tmp_path):
     )
     _check_four_component_nmrpipe(provider, current, ("F1", "F2"), 2, 8, tmp_path)
     assert source.read_bytes() == original
+
+
+def test_nmrpipe_raw_qf_2d_reference(provider, tmp_path):
+    configured = os.environ.get("NMR_PIPE_QF_2D_REFERENCE")
+    if not configured:
+        pytest.skip("configure a complete raw NMRPipe QF reference")
+    path = Path(configured)
+    original = path.read_bytes()
+    marker = np.float32(2.345)
+    dtype = (
+        "<f4" if np.frombuffer(original, dtype="<f4", count=3)[2] == marker else ">f4"
+    )
+    words = np.frombuffer(original, dtype=dtype)
+    assert words[2] == marker
+    # FDSPECNUM and FDSIZE count real rows and complex direct samples.
+    rows, cols = (int(words[index]) for index in (219, 99))
+    binary = words[512:].reshape(rows, 2 * cols)
+    stored = provider.interop.read(path)
+    normalized = provider.interop.normalize(stored, confirm_time_grid=True)
+    dataset = from_interop(normalized)
+    assert dataset.meta.axis_roles == ("F1", "F2")
+    assert dataset.meta.interop_complex_axis == "F2"
+    assert dataset.meta.data_domain == "time"
+    np.testing.assert_array_equal(dataset.data.real, binary[:, :cols])
+    np.testing.assert_array_equal(dataset.data.imag, binary[:, cols:])
+    for coord, count, width in (
+        (dataset.y, rows, words[229]),
+        (dataset.x, cols, words[100]),
+    ):
+        assert coord.units == scp.ur.s
+        np.testing.assert_allclose(coord.data, np.arange(count) / width, rtol=1e-13)
+    target = tmp_path / "qf.scp"
+    dataset.write(target, confirm=False)
+    restored = scp.read(target)
+    np.testing.assert_array_equal(restored.data, dataset.data)
+    np.testing.assert_array_equal(restored.x.data, dataset.x.data)
+    np.testing.assert_array_equal(restored.y.data, dataset.y.data)
+    assert restored.meta.interop_complex_axis == "F2"
+    assert restored.meta.acquisition["indirect_sampling"] == "qf"
+    assert path.read_bytes() == original

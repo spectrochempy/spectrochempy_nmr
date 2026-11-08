@@ -155,8 +155,29 @@ before and after a final ``TP``. This sequence was qualified with NMRPipe
 and their persistence with the component labels in an SCP round trip. The
 core SCP reader can widen float32 to float64 while preserving sample values.
 
-These paths qualify conversion to ``NDDataset``. Raw and mixed-domain 2D
-inputs and 2D processing through ``Experiment`` remain outside the bridge.
+Import a normalized raw 2D QF FID
+---------------------------------
+
+This bridge requires a provider with NMRPipe raw QF normalization support,
+which follows the nmrglue-ng 1.2.0 release. The NMRPipe provider qualifies
+non-transposed QF files. For a known complete QF grid::
+
+   stored = ng.interop.read("qf.fid")
+   fid = from_interop(ng.interop.normalize(stored, confirm_time_grid=True))
+
+The provider explicitly identifies QF and supplies the original time grids
+in seconds. F1 is sampled as real, and F2 is complex. The resulting
+``NDDataset`` preserves the file's physical axis order, samples and imaginary
+sign. ``fid.meta.interop_complex_axis`` identifies F2. Both axes are temporal.
+TPPI and mixed-domain inputs require a separate contract.
+
+Set ``NMR_PIPE_QF_2D_REFERENCE`` to a complete, non-transposed NMRPipe QF FID
+to compare the stored samples and both time grids and check SCP persistence::
+
+   python -I -m pytest tests/qualification/test_nmrpipe_interop.py::test_nmrpipe_raw_qf_2d_reference
+
+These paths qualify conversion to ``NDDataset``. Processing these 2D inputs
+through ``Experiment`` remains a separate qualification.
 
 Report reproducible import/processing problems in the
 `spectrochempy_nmr issue tracker

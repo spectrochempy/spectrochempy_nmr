@@ -333,3 +333,43 @@ def test_import_bruker_named_planes_without_reinterpreting_labels(dtype):
     source.branch_order = ("2rr", "2ir", "2ri", "2ii")
     with pytest.raises(ValueError, match="from_interop 2D requires"):
         from_interop(source)
+
+
+@pytest.mark.parametrize("transposed", [False, True])
+@pytest.mark.parametrize("rows", [1, 3])
+def test_import_normalized_qf_fid_preserves_axes_and_samples(transposed, rows):
+    source = _complex_plane()
+    source.data = source.data[:, :rows]
+    source.domains = ("time", "time")
+    source.acquisition["indirect_sampling"] = "qf"
+    for axis, size, width in zip(source.axes, (rows, 8), (1000, 4000), strict=True):
+        axis.values = np.arange(size) / width
+        axis.unit = "s"
+        axis.domain = "time"
+        axis.direction = "increasing"
+    if transposed:
+        source.data = source.data.transpose(0, 2, 1)
+        source.axes = source.axes[::-1]
+        source.physical_dimensions = source.physical_dimensions[::-1]
+        source.dimensions = ("channels", *source.physical_dimensions)
+        source.encoding = ("complex", "real")
+        source.branch_order = ("rr", "ir")
+    dataset = from_interop(source)
+    assert dataset.meta.axis_roles == source.physical_dimensions
+    assert dataset.meta.isfreq == [False, False]
+    assert dataset.meta.data_domain == "time"
+    assert dataset.meta.interop_complex_axis == "F2"
+    assert dataset.meta.acquisition["indirect_sampling"] == "qf"
+    assert dataset.dtype == np.complex64
+    np.testing.assert_array_equal(dataset.data.real, source.data[0])
+    np.testing.assert_array_equal(dataset.data.imag, source.data[1])
+    for coordinate, axis in zip((dataset.y, dataset.x), source.axes, strict=True):
+        assert coordinate.units == scp.ur.s
+        np.testing.assert_array_equal(coordinate.data, axis.values)
+
+
+def test_import_time_plane_requires_qf_marker():
+    source = _complex_plane()
+    source.domains = ("time", "time")
+    with pytest.raises(ValueError, match="requires a normalized"):
+        from_interop(source)
