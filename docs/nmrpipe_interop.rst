@@ -127,9 +127,36 @@ This test creates a temporary complex reference with NMRPipe
 and SCP persistence. It is a Hilbert transform of the real spectrum, so it
 does not establish the original acquired quadrature.
 
+Import a processed 2D plane with four components
+-------------------------------------------------
+
+Use the same storage reader and normalization for a fully frequency-domain
+NMRPipe plane with both dimensions complex. The dataset has dimensions
+``(c, y, x)`` and preserves the four real planes and their floating-point
+dtype. The ``c`` coordinate labels are ``rr``, ``ri``, ``ir`` and ``ii``.
+For example, ``spectrum.c`` identifies the branches and ``spectrum.data[1]``
+contains ``ri``. The first letter describes the row axis and the second the
+column axis in the supplied physical order. Consult ``spectrum.meta.axis_roles``
+to map those axes to F1 and F2. The converter keeps that order and the stored
+signs. Hypercomplex is optional for this import.
+
+CI compares both physical orders against the binary words of synthetic
+NMRPipe files. To reproduce the external reference, download the pinned
+`2D FID fixture
+<https://github.com/spectrochempy/nmrglue-ng/blob/14f5ee8b06592060a987cbd12f79c6e9a36c8a20/tests/fixtures/fileio/data/nmrpipe_2d_time.fid>`_,
+set ``NMR_PIPE_2D_FID_REFERENCE`` to its path and set
+``NMR_PIPE_EXECUTABLE`` to the NMRPipe executable::
+
+   python -I -m pytest tests/qualification/test_nmrpipe_interop.py::test_nmrpipe_four_component_reference
+
+The test runs ``FT -auto``, ``TP``, then ``FT -auto`` and qualifies the output
+before and after a final ``TP``. This sequence was qualified with NMRPipe
+13.0 Rev 2026.072.12.03. The test checks all samples, both calibrated axes,
+and their persistence with the component labels in an SCP round trip. The
+core SCP reader can widen float32 to float64 while preserving sample values.
+
 These paths qualify conversion to ``NDDataset``. Raw and mixed-domain 2D
-inputs, four-component planes, and 2D processing through ``Experiment``
-remain outside the bridge.
+inputs and 2D processing through ``Experiment`` remain outside the bridge.
 
 Report reproducible import/processing problems in the
 `spectrochempy_nmr issue tracker
