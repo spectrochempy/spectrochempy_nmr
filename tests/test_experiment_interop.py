@@ -150,3 +150,28 @@ def test_direct_fft_uses_sample_spacing_after_decimation(display):
     np.testing.assert_allclose(spectrum.x.data, expected, atol=1e-9)
     with pytest.raises(ValueError, match="complete ascending centered FFT grid"):
         reference_interop_1d(spectrum, reference="primary")
+
+
+def test_fid_preparation_rejects_stale_grid_and_wrong_operation_order():
+    source = _fid()
+    source.meta.acquisition["fid_preparation"] = {
+        "schema": "fid-preparation-v1",
+        "complex_convention": "centered-negative-exponent-dft",
+        "sample_count": source.size,
+        "digital_filter": {"state": "not-required"},
+        "scan_gain": {"state": "available", "divisor": 2.0},
+    }
+    with pytest.raises(ValueError, match="original calibrated time grid"):
+        Experiment(source[::2]).prepare_fid(normalize_scan_gain=True)
+    prepared = Experiment(source).prepare_fid(
+        digital_filter="time", normalize_scan_gain=True
+    )
+    np.testing.assert_array_equal(prepared.data, source.data / 2)
+    assert not prepared.meta.acquisition["digital_filter"]["applied"]
+    again = Experiment(prepared).prepare_fid(
+        digital_filter="time", normalize_scan_gain=True
+    )
+    np.testing.assert_array_equal(again.data, prepared.data)
+    with pytest.raises(ValueError, match="preparation order"):
+        Experiment(prepared).prepare_fid(remove_dc_offset=True)
+    assert "scan_gain" not in source.meta.acquisition

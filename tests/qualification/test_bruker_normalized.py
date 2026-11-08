@@ -195,6 +195,12 @@ def test_synthetic_provider_binary_to_experiment_chain(provider, tmp_path, filte
         result.x.data, (250 - (np.arange(64) - 32) * 2000 / 64) / 125, atol=1e-12
     )
     assert source.meta.acquisition["trimmed_padding_points"] == 96
+    if "fid_preparation" in normalized.acquisition:
+        uncorrected = from_interop(provider.interop.normalize_bruker_fid(raw))
+        deferred = Experiment(uncorrected).prepare_fid(
+            digital_filter="time" if filtered else None
+        )
+        np.testing.assert_allclose(deferred.data, source.data, atol=1e-12)
 
 
 def _check_public_fid(provider, path, filtered, dc, monkeypatch, *, supported=True):
@@ -316,3 +322,52 @@ def test_real_public_bruker_fid_parity(
 ):
     path, _ = acquisition
     _check_public_fid(provider, path, filtered, dc, monkeypatch)
+
+
+def test_real_deferred_preparation_matches_public_fid(provider, acquisition):
+    if "acqus_files" not in signature(provider.interop.read_bruker_fid).parameters:
+        pytest.skip("requires the deferred preparation provider contract")
+    path, _ = acquisition
+    raw = provider.interop.read_bruker_fid(
+        path,
+        acqus_files=[p for p in (path / "acqu", path / "acqus") if p.is_file()],
+        procs_files=list((path / "pdata" / "1").glob("proc*")),
+        read_pulseprogram=False,
+    )
+    normalized = provider.interop.normalize_bruker_fid(raw, preserve_storage=True)
+    if "fid_preparation" not in normalized.acquisition:
+        pytest.skip("requires the deferred preparation provider contract")
+    source = from_interop(normalized)
+    options = dict(
+        remove_dc_offset=True, digital_filter="time", normalize_scan_gain=True
+    )
+    prepared = Experiment(source).prepare_fid(**options)
+    public = scp.read_topspin(path / "fid", remove_dc_offset=True)
+    assert public.meta.normalization_profile == "bruker-fid-1d-complex-v1"
+    np.testing.assert_allclose(prepared.data, public.data, rtol=2e-12, atol=2e-10)
+    np.testing.assert_allclose(
+        prepared.x.to("s").data, public.x.to("s").data, atol=1e-12
+    )
+    prepared_fft = Experiment(prepared).process()
+    public_fft = Experiment(public).process()
+    np.testing.assert_allclose(
+        prepared_fft.data, public_fft.data, rtol=2e-12, atol=2e-8
+    )
+    assert prepared_fft.x.units == public_fft.x.units
+    if prepared_fft.x.units == scp.ur.Hz:
+        # The core rounds the default Hz display differently for s and us inputs.
+        prepared_fft = Experiment(prepared).process(reference="acquisition")
+        public_fft = Experiment(public).process(reference="acquisition")
+    np.testing.assert_allclose(prepared_fft.x.data, public_fft.x.data, atol=0.001)
+    np.testing.assert_array_equal(source.data, normalized.data)
+    assert not source.meta.acquisition["dc_offset"]["applied"]
+    assert (
+        len(prepared.meta.applied_operations) == len(source.meta.applied_operations) + 1
+    )
+    again = Experiment(prepared).prepare_fid(**options)
+    np.testing.assert_array_equal(again.data, prepared.data)
+    assert again.meta.applied_operations == prepared.meta.applied_operations
+    dc = Experiment(source).prepare_fid(remove_dc_offset=True)
+    filtered = Experiment(dc).prepare_fid(digital_filter="time")
+    staged = Experiment(filtered).prepare_fid(normalize_scan_gain=True)
+    np.testing.assert_array_equal(staged.data, prepared.data)

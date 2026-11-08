@@ -76,7 +76,7 @@ jobs:
         uses: actions/checkout@v7
         with:
           repository: spectrochempy/nmrglue-ng
-          ref: 9ebe74934e695213d69072715651e2ca27f8c6c7
+          ref: c49375dd2b873c063ec3c5f337971d221589b712
           fetch-depth: 0
           path: provider-candidate
           persist-credentials: false
@@ -92,3 +92,4 @@ jobs:
           assert "preserve_storage" in signature(normalize_bruker_fid).parameters
           PY
           python -I -m pytest -ra tests/qualification/test_bruker_normalized.py -k synthetic
+          python -I -m pytest -ra tests/test_experiment_interop.py -k fid_preparation

@@ -477,6 +477,34 @@ class Experiment:
     # Processing
     # ------------------------------------------------------------------
 
+    def prepare_fid(
+        self,
+        *,
+        remove_dc_offset: bool = False,
+        digital_filter: str | None = None,
+        normalize_scan_gain: bool = False,
+    ) -> NDDataset:
+        """Prepare a copy of a normalized complex 1D FID before processing.
+
+        Select complex-mean subtraction, the provider's time-domain digital
+        filter, and scan/gain normalization explicitly. Existing corrections
+        are retained and never repeated.
+        """
+        if (
+            self.is_multi_dataset
+            or self.ndim != 1
+            or not (self.is_time_domain and self._nmr_meta.normalized_interop)
+        ):
+            raise ValueError("FID preparation requires one normalized 1D acquisition")
+        from .processing.fid_preparation import prepare_fid  # noqa: PLC0415
+
+        return prepare_fid(
+            self.dataset,
+            remove_dc_offset=remove_dc_offset,
+            digital_filter=digital_filter,
+            normalize_scan_gain=normalize_scan_gain,
+        )
+
     def process(
         self,
         *,
