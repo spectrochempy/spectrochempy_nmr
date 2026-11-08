@@ -3,7 +3,6 @@
 from copy import deepcopy
 from importlib import import_module
 from importlib.metadata import distribution
-from inspect import signature
 import hashlib
 import json
 import os
@@ -59,8 +58,7 @@ def provider():
     import nmrglue as ng
 
     dist = distribution("nmrglue-ng")
-    candidate = os.environ.get("NMRGLUE_NG_QUALIFICATION_SOURCE")
-    location = Path(candidate) / "nmrglue" if candidate else dist.locate_file("nmrglue")
+    location = dist.locate_file("nmrglue")
     assert Path(ng.__file__).resolve().is_relative_to(Path(location).resolve())
     return ng
 
@@ -202,15 +200,6 @@ def test_public_read_topspin_pdata_parity(
     np.testing.assert_array_equal(actual.data, expected.data)
     assert actual.x.units == expected.x.units
     assert actual.x.title == expected.x.title
-    if (
-        "axis_reference"
-        not in signature(provider.interop.normalize_bruker_pdata).parameters
-    ):
-        assert json_encoder(actual.meta) == json_encoder(expected.meta)
-        np.testing.assert_array_equal(actual.x.data, expected.x.data)
-        assert json_encoder(actual.x.meta) == json_encoder(expected.x.meta)
-        return
-
     assert len(converted) == 1 and actual is converted[0]
     assert actual.x.meta.acquisition_frequency == expected.x.meta.acquisition_frequency
     sfo = expected.x.meta.acquisition_frequency.to("MHz").magnitude
@@ -271,14 +260,7 @@ def test_public_read_topspin_falls_back_for_degenerate_calibration(
     np.testing.assert_array_equal(result.x.data, original_data.x.data)
 
 
-def test_public_read_topspin_fallback_does_not_reapply_gain(
-    acquisition, provider, monkeypatch
-):
-    if (
-        "axis_reference"
-        not in signature(provider.interop.normalize_bruker_pdata).parameters
-    ):
-        pytest.skip("requires the provider axis and gain contract")
+def test_public_read_topspin_fallback_does_not_reapply_gain(acquisition, monkeypatch):
     path, _ = acquisition
     converter = import_module("spectrochempy_nmr.interop")
     expected = scp.read_topspin(path / "1r")

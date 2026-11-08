@@ -23,7 +23,6 @@ __all__ = ["read_topspin"]
 import contextlib
 import re
 from datetime import datetime
-from inspect import signature
 
 import numpy as np
 
@@ -986,29 +985,26 @@ def _read_processed_data(directory, acqus_files, procs_files, *, proc_axis):
                 procs_files=procs_files,
                 all_components=True,
             )
-            normalize = interop.normalize_bruker_pdata
-            if "axis_reference" in signature(normalize).parameters:
-                normalized = normalize(
-                    stored,
-                    axis_reference="processing" if proc_axis else "acquisition",
-                    normalize_receiver_gain=True,
-                )
-                acquisition_frequency = normalized.acquisition.get(
-                    "acquisition_frequency_mhz"
-                )
-                if acquisition_frequency is None:
-                    raise ValueError("TopSpin pdata requires an acquisition frequency")
-                candidate = from_interop(normalized)
-                coord = candidate.x.to("ppm")
-                coord.meta["acquisition_frequency"] = acquisition_frequency * ur.MHz
-                coord.meta["reference_frequency"] = (
-                    normalized.axes[0].reference.observation_frequency * ur.MHz
-                )
-                candidate.set_coordset(x=coord)
-                # Retain legacy display metadata from the same parse. Signal
-                # values, corrections and the calibrated grid come from interop.
-                return stored.metadata, candidate.data, candidate
-            converted = from_interop(normalize(stored))
+            normalized = interop.normalize_bruker_pdata(
+                stored,
+                axis_reference="processing" if proc_axis else "acquisition",
+                normalize_receiver_gain=True,
+            )
+            acquisition_frequency = normalized.acquisition.get(
+                "acquisition_frequency_mhz"
+            )
+            if acquisition_frequency is None:
+                raise ValueError("TopSpin pdata requires an acquisition frequency")
+            candidate = from_interop(normalized)
+            coord = candidate.x.to("ppm")
+            coord.meta["acquisition_frequency"] = acquisition_frequency * ur.MHz
+            coord.meta["reference_frequency"] = (
+                normalized.axes[0].reference.observation_frequency * ur.MHz
+            )
+            candidate.set_coordset(x=coord)
+            # Retain legacy display metadata from the same parse. Signal
+            # values, corrections and the calibrated grid come from interop.
+            return stored.metadata, candidate.data, candidate
         except ValueError:
             # The public reader also accepts spectra outside the calibrated profile.
             pass
@@ -1024,8 +1020,7 @@ def _read_processed_data(directory, acqus_files, procs_files, *, proc_axis):
         # Keep the public reader's parameter selection, axes and gain.
         metadata = read_procs_file(directory, procs_files)
         metadata.update(read_acqus_file(directory, acqus_files))
-        data = converted.data if one_dimensional else list(converted.data)
-        return metadata, data, None
+        return metadata, list(converted.data), None
 
     metadata, data = read_pdata(
         directory, acqus_files=acqus_files, procs_files=procs_files, all_components=True

@@ -20,9 +20,8 @@ metadata and coordinate conventions. The ``proc_axis=True`` option retains
 its existing behavior. Profiles outside the calibrated contract continue
 through the historical reader.
 
-With a provider supporting acquisition and processing axis selection and
-receiver-gain normalization, the public reader returns the dataset built
-by ``from_interop()``. It keeps the acquisition frequency (``SFO1``) in
+For qualified Bruker 1D spectra, the public reader returns the dataset built
+by ``from_interop()`` using the nmrglue-ng 1.2.1 axis and receiver-gain contract. It keeps the acquisition frequency (``SFO1``) in
 coordinate metadata. With ``proc_axis=True``, ppm/Hz conversions use the
 processing reference (``SF``), which can differ from ``SFO1``.
 The operation trace records receiver gain separately from ``NC_proc``.
