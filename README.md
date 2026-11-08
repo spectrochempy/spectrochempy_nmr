@@ -2,6 +2,12 @@
 
 NMR plugin for SpectroChemPy.
 
+> [!WARNING]
+> **Experimental plugin.** The public API is still evolving. Function
+> signatures, options, and behavior may change between releases, including in
+> workflows that have already been validated. Check the changelog before
+> upgrading. [Changelog](CHANGELOG.rst)
+
 The first standalone release is **0.2.0**. See [EXTRACTION.md](EXTRACTION.md)
 for the historical extraction baseline and validation scope. Development
 features described below may postdate that release.
