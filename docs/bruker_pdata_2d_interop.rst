@@ -1,5 +1,5 @@
 Bruker processed 2D interop (Unreleased)
-=======================================
+========================================
 
 For a complete Bruker ``pdata`` directory containing ``2rr``, ``2ri``, ``2ir``
 and ``2ii``, use the qualified reader from the optional ``nmrglue-ng``
