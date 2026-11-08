@@ -16,9 +16,8 @@ to the plugin::
    spectrum_hz = Experiment(fid).process(size=32768)
    spectrum_ppm = Experiment(fid).process(size=32768, reference="acquisition")
 
-Use the qualification requirements file for the pinned optional nmrglue-ng
-provider. It remains a test-only dependency, not a plugin runtime requirement.
-The standard public reader still follows its existing legacy route.
+The qualification requirements pin the nmrglue-ng version used for these tests.
+The public TopSpin reader keeps its historical route for raw 1D data.
 
 Normalization explicitly trims zero padding to TD/2, optionally applies the
 existing truncated group-delay correction, and conjugates into the canonical

@@ -2,7 +2,7 @@ Bruker processed 2D interop (Unreleased)
 ========================================
 
 For a complete Bruker ``pdata`` directory containing ``2rr``, ``2ri``, ``2ir``
-and ``2ii``, use the qualified reader from the optional ``nmrglue-ng``
+and ``2ii``, use the qualified reader from the ``nmrglue-ng``
 provider::
 
    import nmrglue as ng
@@ -37,3 +37,15 @@ This qualifies conversion of complete, already processed planes. The
 provider's storage-only reader also supports layouts outside this
 calibrated profile. Raw processing and processing via ``Experiment``
 remain separate.
+
+Public TopSpin reader
+---------------------
+
+``scp.read_topspin()`` delegates complete, calibrated four-plane int32
+``pdata`` to nmrglue-ng. It preserves its two complex channels
+``S_R = 2rr + i*2ir`` and ``S_I = 2ri + i*2ii``, the receiver-gain
+normalization, its metadata and the default and ``proc_axis=True`` axes.
+Each component filename still opens the assembled spectrum. Layouts outside
+the qualified profile continue through the historical reader. Use the
+explicit interop example above for separate planes and provider-calibrated
+Hz coordinates.

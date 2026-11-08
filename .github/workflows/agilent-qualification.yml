@@ -54,7 +54,7 @@ jobs:
       - name: Run processed-spectrum real-provider qualification
         run: python -I -m pytest -ra tests/qualification/test_pdata_real.py
       - name: Qualify synthetic four-component Bruker pdata
-        run: python -I -m pytest -ra tests/qualification/test_bruker_pdata_2d.py -k synthetic
+        run: python -I -m pytest -ra tests/qualification/test_bruker_pdata_2d.py -k "synthetic and not public_reader"
 
       - name: Run synthetic NMRPipe normalized-provider qualification
         run: python -I -m pytest -ra tests/qualification/test_nmrpipe_interop.py -k synthetic

@@ -13,7 +13,7 @@ The same converter and Experiment accept already-frequency-domain spectra::
    spectrum = Experiment(from_interop(normalized)).process()
    ppm_axis = spectrum.coord(0).to("ppm")
 
-The optional external provider is pinned in the qualification requirements.
+The qualification requirements pin the nmrglue-ng version used for these tests.
 The ordinary public readers keep their existing route; no core change is needed.
 
 ``process()`` recognizes the supplied frequency domain and preserves samples

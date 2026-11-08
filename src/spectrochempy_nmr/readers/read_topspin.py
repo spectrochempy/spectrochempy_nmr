@@ -34,6 +34,8 @@ from spectrochempy.utils._logging import warning_
 from spectrochempy.utils.meta import Meta
 from spectrochempy_nmr.extern.nmrglue import read_fid
 from spectrochempy_nmr.extern.nmrglue import read_pdata
+from spectrochempy_nmr.extern.nmrglue._bruker import read_acqus_file
+from spectrochempy_nmr.extern.nmrglue._bruker import read_procs_file
 from spectrochempy_nmr.readers._channels import pair_traces
 from spectrochempy_nmr.readers._channels import set_channel_data
 from spectrochempy_nmr.readers._metadata import apply_reader_metadata_options
@@ -967,6 +969,32 @@ def _validate_proc_axis(dic, data, parmode):
     return use_proc
 
 
+def _read_processed_data(directory, acqus_files, procs_files):
+    names = ("2rr", "2ri", "2ir", "2ii")
+    if not (directory / "1r").is_file() and all(
+        (directory / name).is_file() for name in names
+    ):
+        from nmrglue import interop  # noqa: PLC0415
+
+        from spectrochempy_nmr.interop import from_interop  # noqa: PLC0415
+
+        try:
+            stored = interop.read_bruker_pdata_2d(directory)
+        except ValueError:
+            # The calibrated profile is narrower than the historical reader.
+            pass
+        else:
+            planes = from_interop(interop.normalize_bruker_pdata_2d(stored))
+            # Keep the public reader's parameter selection, axes and gain.
+            metadata = read_procs_file(directory, procs_files)
+            metadata.update(read_acqus_file(directory, acqus_files))
+            return metadata, list(planes.data)
+
+    return read_pdata(
+        directory, acqus_files=acqus_files, procs_files=procs_files, all_components=True
+    )
+
+
 @_importer_method
 def _read_topspin(*args, **kwargs):
     dataset, path = args
@@ -1048,12 +1076,7 @@ def _read_topspin(*args, **kwargs):
             data = _remove_digital_filter(dic, data)
 
     else:
-        dic, datalist = read_pdata(
-            f_procno,
-            acqus_files=acqus_files,
-            procs_files=procs_files,
-            all_components=True,
-        )
+        dic, datalist = _read_processed_data(f_procno, acqus_files, procs_files)
         if isinstance(datalist, list):
             if datalist[0].ndim == 2:
                 if len(datalist) != 4:

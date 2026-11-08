@@ -1,12 +1,14 @@
 """Qualify the Bruker four-plane bridge against tiled binary words."""
 
 import hashlib
+import importlib
 import os
 from pathlib import Path
 
 import numpy as np
 import pytest
 import spectrochempy as scp
+from spectrochempy.utils.jsonutils import json_encoder
 
 from spectrochempy_nmr import from_interop
 
@@ -64,8 +66,17 @@ def _check_plane(provider, path, scaled, expected, axes, exponent, tmp_path):
         assert after.meta.acquisition_frequency == before.meta.acquisition_frequency
 
 
-@pytest.mark.parametrize("scaled", [False, True])
-def test_synthetic_tiled_bruker_planes(provider, scaled, tmp_path):
+@pytest.fixture
+def tiled_pdata(tmp_path):
+    experiment = tmp_path / "bruker" / "1"
+    path = experiment / "pdata" / "1"
+    path.mkdir(parents=True)
+    for name in ("acqus", "acqu2s"):
+        (experiment / name).write_text(
+            "##TITLE= synthetic acquisition\n"
+            "##$PARMODE= 1\n##$TD= 12\n##$SW= 24\n##$SFO1= 501\n"
+            "##$RG= 3\n##$NS= 9\n##$NUC1= <1H>\n##END=\n"
+        )
     axes = ((100, 800, 3), (500, 2400, 7))
     for name, size, tile, (sf, sw, offset) in zip(
         ("proc2s", "procs"), (4, 6), (2, 3), axes, strict=True
@@ -85,14 +96,78 @@ def test_synthetic_tiled_bruker_planes(provider, scaled, tmp_path):
             OFFSET=offset,
         )
         lines = "".join(f"##${key}= {value}\n" for key, value in parameters.items())
-        (tmp_path / name).write_text("##TITLE= synthetic pdata\n" + lines + "##END=\n")
+        (path / name).write_text("##TITLE= synthetic pdata\n" + lines + "##END=\n")
     expected = []
     for index, name in enumerate(NAMES):
         plane = np.arange(-12, 12, dtype=np.int32).reshape(4, 6) - 31 * index
         tiles = [plane[y : y + 2, x : x + 3] for y in (0, 2) for x in (0, 3)]
-        (tmp_path / name).write_bytes(np.stack(tiles).astype(">i4").tobytes())
+        (path / name).write_bytes(np.stack(tiles).astype(">i4").tobytes())
         expected.append(plane)
-    _check_plane(provider, tmp_path, scaled, np.stack(expected), axes, -3, tmp_path)
+    return path, np.stack(expected), axes
+
+
+@pytest.mark.parametrize("scaled", [False, True])
+def test_synthetic_tiled_bruker_planes(provider, scaled, tmp_path, tiled_pdata):
+    path, expected, axes = tiled_pdata
+    _check_plane(provider, path, scaled, expected, axes, -3, tmp_path)
+
+
+def _check_public_reader(provider, path, proc_axis, monkeypatch, *, component="2ri"):
+    reader = importlib.import_module("spectrochempy_nmr.readers.read_topspin")
+
+    def unsupported(*args, **kwargs):
+        raise ValueError("unqualified profile")
+
+    with monkeypatch.context() as legacy:
+        legacy.setattr(provider.interop, "read_bruker_pdata_2d", unsupported)
+        expected = scp.read_topspin(path / component, proc_axis=proc_axis)
+
+    def reject_legacy(*args, **kwargs):
+        pytest.fail("qualified pdata should not use the vendored binary decoder")
+
+    with monkeypatch.context() as migrated:
+        migrated.setattr(reader, "read_pdata", reject_legacy)
+        actual = scp.read_topspin(path / component, proc_axis=proc_axis)
+
+    assert actual.shape == expected.shape
+    assert actual.dtype == expected.dtype
+    assert actual.dims == expected.dims
+    assert actual.units == expected.units
+    assert actual.origin == expected.origin
+    assert actual.name == expected.name
+    assert json_encoder(actual.meta) == json_encoder(expected.meta)
+    np.testing.assert_array_equal(actual.data, expected.data)
+    for dim in ("c", "y", "x"):
+        got, want = actual.coordset[dim], expected.coordset[dim]
+        np.testing.assert_array_equal(got.data, want.data)
+        np.testing.assert_array_equal(got.labels, want.labels)
+        assert got.units == want.units
+        assert got.title == want.title
+        assert json_encoder(got.meta) == json_encoder(want.meta)
+    return actual
+
+
+@pytest.mark.parametrize("proc_axis", [False, True])
+def test_synthetic_tiled_bruker_public_reader(
+    provider, tiled_pdata, proc_axis, monkeypatch
+):
+    path, expected, _ = tiled_pdata
+    result = _check_public_reader(provider, path, proc_axis, monkeypatch)
+    rr, ri, ir, ii = expected
+    channels = np.stack((rr + 1j * ir, ri + 1j * ii)) * 2.0**-3 / 3
+    np.testing.assert_array_equal(result.data, channels)
+    assert tuple(result.c.labels) == ("S_R", "S_I")
+
+
+@pytest.mark.parametrize("proc_axis", [False, True])
+def test_local_bruker_public_reader(provider, proc_axis, monkeypatch):
+    configured = os.environ.get("NMR_PDATA_2D_REFERENCE")
+    if not configured:
+        pytest.skip("configure the checksum-pinned local 2D pdata")
+    path = Path(configured)
+    for name, digest in REFERENCE_HASHES.items():
+        assert hashlib.sha256((path / name).read_bytes()).hexdigest() == digest
+    _check_public_reader(provider, path, proc_axis, monkeypatch)
 
 
 @pytest.mark.parametrize("scaled", [False, True])

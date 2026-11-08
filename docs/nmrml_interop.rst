@@ -71,7 +71,7 @@ published XSD; their binary round trips are not claimed as schema-valid repair.
 
 For local qualification, fetch into a disposable directory with
 ``python tools/fetch_nmrml_qualification.py DIRECTORY`` and set
-``NMRML_QUALIFICATION_DATA=DIRECTORY``. Missing optional provider/data cause skips;
+``NMRML_QUALIFICATION_DATA=DIRECTORY``. Missing XML support or reference data cause skips;
 a skipped test is not qualification. The dedicated CI path installs the pinned
 provider and XML dependency, verifies provenance and downloads checksum-pinned
 originals. Public access supports local validation, not a redistribution claim.
