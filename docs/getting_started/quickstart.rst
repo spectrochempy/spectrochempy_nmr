@@ -1,6 +1,13 @@
 Quickstart
 ==========
 
+.. warning::
+
+   **Experimental plugin.** The public API is still evolving. Function
+   signatures, options, and behavior may change between releases, including
+   in workflows that have already been validated. Check the :doc:`/changelog`
+   before upgrading.
+
 Read a TopSpin FID and process it with explicit, validated 1D parameters:
 
 .. code-block:: python

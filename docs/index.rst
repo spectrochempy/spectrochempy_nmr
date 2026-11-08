@@ -3,6 +3,13 @@
 SpectroChemPy NMR documentation
 ================================
 
+.. warning::
+
+   **Experimental plugin.** The public API is still evolving. Function
+   signatures, options, and behavior may change between releases, including
+   in workflows that have already been validated. Check the :doc:`changelog`
+   before upgrading.
+
 This is the development documentation for the independent
 ``spectrochempy-nmr`` plugin. Changes marked **Unreleased** are not included
 in the published 0.2.0 package.
