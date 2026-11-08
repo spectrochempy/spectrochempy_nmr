@@ -609,6 +609,7 @@ def _check_states_tppi_import(provider, traces, widths, tmp_path):
     np.testing.assert_array_equal(restored.x.data, result.x.data)
     assert tuple(restored.c.labels) == ("E1", "E2")
     assert restored.meta.tppi_alternation_state == "encoded"
+    return result, path
 
 
 def test_synthetic_nmrpipe_states_tppi_import(provider, tmp_path):
@@ -617,7 +618,8 @@ def test_synthetic_nmrpipe_states_tppi_import(provider, tmp_path):
     _check_states_tppi_import(provider, traces, (1000, 4000), tmp_path)
 
 
-def test_real_bruker_states_tppi_import(provider, tmp_path):
+@pytest.mark.parametrize("run_fft", [False, True], ids=["import", "fft"])
+def test_real_bruker_states_tppi_import(provider, tmp_path, monkeypatch, run_fft):
     configured = os.environ.get("NMR_BRUKER_STATES_TPPI_REFERENCE")
     if not configured:
         pytest.skip("configure the checksum-pinned Bruker proton-exchange acquisition")
@@ -646,5 +648,60 @@ def test_real_bruker_states_tppi_import(provider, tmp_path):
     traces.imag = acquired[:, 1::2]
     np.testing.assert_array_equal(traces.real, words[:, :800:2])
     np.testing.assert_array_equal(traces.imag, words[:, 1:800:2])
-    _check_states_tppi_import(provider, traces, (40000.001010485, 10000), tmp_path)
+    result, path = _check_states_tppi_import(
+        provider, traces, (40000.001010485, 10000), tmp_path
+    )
+    if run_fft:
+        _check_real_states_tppi_fft(provider, result, path, tmp_path, monkeypatch)
     check_hashes()
+
+
+def _check_real_states_tppi_fft(provider, dataset, path, tmp_path, monkeypatch):
+    from spectrochempy_nmr.processing import states_tppi_interop
+
+    executable = os.environ.get("NMR_PIPE_EXECUTABLE") or shutil.which("nmrPipe")
+    if not executable:
+        pytest.skip(
+            "configure the NMRPipe executable for States-TPPI FFT qualification"
+        )
+    stages = []
+    cross_pairs = states_tppi_interop._cross_pairs
+
+    def record(values):
+        cross = cross_pairs(values)
+        stages.extend((values.copy(), cross.copy()))
+        return cross
+
+    monkeypatch.setattr(states_tppi_interop, "_cross_pairs", record)
+    spectrum = Experiment(dataset).process()
+    rr, ri, ir, ii = spectrum.data
+    final = np.stack(((rr + 1j * ir).T, (ri + 1j * ii).T), axis=1)
+    for name, options, values in (
+        ("f2", ("FT", "-nodf"), stages[0].transpose(1, 0, 2)),
+        ("tp", ("TP",), stages[1].transpose(2, 0, 1)),
+        ("f1", ("FT", "-alt"), final),
+    ):
+        target = tmp_path / (name + ".ft2")
+        subprocess.run(
+            [executable, "-in", str(path), "-fn", *options, "-out", str(target), "-ov"],
+            check=True,
+            capture_output=True,
+        )
+        header, expected = provider.pipe.read(str(target))
+        np.testing.assert_allclose(
+            values.reshape(expected.shape),
+            expected,
+            rtol=0,
+            atol=3e-6 * np.max(np.abs(expected)),
+        )
+        path = target
+    for axis, role in ((spectrum.y, "F1"), (spectrum.x, "F2")):
+        prefix = "FD" + role
+        size = axis.size
+        grid = (
+            header[prefix + "ORIG"]
+            + (size - 1 - np.arange(size)) * header[prefix + "SW"] / size
+        )
+        np.testing.assert_allclose(
+            axis.data, grid - grid[size // 2], rtol=1e-12, atol=1e-10
+        )
