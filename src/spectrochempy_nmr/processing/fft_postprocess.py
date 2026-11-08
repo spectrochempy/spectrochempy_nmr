@@ -50,7 +50,13 @@ def _apply_interop_fft_presentation(dataset, dim, *, ppm, physical):
     frequency = float(display["reference_frequency_mhz"])
     if not np.isfinite([center, width, frequency]).all() or min(width, frequency) <= 0:
         raise ValueError("invalid interop FFT display calibration")
-    size = dataset.shape[dataset.dims.index(dim)]
+    axis = dataset.coordset[dim]
+    size = axis.size
+    acquisition_width = acquisition.get("spectral_width_hz")
+    if size > 1 and acquisition_width is not None:
+        measured_width = np.ptp(axis.data) * size / (size - 1)
+        if not np.isclose(measured_width, acquisition_width, rtol=1e-3, atol=0):
+            return
     step = -width / max(size - 1, 1)
     coord = Coord.arange(size) * (step * ur.Hz) + (center + width / 2) * ur.Hz
     coord.name = dim

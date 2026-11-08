@@ -130,8 +130,19 @@ def test_normalized_numpy_width_scalars_remain_usable(width):
     assert result.x.units == scp.ur.ppm
 
 
-def test_direct_fft_uses_sample_spacing_after_decimation():
-    source = _fid()[::2]
+@pytest.mark.parametrize("display", [False, True])
+def test_direct_fft_uses_sample_spacing_after_decimation(display):
+    source = _fid()
+    if display:
+        source.meta.acquisition["fft_display_axis"] = {
+            "grid": "inclusive-endpoints",
+            "direction": "decreasing",
+            "center_hz": 0.0,
+            "spectral_width_hz": 2100.0,
+            "reference_frequency_mhz": 125.0,
+        }
+        np.testing.assert_allclose(source.fft(ppm=False).x.data[[0, -1]], [1050, -1050])
+    source = source[::2]
     spectrum = source.fft()
 
     expected = np.fft.fftshift(np.fft.fftfreq(source.size, d=0.001))
