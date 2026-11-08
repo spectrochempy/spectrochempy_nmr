@@ -8,11 +8,7 @@ and pass normalized results to ``from_interop()``. For supported 1D acquisitions
 Processed spectra
 -----------------
 
-The qualification requirements pin provider commit
-``0a7421795a9008c57eb63d6d747debc45ecf7135`` from
-`provider PR #160 <https://github.com/spectrochempy/nmrglue-ng/pull/160>`_.
-It is an unreleased candidate, not a capability promised by older provider
-packages. Install that optional provider and ``xmltodict`` separately::
+The qualification tests use the nmrglue-ng 1.2.0 wheel and ``xmltodict``::
 
     import nmrglue as ng
     from spectrochempy_nmr import from_interop
@@ -79,8 +75,6 @@ For local qualification, fetch into a disposable directory with
 a skipped test is not qualification. The dedicated CI path installs the pinned
 provider and XML dependency, verifies provenance and downloads checksum-pinned
 originals. Public access supports local validation, not a redistribution claim.
-
-
 
 Raw 2D echo/anti-echo
 ---------------------
