@@ -12,6 +12,10 @@ Unreleased
 Changed
 ~~~~~~~
 
+* Offer phase- and time-domain Bruker F2 group-delay corrections for imported
+  2D echo/anti-echo FIDs. Resolve the delay from acquisition metadata when
+  available and qualify both methods on the official HSQC.
+
 * Process imported 2D echo/anti-echo FIDs with explicit Bruker Rance–Kay
   reconstruction in ``Experiment.process()``. Qualify the reconstruction
   and both FFTs against NMRPipe on the official HSQC.

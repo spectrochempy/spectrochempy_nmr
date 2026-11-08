@@ -77,3 +77,9 @@ Use `--hsqc-ser /path/to/ser` with the SHA-1-checked official BMRB SER to
 generate the experimental oracle outside the repository. The AMX conversion
 preserves the raw point count and omits group-delay correction for this
 FFT-only comparison.
+
+Add `--digital-filter` to build the `FT -df` checkpoints for the HSQC
+acquisition parameters (`DECIM=24`, `DSPFVS=12`). The conversion still
+uses AMX to preserve all stored samples, but writes the group delay into
+the header. Only the F2 transform uses `-df`. The same flag without
+`--hsqc-ser` generates the corrected synthetic CI oracle.

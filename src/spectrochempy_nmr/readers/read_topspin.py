@@ -679,8 +679,12 @@ def _remove_digital_filter(dic, data):
             raise ValueError("decim not in lookup table")
         phase = bruker_dsp_table[dspfvs][decim]
 
-    phase = np.floor(phase)
+    return _correct_digital_filter_time(data, phase)
 
+
+def _correct_digital_filter_time(data, phase):
+    """Apply the historical reader's integer shift and boundary treatment."""
+    phase = np.floor(phase)
     si = data.shape[-1]
     s = float(si)
 
