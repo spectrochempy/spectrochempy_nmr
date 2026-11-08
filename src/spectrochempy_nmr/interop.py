@@ -527,4 +527,16 @@ def from_interop(result, *, profile=None):
     dataset.meta.data_domain = domain[0]
     dataset.meta.isfreq = [domain == ("frequency",)]
     dataset.meta.td = [int(data.size)]
+    if domain == ("time",):
+        phase = result.acquisition.get("fft_initial_phase")
+        if phase is not None:
+            if not isinstance(phase, Mapping) or phase.get("pivot_index") != 0:
+                raise ValueError("unsupported interop FFT initial phase")
+            zero = float(phase["zero_order_deg"])
+            first = float(phase["first_order_deg"])
+            if not np.isfinite([zero, first]).all():
+                raise ValueError("invalid interop FFT initial phase")
+            dataset.meta.pivot = [0]
+            dataset.meta.phc0 = [zero * scp.ur.degree]
+            dataset.meta.phc1 = [first * scp.ur.degree]
     return dataset

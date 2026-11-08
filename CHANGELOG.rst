@@ -12,6 +12,11 @@ Unreleased
 Changed
 ~~~~~~~
 
+* Return the normalized Bruker 1D FID dataset from ``read_topspin()`` when
+  the provider supports the FID contract. Use canonical complex samples and
+  preserve the default public FFT presentation. Keep the previous reader
+  path for older providers and unsupported acquisitions.
+
 * Preserve the normalized dataset in the public Bruker 1D pdata reader
   when the provider supplies the requested axis and receiver-gain correction.
   Distinguish the processing reference from the acquisition frequency.

@@ -1028,6 +1028,47 @@ def _read_processed_data(directory, acqus_files, procs_files, *, proc_axis):
     return metadata, data, None
 
 
+def _read_normalized_fid(
+    directory, acqus_files, procs_files, *, remove_filter, remove_dc
+):
+    from inspect import signature  # noqa: PLC0415
+
+    from nmrglue import interop  # noqa: PLC0415
+
+    from spectrochempy_nmr.interop import from_interop  # noqa: PLC0415
+
+    normalize = interop.normalize_bruker_fid
+    if "preserve_storage" not in signature(normalize).parameters:
+        return None
+    try:
+        stored = interop.read_bruker_fid(
+            directory,
+            acqus_files=acqus_files,
+            procs_files=procs_files,
+            read_pulseprogram=(directory / "pulseprogram").is_file(),
+        )
+        normalized = normalize(
+            stored,
+            preserve_storage=True,
+            remove_dc_offset=remove_dc,
+            remove_digital_filter="if-decimated" if remove_filter else False,
+            normalize_scan_gain=True,
+        )
+        if normalized.acquisition.get("observation_frequency_mhz") is None:
+            return None
+        dataset = from_interop(normalized)
+    except ValueError:
+        return None
+    coord = dataset.x.to("us")
+    coord.title = "F1 acquisition time"
+    coord.meta["acquisition_frequency"] = (
+        normalized.acquisition["observation_frequency_mhz"] * ur.MHz
+    )
+    dataset.set_coordset(x=coord)
+    dataset.meta.acquisition_encoding = tuple(normalized.encoding)
+    return stored.metadata, dataset
+
+
 def _read_raw_data(directory, filename, acqus_files, procs_files):
     acqus_path = directory / "acqus"
     migrate_ser = (
@@ -1106,18 +1147,24 @@ def _read_topspin(*args, **kwargs):
     processed_components = None
     normalized_dataset = None
     if not processed:
-        dic, data = _read_raw_data(f_expno, path.name, acqus_files, procs_files)
+        normalized = None
+        if path.name == "fid":
+            normalized = _read_normalized_fid(
+                f_expno,
+                acqus_files,
+                procs_files,
+                remove_filter=bool(kwargs.get("remove_digital_filter", True)),
+                remove_dc=bool(kwargs.get("remove_dc_offset", False)),
+            )
+        if normalized is None:
+            dic, data = _read_raw_data(f_expno, path.name, acqus_files, procs_files)
+        else:
+            dic, normalized_dataset = normalized
+            data = normalized_dataset.data
 
-        # Keep the raw 1D FID in nmrglue's direct-complex orientation.
-        # The public 1D QSIM FFT path already applies the conjugated Fourier
-        # convention needed to recover the TopSpin spectral orientation from
-        # that raw signal.  Injecting an additional -90° rotation here would
-        # leave the final 1D spectrum globally quadrature-shifted relative to
-        # the bundled TopSpin `1r`/`1i` reference.
-        #
-        # Historical 2D SER work used the imported -90° direct-dimension
-        # rotation. Keep that behavior there until the separate 2D campaign is
-        # revisited.
+        # The normalized 1D route already supplies canonical samples.
+        # The fallback 1D route keeps the decoded convention for its FFT.
+        # The legacy SER route applies the direct-dimension rotation.
         if path.name == "ser":
             data = data * np.exp(-1j * np.pi / 2.0)
 
@@ -1145,11 +1192,12 @@ def _read_topspin(*args, **kwargs):
             ntd = _acqu.get("TD", dic.get("acqus", {}).get("TD", 0)) // 2
             data = data[..., :ntd]
 
-        if kwargs.get("remove_dc_offset", False):
-            data = data - data.mean(axis=-1, keepdims=True)
+        if normalized_dataset is None:
+            if kwargs.get("remove_dc_offset", False):
+                data = data - data.mean(axis=-1, keepdims=True)
 
-        if kwargs.get("remove_digital_filter", True) and dic["acqus"]["DECIM"] > 1:
-            data = _remove_digital_filter(dic, data)
+            if kwargs.get("remove_digital_filter", True) and dic["acqus"]["DECIM"] > 1:
+                data = _remove_digital_filter(dic, data)
 
     else:
         dic, datalist, normalized_dataset = _read_processed_data(
@@ -1183,6 +1231,7 @@ def _read_topspin(*args, **kwargs):
     keys = sorted(dic.keys())
 
     # we need the ndim of the data
+    normalized_fid = normalized_dataset is not None and not processed
     parmode = int(dic["acqus"].get("PARMODE", data.ndim - 1))
     if parmode + 1 != data.ndim:
         raise KeyError(
@@ -1237,8 +1286,11 @@ def _read_topspin(*args, **kwargs):
 
     if not processed:
         meta.isfreq = [False]
-        meta.encoding[-1] = AQ_mod[meta.aq_mod[-1]]
-        meta.iscomplex[-1] = meta.aq_mod[-1] > 0
+        if normalized_fid:
+            meta.iscomplex = [True]
+        else:
+            meta.encoding[-1] = AQ_mod[meta.aq_mod[-1]]
+            meta.iscomplex[-1] = meta.aq_mod[-1] > 0
 
     if datatype in ["SER"]:
         meta.isfreq.insert(0, False)
@@ -1278,7 +1330,10 @@ def _read_topspin(*args, **kwargs):
 
     # correct TD, so it is the number of complex points, not the number of data
     # not for the last dimension which is already correct
-    meta.tdeff = meta.td[:]
+    if normalized_fid:
+        meta.tdeff = [normalized_dataset.meta.acquisition["acquired_points"]]
+    else:
+        meta.tdeff = meta.td[:]
     meta.td = list(data.shape)
 
     paired_ser = datatype == "SER" and meta.iscomplex[0]
@@ -1291,15 +1346,18 @@ def _read_topspin(*args, **kwargs):
             raise ValueError("TopSpin States SER requires an even number of traces")
         meta.td[0] //= 2
     for axis in range(parmode + 1):
-        if meta.iscomplex[axis]:
+        if meta.iscomplex[axis] and not normalized_fid:
             meta.tdeff[axis] //= 2
 
-    meta.sw_h = [
-        (meta.sw[axis].m * meta.sfo1[axis] * 1e-6).to("Hz")
-        if meta.sw[axis] is not None and meta.sfo1[axis] is not None
-        else None
-        for axis in range(parmode + 1)
-    ]
+    if normalized_fid:
+        meta.sw_h = [normalized_dataset.meta.acquisition["spectral_width_hz"] * ur.Hz]
+    else:
+        meta.sw_h = [
+            (meta.sw[axis].m * meta.sfo1[axis] * 1e-6).to("Hz")
+            if meta.sw[axis] is not None and meta.sfo1[axis] is not None
+            else None
+            for axis in range(parmode + 1)
+        ]
 
     if processed:
         meta.si = list(data.shape)
@@ -1324,7 +1382,9 @@ def _read_topspin(*args, **kwargs):
             [1] * data.ndim,
         )  # sometimes these parameters are not present
         meta.rg = meta.get("rg", [1.0] * data.ndim)
-        if processed:
+        if normalized_dataset is not None:
+            fac = 1.0
+        elif processed:
             # TopSpin pdata amplitudes already carry the scan averaging.
             # Dividing them again by NS makes the treated vendor reference
             # artificially smaller than the spectrum reconstructed from the raw
@@ -1385,6 +1445,8 @@ def _read_topspin(*args, **kwargs):
             coords.append(coord)
 
         elif not meta.isfreq[axis]:
+            if normalized_dataset is not None:
+                continue
             # the axis is in time units
             dw = (1.0 / meta.sw_h[axis]).to("us")
             coordpoints = np.arange(meta.td[axis])
@@ -1460,7 +1522,7 @@ def _read_topspin(*args, **kwargs):
     elif normalized_dataset is not None:
         dataset = normalized_dataset
         for key, value in meta.items():
-            if key not in dataset.meta:
+            if key not in dataset.meta and not (normalized_fid and key == "encoding"):
                 dataset.meta[key] = value
     else:
         dataset.data = data

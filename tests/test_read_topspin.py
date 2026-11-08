@@ -143,7 +143,11 @@ def test_1d_fid_metadata():
     assert nd.units == "count"
     assert nd.title == "intensity"
     assert nd.meta.datatype == "FID"
-    assert nd.meta.encoding == ["QSIM"]
+    if nd.meta.normalization_profile == "bruker-fid-1d-complex-v1":
+        assert nd.meta.encoding is None
+        assert nd.meta.acquisition_encoding == ("QSIM",)
+    else:
+        assert nd.meta.encoding == ["QSIM"]
     assert nd.meta.isfreq == [False]
     assert nd.meta.iscomplex == [True]
     assert nd.meta.nuc1 == ["1H"]

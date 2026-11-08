@@ -71,3 +71,24 @@ jobs:
         run: python tools/fetch_nmrml_qualification.py "$NMRML_QUALIFICATION_DATA"
       - name: Run nmrML raw and processed interop qualification
         run: python -I -m pytest -ra tests/qualification/test_nmrml_interop.py
+
+      - name: Check out the merged Bruker FID provider contract
+        uses: actions/checkout@v7
+        with:
+          repository: spectrochempy/nmrglue-ng
+          ref: 9ebe74934e695213d69072715651e2ca27f8c6c7
+          fetch-depth: 0
+          path: provider-candidate
+          persist-credentials: false
+      - name: Qualify the public Bruker FID route with the candidate wheel
+        run: |
+          python -m pip wheel --no-deps --wheel-dir provider-dist ./provider-candidate
+          python -m pip install --force-reinstall --no-deps provider-dist/*.whl
+          python -m pip check
+          python -I - <<'PY'
+          from inspect import signature
+          from nmrglue.interop import normalize_bruker_fid
+
+          assert "preserve_storage" in signature(normalize_bruker_fid).parameters
+          PY
+          python -I -m pytest -ra tests/qualification/test_bruker_normalized.py -k synthetic
