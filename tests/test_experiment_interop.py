@@ -128,3 +128,14 @@ def test_normalized_numpy_width_scalars_remain_usable(width):
     source.meta.acquisition["spectral_width_hz"] = width
     result = Experiment(source).process(reference="primary")
     assert result.x.units == scp.ur.ppm
+
+
+def test_direct_fft_uses_sample_spacing_after_decimation():
+    source = _fid()[::2]
+    spectrum = source.fft()
+
+    expected = np.fft.fftshift(np.fft.fftfreq(source.size, d=0.001))
+    assert spectrum.x.units == scp.ur.Hz
+    np.testing.assert_allclose(spectrum.x.data, expected, atol=1e-9)
+    with pytest.raises(ValueError, match="complete ascending centered FFT grid"):
+        reference_interop_1d(spectrum, reference="primary")

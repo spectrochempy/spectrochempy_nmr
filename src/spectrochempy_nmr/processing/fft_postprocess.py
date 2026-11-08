@@ -21,7 +21,7 @@ def _meta_dim_index(new, dim):
 def _apply_interop_fft_presentation(dataset, dim, *, ppm, physical):
     acquisition = dataset.meta.get("acquisition", {})
     display = acquisition.get("fft_display_axis")
-    if physical or display is None:
+    if physical:
         width = acquisition.get("spectral_width_hz")
         if width is not None:
             size = dataset.shape[dataset.dims.index(dim)]
@@ -29,11 +29,13 @@ def _apply_interop_fft_presentation(dataset, dim, *, ppm, physical):
             dataset.coordset[dim] = Coord(
                 bins, units="Hz", title="frequency", rounding=False, sigdigits=15
             )
-        if physical and acquisition.get("fft_initial_phase") is not None:
+        if acquisition.get("fft_initial_phase") is not None:
             from spectrochempy import ur  # noqa: PLC0415
 
             dataset.meta.phc0 = [0 * ur.degree]
             dataset.meta.phc1 = [0 * ur.degree]
+        return
+    if display is None:
         return
     from spectrochempy import ur  # noqa: PLC0415
 
