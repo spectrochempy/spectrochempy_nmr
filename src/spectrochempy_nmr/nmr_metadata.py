@@ -730,6 +730,14 @@ def extract_nmr_metadata(meta, *, ndim=None) -> NMRMetadata:
             and meta.get("normalization_state") == "storage-normalized"
         ):
             return _extract_fid_display_metadata(meta)
+        if (
+            quadrature == "tppi-stored-2d"
+            and physical == dimensions == ("F1", "F2")
+            and tuple(meta.get("axis_roles", ())) == physical
+            and domain in ("time", "mixed")
+            and meta.get("normalization_state") == "storage-normalized"
+        ):
+            return _extract_fid_display_metadata(meta)
         states_tppi = quadrature == "states-tppi" and (
             domain,
             meta.get("tppi_alternation_state"),

@@ -18,6 +18,9 @@ Added
 Changed
 ~~~~~~~
 
+* Use the normalized interop dataset for qualified Agilent TPPI 2D acquisitions.
+  Preserve the public display axes, amplitude scaling and direct FFT.
+
 * Use the normalized interop dataset for qualified Agilent States 2D
   acquisitions when the provider supports States storage normalization.
   Preserve the public axes, scaling and FFT guard.

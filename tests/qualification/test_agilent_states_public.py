@@ -1,4 +1,4 @@
-"""Qualify the public Agilent States reader against its compatibility path."""
+"""Qualify the public Agilent 2D reader against its compatibility path."""
 
 import hashlib
 import os
@@ -14,7 +14,7 @@ import spectrochempy as scp
 import spectrochempy_nmr.interop as adapter
 
 
-def _check_states(path, monkeypatch):
+def _check_public_2d(path, monkeypatch, profile="states"):
     convert = adapter.from_interop
     calls = []
 
@@ -24,11 +24,11 @@ def _check_states(path, monkeypatch):
         return dataset
 
     def reject_fallback(*args, **kwargs):
-        pytest.fail("qualified States called the historical decoder")
+        pytest.fail("qualified 2D acquisition called the historical decoder")
 
     reader = import_module("spectrochempy_nmr.readers.read_agilent")
     with monkeypatch.context() as baseline:
-        baseline.setattr(interop, "normalize_agilent_states_2d", None)
+        baseline.setattr(interop, f"normalize_agilent_{profile}_2d", None)
         old = scp.read_agilent(path, origin="qualification")
 
     monkeypatch.setattr(adapter, "from_interop", spy)
@@ -69,17 +69,24 @@ def _check_states(path, monkeypatch):
         assert experiment.encoding == previous.encoding
         assert experiment.nuclei == previous.nuclei
         assert experiment.source_kind == previous.source_kind
-    with pytest.raises(NotImplementedError, match="UNVALIDATED:AGILENT-STATES"):
+    with pytest.raises(
+        NotImplementedError, match=f"UNVALIDATED:AGILENT-{profile.upper()}"
+    ):
         direct.fft(dim="y")
+    if profile == "tppi":
+        assert scp.nmr.Experiment(actual[0].squeeze()).domains == (
+            scp.nmr.Experiment(old[0].squeeze()).domains
+        )
     return actual
 
 
 @pytest.fixture
-def synthetic_states(tmp_path):
+def synthetic_states(tmp_path, request):
+    tppi = getattr(request, "param", "states") == "tppi"
     params = {
-        "array": ["phase"],
-        "phase": ["1", "2"],
-        "ni": ["2"],
+        "array": [""] if tppi else ["phase"],
+        "phase": ["3"] if tppi else ["1", "2"],
+        "ni": ["4"] if tppi else ["2"],
         "arraydim": ["4"],
         "np": ["8"],
         "sw": ["10775.862069"],
@@ -90,10 +97,11 @@ def synthetic_states(tmp_path):
         "ns": ["3"],
         "ne": ["2"],
     }
-    varian.write_procpar(
-        tmp_path / "procpar",
-        {key: varian.create_pdic_param(key, values) for key, values in params.items()},
-    )
+    procpar = {
+        key: varian.create_pdic_param(key, values) for key, values in params.items()
+    }
+    procpar["array"]["basictype"] = "2"
+    varian.write_procpar(tmp_path / "procpar", procpar)
     words = np.arange(32, dtype=">i4").reshape(4, 8)
     words[:, 1::2] *= -7
     with (tmp_path / "fid").open("wb") as stream:
@@ -110,7 +118,7 @@ def synthetic_states(tmp_path):
 )
 def test_synthetic_states_public(synthetic_states, monkeypatch):
     path, samples = synthetic_states
-    actual = _check_states(path, monkeypatch)
+    actual = _check_public_2d(path, monkeypatch)
     np.testing.assert_array_equal(actual.data[0], samples[::2] / 6)
     np.testing.assert_array_equal(actual.data[1], samples[1::2] / 6)
     scales = [
@@ -193,11 +201,88 @@ def test_real_states_public(monkeypatch, variable, shape, width, checksums):
     files = (path / "fid", path / "procpar")
     before = tuple(hashlib.sha256(file.read_bytes()).hexdigest() for file in files)
     assert before == checksums
-    actual = _check_states(path, monkeypatch)
+    actual = _check_public_2d(path, monkeypatch)
     assert actual.shape == shape
     assert actual.y.units is None
     assert actual.meta.acquisition["spectral_widths_hz"] == width
     assert actual.meta.interop_axes[0]["reference"] is None
     assert before == tuple(
         hashlib.sha256(file.read_bytes()).hexdigest() for file in files
+    )
+
+
+@pytest.mark.parametrize("synthetic_states", ["tppi"], indirect=True)
+@pytest.mark.skipif(
+    not hasattr(interop, "normalize_agilent_tppi_2d"),
+    reason="provider does not support TPPI normalization",
+)
+def test_synthetic_tppi_public(synthetic_states, monkeypatch):
+    path, samples = synthetic_states
+    actual = _check_public_2d(path, monkeypatch, "tppi")
+    np.testing.assert_array_equal(actual.data, samples / 6)
+    scales = [
+        operation
+        for operation in actual.meta.applied_operations
+        if operation["name"] == "normalize-agilent-ns-ne"
+    ]
+    assert len(scales) == 1 and scales[0]["divisor"] == 6
+
+
+@pytest.mark.parametrize("synthetic_states", ["tppi"], indirect=True)
+def test_synthetic_tppi_older_provider(synthetic_states, monkeypatch):
+    path, samples = synthetic_states
+    monkeypatch.delattr(interop, "normalize_agilent_tppi_2d", raising=False)
+    actual = scp.read_agilent(path)
+    assert actual.meta.encoding == ["UNVALIDATED:AGILENT-TPPI", "QSIM"]
+    assert actual.meta.get("normalization_state") is None
+    np.testing.assert_array_equal(actual.data, samples / 6)
+
+
+@pytest.mark.parametrize("synthetic_states", ["tppi"], indirect=True)
+@pytest.mark.skipif(
+    not hasattr(interop, "normalize_agilent_tppi_2d"),
+    reason="provider does not support TPPI normalization",
+)
+def test_synthetic_tppi_secondary_dimension_uses_compatibility(
+    synthetic_states, monkeypatch
+):
+    path, _ = synthetic_states
+    procpar_path = path.with_name("procpar")
+    procpar = varian.read_procpar(procpar_path)
+    procpar["ni2"] = varian.create_pdic_param("ni2", ["0"])
+    procpar["phase2"] = varian.create_pdic_param("phase2", ["1"])
+    varian.write_procpar(procpar_path, procpar, overwrite=True)
+
+    def reject_normalized(result):
+        pytest.fail("ambiguous indirect dimensions reached from_interop")
+
+    monkeypatch.setattr(adapter, "from_interop", reject_normalized)
+    assert scp.read_agilent(path) is None
+
+
+@pytest.mark.skipif(
+    not hasattr(interop, "normalize_agilent_tppi_2d"),
+    reason="provider does not support TPPI normalization",
+)
+def test_real_tppi_public(monkeypatch):
+    directory = os.environ.get("NMR_AGILENT_TPPI_DATA")
+    if not directory:
+        pytest.skip("set NMR_AGILENT_TPPI_DATA to the real TPPI acquisition directory")
+    path = Path(directory)
+    files = (path / "fid", path / "procpar")
+    checksums = (
+        "db3a4b42140aec536917b5fe4369d1a517dd9208c2c1cc88d8e17f6ae1d0ee13",
+        "cbe683a6463bdc34b389aedc18438edf32968984f5f8599da2ed82cef73b0199",
+    )
+    assert (
+        tuple(hashlib.sha256(file.read_bytes()).hexdigest() for file in files)
+        == checksums
+    )
+    actual = _check_public_2d(path, monkeypatch, "tppi")
+    assert actual.shape == (600, 1400)
+    assert actual.y.units is None
+    assert actual.meta.acquisition["spectral_widths_hz"] == (66666.6666667, 50000.0)
+    assert (
+        tuple(hashlib.sha256(file.read_bytes()).hexdigest() for file in files)
+        == checksums
     )

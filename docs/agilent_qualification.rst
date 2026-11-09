@@ -148,3 +148,16 @@ each. The public reader retains the F1 point index because the file has
 no ``sw2``. The physical width from ``sw1`` remains available through
 the normalized acquisition metadata. Synthetic binary input in CI
 checks branch order, a nontrivial divisor and public dataset identity.
+
+
+Agilent TPPI 2D public reader
+-----------------------------
+
+For ``phase=[3]`` with one stored trace per indirect increment,
+``read_agilent()`` returns the normalized interop matrix with its
+historical public presentation. The real reference has 600 increments
+and 1400 complex points per trace. The physical F1 time grid derives
+from ``sw1``. The public display retains point indices when ``sw2`` is
+absent. The direct FFT remains available. The indirect TPPI FFT is
+guarded pending processing qualification. Older providers retain the
+compatibility reader.

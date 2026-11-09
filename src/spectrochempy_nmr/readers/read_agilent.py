@@ -414,16 +414,18 @@ def _read_normalized_agilent_fid(directory, path):
     return dataset
 
 
-def _read_normalized_agilent_states(directory, path):
+def _read_normalized_agilent_2d(directory, path, profile):
     from nmrglue import interop  # noqa: PLC0415
 
     from ..interop import from_interop  # noqa: PLC0415
 
-    normalize = getattr(interop, "normalize_agilent_states_2d", None)
+    normalize = getattr(interop, f"normalize_agilent_{profile}_2d", None)
     if normalize is None:
         return None
     try:
-        stored = interop.read_agilent_fid_storage(directory, states_only=True)
+        stored = interop.read_agilent_fid_storage(
+            directory, **{f"{profile}_only": True}
+        )
         result = normalize(stored, legacy_presentation=True)
         dataset = from_interop(result)
     except ValueError:
@@ -446,6 +448,8 @@ def _read_normalized_agilent_states(directory, path):
             coord.meta["acquisition_frequency"] = display_frequency * ur.MHz
         dataset.coordset[dim] = coord
 
+    states = dataset.meta.quadrature_mode == "states-stored-2d"
+    prefix = [None] if states else []
     dataset.meta.update(
         Meta(
             datatype="2D",
@@ -456,29 +460,36 @@ def _read_normalized_agilent_states(directory, path):
             ntraces=1,
             np_raw=acquisition["storage_shape"][1],
             source_procpar=dataset.meta.source_metadata["procpar"],
-            sw=[None, *widths],
+            sw=[*prefix, *widths],
             sw_h=[
-                None,
+                *prefix,
                 *(None if width is None else width * ur.Hz for width in widths),
             ],
-            sfrq=[None, *observation],
-            dfrq=[None, *decoupler],
-            nucleus=[None, *display["reported_nuclei"]],
-            encoding=["CHANNELS", "UNVALIDATED:AGILENT-STATES", "DIRECT:QSIM"],
-            acquisition_encoding=("STATES", "QSIM"),
-            storage_profile="agilent-phase-1-2-trace-pairs",
+            sfrq=[*prefix, *observation],
+            dfrq=[*prefix, *decoupler],
+            nucleus=[*prefix, *display["reported_nuclei"]],
             ns=display["ns"],
             ne=display["ne"],
             ns_norm=1.0,
             pulprog=display["pulse_program"],
-            seqfil=display["sequence"],
             date_raw=display["date_raw"],
             at=display["acquisition_time_s"],
-            phase=acquisition["phase"],
-            ni=acquisition["physical_indirect_increments"],
-            arraydim=acquisition["storage_shape"][0],
         )
     )
+    if states:
+        dataset.meta.update(
+            Meta(
+                encoding=["CHANNELS", "UNVALIDATED:AGILENT-STATES", "DIRECT:QSIM"],
+                acquisition_encoding=("STATES", "QSIM"),
+                storage_profile="agilent-phase-1-2-trace-pairs",
+                seqfil=display["sequence"],
+                phase=acquisition["phase"],
+                ni=acquisition["physical_indirect_increments"],
+                arraydim=acquisition["storage_shape"][0],
+            )
+        )
+    else:
+        dataset.meta.encoding = ["UNVALIDATED:AGILENT-TPPI", "QSIM"]
     return dataset
 
 
@@ -524,9 +535,10 @@ def _read_agilent(*args, **kwargs):
     if candidate is not None:
         return _finalize_agilent_dataset(candidate, data_dir, kwargs)
 
-    candidate = _read_normalized_agilent_states(data_dir, path)
-    if candidate is not None:
-        return _finalize_agilent_dataset(candidate, data_dir, kwargs)
+    for profile in ("states", "tppi"):
+        candidate = _read_normalized_agilent_2d(data_dir, path, profile)
+        if candidate is not None:
+            return _finalize_agilent_dataset(candidate, data_dir, kwargs)
 
     # Compatibility path for unsupported profiles and older providers.
     dic, data = read_varian(str(data_dir), fid_file="fid", procpar_file="procpar")

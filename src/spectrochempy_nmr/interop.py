@@ -556,12 +556,62 @@ def _from_stored_states(result, data):
     return dataset
 
 
+def _raw_time_or_index_coordinate(axis, size, dim):
+    if axis.values is None and axis.unit is None:
+        return _axis_coordinate(axis, size, dim)
+    return _raw_time_coordinate(axis, size, dim)
+
+
+def _from_stored_tppi(result, data):
+    """Preserve the TPPI trace matrix with the indirect FFT guarded."""
+    import spectrochempy as scp  # noqa: PLC0415
+
+    from .processing.fft_validation import _require_fft_prevalidation  # noqa: PLC0415
+
+    if (
+        tuple(result.physical_dimensions) != ("F1", "F2")
+        or tuple(result.dimensions) != ("F1", "F2")
+        or tuple(result.domains) != ("time", "time")
+        or tuple(result.encoding) != ("tppi", "complex")
+        or tuple(result.branch_order) != ("complex",)
+        or result.normalization_state != "storage-normalized"
+        or getattr(result, "channel_axis", None) is not None
+        or len(result.axes) != 2
+        or data.ndim != 2
+        or 0 in data.shape
+        or data.dtype.kind != "c"
+        or data.dtype.itemsize not in (8, 16)
+        or not np.isfinite(data).all()
+    ):
+        raise ValueError("TPPI requires normalized F1/F2 complex time-domain traces")
+    _require_fft_prevalidation()
+    y, x = (
+        _raw_time_or_index_coordinate(axis, size, dim)
+        for axis, size, dim in zip(result.axes, data.shape, ("y", "x"), strict=True)
+    )
+    dataset = scp.NDDataset(data.copy(), dtype=data.dtype, dims=["y", "x"])
+    dataset.set_coordset(y=y, x=x)
+    dataset.meta.update(_interop_metadata(result))
+    dataset.meta.update(
+        {
+            "axis_roles": ("F1", "F2"),
+            "data_domain": "time",
+            "encoding": ["UNVALIDATED:TPPI", "QSIM"],
+            "iscomplex": [False, True],
+            "isfreq": [False, False],
+            "stage": "acquisition",
+            "td": list(data.shape),
+        }
+    )
+    return dataset
+
+
 def _raw_channel_dataset(result, channels, labels, *, allow_unknown_time=False):
     import spectrochempy as scp  # noqa: PLC0415
 
     y, x = (
-        _axis_coordinate(axis, size, dim)
-        if allow_unknown_time and axis.values is None and axis.unit is None
+        _raw_time_or_index_coordinate(axis, size, dim)
+        if allow_unknown_time
         else _raw_time_coordinate(axis, size, dim)
         for axis, size, dim in zip(
             result.axes, channels.shape[1:], ("y", "x"), strict=True
@@ -634,6 +684,8 @@ def from_interop(result, *, profile=None):
         return _from_states_tppi(result, data)
     if profile is not None:
         raise ValueError(f"unsupported interop profile: {profile!r}")
+    if result.quadrature_mode == "tppi-stored-2d":
+        return _from_stored_tppi(result, data)
     if result.quadrature_mode == "states-stored-2d":
         return _from_stored_states(result, data)
     if result.quadrature_mode == "echo-antiecho-stored-2d":
