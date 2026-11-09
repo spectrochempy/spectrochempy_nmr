@@ -18,6 +18,9 @@ Added
 Changed
 ~~~~~~~
 
+* Require nmrglue-ng 1.2.2 and use its decoder for all TopSpin reads.
+  Remove the bundled Bruker decoder.
+
 * Use the nmrglue-ng raw decoder for TopSpin fallbacks when it can preserve
   declared-shape recovery and defer NUS schedule handling.
 

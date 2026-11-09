@@ -37,7 +37,7 @@ jobs:
           from importlib.util import find_spec
           from pathlib import Path
 
-          assert version("nmrglue-ng") == "1.2.1"
+          assert version("nmrglue-ng") == "1.2.2"
           for name in ("spectrochempy", "spectrochempy_nmr", "nmrglue"):
               location = Path(find_spec(name).origin).resolve()
               assert Path.cwd() not in location.parents, location
@@ -47,8 +47,6 @@ jobs:
         run: python tools/fetch_agilent_qualification.py "$NMR_AGILENT_REAL_DATA"
       - name: Run real-provider qualification
         run: python -I -m pytest -ra tests/qualification/test_agilent_real.py
-      - name: Run synthetic Bruker normalized-provider qualification
-        run: python -I -m pytest -ra tests/qualification/test_bruker_normalized.py -k synthetic
       - name: Fetch checksum-pinned Bruker pdata reference
         run: python tools/fetch_pdata_qualification.py /tmp/pdata-real
       - name: Run processed-spectrum real-provider qualification
@@ -72,19 +70,8 @@ jobs:
       - name: Run nmrML raw and processed interop qualification
         run: python -I -m pytest -ra tests/qualification/test_nmrml_interop.py
 
-      - name: Check out the candidate Bruker interop provider
-        uses: actions/checkout@v7
-        with:
-          repository: spectrochempy/nmrglue-ng
-          ref: 8f86b9cb0dc6eda191572d8a3c84ab3961d101f2
-          fetch-depth: 0
-          path: provider-candidate
-          persist-credentials: false
-      - name: Qualify the public Bruker FID route with the candidate wheel
+      - name: Qualify the public Bruker FID route with the published wheel
         run: |
-          python -m pip wheel --no-deps --wheel-dir provider-dist ./provider-candidate
-          python -m pip install --force-reinstall --no-deps provider-dist/*.whl
-          python -m pip check
           python -I - <<'PY'
           from inspect import signature
           from nmrglue import bruker
@@ -110,6 +97,7 @@ jobs:
           assert "echo_antiecho_only" in signature(read_bruker_ser_storage).parameters
           PY
           python -I -m pytest -ra tests/qualification/test_bruker_normalized.py -k synthetic
+          python -I -m pytest -ra tests/qualification/test_bruker_ser_migration.py -k stale_indirect_status
           python -I -m pytest -ra tests/test_experiment_interop.py -k fid_preparation
       - name: Check out core with FFT prevalidation
         uses: actions/checkout@v7

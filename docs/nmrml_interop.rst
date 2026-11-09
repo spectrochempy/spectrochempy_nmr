@@ -8,7 +8,7 @@ and pass normalized results to ``from_interop()``. For supported 1D acquisitions
 Processed spectra
 -----------------
 
-The qualification tests use the nmrglue-ng 1.2.1 wheel and ``xmltodict``::
+The qualification tests use the nmrglue-ng 1.2.2 wheel and ``xmltodict``::
 
     import nmrglue as ng
     from spectrochempy_nmr import from_interop

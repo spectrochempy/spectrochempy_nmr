@@ -114,6 +114,15 @@ available as acquisition metadata. The four stored planes remain available
 through the provider's default normalization. The historical reader
 continues to cover profiles outside this contract and custom list axes.
 
+Decoding outside the normalized profiles
+----------------------------------------
+
+TopSpin uses nmrglue-ng for both qualified spectra and compatibility reads.
+The latter retain the public treatment of incomplete acquisitions, including
+the trace length used when recovering flat SER data. Nonuniform sampling is
+retained in acquisition metadata. Loading the samples does not reconstruct
+the NUS schedule or qualify that acquisition for a normalized FFT.
+
 Prepare a FID explicitly
 ------------------------
 

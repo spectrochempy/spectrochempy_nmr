@@ -206,20 +206,15 @@ def test_synthetic_provider_binary_to_experiment_chain(provider, tmp_path, filte
 def _check_public_fid(provider, path, filtered, dc, monkeypatch, *, supported=True):
     reader = import_module("spectrochempy_nmr.readers.read_topspin")
     converter = import_module("spectrochempy_nmr.interop")
-    legacy_read = reader.read_fid
 
     supports_contract = (
         "preserve_storage"
         in signature(provider.interop.normalize_bruker_fid).parameters
     )
 
-    def use_legacy(directory, *, read_pulseprogram, **kwargs):
-        return legacy_read(directory, read_pulseprogram=read_pulseprogram, **kwargs)
-
     options = dict(remove_digital_filter=filtered, remove_dc_offset=dc)
     with monkeypatch.context() as legacy:
         legacy.setattr(reader, "_read_normalized_fid", lambda *args, **kwargs: None)
-        legacy.setattr(provider.bruker, "read", use_legacy)
         expected = scp.read_topspin(path / "fid", **options)
 
     def reject_legacy(*args, **kwargs):
@@ -234,7 +229,8 @@ def _check_public_fid(provider, path, filtered, dc, monkeypatch, *, supported=Tr
         return dataset
 
     with monkeypatch.context() as migrated:
-        migrated.setattr(reader, "read_fid", reject_legacy)
+        if supports_contract and supported:
+            migrated.setattr(reader, "_read_raw_data", reject_legacy)
         migrated.setattr(converter, "from_interop", record_conversion)
         actual = scp.read_topspin(path / "fid", **options)
 
