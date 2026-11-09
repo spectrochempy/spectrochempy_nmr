@@ -415,6 +415,8 @@ def test_public_jeol_cosy_preserves_f2_fft_and_calibrates_axes(monkeypatch):
 def test_public_jeol_listed_preserves_trace_pairs(
     experiment, nominal, acquired, initial_indices, dwell, monkeypatch
 ):
+    from dataclasses import replace
+
     from spectrochempy_nmr import interop as bridge
 
     source = os.environ.get(f"NMR_JEOL_{experiment}")
@@ -431,7 +433,7 @@ def test_public_jeol_listed_preserves_trace_pairs(
 
     def convert(result):
         dataset = from_interop(result)
-        converted.append(dataset)
+        converted.append((dataset, result))
         return dataset
 
     def unexpected_fallback(*args):
@@ -441,7 +443,8 @@ def test_public_jeol_listed_preserves_trace_pairs(
     monkeypatch.setattr(reader, "_read_jeol_raw", unexpected_fallback)
     actual = scp.nmr.read_jeol(path)
     assert len(converted) == 1
-    assert actual is converted[0]
+    converted_dataset, result = converted[0]
+    assert actual is converted_dataset
     assert actual.shape == historical.shape
     assert actual.shape[0] == 2 * acquired
     assert actual.meta.acquisition["nominal_shape"] == (nominal, actual.shape[1])
@@ -457,6 +460,24 @@ def test_public_jeol_listed_preserves_trace_pairs(
     direct = actual.fft(dim="x")
     np.testing.assert_array_equal(direct.data, historical.fft(dim="x").data)
     np.testing.assert_array_equal(direct.y.data, actual.y.data)
+    width = actual.meta.sw[-1]
+    expected_hz = np.fft.fftshift(np.fft.fftfreq(actual.x.size, d=1 / width))
+    assert direct.x.units == scp.ur.Hz
+    np.testing.assert_allclose(direct.x.data, expected_hz, atol=width * 4e-4, rtol=0)
     for dataset in (actual, direct):
         with pytest.raises(NotImplementedError, match="UNVALIDATED:F1"):
             dataset.fft(dim="y")
+
+    axis = result.axes[0]
+    negative_first = axis.values.copy()
+    negative_first[:2] = -5e-8 * dwell
+    invalid = replace(
+        result, axes=(replace(axis, values=negative_first), result.axes[1])
+    )
+    with pytest.raises(ValueError, match="nominal sampling grid"):
+        from_interop(invalid)
+    contradictory = replace(
+        result, axes=(replace(axis, direction="decreasing"), result.axes[1])
+    )
+    with pytest.raises(ValueError, match="time coordinate for each trace pair"):
+        from_interop(contradictory)

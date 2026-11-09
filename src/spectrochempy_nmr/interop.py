@@ -567,6 +567,7 @@ def _listed_pair_coordinate(axis, size, width, nominal_size):
     values = coord.data
     if (
         axis.unit != "s"
+        or axis.direction != "unknown"
         or axis.values is None
         or size < 4
         or size % 2
@@ -578,7 +579,8 @@ def _listed_pair_coordinate(axis, size, width, nominal_size):
     grid = values[::2] * width
     indices = np.rint(grid)
     if (
-        np.any(indices < 0)
+        not np.isfinite(grid).all()
+        or np.any(grid < 0)
         or np.any(indices >= nominal_size)
         or np.any(np.diff(indices) <= 0)
         or not np.allclose(grid, indices, rtol=0, atol=1e-7)
@@ -640,12 +642,21 @@ def _from_raw_trace_matrix(result, data):
         sampling = result.acquisition.get("sampling")
         if sampling == ("listed-paired", "regular"):
             nominal = result.acquisition.get("nominal_shape", ())
+            branches = result.acquisition.get("trace_branch_order", ())
             if (
                 not isinstance(nominal, (tuple, list))
                 or len(nominal) != 2
+                or any(not isinstance(size, (int, np.integer)) for size in nominal)
                 or nominal[1] != x.size
             ):
                 raise ValueError("Listed F1 requires a nominal sampling shape")
+            if (
+                not isinstance(branches, (tuple, list))
+                or len(branches) != 2
+                or any(not isinstance(name, str) or not name for name in branches)
+                or branches[0] == branches[1]
+            ):
+                raise ValueError("Listed F1 requires two distinct trace branch labels")
             y = _listed_pair_coordinate(leading, data.shape[0], widths[0], nominal[0])
             grids = ((x, widths[1]),)
         else:
