@@ -137,18 +137,28 @@ def _jeol_axis_type_to_encoding(axis_type_str, *, axis: int, ndim: int):
     return "unknown", False
 
 
-def _read_normalized_jeol_fid(path):
+def _read_normalized_jeol(path):
     from inspect import signature  # noqa: PLC0415
 
     from nmrglue import interop  # noqa: PLC0415
 
     from spectrochempy_nmr.interop import from_interop  # noqa: PLC0415
 
-    normalize = interop.normalize_jeol_fid
-    if "legacy_presentation" not in signature(normalize).parameters:
+    normalizers = {
+        profile: normalize
+        for profile, normalize in (
+            ("jeol-fid-1d", interop.normalize_jeol_fid),
+            ("jeol-2d-storage", interop.normalize_jeol_2d),
+        )
+        if "legacy_presentation" in signature(normalize).parameters
+    }
+    if not normalizers:
         return None
     try:
-        stored = interop.read_jeol_fid(path)
+        stored = interop.read(path)
+        normalize = normalizers.get(stored.format)
+        if normalize is None:
+            return None
         result = normalize(stored, conjugation="conjugate", legacy_presentation=True)
     except (ValueError, OSError):
         return None
@@ -156,26 +166,38 @@ def _read_normalized_jeol_fid(path):
     dataset = from_interop(result)
     acquisition = dataset.meta.acquisition
     display = acquisition["legacy_presentation"]
-    width = acquisition["spectral_width_hz"]
-    observation = acquisition["observation_frequency_mhz"]
-    dataset.x.ito("us")
-    dataset.x.title = "F1 acquisition time"
-    dataset.x.meta["acquisition_frequency"] = observation * ur.MHz
+    one_dimensional = dataset.ndim == 1
+    widths = acquisition["spectral_width_hz"]
+    if one_dimensional:
+        widths = (widths,)
+        nuclei = [acquisition.get("nucleus")]
+        offsets = [acquisition.get("carrier_offset_ppm")]
+    else:
+        nuclei = list(acquisition["nucleus"])
+        offsets = list(acquisition["carrier_offset_ppm"])
+    frequencies = [axis.reference.observation_frequency for axis in result.axes]
+    for index, (dim, frequency) in enumerate(
+        zip(dataset.dims, frequencies, strict=True), 1
+    ):
+        coord = dataset.coordset[dim]
+        coord.ito("us")
+        coord.title = f"F{index} acquisition time"
+        coord.meta["acquisition_frequency"] = frequency * ur.MHz
     dataset.meta.update(
         Meta(
-            datatype="FID",
+            datatype="FID" if one_dimensional else "2D",
             pathname=str(path),
             filename=path.name,
             origin="jeol",
             endian=display["data_endianness"],
             data_format=display["storage_format"],
             data_type=display["storage_dtype"],
-            sw=[width],
-            sw_h=[width * ur.Hz],
-            sfrq=[observation],
-            nucleus=[acquisition.get("nucleus")],
-            iscomplex=[True],
-            offset=[acquisition.get("carrier_offset_ppm")],
+            sw=list(widths),
+            sw_h=[width * ur.Hz for width in widths],
+            sfrq=frequencies,
+            nucleus=nuclei,
+            iscomplex=[True] * dataset.ndim,
+            offset=offsets,
             ns=display["scan_count"],
             solvent=display["solvent"],
             sample=display["sample"],
@@ -210,7 +232,7 @@ def _read_jdf(*args, **kwargs):
         return None
 
     normalized = (
-        _read_normalized_jeol_fid(path)
+        _read_normalized_jeol(path)
         if kwargs.get("_jeol_single_acquisition") and type(dataset) is NDDataset
         else None
     )

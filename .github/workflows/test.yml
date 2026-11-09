@@ -207,6 +207,8 @@ jobs:
     runs-on: ubuntu-latest
     env:
       NMR_JEOL_REFERENCE: /tmp/epicatechin_1h.jdf
+      NMR_JEOL_COSY: /tmp/epicatechin_cosy.jdf
+      NMR_JEOL_HSQC: /tmp/epicatechin_hsqc.jdf
     steps:
       - uses: actions/checkout@v7
       - uses: actions/setup-python@v7
@@ -222,7 +224,7 @@ jobs:
         uses: actions/checkout@v7
         with:
           repository: spectrochempy/nmrglue-ng
-          ref: 50316c9e9425f3da384819a2f185d700c467bd34
+          ref: 86ea960c807d21dd82662a25dba7196016025e2f
           path: jeol-provider
           fetch-depth: 0
           persist-credentials: false
@@ -236,3 +238,12 @@ jobs:
           echo "6ab899b72d314f05d187e07c69389efae30572bae9b0c74fb0249cfa468ae7e0  $NMR_JEOL_REFERENCE" | sha256sum -c -
           python -I -m pytest -ra tests/test_read_jeol.py -k public_jeol_reference
           python -I -m pytest -ra tests/test_native_readers.py::test_jeol_real_qf_reader_preserves_fft_support
+      - name: Qualify JEOL 2D with released FFT prevalidation
+        run: |
+          python -m pip install "spectrochempy==1.2.0"
+          python -m pip check
+          cp jeol-provider/tests/fixtures/fileio/data/jeol/epicatechin_cosy.jdf "$NMR_JEOL_COSY"
+          cp jeol-provider/tests/fixtures/fileio/data/jeol/epicatechin_hsqc.jdf "$NMR_JEOL_HSQC"
+          echo "f109351f2102435faa7d302659e073b77ecc1184f1c3ef8817087ca91b9df3aa  $NMR_JEOL_COSY" | sha256sum -c -
+          echo "eaa28b4b1fe05f95a41ace4f69f33ee6f31f26f392d3aea1d94bf3978b153625  $NMR_JEOL_HSQC" | sha256sum -c -
+          python -I -m pytest -ra tests/test_read_jeol.py -k 'cosy_preserves or listed_hsqc'

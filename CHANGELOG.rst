@@ -18,6 +18,10 @@ Added
 Changed
 ~~~~~~~
 
+* Use the normalized interop dataset for qualified regular JEOL 2D FID
+  matrices. Correct the previously swapped F1 and F2 time calibrations
+  and use the physical F2 sweep for the direct FFT frequency axis.
+
 * Use the normalized interop dataset for qualified JEOL 1D complex FIDs
   when nmrglue-ng provides the historical presentation contract.
 

@@ -562,15 +562,17 @@ def _raw_time_or_index_coordinate(axis, size, dim):
     return _raw_time_coordinate(axis, size, dim)
 
 
-def _from_raw_trace_matrix(result, data, *, series):
+def _from_raw_trace_matrix(result, data):
     """Preserve independent complex FIDs with the leading FFT guarded."""
     import spectrochempy as scp  # noqa: PLC0415
 
     from .processing.fft_validation import _require_fft_prevalidation  # noqa: PLC0415
 
+    series = result.quadrature_mode == "series-stored-2d"
+    guarded_f2 = result.quadrature_mode == "f2-traces-stored-2d"
     dimensions = ("trace", "F2") if series else ("F1", "F2")
     domains = ("unknown", "time") if series else ("time", "time")
-    encoding = ("unknown", "complex") if series else ("tppi", "complex")
+    encoding = ("unknown" if series or guarded_f2 else "tppi", "complex")
     if (
         tuple(result.physical_dimensions) != dimensions
         or tuple(result.dimensions) != dimensions
@@ -595,6 +597,9 @@ def _from_raw_trace_matrix(result, data, *, series):
     if not legacy_series:
         _require_fft_prevalidation()
     leading, direct = result.axes
+    time_coordinate = (
+        _raw_time_coordinate if guarded_f2 else _raw_time_or_index_coordinate
+    )
     if series:
         if (
             leading.domain != "unknown"
@@ -604,8 +609,23 @@ def _from_raw_trace_matrix(result, data, *, series):
             raise ValueError("Trace series requires an uncalibrated trace axis")
         y = scp.Coord.arange(data.shape[0], title=leading.label)
     else:
-        y = _raw_time_or_index_coordinate(leading, data.shape[0], "y")
-    x = _raw_time_or_index_coordinate(direct, data.shape[1], "x")
+        y = time_coordinate(leading, data.shape[0], "y")
+    x = time_coordinate(direct, data.shape[1], "x")
+    if guarded_f2:
+        widths = result.acquisition.get("spectral_width_hz", ())
+        if (
+            not isinstance(widths, (list, tuple))
+            or len(widths) != 2
+            or any(
+                not isinstance(width, (int, float, np.integer, np.floating))
+                or not np.isfinite(width)
+                or width <= 0
+                or coord.size < 2
+                or not np.isclose(coord.data[1] * width, 1, rtol=1e-12, atol=0)
+                for width, coord in zip(widths, (y, x), strict=True)
+            )
+        ):
+            raise ValueError("Raw F2 traces require calibrated F1 and F2 sweep widths")
     dataset = scp.NDDataset(data.copy(), dtype=data.dtype, dims=["y", "x"])
     dataset.set_coordset(y=y, x=x)
     dataset.meta.update(_interop_metadata(result))
@@ -618,8 +638,10 @@ def _from_raw_trace_matrix(result, data, *, series):
                 if legacy_series
                 else "UNVALIDATED:TRACE"
                 if series
+                else "UNVALIDATED:F1"
+                if guarded_f2
                 else "UNVALIDATED:TPPI",
-                "QSIM",
+                "DIRECT:QSIM" if guarded_f2 else "QSIM",
             ],
             "iscomplex": [False, True],
             "isfreq": [False, False],
@@ -708,10 +730,12 @@ def from_interop(result, *, profile=None):
         return _from_states_tppi(result, data)
     if profile is not None:
         raise ValueError(f"unsupported interop profile: {profile!r}")
-    if result.quadrature_mode == "tppi-stored-2d":
-        return _from_raw_trace_matrix(result, data, series=False)
-    if result.quadrature_mode == "series-stored-2d":
-        return _from_raw_trace_matrix(result, data, series=True)
+    if result.quadrature_mode in (
+        "tppi-stored-2d",
+        "series-stored-2d",
+        "f2-traces-stored-2d",
+    ):
+        return _from_raw_trace_matrix(result, data)
     if result.quadrature_mode == "states-stored-2d":
         return _from_stored_states(result, data)
     if result.quadrature_mode == "echo-antiecho-stored-2d":
