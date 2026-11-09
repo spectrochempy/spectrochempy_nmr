@@ -405,14 +405,79 @@ def test_public_jeol_cosy_preserves_f2_fft_and_calibrates_axes(monkeypatch):
             dataset.fft(dim="y")
 
 
-@pytest.mark.skipif(not os.environ.get("NMR_JEOL_HSQC"), reason="Set NMR_JEOL_HSQC")
-def test_public_jeol_listed_hsqc_keeps_fallback(monkeypatch):
+@pytest.mark.parametrize(
+    "experiment, nominal, acquired, initial_indices, dwell",
+    [
+        ("HSQC", 128, 32, [0, 2, 4, 7], 58.48e-6),
+        ("HMBC", 256, 64, [0, 1, 2, 4], 39.76e-6),
+    ],
+)
+def test_public_jeol_listed_preserves_trace_pairs(
+    experiment, nominal, acquired, initial_indices, dwell, monkeypatch
+):
+    from dataclasses import replace
+
     from spectrochempy_nmr import interop as bridge
 
-    def unexpected_conversion(*args):
-        pytest.fail("listed HSQC was sent to the regular COSY converter")
+    source = os.environ.get(f"NMR_JEOL_{experiment}")
+    if not source:
+        pytest.skip(f"Set NMR_JEOL_{experiment}")
+    path = Path(source)
+    reader = import_module("spectrochempy_nmr.readers.read_jeol")
+    with monkeypatch.context() as fallback:
+        fallback.setattr(reader, "_read_normalized_jeol", lambda path: None)
+        historical = scp.nmr.read_jeol(path)
 
-    monkeypatch.setattr(bridge, "from_interop", unexpected_conversion)
-    dataset = scp.nmr.read_jeol(Path(os.environ["NMR_JEOL_HSQC"]))
-    assert dataset is not None
-    assert dataset.meta.normalization_state == "storage-decoded"
+    from_interop = bridge.from_interop
+    converted = []
+
+    def convert(result):
+        dataset = from_interop(result)
+        converted.append((dataset, result))
+        return dataset
+
+    def unexpected_fallback(*args):
+        pytest.fail("qualified listed JDF was sent to the historical reader")
+
+    monkeypatch.setattr(bridge, "from_interop", convert)
+    monkeypatch.setattr(reader, "_read_jeol_raw", unexpected_fallback)
+    actual = scp.nmr.read_jeol(path)
+    assert len(converted) == 1
+    converted_dataset, result = converted[0]
+    assert actual is converted_dataset
+    assert actual.shape == historical.shape
+    assert actual.shape[0] == 2 * acquired
+    assert actual.meta.acquisition["nominal_shape"] == (nominal, actual.shape[1])
+    assert actual.meta.acquisition["trace_branch_order"] == (
+        "section-0/1",
+        "section-2/3",
+    )
+    np.testing.assert_array_equal(actual.data, historical.data)
+    times = actual.y.to("s").data
+    np.testing.assert_array_equal(times[::2], times[1::2])
+    np.testing.assert_allclose(times[::2][:4], np.array(initial_indices) * dwell)
+    assert np.all(np.diff(times[::2]) > 0)
+    direct = actual.fft(dim="x")
+    np.testing.assert_array_equal(direct.data, historical.fft(dim="x").data)
+    np.testing.assert_array_equal(direct.y.data, actual.y.data)
+    width = actual.meta.sw[-1]
+    expected_hz = np.fft.fftshift(np.fft.fftfreq(actual.x.size, d=1 / width))
+    assert direct.x.units == scp.ur.Hz
+    np.testing.assert_allclose(direct.x.data, expected_hz, atol=width * 4e-4, rtol=0)
+    for dataset in (actual, direct):
+        with pytest.raises(NotImplementedError, match="UNVALIDATED:F1"):
+            dataset.fft(dim="y")
+
+    axis = result.axes[0]
+    negative_first = axis.values.copy()
+    negative_first[:2] = -5e-8 * dwell
+    invalid = replace(
+        result, axes=(replace(axis, values=negative_first), result.axes[1])
+    )
+    with pytest.raises(ValueError, match="nominal sampling grid"):
+        from_interop(invalid)
+    contradictory = replace(
+        result, axes=(replace(axis, direction="decreasing"), result.axes[1])
+    )
+    with pytest.raises(ValueError, match="time coordinate for each trace pair"):
+        from_interop(contradictory)

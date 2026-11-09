@@ -562,6 +562,33 @@ def _raw_time_or_index_coordinate(axis, size, dim):
     return _raw_time_coordinate(axis, size, dim)
 
 
+def _listed_pair_coordinate(axis, size, width, nominal_size):
+    coord = _axis_coordinate(axis, size, "y", linearize_below=0.0)
+    values = coord.data
+    if (
+        axis.unit != "s"
+        or axis.direction != "unknown"
+        or axis.values is None
+        or size < 4
+        or size % 2
+        or not isinstance(nominal_size, (int, np.integer))
+        or nominal_size <= size // 2
+        or not np.array_equal(values[::2], values[1::2])
+    ):
+        raise ValueError("Listed F1 requires a time coordinate for each trace pair")
+    grid = values[::2] * width
+    indices = np.rint(grid)
+    if (
+        not np.isfinite(grid).all()
+        or np.any(grid < 0)
+        or np.any(indices >= nominal_size)
+        or np.any(np.diff(indices) <= 0)
+        or not np.allclose(grid, indices, rtol=0, atol=1e-7)
+    ):
+        raise ValueError("Listed F1 time pairs must follow the nominal sampling grid")
+    return coord
+
+
 def _from_raw_trace_matrix(result, data):
     """Preserve independent complex FIDs with the leading FFT guarded."""
     import spectrochempy as scp  # noqa: PLC0415
@@ -597,20 +624,6 @@ def _from_raw_trace_matrix(result, data):
     if not legacy_series:
         _require_fft_prevalidation()
     leading, direct = result.axes
-    time_coordinate = (
-        _raw_time_coordinate if guarded_f2 else _raw_time_or_index_coordinate
-    )
-    if series:
-        if (
-            leading.domain != "unknown"
-            or leading.values is not None
-            or leading.unit is not None
-        ):
-            raise ValueError("Trace series requires an uncalibrated trace axis")
-        y = scp.Coord.arange(data.shape[0], title=leading.label)
-    else:
-        y = time_coordinate(leading, data.shape[0], "y")
-    x = time_coordinate(direct, data.shape[1], "x")
     if guarded_f2:
         widths = result.acquisition.get("spectral_width_hz", ())
         if (
@@ -618,14 +631,55 @@ def _from_raw_trace_matrix(result, data):
             or len(widths) != 2
             or any(
                 not isinstance(width, (int, float, np.integer, np.floating))
+                or isinstance(width, (bool, np.bool_))
                 or not np.isfinite(width)
                 or width <= 0
-                or coord.size < 2
-                or not np.isclose(coord.data[1] * width, 1, rtol=1e-12, atol=0)
-                for width, coord in zip(widths, (y, x), strict=True)
+                for width in widths
             )
         ):
             raise ValueError("Raw F2 traces require calibrated F1 and F2 sweep widths")
+        x = _raw_time_coordinate(direct, data.shape[1], "x")
+        sampling = result.acquisition.get("sampling")
+        if sampling == ("listed-paired", "regular"):
+            nominal = result.acquisition.get("nominal_shape", ())
+            branches = result.acquisition.get("trace_branch_order", ())
+            if (
+                not isinstance(nominal, (tuple, list))
+                or len(nominal) != 2
+                or any(not isinstance(size, (int, np.integer)) for size in nominal)
+                or nominal[1] != x.size
+            ):
+                raise ValueError("Listed F1 requires a nominal sampling shape")
+            if (
+                not isinstance(branches, (tuple, list))
+                or len(branches) != 2
+                or any(not isinstance(name, str) or not name for name in branches)
+                or branches[0] == branches[1]
+            ):
+                raise ValueError("Listed F1 requires two distinct trace branch labels")
+            y = _listed_pair_coordinate(leading, data.shape[0], widths[0], nominal[0])
+            grids = ((x, widths[1]),)
+        else:
+            y = _raw_time_coordinate(leading, data.shape[0], "y")
+            grids = zip((y, x), widths, strict=True)
+        if any(
+            coord.size < 2
+            or not np.isclose(coord.data[1] * width, 1, rtol=1e-12, atol=0)
+            for coord, width in grids
+        ):
+            raise ValueError("Raw F2 traces require calibrated F1 and F2 sweep widths")
+    else:
+        x = _raw_time_or_index_coordinate(direct, data.shape[1], "x")
+        if series:
+            if (
+                leading.domain != "unknown"
+                or leading.values is not None
+                or leading.unit is not None
+            ):
+                raise ValueError("Trace series requires an uncalibrated trace axis")
+            y = scp.Coord.arange(data.shape[0], title=leading.label)
+        else:
+            y = _raw_time_or_index_coordinate(leading, data.shape[0], "y")
     dataset = scp.NDDataset(data.copy(), dtype=data.dtype, dims=["y", "x"])
     dataset.set_coordset(y=y, x=x)
     dataset.meta.update(_interop_metadata(result))
