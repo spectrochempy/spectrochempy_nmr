@@ -188,7 +188,7 @@ jobs:
           python -I -m pytest -ra tests/test_linear_prediction.py tests/test_fft_encodings.py tests/test_fft_2d_characterization.py tests/test_nmrpipe_oracle_conventions.py tests/test_nmrpipe_states_tppi_oracle.py tests/test_nmrpipe_echo_antiecho_oracle.py tests/test_native_readers.py tests/test_fft_prevalidation_compatibility.py tests/test_complex_channels.py tests/test_quadrature.py tests/test_agilent_noesy_processing.py tests/test_interop_conversion.py tests/test_agilent_interop_facade.py tests/test_agilent_reference.py tests/test_experiment_interop.py tests/test_processed_interop.py tests/test_processing_architecture.py
 
       - name: Qualify SIMPSON migration and Tecmag reader withdrawal
-        run: python -I -m pytest -ra tests/test_simpson_migration.py
+        run: python -I -m pytest -ra tests/test_read_simpson.py tests/test_simpson_migration.py
 
       - name: Qualify public TopSpin migrations
         run: |
@@ -224,7 +224,7 @@ jobs:
         with:
           name: plugin-dist
           path: dist
-      - name: Check out the qualified JEOL provider candidate
+      - name: Check out the checksum-pinned JEOL fixtures
         uses: actions/checkout@v7
         with:
           repository: spectrochempy/nmrglue-ng
@@ -232,11 +232,10 @@ jobs:
           path: jeol-provider
           fetch-depth: 0
           persist-credentials: false
-      - name: Install candidate wheels and qualify the public reader
+      - name: Install the released provider and qualify the public reader
         run: |
-          python -m pip wheel --no-deps --wheel-dir jeol-provider-wheels ./jeol-provider
           python -m pip install "spectrochempy==1.1.4" pytest
-          python -m pip install dist/*.whl jeol-provider-wheels/*.whl
+          python -m pip install --only-binary nmrglue-ng "nmrglue-ng==1.2.4" dist/*.whl
           python -m pip check
           cp jeol-provider/tests/fixtures/fileio/data/jeol/epicatechin_1h.jdf "$NMR_JEOL_REFERENCE"
           echo "6ab899b72d314f05d187e07c69389efae30572bae9b0c74fb0249cfa468ae7e0  $NMR_JEOL_REFERENCE" | sha256sum -c -
@@ -255,6 +254,4 @@ jobs:
           python -I -m pytest -ra tests/test_read_jeol.py -k 'cosy_preserves or listed_preserves'
       - name: Qualify the JEOL compatibility reader with the released wheel
         run: |
-          python -m pip install --only-binary nmrglue-ng "nmrglue-ng==1.2.3"
-          python -m pip check
           python -I -m pytest -ra tests/qualification/test_jeol_fallback.py

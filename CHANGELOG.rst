@@ -18,6 +18,9 @@ Added
 Changed
 ~~~~~~~
 
+* Remove the bundled SIMPSON decoder. Delegate compatibility decoding to
+  nmrglue-ng and retain the historical ordering of indexed XYREIM data.
+
 * Read qualified standalone SIMPSON FIDs and spectra through interop with
   calibrated axes. Keep compatibility handling for simulation input metadata
   and legacy data layouts.

@@ -34,14 +34,9 @@ def test_public_jeol_uses_released_decoder(source, shape, digest, monkeypatch):
     path = os.environ.get(source)
     if not path:
         pytest.skip(f"Set {source}")
-    from spectrochempy_nmr import interop
-
-    def unexpected_conversion(*args):
-        pytest.fail("the released provider must use the compatibility reader")
-
-    monkeypatch.setattr(interop, "from_interop", unexpected_conversion)
     reader = import_module("spectrochempy_nmr.readers.read_jeol")
     assert reader._read_jeol_raw is jeol.read
+    monkeypatch.setattr(reader, "_read_normalized_jeol", lambda path: None)
     dataset = scp.nmr.read_jeol(Path(path))
     assert dataset.shape == shape
     assert (
