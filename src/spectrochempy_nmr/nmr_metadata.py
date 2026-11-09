@@ -875,7 +875,8 @@ def extract_nmr_metadata(meta, *, ndim=None) -> NMRMetadata:
                 ),
             ),
             encoding=tuple(meta.get("encoding") or ()) or None,
-            pulse_program=meta.get("pulprog"),
+            pulse_program=meta.get("pulprog")
+            or acquisition.get("legacy_presentation", {}).get("pulse_program"),
             datatype=meta.get("datatype"),
             iscomplex=(meta.get("quadrature_mode") == "complex-1d",),
             spectral_width_hz=(acquisition.get("spectral_width_hz"),),

@@ -201,3 +201,37 @@ jobs:
         env:
           MATRIX_RESULT: ${{ needs.pinned-core-tests.result }}
         run: test "$MATRIX_RESULT" = success
+
+  jeol-fid-interop:
+    needs: artifacts
+    runs-on: ubuntu-latest
+    env:
+      NMR_JEOL_REFERENCE: /tmp/epicatechin_1h.jdf
+    steps:
+      - uses: actions/checkout@v7
+      - uses: actions/setup-python@v7
+        with:
+          python-version: "3.13"
+      - name: Secure pip bootstrap
+        uses: spectrochempy/spectrochempy/.github/actions/verified-pip@cdb087a24f06b8c83ea91ea036192304db9329e3
+      - uses: actions/download-artifact@v8
+        with:
+          name: plugin-dist
+          path: dist
+      - name: Check out the qualified JEOL provider candidate
+        uses: actions/checkout@v7
+        with:
+          repository: spectrochempy/nmrglue-ng
+          ref: f6b9ffd524fc245a87f937ca3f90dafc358371db
+          path: jeol-provider
+          fetch-depth: 0
+          persist-credentials: false
+      - name: Install candidate wheels and qualify the public reader
+        run: |
+          python -m pip wheel --no-deps --wheel-dir jeol-provider-wheels ./jeol-provider
+          python -m pip install "spectrochempy==1.1.4" pytest
+          python -m pip install dist/*.whl jeol-provider-wheels/*.whl
+          python -m pip check
+          cp jeol-provider/tests/fixtures/fileio/data/jeol/epicatechin_1h.jdf "$NMR_JEOL_REFERENCE"
+          echo "6ab899b72d314f05d187e07c69389efae30572bae9b0c74fb0249cfa468ae7e0  $NMR_JEOL_REFERENCE" | sha256sum -c -
+          python -I -m pytest -ra tests/test_read_jeol.py::test_public_jeol_reference_interop_parity

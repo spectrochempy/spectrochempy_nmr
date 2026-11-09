@@ -125,6 +125,70 @@ def _jeol_axis_type_to_encoding(axis_type_str, *, axis: int, ndim: int):
     return "unknown", False
 
 
+def _read_normalized_jeol_fid(path):
+    from inspect import signature  # noqa: PLC0415
+
+    from nmrglue import interop  # noqa: PLC0415
+
+    from spectrochempy_nmr.interop import from_interop  # noqa: PLC0415
+
+    normalize = interop.normalize_jeol_fid
+    if "legacy_presentation" not in signature(normalize).parameters:
+        return None
+    try:
+        stored = interop.read_jeol_fid(path)
+        result = normalize(stored, conjugation="conjugate", legacy_presentation=True)
+    except (ValueError, OSError):
+        return None
+
+    dataset = from_interop(result)
+    acquisition = dataset.meta.acquisition
+    display = acquisition["legacy_presentation"]
+    width = acquisition["spectral_width_hz"]
+    observation = acquisition["observation_frequency_mhz"]
+    dataset.x.ito("us")
+    dataset.x.title = "F1 acquisition time"
+    dataset.x.meta["acquisition_frequency"] = observation * ur.MHz
+    dataset.meta.update(
+        Meta(
+            datatype="FID",
+            pathname=str(path),
+            filename=path.name,
+            origin="jeol",
+            endian=display["data_endianness"],
+            data_format=display["storage_format"],
+            data_type=display["storage_dtype"],
+            sw=[width],
+            sw_h=[width * ur.Hz],
+            sfrq=[observation],
+            nucleus=[acquisition.get("nucleus")],
+            iscomplex=[True],
+            offset=[acquisition.get("carrier_offset_ppm")],
+            ns=display["scan_count"],
+            solvent=display["solvent"],
+            sample=display["sample"],
+            experiment=display["pulse_program"],
+            at=display["acquisition_time_s"],
+            d1=display["relaxation_delay_s"],
+            pw=display["pulse_width"],
+        )
+    )
+    return _finish_jeol_dataset(dataset, path, display["acquisition_date"])
+
+
+def _finish_jeol_dataset(dataset, path, creation):
+    dataset.meta.readonly = True
+    dataset.units = "count"
+    dataset.title = "intensity"
+    dataset.name = f"{path.stem} ({dataset.meta.datatype})"
+    dataset.filename = path.parent
+    if creation:
+        with contextlib.suppress(ValueError, TypeError):
+            dataset.acquisition_date = datetime(*creation)
+    dataset.history = f"Imported JEOL JDF file {path.name}"
+    return dataset
+
+
 @_importer_method
 def _read_jdf(*args, **kwargs):
     dataset, path = args
@@ -133,7 +197,11 @@ def _read_jdf(*args, **kwargs):
         warning_(f"File not found: {path}")
         return None
 
-    # Read using vendored NMRGlue
+    normalized = _read_normalized_jeol_fid(path)
+    if normalized is not None:
+        apply_reader_metadata_options(normalized, kwargs, default_origin="jeol")
+        return normalized
+
     try:
         dic, data = _read_jeol_raw(str(path))
     except Exception as exc:
@@ -298,25 +366,13 @@ def _read_jdf(*args, **kwargs):
 
     # Apply metadata
     dataset.meta.update(meta)
-    dataset.meta.readonly = True
     dataset.set_coordset(*tuple(coords))
-
-    dataset.units = "count"
-    dataset.title = "intensity"
     apply_reader_metadata_options(dataset, kwargs, default_origin="jeol")
-    dataset.name = f"{path.stem} ({meta.datatype})"
-    dataset.filename = path.parent
-
-    # Creation date
     creation = header.get("creation_time")
     if creation:
-        with contextlib.suppress(ValueError, TypeError):
-            dataset.acquisition_date = datetime(
-                creation.get("year", 1970),
-                creation.get("month", 1),
-                creation.get("day", 1),
-            )
-
-    dataset.history = f"Imported JEOL JDF file {path.name}"
-
-    return dataset
+        creation = (
+            creation.get("year", 1970),
+            creation.get("month", 1),
+            creation.get("day", 1),
+        )
+    return _finish_jeol_dataset(dataset, path, creation)

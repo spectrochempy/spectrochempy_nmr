@@ -1298,27 +1298,23 @@ class Experiment:
         coord = work.coord(0)
         from spectrochempy.core.units import ur  # noqa: PLC0415
 
-        origin = getattr(self.dataset, "origin", None)
+        acquisition = self.dataset.meta.get("acquisition", {})
+        inclusive_axis = (
+            acquisition.get("legacy_presentation") is not None
+            if self._nmr_meta.normalized_interop
+            else self.dataset.origin in {"agilent", "jeol", "tecmag", "simpson"}
+        )
         if (
-            (
-                origin in {"agilent", "jeol", "tecmag", "simpson"}
-                or (
-                    not origin
-                    and not self.dataset.meta.get("origin")
-                    and self.dataset.meta.get("acquisition", {}).get(
-                        "legacy_presentation"
-                    )
-                )
-            )
+            inclusive_axis
             and self.source_kind == "fid"
             and sw_hz
             and sw_hz[0] is not None
             and coord.size > 1
         ):
-            offset_ppm = 0.0
-            raw_offset = getattr(self.dataset.meta, "offset", None)
-            if raw_offset and raw_offset[0] is not None:
-                offset_ppm = float(raw_offset[0])
+            raw_offset = self.dataset.meta.get("offset") or [None]
+            offset_ppm = float(
+                acquisition.get("carrier_offset_ppm", raw_offset[0]) or 0.0
+            )
 
             ppm_width = float(sw_hz[0]) / float(sfo[0])
             sizem = max(coord.size - 1, 1)
