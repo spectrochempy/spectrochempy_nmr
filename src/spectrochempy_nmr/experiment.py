@@ -1299,13 +1299,16 @@ class Experiment:
         from spectrochempy.core.units import ur  # noqa: PLC0415
 
         acquisition = self.dataset.meta.get("acquisition", {})
-        inclusive_axis = (
-            acquisition.get("legacy_presentation") is not None
-            if self._nmr_meta.normalized_interop
-            else self.dataset.origin in {"agilent", "jeol", "tecmag", "simpson"}
-        )
+        origin = self.dataset.origin
         if (
-            inclusive_axis
+            (
+                origin in {"agilent", "jeol", "tecmag", "simpson"}
+                or (
+                    not origin
+                    and not self.dataset.meta.get("origin")
+                    and acquisition.get("legacy_presentation")
+                )
+            )
             and self.source_kind == "fid"
             and sw_hz
             and sw_hz[0] is not None

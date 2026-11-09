@@ -89,13 +89,24 @@ def read_jeol(*paths, **kwargs):
     """
     kwargs["filetypes"] = ["JEOL JDF files (*.jdf)"]
     kwargs["protocol"] = ["jeol"]
-    importer = Importer()
+    importer = _JeolImporter()
     return importer(*paths, **kwargs)
 
 
 # ======================================================================================
 # Private reader implementation
 # ======================================================================================
+
+
+class _JeolImporter(Importer):
+    """Keep potentially stacked reads on the historical dataset contract."""
+
+    def _switch_protocol(self, key, files, **kwargs):
+        kwargs["_jeol_single_acquisition"] = (
+            not kwargs.get("merge", True)
+            or sum(len(group) for group in self.files.values()) == 1
+        )
+        return super()._switch_protocol(key, files, **kwargs)
 
 
 def _jeol_axis_type_to_encoding(axis_type_str, *, axis: int, ndim: int):
@@ -168,8 +179,8 @@ def _read_normalized_jeol_fid(path):
             solvent=display["solvent"],
             sample=display["sample"],
             experiment=display["pulse_program"],
-            at=display["acquisition_time_s"],
-            d1=display["relaxation_delay_s"],
+            at=display["acquisition_time"],
+            d1=display["relaxation_delay"],
             pw=display["pulse_width"],
         )
     )
@@ -197,7 +208,11 @@ def _read_jdf(*args, **kwargs):
         warning_(f"File not found: {path}")
         return None
 
-    normalized = _read_normalized_jeol_fid(path)
+    normalized = (
+        _read_normalized_jeol_fid(path)
+        if kwargs.get("_jeol_single_acquisition", not kwargs.get("merge"))
+        else None
+    )
     if normalized is not None:
         apply_reader_metadata_options(normalized, kwargs, default_origin="jeol")
         return normalized

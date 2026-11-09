@@ -239,13 +239,38 @@ def test_public_jeol_fid_interop_parity(filename, monkeypatch):
     not os.environ.get("NMR_JEOL_REFERENCE"), reason="Set NMR_JEOL_REFERENCE"
 )
 def test_public_jeol_reference_interop_parity(monkeypatch):
-    _assert_public_jeol_fid_interop_parity(
-        Path(os.environ["NMR_JEOL_REFERENCE"]), monkeypatch, require_provider=True
+    path = Path(os.environ["NMR_JEOL_REFERENCE"])
+    for origin in (None, "custom"):
+        with monkeypatch.context() as patch:
+            _assert_public_jeol_fid_interop_parity(
+                path, patch, origin=origin, require_provider=True
+            )
+
+
+@pytest.mark.skipif(
+    not os.environ.get("NMR_JEOL_REFERENCE"), reason="Set NMR_JEOL_REFERENCE"
+)
+@pytest.mark.parametrize("mode", ["automatic", "explicit"])
+def test_public_jeol_reference_stack_retains_legacy_contract(mode, monkeypatch):
+    from spectrochempy_nmr import Experiment
+
+    def unexpected_normalization(*args):
+        pytest.fail("stacked JDFs require the legacy presentation")
+
+    reader = import_module("spectrochempy_nmr.readers.read_jeol")
+    monkeypatch.setattr(reader, "_read_normalized_jeol_fid", unexpected_normalization)
+    path = Path(os.environ["NMR_JEOL_REFERENCE"])
+    merged = (
+        scp.nmr.read_jeol(path, path)
+        if mode == "automatic"
+        else scp.nmr.read_jeol([path, path], merge=True)
     )
+    assert merged.shape[0] == 2
+    assert Experiment(merged).domain == "time"
 
 
 def _assert_public_jeol_fid_interop_parity(
-    path, monkeypatch, *, require_provider=False
+    path, monkeypatch, *, origin=None, require_provider=False
 ):
     from nmrglue import interop
 
@@ -260,7 +285,7 @@ def _assert_public_jeol_fid_interop_parity(
     reader = import_module("spectrochempy_nmr.readers.read_jeol")
     with monkeypatch.context() as fallback:
         fallback.setattr(reader, "_read_normalized_jeol_fid", lambda path: None)
-        historical = scp.nmr.read_jeol(path)
+        historical = scp.nmr.read_jeol(path, origin=origin)
     assert historical is not None
 
     converted = []
@@ -276,12 +301,13 @@ def _assert_public_jeol_fid_interop_parity(
 
     monkeypatch.setattr(bridge, "from_interop", convert)
     monkeypatch.setattr(reader, "_read_jeol_raw", unexpected_fallback)
-    actual = scp.nmr.read_jeol(path, description="public JEOL qualification")
+    actual = scp.nmr.read_jeol(
+        path, description="public JEOL qualification", origin=origin
+    )
     assert len(converted) == 1
     assert actual is converted[0]
     assert actual.description == "public JEOL qualification"
-    if path.name != "1H.jdf":
-        assert actual.acquisition_date == historical.acquisition_date
+    assert actual.acquisition_date == historical.acquisition_date
     assert actual.origin == historical.origin
     assert len(actual.meta.applied_operations) == 1
     assert actual.meta.applied_operations[0]["conjugation"] == "conjugate"
