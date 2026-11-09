@@ -131,7 +131,7 @@ FFT convention. Other profiles still use the compatibility reader.
 
 
 Agilent States 2D public reader
-------------------------------
+-------------------------------
 
 With a provider that supports States storage normalization,
 ``read_agilent()`` uses the dataset returned by ``from_interop()`` for

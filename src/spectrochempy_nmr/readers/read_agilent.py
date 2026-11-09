@@ -433,14 +433,18 @@ def _read_normalized_agilent_states(directory, path):
     display = acquisition["legacy_presentation"]
     widths = display["spectral_widths_hz"]
     observation = display["observation_frequencies_mhz"]
-    for index, (coord, width, frequency) in enumerate(
-        zip((dataset.y, dataset.x), widths, observation, strict=True), 1
+    decoupler = display["decoupler_frequencies_mhz"]
+    for index, (dim, width, frequency, fallback) in enumerate(
+        zip(("y", "x"), widths, observation, decoupler, strict=True), 1
     ):
+        coord = dataset.coordset[dim]
         if width is not None:
-            coord.ito("us")
+            coord = Coord(coord.to("us").data, units="us")
         coord.title = f"F{index} acquisition time"
-        if frequency is not None:
-            coord.meta["acquisition_frequency"] = frequency * ur.MHz
+        display_frequency = frequency or fallback
+        if display_frequency is not None:
+            coord.meta["acquisition_frequency"] = display_frequency * ur.MHz
+        dataset.coordset[dim] = coord
 
     dataset.meta.update(
         Meta(
@@ -458,7 +462,7 @@ def _read_normalized_agilent_states(directory, path):
                 *(None if width is None else width * ur.Hz for width in widths),
             ],
             sfrq=[None, *observation],
-            dfrq=[None, *display["decoupler_frequencies_mhz"]],
+            dfrq=[None, *decoupler],
             nucleus=[None, *display["reported_nuclei"]],
             encoding=["CHANNELS", "UNVALIDATED:AGILENT-STATES", "DIRECT:QSIM"],
             acquisition_encoding=("STATES", "QSIM"),

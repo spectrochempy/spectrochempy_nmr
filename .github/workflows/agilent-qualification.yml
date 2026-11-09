@@ -120,11 +120,13 @@ jobs:
             tests/qualification/test_bruker_echo_antiecho_public.py -k synthetic
           python -I -m pytest -ra tests/qualification/test_bruker_pdata_2d.py -k "synthetic and public_reader"
           python -I -m pytest -ra tests/qualification/test_bruker_ser_migration.py -k synthetic
+      - name: Qualify the public Agilent States fallback with the published wheel
+        run: python -I -m pytest -ra tests/qualification/test_agilent_states_public.py -k older_provider
       - name: Check out the candidate Agilent interop provider
         uses: actions/checkout@v7
         with:
           repository: spectrochempy/nmrglue-ng
-          ref: 2e35defbad559eac08152a54d96d443bba49c585
+          ref: d0ddc766bf312dece2ac77d1dd08ab710224201e
           fetch-depth: 0
           path: provider-candidate
           persist-credentials: false

@@ -49,7 +49,7 @@ def _check_states(path, monkeypatch):
         assert got.title == expected.title
         assert got.units == expected.units
         assert got.meta == expected.meta
-        np.testing.assert_allclose(got.data, expected.data, rtol=1e-12, atol=0)
+        np.testing.assert_array_equal(got.data, expected.data)
         np.testing.assert_array_equal(got.labels, expected.labels)
 
     direct, baseline = actual.fft(), old.fft()
@@ -61,16 +61,17 @@ def _check_states(path, monkeypatch):
     return actual
 
 
-def test_synthetic_states_public(tmp_path, monkeypatch):
+@pytest.fixture
+def synthetic_states(tmp_path):
     params = {
         "array": ["phase"],
         "phase": ["1", "2"],
         "ni": ["2"],
         "arraydim": ["4"],
         "np": ["8"],
-        "sw": ["2000"],
+        "sw": ["10775.862069"],
         "sw1": ["500"],
-        "sw2": ["800"],
+        "sw2": ["831.91923"],
         "sfrq": ["125"],
         "dfrq2": ["50"],
         "ns": ["3"],
@@ -87,8 +88,16 @@ def test_synthetic_states_public(tmp_path, monkeypatch):
         for index, trace in enumerate(words, 1):
             varian.put_blockheader(stream, (0, 21, index, 0, 3, 0, 0, 0, 0))
             stream.write(trace.tobytes())
-    actual = _check_states(tmp_path / "fid", monkeypatch)
-    samples = words[:, ::2] + 1j * words[:, 1::2]
+    return tmp_path / "fid", words[:, ::2] + 1j * words[:, 1::2]
+
+
+@pytest.mark.skipif(
+    not hasattr(interop, "normalize_agilent_states_2d"),
+    reason="provider does not support States normalization",
+)
+def test_synthetic_states_public(synthetic_states, monkeypatch):
+    path, samples = synthetic_states
+    actual = _check_states(path, monkeypatch)
     np.testing.assert_array_equal(actual.data[0], samples[::2] / 6)
     np.testing.assert_array_equal(actual.data[1], samples[1::2] / 6)
     scales = [
@@ -99,23 +108,83 @@ def test_synthetic_states_public(tmp_path, monkeypatch):
     assert len(scales) == 1 and scales[0]["divisor"] == 6
 
 
-def test_real_states_public(monkeypatch):
-    directory = os.environ.get("NMR_AGILENT_STATES_DATA")
+def test_synthetic_states_older_provider(synthetic_states, monkeypatch):
+    path, samples = synthetic_states
+    monkeypatch.delattr(interop, "normalize_agilent_states_2d", raising=False)
+    actual = scp.read_agilent(path)
+    assert actual.meta.normalization_state == "storage-decoded"
+    np.testing.assert_array_equal(actual.data[0], samples[::2] / 6)
+    np.testing.assert_array_equal(actual.data[1], samples[1::2] / 6)
+
+
+@pytest.mark.skipif(
+    not hasattr(interop, "normalize_agilent_states_2d"),
+    reason="provider does not support States normalization",
+)
+def test_synthetic_imaging_topology_uses_compatibility(synthetic_states, monkeypatch):
+    path, _ = synthetic_states
+    procpar_path = path.with_name("procpar")
+    procpar = varian.read_procpar(procpar_path)
+    procpar.update(
+        seqcon=varian.create_pdic_param("seqcon", ["nnnnn"]),
+        nv=varian.create_pdic_param("nv", ["2"]),
+        nv2=varian.create_pdic_param("nv2", ["2"]),
+    )
+    varian.write_procpar(procpar_path, procpar, overwrite=True)
+    reader = import_module("spectrochempy_nmr.readers.read_agilent")
+    legacy = reader.read_varian
+    shapes = []
+
+    def spy(*args, **kwargs):
+        metadata, data = legacy(*args, **kwargs)
+        shapes.append(data.shape)
+        return metadata, data
+
+    monkeypatch.setattr(reader, "read_varian", spy)
+    assert scp.read_agilent(path) is None
+    assert shapes == [(2, 2, 4)]
+
+
+@pytest.mark.skipif(
+    not hasattr(interop, "normalize_agilent_states_2d"),
+    reason="provider does not support States normalization",
+)
+@pytest.mark.parametrize(
+    ("variable", "shape", "width", "checksums"),
+    [
+        (
+            "NMR_AGILENT_STATES_DATA",
+            (2, 166, 1500),
+            (5555.55555556, 50000.0),
+            (
+                "4a35f4b98f9116ba67760d1c0c83cc48a17b4e53897b5dbe1e25f85f28b1eac8",
+                "54cf12841987ec3a05f5ca76f2b09dff09b7648d84b2936627f2c9757472c817",
+            ),
+        ),
+        (
+            "NMR_AGILENT_NOESY_DATA",
+            (2, 200, 1616),
+            (10775.862069, 10775.862069),
+            (
+                "730290aaa33a1d7c7d394ec0d63af01a6a32c01c39819ffcce0a1b0dc677cef6",
+                "3d387937d66af98aaf1356893ef0bae7d34d290d4fa32920374eb88c8bcbc471",
+            ),
+        ),
+    ],
+)
+def test_real_states_public(monkeypatch, variable, shape, width, checksums):
+    directory = os.environ.get(variable)
     if not directory:
-        pytest.skip(
-            "set NMR_AGILENT_STATES_DATA to the historical agilent_2d directory"
-        )
+        pytest.skip(f"set {variable} to the real acquisition directory")
     path = Path(directory)
     files = (path / "fid", path / "procpar")
     before = tuple(hashlib.sha256(file.read_bytes()).hexdigest() for file in files)
-    assert before == (
-        "4a35f4b98f9116ba67760d1c0c83cc48a17b4e53897b5dbe1e25f85f28b1eac8",
-        "54cf12841987ec3a05f5ca76f2b09dff09b7648d84b2936627f2c9757472c817",
-    )
+    assert before == checksums
     actual = _check_states(path, monkeypatch)
-    assert actual.shape == (2, 166, 1500)
+    assert actual.shape == shape
     assert actual.y.units is None
-    assert actual.meta.acquisition["spectral_widths_hz"] == (5555.55555556, 50000.0)
+    assert actual.meta.acquisition["spectral_widths_hz"] == width
+    assert actual.meta.interop_axes[0]["reference"] is None
     assert before == tuple(
         hashlib.sha256(file.read_bytes()).hexdigest() for file in files
     )
