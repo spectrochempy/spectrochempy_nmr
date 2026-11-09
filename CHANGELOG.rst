@@ -18,6 +18,13 @@ Added
 Changed
 ~~~~~~~
 
+* Read qualified standalone SIMPSON FIDs and spectra through interop with
+  calibrated axes. Keep compatibility handling for simulation input metadata
+  and legacy data layouts.
+
+* Remove the Tecmag TNT reader. Previously saved Tecmag datasets remain
+  interpretable.
+
 * Delegate JEOL JDF compatibility decoding to nmrglue-ng and remove
   the bundled decoder.
 

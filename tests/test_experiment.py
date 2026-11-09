@@ -783,17 +783,6 @@ class TestProcessTimeDomain:
         spectrum = exp.process()
         assert str(spectrum.coord(0).units) == "ppm"
 
-    @pytest.mark.skipif(
-        not (EXTRA_NMR / "tecmag" / "LiCl_ref1.tnt").exists(),
-        reason="TecMag 1D data missing",
-    )
-    def test_tecmag_1d_pipeline_uses_direct_complex_encoding(self):
-        fid = _read_or_skip(EXTRA_NMR / "tecmag" / "LiCl_ref1.tnt")
-        exp = Experiment(fid)
-        assert exp.encoding == ("QSIM",)
-        spectrum = exp.process()
-        assert str(spectrum.coord(0).units) == "ppm"
-
 
 class TestPublic1DMathConventions:
     """Numerically characterize the public 1D FFT and axis conventions."""
@@ -980,21 +969,6 @@ class TestPublic1DRealAxisValidation:
         center_ppm = (float(axis[0]) + float(axis[-1])) / 2.0
 
         assert center_ppm == pytest.approx(float(fid.meta.offset[0]), abs=0.05)
-
-    @pytest.mark.skipif(
-        not (EXTRA_NMR / "tecmag" / "LiCl_ref1.tnt").exists(),
-        reason="TecMag 1D data missing",
-    )
-    def test_tecmag_reference_peak_remains_near_zero_ppm(self):
-        spectrum = Experiment(
-            _read_or_skip(EXTRA_NMR / "tecmag" / "LiCl_ref1.tnt")
-        ).process()
-        axis = np.asarray(spectrum.x.data)
-        peak_ppm = float(axis[int(np.argmax(np.abs(np.asarray(spectrum.data))))])
-        center_ppm = (float(axis[0]) + float(axis[-1])) / 2.0
-
-        assert center_ppm == pytest.approx(0.0, abs=0.05)
-        assert peak_ppm == pytest.approx(0.0, abs=0.5)
 
     @pytest.mark.skipif(
         not (_has_topspin_1d() and _has_topspin_1d_pdata()),

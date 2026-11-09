@@ -31,11 +31,11 @@ from nmrglue.fileio.jeol import read as _read_jeol_raw
 
 from spectrochempy.core.dataset.coord import Coord
 from spectrochempy.core.dataset.nddataset import NDDataset
-from spectrochempy.core.readers.importer import Importer
 from spectrochempy.core.readers.importer import _importer_method
 from spectrochempy.core.units import ur
 from spectrochempy.utils._logging import warning_
 from spectrochempy.utils.meta import Meta
+from spectrochempy_nmr.readers._metadata import SingleAcquisitionImporter
 from spectrochempy_nmr.readers._metadata import apply_reader_metadata_options
 
 # ======================================================================================
@@ -90,24 +90,13 @@ def read_jeol(*paths, **kwargs):
     """
     kwargs["filetypes"] = ["JEOL JDF files (*.jdf)"]
     kwargs["protocol"] = ["jeol"]
-    importer = _JeolImporter()
+    importer = SingleAcquisitionImporter()
     return importer(*paths, **kwargs)
 
 
 # ======================================================================================
 # Private reader implementation
 # ======================================================================================
-
-
-class _JeolImporter(Importer):
-    """Keep potentially stacked reads on the historical dataset contract."""
-
-    def _switch_protocol(self, key, files, **kwargs):
-        kwargs["_jeol_single_acquisition"] = (
-            not kwargs.get("merge", True)
-            or sum(len(group) for group in self.files.values()) == 1
-        )
-        return super()._switch_protocol(key, files, **kwargs)
 
 
 def _jeol_axis_type_to_encoding(axis_type_str, *, axis: int, ndim: int):
@@ -233,7 +222,7 @@ def _read_jdf(*args, **kwargs):
 
     normalized = (
         _read_normalized_jeol(path)
-        if kwargs.get("_jeol_single_acquisition") and type(dataset) is NDDataset
+        if kwargs.get("_nmr_single_acquisition") and type(dataset) is NDDataset
         else None
     )
     if normalized is not None:

@@ -34,13 +34,6 @@ def _resolve_read_jeol():
     return read_jeol
 
 
-def _resolve_read_tecmag():
-    """Lazily import and return the real ``read_tecmag`` function."""
-    from .readers.read_tecmag import read_tecmag  # noqa: PLC0415
-
-    return read_tecmag
-
-
 def _resolve_read_simpson():
     """Lazily import and return the real ``read_simpson`` function."""
     from .readers.read_simpson import read_simpson  # noqa: PLC0415
@@ -58,19 +51,6 @@ def _ensure_jeol_filetype_registered() -> None:
             "jeol",
             "JEOL JDF NMR data files",
             aliases=["jdf"],
-        )
-
-
-def _ensure_tecmag_filetype_registered() -> None:
-    """Register the plugin-owned TecMag key in the legacy importer registry."""
-    from spectrochempy.core.readers.filetypes import registry  # noqa: PLC0415
-
-    known = {name for name, _description in registry.filetypes}
-    if "tecmag" not in known:
-        registry.register_filetype(
-            "tecmag",
-            "TecMag TNT NMR data files",
-            aliases=["tnt"],
         )
 
 
@@ -92,11 +72,10 @@ def _resolve_read():
     from .readers.read_agilent import read_agilent  # noqa: PLC0415
     from .readers.read_jeol import read_jeol  # noqa: PLC0415
     from .readers.read_simpson import read_simpson  # noqa: PLC0415
-    from .readers.read_tecmag import read_tecmag  # noqa: PLC0415
     from .readers.read_topspin import read_topspin  # noqa: PLC0415
 
     def read(*paths, **kwargs):
-        """Read NMR data, auto-detecting TopSpin vs Agilent/Varian vs JEOL vs TecMag vs SIMPSON format."""
+        """Read NMR data, auto-detecting TopSpin vs Agilent/Varian vs JEOL vs SIMPSON format."""
         protocol = kwargs.get("protocol")
         if protocol == "agilent":
             return read_agilent(*paths, **kwargs)
@@ -104,8 +83,6 @@ def _resolve_read():
             return read_topspin(*paths, **kwargs)
         if protocol == "jeol":
             return read_jeol(*paths, **kwargs)
-        if protocol == "tecmag":
-            return read_tecmag(*paths, **kwargs)
         if protocol == "simpson":
             return read_simpson(*paths, **kwargs)
 
@@ -117,9 +94,6 @@ def _resolve_read():
                 # SIMPSON files use .spe/.fid/.in extensions
                 if path.suffix.lower() in {".spe", ".fid", ".in"}:
                     return read_simpson(*paths, **kwargs)
-                # TecMag files have .tnt extension
-                if path.suffix.lower() == ".tnt":
-                    return read_tecmag(*paths, **kwargs)
                 # JEOL files have .jdf extension
                 if path.suffix.lower() == ".jdf":
                     return read_jeol(*paths, **kwargs)
@@ -259,25 +233,6 @@ def _infer_jeol_filetype_key(filename, **kwargs):
     """Return the JEOL filetype key for .jdf files."""
     if filename.suffix.lower() == ".jdf":
         return ".jeol"
-    return None
-
-
-_VALID_TECMAG_EXTENSIONS = {".tnt"}
-
-
-def _is_tecmag_protocol(**kwargs) -> bool:
-    protocol = kwargs.get("protocol")
-    if protocol is None:
-        return False
-    if isinstance(protocol, str):
-        protocol = [protocol]
-    return "tecmag" in protocol
-
-
-def _infer_tecmag_filetype_key(filename, **kwargs):
-    """Return the TecMag filetype key for .tnt files."""
-    if filename.suffix.lower() == ".tnt":
-        return ".tecmag"
     return None
 
 
@@ -438,10 +393,6 @@ def _infer_nmr_filetype_key(filename, **kwargs):
     simpson_key = _infer_simpson_filetype_key(filename, **kwargs)
     if simpson_key is not None:
         return simpson_key
-    # Check TecMag: .tnt files are TecMag.
-    tecmag_key = _infer_tecmag_filetype_key(filename, **kwargs)
-    if tecmag_key is not None:
-        return tecmag_key
     # Check JEOL: .jdf files are JEOL.
     jeol_key = _infer_jeol_filetype_key(filename, **kwargs)
     if jeol_key is not None:
@@ -482,7 +433,7 @@ def _ensure_topspin_filetype_registered() -> None:
 
 
 class NMRPlugin(SpectroChemPyPlugin):
-    """NMR plugin, providing Bruker TopSpin, Agilent/Varian, JEOL, TecMag, and SIMPSON readers."""
+    """NMR plugin, providing Bruker TopSpin, Agilent/Varian, JEOL, and SIMPSON readers."""
 
     name = "nmr"
     version = "0.2.0"
@@ -499,15 +450,13 @@ class NMRPlugin(SpectroChemPyPlugin):
         "topspin": {"read": "nmr.read_topspin"},
         "agilent": {"read": "nmr.read_agilent"},
         "jeol": {"read": "nmr.read_jeol"},
-        "tecmag": {"read": "nmr.read_tecmag"},
     }
 
     def register_readers(self) -> list[dict]:
-        """Declare the TopSpin, Agilent, JEOL, TecMag, and SIMPSON file readers."""
+        """Declare the TopSpin, Agilent, JEOL, and SIMPSON file readers."""
         _ensure_topspin_filetype_registered()
         _ensure_agilent_filetype_registered()
         _ensure_jeol_filetype_registered()
-        _ensure_tecmag_filetype_registered()
         _ensure_simpson_filetype_registered()
         return [
             {
@@ -542,14 +491,6 @@ class NMRPlugin(SpectroChemPyPlugin):
                 ),
                 "description": "JEOL JDF NMR data files",
                 "extensions": [".jdf"],
-            },
-            {
-                "name": "tecmag",
-                "func": lazy_proxy(
-                    _resolve_read_tecmag, name="spectrochempy.nmr.read_tecmag"
-                ),
-                "description": "TecMag TNT NMR data files",
-                "extensions": [".tnt"],
             },
             {
                 "name": "simpson",
@@ -613,10 +554,6 @@ def __getattr__(name: str):
         from .readers.read_jeol import read_jeol  # noqa: PLC0415
 
         return read_jeol
-    if name == "read_tecmag":
-        from .readers.read_tecmag import read_tecmag  # noqa: PLC0415
-
-        return read_tecmag
     if name == "read_simpson":
         from .readers.read_simpson import read_simpson  # noqa: PLC0415
 
@@ -677,7 +614,6 @@ def __dir__() -> list[str]:
         "read_topspin",
         "read_agilent",
         "read_jeol",
-        "read_tecmag",
         "read_simpson",
         "set_nmr_context",
     ]

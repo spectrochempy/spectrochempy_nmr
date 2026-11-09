@@ -10,7 +10,7 @@ The recommended reader is exposed after plugin discovery as
 The dispatch function itself is documented in the user guide because it is a
 plugin-proxy entry point rather than a module-level function.
 
-``scp.nmr.read`` accepts TopSpin/Bruker, Agilent/Varian, JEOL, TecMag and
+``scp.nmr.read`` accepts TopSpin/Bruker, Agilent/Varian, JEOL and
 SIMPSON inputs and dispatches to the reader functions below. It is the
 recommended public entry point even though the callable is created lazily by
 the plugin proxy.
@@ -26,9 +26,6 @@ the plugin proxy.
 
 .. automodule:: spectrochempy_nmr.readers.read_jeol
    :members: read_jeol
-
-.. automodule:: spectrochempy_nmr.readers.read_tecmag
-   :members: read_tecmag
 
 .. automodule:: spectrochempy_nmr.readers.read_simpson
    :members: read_simpson
