@@ -366,6 +366,13 @@ def _set_ser_fft_presentation(dataset, result):
     widths = result.acquisition["spectral_width_hz"]
     fft_axes = {}
     channel = dataset.ndim == 3
+    indirect_transform = {
+        "states-tppi": ("states-tppi-cross-pairs", "INDIRECT:STATES-TPPI"),
+        "echo-antiecho-stored-2d": (
+            "echo-antiecho-branch-fft",
+            "INDIRECT:ECHO-ANTIECHO",
+        ),
+    }.get(dataset.meta.quadrature_mode)
     zero = [0 * scp.ur.degree] if channel else []
     first = zero.copy()
     encoding = ["CHANNELS"] if channel else []
@@ -374,8 +381,8 @@ def _set_ser_fft_presentation(dataset, result):
         transform = descriptor.get("transform")
         if transform == "conjugate-input" and not (channel and role == "F1"):
             fft_encoding = "CONJUGATE-FFT"
-        elif channel and role == "F1" and transform == "states-tppi-cross-pairs":
-            fft_encoding = "INDIRECT:STATES-TPPI"
+        elif role == "F1" and indirect_transform and transform == indirect_transform[0]:
+            fft_encoding = indirect_transform[1]
         else:
             raise ValueError("unsupported SER FFT presentation transform")
         phase = descriptor["initial_phase"]
@@ -461,7 +468,9 @@ def _from_echo_antiecho(result, data):
         raise ValueError(
             "Echo/anti-echo requires normalized F1/F2 time-domain complex branches"
         )
-    return _raw_channel_dataset(result, data.copy(), tuple(result.branch_order))
+    dataset = _raw_channel_dataset(result, data.copy(), tuple(result.branch_order))
+    _set_ser_fft_presentation(dataset, result)
+    return dataset
 
 
 def _raw_channel_dataset(result, channels, labels):

@@ -109,28 +109,10 @@ def _check_route(path, monkeypatch, tmp_path, dc, filtered):
         )
 
 
-def test_synthetic_public_states_tppi_asymmetric_branches(tmp_path, monkeypatch):
-    path = tmp_path / "states" / "1"
-    proc = path / "pdata" / "1"
-    proc.mkdir(parents=True)
-    (path / "acqus").write_text(
-        "##TITLE= Direct acquisition\n"
-        "##$TD= 256\n##$SW= 16\n##$SW_h= 2000\n##$SFO1= 125\n"
-        "##$BF1= 124.9995\n##$O1= 500\n##$AQ_mod= 3\n##$DECIM= 16\n"
-        "##$DSPFVS= 12\n##$GRPDLY= 2.5\n##$BYTORDA= 1\n##$DTYPA= 0\n"
-        "##$PARMODE= 1\n##$NUC1= <13C>\n##$NS= 16\n##$RG= 18\n"
-        "##$FnTYPE= 0\n##END=\n"
-    )
-    (path / "acqu2s").write_text(
-        "##TITLE= Indirect acquisition\n"
-        "##$TD= 8\n##$SW= 8\n##$SFO1= 125\n##$BF1= 124.9995\n"
-        "##$O1= 500\n##$FnMODE= 5\n##$NUC1= <13C>\n##END=\n"
-    )
-    for name, zero, first in (("procs", 21, -8), ("proc2s", -30, 14)):
-        (proc / name).write_text(
-            f"##TITLE= Processing\n##$SF= 124.999\n"
-            f"##$PHC0= {zero}\n##$PHC1= {first}\n##END=\n"
-        )
-    values = np.arange(8 * 256, dtype=np.int32)
-    (path / "ser").write_bytes((values * (values % 7 - 3)).astype(">i4").tobytes())
-    _check_route(path, monkeypatch, tmp_path, True, True)
+@pytest.mark.parametrize("paired_ser", [5], indirect=True)
+def test_synthetic_public_states_tppi_asymmetric_branches(
+    paired_ser,
+    tmp_path,
+    monkeypatch,
+):
+    _check_route(paired_ser, monkeypatch, tmp_path, True, True)

@@ -215,9 +215,12 @@ def _fft_postprocess_result(new, dim=-1, inv=False, **kwargs):
         ]
         if new.meta.component_axis == "c" and all(physical_flags):
             new.meta.stage = "spectrum"
-            new.meta.tppi_alternation_state = "applied"
-            new.meta.component_labels = ("F1_R", "F1_I")
-            new.coordset["c"] = Coord.arange(2, dims="c", labels=["F1_R", "F1_I"])
+            if new.meta.quadrature_mode == "states-tppi":
+                new.meta.tppi_alternation_state = "applied"
+                new.meta.component_labels = ("F1_R", "F1_I")
+                new.coordset["c"] = Coord.arange(2, dims="c", labels=["F1_R", "F1_I"])
+            elif new.meta.quadrature_mode == "echo-antiecho-stored-2d":
+                new.meta.echo_antiecho_reconstruction = "public-branch-fft"
         new.meta.data_domain = (
             "frequency"
             if all(physical_flags)

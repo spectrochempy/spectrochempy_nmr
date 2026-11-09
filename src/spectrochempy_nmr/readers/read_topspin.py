@@ -1098,6 +1098,12 @@ def _read_normalized_ser(
             "normalize_bruker_ser_states_tppi",
             "states_tppi_only",
         ),
+        (
+            "echo-antiecho",
+            interop.read_bruker_ser_storage,
+            "normalize_bruker_ser_echo_antiecho",
+            "echo_antiecho_only",
+        ),
     )
     for profile, read, normalizer, preflight in profiles:
         normalize = getattr(interop, normalizer, None)
@@ -1125,11 +1131,13 @@ def _read_normalized_ser(
                 for axis in normalized.acquisition["fft_presentation"].values()
             ):
                 return None
-            dataset = from_interop(normalized, profile=profile)
+            dataset = from_interop(
+                normalized, profile="states-tppi" if profile == "states-tppi" else None
+            )
         except (OSError, ValueError):
             continue
         dataset.meta.acquisition_encoding = (
-            tuple(stored.encoding) if profile is None else ("STATES-TPPI", "DQD")
+            tuple(stored.encoding) if profile is None else (profile.upper(), "DQD")
         )
         return stored.metadata, dataset
     return None
