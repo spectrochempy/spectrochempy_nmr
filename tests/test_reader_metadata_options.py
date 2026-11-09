@@ -13,7 +13,6 @@ import pytest
 from spectrochempy_nmr.readers.read_agilent import read_agilent
 from spectrochempy_nmr.readers.read_jeol import read_jeol
 from spectrochempy_nmr.readers.read_simpson import read_simpson
-from spectrochempy_nmr.readers.read_tecmag import read_tecmag
 from spectrochempy_nmr.readers.read_topspin import read_topspin
 
 import spectrochempy as scp
@@ -32,11 +31,6 @@ def _reader_cases(tmp_path):
             read_jeol,
             extra_dir / "jeol" / "1H.jdf",
             "jeol",
-        ),
-        (
-            read_tecmag,
-            extra_dir / "tecmag" / "LiCl_ref1.tnt",
-            "tecmag",
         ),
         (read_simpson, simpson_path, "simpson"),
         (
@@ -81,7 +75,7 @@ def _assert_scientific_payload_unchanged(actual, control):
     )
 
 
-@pytest.mark.parametrize("case_index", range(5))
+@pytest.mark.parametrize("case_index", range(4))
 def test_public_reader_metadata_options(tmp_path, case_index):
     reader, path, default_origin = _reader_cases(tmp_path)[case_index]
     if not path.exists():
@@ -110,7 +104,7 @@ def test_public_reader_metadata_options(tmp_path, case_index):
 
 
 def test_reader_metadata_options_distinguish_empty_string_and_none(tmp_path):
-    path = _reader_cases(tmp_path)[2][1]
+    path = _reader_cases(tmp_path)[1][1]
 
     control = read_simpson(path)
     none_values = read_simpson(path, origin=None, description=None)

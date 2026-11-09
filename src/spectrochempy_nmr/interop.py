@@ -236,12 +236,13 @@ def _from_2d(result, data):
         and result.acquisition.get("indirect_sampling") == "qf"
     )
     paired_spectrum = mode == "complex-channel-pair-2d"
+    complex_matrix = mode == "simpson-stored-complex-2d"
     if (
         dimensions not in (("F1", "F2"), ("F2", "F1"))
         or len(result.axes) != 2
         or (domains != ("frequency", "frequency") and not time_qf)
         or result.normalization_state != "storage-normalized"
-        or data.dtype.kind not in ("c" if paired_spectrum else "iuf")
+        or data.dtype.kind not in ("c" if paired_spectrum or complex_matrix else "iuf")
         or not np.isfinite(data).all()
     ):
         raise ValueError(
@@ -278,6 +279,18 @@ def _from_2d(result, data):
         _require_fft_prevalidation()
         component_labels = branches
         plane = np.array(data, copy=True)
+    elif (
+        complex_matrix
+        and not time_qf
+        and data.ndim == 2
+        and data.dtype.itemsize in (8, 16)
+        and tuple(result.dimensions) == dimensions == ("F1", "F2")
+        and encoding == ("unknown", "complex")
+        and branches == ("complex",)
+        and channel_axis is None
+    ):
+        plane = np.array(data, copy=True)
+        complex_axis = "F2"
     elif (
         not time_qf
         and mode == "real-2d"
@@ -596,7 +609,10 @@ def _from_raw_trace_matrix(result, data):
     from .processing.fft_validation import _require_fft_prevalidation  # noqa: PLC0415
 
     series = result.quadrature_mode == "series-stored-2d"
-    guarded_f2 = result.quadrature_mode == "f2-traces-stored-2d"
+    guarded_f2 = result.quadrature_mode in (
+        "f2-traces-stored-2d",
+        "simpson-stored-complex-2d",
+    )
     dimensions = ("trace", "F2") if series else ("F1", "F2")
     domains = ("unknown", "time") if series else ("time", "time")
     encoding = ("unknown" if series or guarded_f2 else "tppi", "complex")
@@ -789,6 +805,10 @@ def from_interop(result, *, profile=None):
         "series-stored-2d",
         "f2-traces-stored-2d",
     ):
+        return _from_raw_trace_matrix(result, data)
+    if result.quadrature_mode == "simpson-stored-complex-2d" and tuple(
+        result.domains
+    ) == ("time", "time"):
         return _from_raw_trace_matrix(result, data)
     if result.quadrature_mode == "states-stored-2d":
         return _from_stored_states(result, data)

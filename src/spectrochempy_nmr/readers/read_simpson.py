@@ -26,14 +26,16 @@ import re
 from pathlib import Path
 
 import numpy as np
+from nmrglue.fileio import simpson
 
 from spectrochempy.core.dataset.coord import Coord
-from spectrochempy.core.readers.importer import Importer
+from spectrochempy.core.dataset.nddataset import NDDataset
 from spectrochempy.core.readers.importer import _importer_method
 from spectrochempy.core.units import ur
 from spectrochempy.utils._logging import warning_
 from spectrochempy.utils.meta import Meta
 from spectrochempy_nmr.extern.nmrglue._simpson import read as _read_simpson_raw
+from spectrochempy_nmr.readers._metadata import SingleAcquisitionImporter
 from spectrochempy_nmr.readers._metadata import apply_reader_metadata_options
 
 # ======================================================================================
@@ -89,7 +91,7 @@ def read_simpson(*paths, **kwargs):
     """
     kwargs["filetypes"] = ["SIMPSON files (*.spe *.fid)"]
     kwargs["protocol"] = ["simpson"]
-    importer = Importer()
+    importer = SingleAcquisitionImporter()
     return importer(*paths, **kwargs)
 
 
@@ -149,6 +151,57 @@ def _parse_simpson_in(filepath):
 # ======================================================================================
 
 
+def _read_normalized_simpson(data_path):
+    from nmrglue import interop  # noqa: PLC0415
+
+    from spectrochempy_nmr.interop import from_interop  # noqa: PLC0415
+
+    try:
+        stored = interop.read(data_path)
+        if not stored.format.startswith("simpson-") or (
+            stored.data.ndim == 2 and stored.data.shape[0] == 1
+        ):
+            return None
+        is_frequency = stored.domains[0] == "frequency"
+        if is_frequency != _is_spe(data_path, stored.metadata):
+            return None
+        options = {} if is_frequency else {"conjugation": "none"}
+        result = interop.normalize(stored, **options)
+        dataset = from_interop(result)
+    except (ValueError, NotImplementedError, OSError):
+        return None
+
+    acquisition = dataset.meta.acquisition
+    widths = acquisition["spectral_width_hz"]
+    if dataset.ndim == 1:
+        widths = (widths,)
+        dataset.meta.encoding = ["QF"]
+    dataset.meta.update(
+        Meta(
+            datatype="2D" if dataset.ndim == 2 else "SPE" if is_frequency else "FID",
+            sw=list(widths),
+            sw_h=[width * ur.Hz for width in widths],
+            sfrq=[None] * dataset.ndim,
+            nucleus=[None] * dataset.ndim,
+            iscomplex=[True] if dataset.ndim == 1 else [False, True],
+            offset=[None] * dataset.ndim,
+        )
+    )
+    return dataset
+
+
+def _finish_simpson(dataset, path, kwargs):
+    dataset.meta.update(Meta(pathname=str(path), filename=path.name, origin="simpson"))
+    dataset.meta.readonly = True
+    dataset.units = "count"
+    dataset.title = "intensity"
+    apply_reader_metadata_options(dataset, kwargs, default_origin="simpson")
+    dataset.name = f"{path.stem} ({dataset.meta.datatype})"
+    dataset.filename = path
+    dataset.history = f"Imported SIMPSON dataset {path.name} ({dataset.meta.datatype})"
+    return dataset
+
+
 def _read_simpson_core(dataset, path, **kwargs):
     """Core SIMPSON reading logic shared across file extensions."""
     if not path.exists():
@@ -198,9 +251,22 @@ def _read_simpson_core(dataset, path, **kwargs):
         if sibling_in.exists():
             in_meta = _parse_simpson_in(sibling_in)
 
-    # Read using the SIMPSON parser
+    if (
+        kwargs.get("_nmr_single_acquisition")
+        and type(dataset) is NDDataset
+        and not in_meta
+    ):
+        normalized = _read_normalized_simpson(data_path)
+        if normalized is not None:
+            return _finish_simpson(normalized, path, kwargs)
+
     try:
-        dic, data = _read_simpson_raw(str(data_path))
+        try:
+            dic, data = simpson.read(str(data_path))
+            if any(key != key.strip() for key in dic):
+                dic, data = _read_simpson_raw(str(data_path))
+        except (ValueError, KeyError, IndexError, UnboundLocalError):
+            dic, data = _read_simpson_raw(str(data_path))
     except Exception as exc:
         warning_(f"Failed to read SIMPSON file {data_path}: {exc}")
         return None
@@ -318,18 +384,8 @@ def _read_simpson_core(dataset, path, **kwargs):
 
     # Apply metadata
     dataset.meta.update(meta)
-    dataset.meta.readonly = True
     dataset.set_coordset(*tuple(coords))
-
-    dataset.units = "count"
-    dataset.title = "intensity"
-    apply_reader_metadata_options(dataset, kwargs, default_origin="simpson")
-    dataset.name = f"{path.stem} ({meta.datatype})"
-    dataset.filename = path
-
-    dataset.history = f"Imported SIMPSON dataset {path.name} ({meta.datatype})"
-
-    return dataset
+    return _finish_simpson(dataset, path, kwargs)
 
 
 @_importer_method

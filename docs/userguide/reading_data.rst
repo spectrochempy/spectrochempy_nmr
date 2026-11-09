@@ -2,7 +2,7 @@ Reading NMR data
 ================
 
 ``scp.nmr.read(...)`` dispatches public readers for TopSpin/Bruker, Agilent or
-Varian, JEOL, TecMag and SIMPSON inputs. A protocol can be supplied explicitly
+Varian, JEOL and SIMPSON inputs. A protocol can be supplied explicitly
 when automatic detection is not appropriate.
 
 .. code-block:: python
@@ -18,9 +18,8 @@ available. ``vendor_profile`` describes the vendor file; it does not claim to
 be a replayable historical processing recipe. Compatibility aliases
 ``scp.nmr.read_topspin`` and ``scp.read_topspin`` remain available.
 
-The reader scope includes 1D and 2D raw/processed data. 2D reading and
-native complex-channel storage must not be confused with validated 2D processing;
-the latter is outside the current public workflow.
+The readers cover 1D and 2D raw and processed data. The available processing
+steps depend on the acquisition profile.
 
 The separate experimental ``read_agilent_interop`` facade is characterized on
 real acquisitions with a pinned external provider. See
@@ -31,3 +30,19 @@ For the explicit, optional NMRPipe processed 1D interop path, see
 
 See :doc:`../nmrml_interop` for explicit 1D nmrML exchange-format profiles,
 writer round trips and the required convention choices.
+
+SIMPSON
+-------
+
+Use ``scp.nmr.read_simpson(...)`` for SIMPSON data files or a simulation
+input file with a sibling output. Qualified standalone FIDs use calibrated
+time coordinates. Qualified standalone spectra use frequency coordinates
+in Hz. The direct FFT is available for qualified 2D FIDs. Their indirect
+quadrature remains unqualified. Files with simulation metadata from an
+``.in`` file and other legacy layouts use the compatibility presentation.
+
+Tecmag
+------
+
+Tecmag TNT acquisition files are no longer read by the plugin. Previously
+saved Tecmag datasets retain their metadata interpretation.

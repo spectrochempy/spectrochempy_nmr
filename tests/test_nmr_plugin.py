@@ -235,6 +235,9 @@ class _MockMeta:
         for k, v in kwargs.items():
             setattr(self, k, v)
 
+    def get(self, name, default=None):
+        return getattr(self, name, default)
+
     def __len__(self):
         return 1
 
