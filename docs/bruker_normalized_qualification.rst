@@ -86,6 +86,22 @@ uses the provider's phase and ppm display parameters. The generic
 ``Experiment.process()`` route retains its NMRPipe-qualified convention.
 Unsupported acquisitions continue through the earlier reader.
 
+Public echo/anti-echo SER
+-------------------------
+
+For a complete, uniform Bruker echo/anti-echo acquisition with calibrated
+FFT display parameters, the public reader returns the dataset produced by
+``from_interop()``. As with States-TPPI, the public reader preserves aligned
+trace length and applies the selected corrections once before pairing.
+
+The public FFT transforms F2 before F1 and reproduces the historical
+branchwise transform, including the initial phase and ppm display convention.
+The stored branches can also be processed with
+``Experiment.process(echo_antiecho="bruker-rance-kay")`` for physical
+Rance–Kay reconstruction. The two routes have distinct reconstruction
+metadata. Profiles without the required calibration retain the historical
+reader.
+
 Prepare a FID explicitly
 ------------------------
 

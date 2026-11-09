@@ -35,7 +35,7 @@ def _check_parity(path, monkeypatch, *, migrate, filtered, dc):
         previous.setattr(ng.bruker, "read", old_provider)
         expected = scp.read_topspin(path / "ser", **options)
     with monkeypatch.context() as current:
-        if path.parent.name == "exam2d_HH":
+        if path.parent.name in ("exam2d_HH", "exam2d_HC"):
             current.setattr(
                 reader, "_read_normalized_ser", lambda *args, **kwargs: None
             )

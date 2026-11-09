@@ -723,7 +723,12 @@ def extract_nmr_metadata(meta, *, ndim=None) -> NMRMetadata:
         echo_antiecho = quadrature == "echo-antiecho-stored-2d" and (
             domain,
             meta.get("echo_antiecho_reconstruction"),
-        ) in (("time", None), ("frequency", "bruker-rance-kay"))
+        ) in (
+            ("time", None),
+            ("mixed", None),
+            ("frequency", "bruker-rance-kay"),
+            ("frequency", "public-branch-fft"),
+        )
         if (
             ndim == 3
             and physical == ("F1", "F2")

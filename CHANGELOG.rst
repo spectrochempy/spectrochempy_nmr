@@ -18,6 +18,9 @@ Added
 Changed
 ~~~~~~~
 
+* Use the normalized interop dataset for qualified Bruker echo/anti-echo SER
+  data while preserving the public two-stage FFT convention.
+
 * Use the normalized interop dataset for qualified Bruker States-TPPI SER
   data with calibrated public FFT presentation.
 
