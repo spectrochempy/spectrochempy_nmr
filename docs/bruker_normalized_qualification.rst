@@ -70,7 +70,7 @@ FFT convention and carrier-relative Hz axes. SERs outside this qualified
 path continue through the previous reader.
 
 Public States-TPPI SER reader
-----------------------------
+-----------------------------
 
 For complete uniform States-TPPI SERs with both processing axes calibrated,
 ``read_topspin()`` can return the normalized E1/E2 dataset from
