@@ -18,6 +18,9 @@ Added
 Changed
 ~~~~~~~
 
+* Use the normalized interop dataset for qualified single-trace Agilent 1D
+  FIDs when the provider supports the public presentation contract.
+
 * Require nmrglue-ng 1.2.2 and use its decoder for all TopSpin reads.
   Remove the bundled Bruker decoder.
 

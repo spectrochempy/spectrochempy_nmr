@@ -364,6 +364,80 @@ def _ensure_agilent_filetype_registered() -> None:
         )
 
 
+def _read_normalized_agilent_fid(directory, path):
+    from inspect import signature  # noqa: PLC0415
+
+    from nmrglue import interop  # noqa: PLC0415
+
+    from ..interop import from_interop  # noqa: PLC0415
+
+    normalize = interop.normalize_agilent_fid
+    if "legacy_presentation" not in signature(normalize).parameters:
+        return None
+    try:
+        stored = interop.read_agilent_fid(directory, single_trace_only=True)
+        result = normalize(stored, legacy_presentation=True)
+        dataset = from_interop(result)
+    except ValueError:
+        return None
+    acquisition = dataset.meta.acquisition
+    display = acquisition["legacy_presentation"]
+    if display["fft_input_transform"] != "conjugate-input":
+        raise ValueError("unsupported Agilent FFT presentation")
+    width = acquisition["spectral_width_hz"]
+    observation = acquisition["observation_frequency_mhz"]
+    dataset.x.ito("us")
+    dataset.x.title = "F1 acquisition time"
+    dataset.x.meta["acquisition_frequency"] = observation * ur.MHz
+    dataset.meta.update(
+        Meta(
+            datatype="FID",
+            pathname=str(path),
+            filename=directory.parent,
+            origin="agilent",
+            nblocks=display["nblocks"],
+            ntraces=display["ntraces"],
+            np_raw=int(acquisition["np_raw"]),
+            source_procpar=dataset.meta.source_metadata["procpar"],
+            sw=[width],
+            sw_h=[width * ur.Hz],
+            sfrq=[observation],
+            dfrq=[display["decoupler_frequency_mhz"]],
+            nucleus=[display["reported_nucleus"]],
+            encoding=list(result.encoding),
+            iscomplex=[True],
+            ns=display["ns"],
+            ne=display["ne"],
+            ns_norm=1.0,
+            pulprog=display["pulse_program"],
+            date_raw=display["date_raw"],
+            at=display["acquisition_time_s"],
+        )
+    )
+    return dataset
+
+
+def _finalize_agilent_dataset(dataset, directory, options):
+    dataset.meta.readonly = True
+    dataset.units = "count"
+    dataset.title = "intensity"
+    apply_reader_metadata_options(dataset, options, default_origin="agilent")
+    datatype = dataset.meta.datatype
+    dataset.name = f"{directory.name} ({datatype})"
+    dataset.filename = directory
+
+    if dataset.meta.date_raw:
+        import contextlib
+
+        with contextlib.suppress(ValueError, TypeError):
+            dataset.acquisition_date = datetime.fromisoformat(
+                str(dataset.meta.date_raw)
+            )
+
+    dataset.history = f"Imported Agilent/Varian dataset {directory.name} ({datatype})"
+    return dataset
+
+
 @_importer_method
 def _read_agilent(*args, **kwargs):
     dataset, path = args
@@ -381,7 +455,11 @@ def _read_agilent(*args, **kwargs):
         warning_(f"No procpar file found in {data_dir}")
         return None
 
-    # Read using vendored NMRGlue
+    candidate = _read_normalized_agilent_fid(data_dir, path)
+    if candidate is not None:
+        return _finalize_agilent_dataset(candidate, data_dir, kwargs)
+
+    # Compatibility path for unsupported profiles and older providers.
     dic, data = read_varian(str(data_dir), fid_file="fid", procpar_file="procpar")
     pdic = dic.get("procpar", {})
 
@@ -580,22 +658,4 @@ def _read_agilent(*args, **kwargs):
         dataset.data = data
         dataset.meta.update(meta)
         dataset.set_coordset(*tuple(coords))
-    dataset.meta.readonly = True
-
-    dataset.units = "count"
-    dataset.title = "intensity"
-    apply_reader_metadata_options(dataset, kwargs, default_origin="agilent")
-    dataset.name = f"{data_dir.name} ({meta.datatype})"
-    dataset.filename = data_dir
-
-    if date_str:
-        import contextlib
-
-        with contextlib.suppress(ValueError, TypeError):
-            dataset.acquisition_date = datetime.fromisoformat(str(date_str))
-
-    dataset.history = (
-        f"Imported Agilent/Varian dataset {data_dir.name} ({meta.datatype})"
-    )
-
-    return dataset
+    return _finalize_agilent_dataset(dataset, data_dir, kwargs)
