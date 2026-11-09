@@ -18,8 +18,9 @@ def _meta_dim_index(new, dim):
     return axis
 
 
-def _apply_interop_fft_presentation(dataset, dim, *, ppm, physical):
-    acquisition = dataset.meta.get("acquisition", {})
+def _apply_interop_fft_presentation(dataset, dim, *, ppm, physical, acquisition=None):
+    if acquisition is None:
+        acquisition = dataset.meta.get("acquisition", {})
     display = acquisition.get("fft_display_axis")
     if physical:
         width = acquisition.get("spectral_width_hz")
@@ -58,7 +59,15 @@ def _apply_interop_fft_presentation(dataset, dim, *, ppm, physical):
         if not np.isclose(measured_width, acquisition_width, rtol=1e-3, atol=0):
             return
     step = -width / max(size - 1, 1)
-    coord = Coord.arange(size) * (step * ur.Hz) + (center + width / 2) * ur.Hz
+    if "physical_axis" in acquisition:
+        coord = Coord(
+            center + width / 2 + np.arange(size) * step,
+            units="Hz",
+            rounding=False,
+            sigdigits=15,
+        )
+    else:
+        coord = Coord.arange(size) * (step * ur.Hz) + (center + width / 2) * ur.Hz
     coord.name = dim
     coord.show_datapoints = False
     coord.meta["acquisition_frequency"] = frequency * ur.MHz
@@ -69,6 +78,10 @@ def _apply_interop_fft_presentation(dataset, dim, *, ppm, physical):
     if ppm:
         coord.ito("ppm")
         coord.title = rf"$\delta\ {label}$"
+    if "physical_axis" in acquisition:
+        values = coord.data
+        if not np.isfinite(values).all() or not np.all(values[1:] < values[:-1]):
+            raise ValueError("unrepresentable interop FFT display grid")
     dataset.coordset[dim] = coord
 
 
@@ -144,6 +157,54 @@ def _fft_postprocess_result(new, dim=-1, inv=False, **kwargs):
                     )
         finally:
             new.meta.readonly = readonly
+        return new
+
+    presentation = new.meta.get("fft_presentation")
+    if presentation is not None and new.ndim == 2:
+        index = _meta_dim_index(new, dim)
+        dimension = new.dims[index]
+        descriptor = presentation[dimension]
+        transformed = set(new.meta.get("fft_presentation_transformed", ()))
+        if inv:
+            if dimension in transformed:
+                new.data = np.conj(new.data)
+                transformed.remove(dimension)
+            size = new.shape[index]
+            new.coordset[dimension] = Coord(
+                np.arange(size) / descriptor["spectral_width_hz"],
+                units="s",
+                title="time",
+                rounding=False,
+                sigdigits=15,
+            )
+        else:
+            transformed.add(dimension)
+            _apply_interop_fft_presentation(
+                new,
+                dimension,
+                ppm=kwargs.get("ppm", True),
+                physical=False,
+                acquisition=descriptor,
+            )
+        readonly = new.meta.readonly
+        new.meta.readonly = False
+        new.meta.fft_presentation_transformed = tuple(
+            name for name in presentation if name in transformed
+        )
+        flags = list(new.meta.isfreq)
+        flags[index] = not inv
+        f2 = next(
+            i
+            for i, name in enumerate(new.dims)
+            if presentation[name]["physical_axis"] == "F2"
+        )
+        new.meta.encoding = ["CONJUGATE-FFT"] * 2
+        if not flags[f2]:
+            new.meta.encoding[1 - f2] = "PENDING-F2:CONJUGATE-FFT"
+        new.meta.data_domain = (
+            "frequency" if all(flags) else "mixed" if any(flags) else "time"
+        )
+        new.meta.readonly = readonly
         return new
 
     # Only act when NMR metadata is present

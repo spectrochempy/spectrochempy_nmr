@@ -342,6 +342,44 @@ def _from_2d(result, data):
         dataset.meta.component_labels = component_labels
         dataset.meta.stage = "spectrum"
     dataset.meta.td = list(plane.shape)
+    presentation = result.acquisition.get("fft_presentation")
+    if time_qf and presentation is not None:
+        from .processing.fft_validation import _require_fft_prevalidation  # noqa: PLC0415
+
+        _require_fft_prevalidation()
+        if not isinstance(presentation, Mapping) or set(presentation) != set(
+            dimensions
+        ):
+            raise ValueError("invalid QF FFT presentation dimensions")
+        widths = result.acquisition["spectral_width_hz"]
+        fft_axes = {}
+        zero, first = [], []
+        for dim, role, width in zip(dims, dimensions, widths, strict=True):
+            descriptor = presentation[role]
+            if descriptor.get("transform") != "conjugate-input":
+                raise ValueError("unsupported QF FFT presentation transform")
+            phase = descriptor["initial_phase"]
+            if phase.get("pivot_index") != 0:
+                raise ValueError("unsupported QF FFT phase pivot")
+            angles = float(phase["zero_order_deg"]), float(phase["first_order_deg"])
+            if not np.isfinite(angles).all():
+                raise ValueError("invalid QF FFT initial phase")
+            zero.append(angles[0] * scp.ur.degree)
+            first.append(angles[1] * scp.ur.degree)
+            fft_axes[dim] = {
+                "physical_axis": role,
+                "fft_display_axis": _plain(descriptor.get("display_axis")),
+                "spectral_width_hz": width,
+                "nucleus": coordinates[dim].title,
+            }
+        dataset.meta.fft_presentation = fft_axes
+        dataset.meta.encoding = [
+            "PENDING-F2:CONJUGATE-FFT" if role == "F1" else "CONJUGATE-FFT"
+            for role in dimensions
+        ]
+        dataset.meta.phc0 = zero
+        dataset.meta.phc1 = first
+        dataset.meta.pivot = [0, 0]
     if complex_axis is not None:
         dataset.meta.interop_complex_axis = complex_axis
     return dataset
