@@ -18,6 +18,9 @@ Added
 Changed
 ~~~~~~~
 
+* Use the normalized interop dataset for qualified JEOL 1D complex FIDs
+  when nmrglue-ng provides the historical presentation contract.
+
 * Require nmrglue-ng 1.2.3 and delegate Agilent compatibility decoding to
   its Varian reader. Remove the bundled Varian decoder.
 

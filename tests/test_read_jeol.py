@@ -7,13 +7,20 @@
 
 """Tests for JEOL JDF NMR reader."""
 
+import os
+from importlib import import_module
+from inspect import signature
+from pathlib import Path
+
 import numpy as np
 import pytest
 
 import spectrochempy as scp
 
 EXTRA_DATADIR = scp.preferences.datadir.parent / "testdata-extra"
-JEOL_DIR = EXTRA_DATADIR / "testdata" / "nmrdata" / "jeol"
+JEOL_DIR = Path(
+    os.environ.get("NMR_JEOL_DIR", EXTRA_DATADIR / "testdata" / "nmrdata" / "jeol")
+)
 
 
 def _has_jeol_data():
@@ -218,3 +225,121 @@ class TestReadJeol:
         """Auto-detect JEOL from .jdf extension via generic read."""
         ds = scp.nmr.read(str(JEOL_DIR / "1H.jdf"))
         assert ds.origin == "jeol"
+
+
+@pytest.mark.parametrize("filename", ["1H.jdf", "13C.jdf"])
+def test_public_jeol_fid_interop_parity(filename, monkeypatch):
+    path = JEOL_DIR / filename
+    if not path.is_file():
+        pytest.skip("JEOL qualification JDF is unavailable")
+    _assert_public_jeol_fid_interop_parity(path, monkeypatch)
+
+
+@pytest.mark.skipif(
+    not os.environ.get("NMR_JEOL_REFERENCE"), reason="Set NMR_JEOL_REFERENCE"
+)
+def test_public_jeol_reference_interop_parity(monkeypatch):
+    path = Path(os.environ["NMR_JEOL_REFERENCE"])
+    for origin in (None, "custom"):
+        with monkeypatch.context() as patch:
+            _assert_public_jeol_fid_interop_parity(
+                path, patch, origin=origin, require_provider=True
+            )
+
+
+@pytest.mark.skipif(
+    not os.environ.get("NMR_JEOL_REFERENCE"), reason="Set NMR_JEOL_REFERENCE"
+)
+@pytest.mark.parametrize("mode", ["automatic", "explicit", "core"])
+def test_public_jeol_reference_stack_retains_legacy_contract(mode, monkeypatch):
+    from spectrochempy_nmr import Experiment
+
+    def unexpected_normalization(*args):
+        pytest.fail("stacked JDFs require the legacy presentation")
+
+    path = Path(os.environ["NMR_JEOL_REFERENCE"])
+    if mode == "core":
+        assert scp.nmr.read_jeol(path) is not None
+    reader = import_module("spectrochempy_nmr.readers.read_jeol")
+    monkeypatch.setattr(reader, "_read_normalized_jeol_fid", unexpected_normalization)
+    if mode == "automatic":
+        merged = scp.nmr.read_jeol(path, path)
+    elif mode == "explicit":
+        merged = scp.nmr.read_jeol([path, path], merge=True)
+    else:
+        merged = scp.read(path, path)
+    assert merged.shape[0] == 2
+    assert Experiment(merged).domain == "time"
+
+
+@pytest.mark.skipif(
+    not os.environ.get("NMR_JEOL_REFERENCE"), reason="Set NMR_JEOL_REFERENCE"
+)
+def test_public_jeol_reference_preserves_custom_dataset_type(monkeypatch):
+    class CustomDataset(scp.NDDataset):
+        pass
+
+    def unexpected_normalization(*args):
+        pytest.fail("a custom dataset type requires the historical importer")
+
+    reader = import_module("spectrochempy_nmr.readers.read_jeol")
+    monkeypatch.setattr(reader, "_read_normalized_jeol_fid", unexpected_normalization)
+    path = Path(os.environ["NMR_JEOL_REFERENCE"])
+    assert isinstance(scp.nmr.read_jeol(path, objtype=CustomDataset), CustomDataset)
+
+
+def _assert_public_jeol_fid_interop_parity(
+    path, monkeypatch, *, origin=None, require_provider=False
+):
+    from nmrglue import interop
+
+    from spectrochempy_nmr import Experiment
+    from spectrochempy_nmr import interop as bridge
+
+    if "legacy_presentation" not in signature(interop.normalize_jeol_fid).parameters:
+        if require_provider:
+            pytest.fail("provider lacks the JEOL public presentation contract")
+        pytest.skip("provider lacks the JEOL public presentation contract")
+
+    reader = import_module("spectrochempy_nmr.readers.read_jeol")
+    with monkeypatch.context() as fallback:
+        fallback.setattr(reader, "_read_normalized_jeol_fid", lambda path: None)
+        historical = scp.nmr.read_jeol(path, origin=origin)
+    assert historical is not None
+
+    converted = []
+    from_interop = bridge.from_interop
+
+    def convert(result):
+        dataset = from_interop(result)
+        converted.append(dataset)
+        return dataset
+
+    def unexpected_fallback(*args):
+        pytest.fail("qualified JDF was sent to the embedded decoder")
+
+    monkeypatch.setattr(bridge, "from_interop", convert)
+    monkeypatch.setattr(reader, "_read_jeol_raw", unexpected_fallback)
+    actual = scp.nmr.read_jeol(
+        path, description="public JEOL qualification", origin=origin
+    )
+    assert len(converted) == 1
+    assert actual is converted[0]
+    assert actual.description == "public JEOL qualification"
+    assert actual.acquisition_date == historical.acquisition_date
+    assert actual.origin == historical.origin
+    assert len(actual.meta.applied_operations) == 1
+    assert actual.meta.applied_operations[0]["conjugation"] == "conjugate"
+    for key in historical.meta:
+        assert actual.meta[key] == historical.meta[key], key
+
+    for migrated, legacy in (
+        (actual, historical),
+        (actual.fft(), historical.fft()),
+        (Experiment(actual).process(), Experiment(historical).process()),
+    ):
+        np.testing.assert_array_equal(migrated.data, legacy.data)
+        np.testing.assert_array_equal(migrated.x.data, legacy.x.data)
+        assert migrated.x.units == legacy.x.units
+        assert migrated.x.title == legacy.x.title
+        assert migrated.units == legacy.units
