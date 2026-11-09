@@ -160,7 +160,7 @@ def _fft_postprocess_result(new, dim=-1, inv=False, **kwargs):
         return new
 
     presentation = new.meta.get("fft_presentation")
-    if presentation is not None and new.ndim == 2:
+    if presentation is not None:
         index = _meta_dim_index(new, dim)
         dimension = new.dims[index]
         descriptor = presentation[dimension]
@@ -196,13 +196,34 @@ def _fft_postprocess_result(new, dim=-1, inv=False, **kwargs):
         f2 = next(
             i
             for i, name in enumerate(new.dims)
-            if presentation[name]["physical_axis"] == "F2"
+            if name in presentation and presentation[name]["physical_axis"] == "F2"
         )
-        new.meta.encoding = ["CONJUGATE-FFT"] * 2
-        if not flags[f2]:
-            new.meta.encoding[1 - f2] = "PENDING-F2:CONJUGATE-FFT"
+        new.meta.encoding = []
+        for name in new.dims:
+            if name not in presentation:
+                new.meta.encoding.append("CHANNELS")
+                continue
+            item = presentation[name]
+            encoding = item["encoding"]
+            if item["physical_axis"] == "F1" and not flags[f2]:
+                encoding = "PENDING-F2:" + encoding
+            new.meta.encoding.append(encoding)
+        physical_flags = [
+            flag
+            for name, flag in zip(new.dims, flags, strict=True)
+            if name in presentation
+        ]
+        if new.meta.component_axis == "c" and all(physical_flags):
+            new.meta.stage = "spectrum"
+            new.meta.tppi_alternation_state = "applied"
+            new.meta.component_labels = ("F1_R", "F1_I")
+            new.coordset["c"] = Coord.arange(2, dims="c", labels=["F1_R", "F1_I"])
         new.meta.data_domain = (
-            "frequency" if all(flags) else "mixed" if any(flags) else "time"
+            "frequency"
+            if all(physical_flags)
+            else "mixed"
+            if any(physical_flags)
+            else "time"
         )
         new.meta.readonly = readonly
         return new

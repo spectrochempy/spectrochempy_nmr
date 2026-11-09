@@ -7,18 +7,7 @@ import numpy as np
 from spectrochempy_nmr.processing.fft_validation import _require_fft_prevalidation
 
 
-def set_channel_data(dataset, data, coords, meta, *, labels, stage, profile):
-    """Attach two complex channels without treating their axis as physical."""
-    import spectrochempy as scp
-
-    _require_fft_prevalidation()
-    data = np.asarray(data)
-    if data.ndim != 3 or data.shape[0] != 2 or not np.iscomplexobj(data):
-        raise ValueError("channel storage requires a complex (2, nF1, nF2) array")
-    if len(coords) != 2 or any(
-        coord.size != size for coord, size in zip(coords, data.shape[1:], strict=True)
-    ):
-        raise ValueError("physical coordinates must match both channel dimensions")
+def pad_channel_metadata(meta):
     for key, value in list(meta.items()):
         if isinstance(value, list) and len(value) == 2:
             default = None
@@ -31,6 +20,21 @@ def set_channel_data(dataset, data, coords, meta, *, labels, stage, profile):
             elif key in ("phc0", "phc1", "pivot", "exptc"):
                 default = 0
             meta[key] = [default, *value]
+
+
+def set_channel_data(dataset, data, coords, meta, *, labels, stage, profile):
+    """Attach two complex channels without treating their axis as physical."""
+    import spectrochempy as scp
+
+    _require_fft_prevalidation()
+    data = np.asarray(data)
+    if data.ndim != 3 or data.shape[0] != 2 or not np.iscomplexobj(data):
+        raise ValueError("channel storage requires a complex (2, nF1, nF2) array")
+    if len(coords) != 2 or any(
+        coord.size != size for coord, size in zip(coords, data.shape[1:], strict=True)
+    ):
+        raise ValueError("physical coordinates must match both channel dimensions")
+    pad_channel_metadata(meta)
     if stage == "acquisition":
         meta.encoding[-1] = "DIRECT:" + meta.encoding[-1]
     meta.td = list(data.shape)

@@ -25,14 +25,14 @@ def _check_route(path, monkeypatch, dc, filtered):
     converter = import_module("spectrochempy_nmr.interop")
     options = {"remove_dc_offset": dc, "remove_digital_filter": filtered}
     with monkeypatch.context() as old:
-        old.setattr(reader, "_read_normalized_qf_ser", lambda *args, **kwargs: None)
+        old.setattr(reader, "_read_normalized_ser", lambda *args, **kwargs: None)
         expected = scp.read_topspin(path / "ser", **options)
 
     converted = []
     convert = converter.from_interop
 
-    def capture(result):
-        dataset = convert(result)
+    def capture(result, **kwargs):
+        dataset = convert(result, **kwargs)
         converted.append(dataset)
         return dataset
 
@@ -126,9 +126,7 @@ def test_synthetic_qf_public_with_nonzero_phase(tmp_path, monkeypatch, dc, filte
         (processing / "proc2s").unlink()
         reader = import_module("spectrochempy_nmr.readers.read_topspin")
         with monkeypatch.context() as legacy:
-            legacy.setattr(
-                reader, "_read_normalized_qf_ser", lambda *args, **kwargs: None
-            )
+            legacy.setattr(reader, "_read_normalized_ser", lambda *args, **kwargs: None)
             expected = scp.read_topspin(path / "ser")
         actual = scp.read_topspin(path / "ser")
         assert actual.meta.normalization_profile is None

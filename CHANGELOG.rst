@@ -18,6 +18,10 @@ Added
 Changed
 ~~~~~~~
 
+* Use the normalized interop dataset for qualified Bruker States-TPPI SER
+  data with calibrated public FFT presentation.
+
+
 * Use the normalized interop dataset for complete Bruker QF SER data when
   the provider supplies the public FFT presentation contract. Preserve the
   existing two-stage FFT display and correction options.

@@ -22,6 +22,8 @@ _OPERATION_KEYS = {
 
 
 def _plain(value):
+    if isinstance(value, bytes):
+        return np.frombuffer(value, dtype=np.uint8).copy()
     """Convert neutral read-only mappings/diagnostics to copyable metadata."""
     if isinstance(value, np.ndarray):
         return value.copy()
@@ -342,47 +344,61 @@ def _from_2d(result, data):
         dataset.meta.component_labels = component_labels
         dataset.meta.stage = "spectrum"
     dataset.meta.td = list(plane.shape)
-    presentation = result.acquisition.get("fft_presentation")
-    if time_qf and presentation is not None:
-        from .processing.fft_validation import _require_fft_prevalidation  # noqa: PLC0415
-
-        _require_fft_prevalidation()
-        if not isinstance(presentation, Mapping) or set(presentation) != set(
-            dimensions
-        ):
-            raise ValueError("invalid QF FFT presentation dimensions")
-        widths = result.acquisition["spectral_width_hz"]
-        fft_axes = {}
-        zero, first = [], []
-        for dim, role, width in zip(dims, dimensions, widths, strict=True):
-            descriptor = presentation[role]
-            if descriptor.get("transform") != "conjugate-input":
-                raise ValueError("unsupported QF FFT presentation transform")
-            phase = descriptor["initial_phase"]
-            if phase.get("pivot_index") != 0:
-                raise ValueError("unsupported QF FFT phase pivot")
-            angles = float(phase["zero_order_deg"]), float(phase["first_order_deg"])
-            if not np.isfinite(angles).all():
-                raise ValueError("invalid QF FFT initial phase")
-            zero.append(angles[0] * scp.ur.degree)
-            first.append(angles[1] * scp.ur.degree)
-            fft_axes[dim] = {
-                "physical_axis": role,
-                "fft_display_axis": _plain(descriptor.get("display_axis")),
-                "spectral_width_hz": width,
-                "nucleus": coordinates[dim].title,
-            }
-        dataset.meta.fft_presentation = fft_axes
-        dataset.meta.encoding = [
-            "PENDING-F2:CONJUGATE-FFT" if role == "F1" else "CONJUGATE-FFT"
-            for role in dimensions
-        ]
-        dataset.meta.phc0 = zero
-        dataset.meta.phc1 = first
-        dataset.meta.pivot = [0, 0]
+    if time_qf:
+        _set_ser_fft_presentation(dataset, result)
     if complex_axis is not None:
         dataset.meta.interop_complex_axis = complex_axis
     return dataset
+
+
+def _set_ser_fft_presentation(dataset, result):
+    import spectrochempy as scp  # noqa: PLC0415
+
+    from .processing.fft_validation import _require_fft_prevalidation  # noqa: PLC0415
+
+    presentation = result.acquisition.get("fft_presentation")
+    if presentation is None:
+        return
+    _require_fft_prevalidation()
+    dimensions = tuple(result.physical_dimensions)
+    if not isinstance(presentation, Mapping) or set(presentation) != set(dimensions):
+        raise ValueError("invalid SER FFT presentation dimensions")
+    widths = result.acquisition["spectral_width_hz"]
+    fft_axes = {}
+    channel = dataset.ndim == 3
+    zero = [0 * scp.ur.degree] if channel else []
+    first = zero.copy()
+    encoding = ["CHANNELS"] if channel else []
+    for dim, role, width in zip(dataset.dims[-2:], dimensions, widths, strict=True):
+        descriptor = presentation[role]
+        transform = descriptor.get("transform")
+        if transform == "conjugate-input":
+            fft_encoding = "CONJUGATE-FFT"
+        elif channel and role == "F1" and transform == "states-tppi-cross-pairs":
+            fft_encoding = "INDIRECT:STATES-TPPI"
+        else:
+            raise ValueError("unsupported SER FFT presentation transform")
+        phase = descriptor["initial_phase"]
+        if phase.get("pivot_index") != 0:
+            raise ValueError("unsupported SER FFT phase pivot")
+        angles = float(phase["zero_order_deg"]), float(phase["first_order_deg"])
+        if not np.isfinite(angles).all():
+            raise ValueError("invalid SER FFT initial phase")
+        zero.append(angles[0] * scp.ur.degree)
+        first.append(angles[1] * scp.ur.degree)
+        encoding.append("PENDING-F2:" + fft_encoding if role == "F1" else fft_encoding)
+        fft_axes[dim] = {
+            "physical_axis": role,
+            "encoding": fft_encoding,
+            "fft_display_axis": _plain(descriptor.get("display_axis")),
+            "spectral_width_hz": width,
+            "nucleus": dataset.coordset[dim].title,
+        }
+    dataset.meta.fft_presentation = fft_axes
+    dataset.meta.encoding = encoding
+    dataset.meta.phc0 = zero
+    dataset.meta.phc1 = first
+    dataset.meta.pivot = [0] * dataset.ndim
 
 
 def _from_states_tppi(result, data):
@@ -418,6 +434,7 @@ def _from_states_tppi(result, data):
     dataset = _raw_channel_dataset(result, channels, ("E1", "E2"))
     dataset.meta.quadrature_mode = "states-tppi"
     dataset.meta.tppi_alternation_state = "encoded"
+    _set_ser_fft_presentation(dataset, result)
     return dataset
 
 
