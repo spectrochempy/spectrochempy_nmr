@@ -138,7 +138,7 @@ def _check_public_reader(provider, path, proc_axis, monkeypatch, *, component="2
         return dataset
 
     with monkeypatch.context() as migrated:
-        migrated.setattr(reader, "read_pdata", reject_legacy)
+        migrated.setattr(reader, "_read_pdata_fallback", reject_legacy)
         migrated.setattr(converter, "from_interop", capture)
         actual = scp.read_topspin(path / component, proc_axis=proc_axis)
 
@@ -239,3 +239,34 @@ def test_local_bruker_proton_exchange_planes(provider, scaled, tmp_path):
     )
     _check_plane(provider, path, scaled, expected, axes, -7, tmp_path)
     check_hashes()
+
+
+def test_synthetic_float64_pdata_public_reader_uses_provider_fallback(
+    provider, tiled_pdata, monkeypatch
+):
+    path, planes, _ = tiled_pdata
+    for name in ("procs", "proc2s"):
+        file = path / name
+        file.write_text(file.read_text().replace("DTYPP= 0", "DTYPP= 2"))
+    for name in NAMES:
+        file = path / name
+        words = np.fromfile(file, dtype=">i4")
+        file.write_bytes(words.astype(">f8").tobytes())
+
+    calls = []
+    decode = provider.bruker.read_pdata
+
+    def capture(directory, **kwargs):
+        calls.append(directory)
+        return decode(directory, **kwargs)
+
+    monkeypatch.setattr(provider.bruker, "read_pdata", capture)
+    dataset = scp.read_topspin(path / "2rr", proc_axis=True)
+    rr, ri, ir, ii = planes
+    np.testing.assert_array_equal(
+        dataset.data, np.stack((rr + 1j * ir, ri + 1j * ii)) / 24
+    )
+    assert calls == [path]
+    assert tuple(dataset.c.labels) == ("S_R", "S_I")
+    np.testing.assert_allclose(dataset.y.data, [3, 1, -1, -3])
+    np.testing.assert_allclose(dataset.x.data, [7, 6.2, 5.4, 4.6, 3.8, 3])

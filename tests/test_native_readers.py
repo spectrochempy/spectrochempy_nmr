@@ -153,7 +153,9 @@ def test_bruker_processed_preserves_four_components_and_persistence(
     components = [np.arange(12).reshape(3, 4) + 100 * n for n in range(4)]
     dic = _bruker_dictionary()
     dic.update({"procs": {"SI": 4}, "proc2s": {"SI": 3}})
-    monkeypatch.setattr(reader, "read_pdata", lambda *a, **k: (dic, components))
+    monkeypatch.setattr(
+        reader, "_read_pdata_fallback", lambda *a, **k: (dic, components)
+    )
     result = reader._read_topspin(scp.NDDataset(), path)
     np.testing.assert_allclose(result.data[0], (components[0] + 1j * components[2]) / 2)
     np.testing.assert_allclose(result.data[1], (components[1] + 1j * components[3]) / 2)
