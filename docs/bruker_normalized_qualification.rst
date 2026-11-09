@@ -69,6 +69,23 @@ still in the time domain.
 FFT convention and carrier-relative Hz axes. SERs outside this qualified
 path continue through the previous reader.
 
+Public States-TPPI SER reader
+-----------------------------
+
+For complete uniform States-TPPI SERs with both processing axes calibrated,
+``read_topspin()`` can return the normalized E1/E2 dataset from
+``from_interop()``. This requires a provider with the States-TPPI storage
+normalizer and a core with FFT prevalidation. The reader selects the
+aligned trace length for compatibility. The normalizer's default instead
+uses only acquired points. DC, filter and scan/gain options apply once
+before pairing. The samples retain their stored complex orientation.
+
+Transform F2 before F1. The first public FFT retains the encoded alternation
+and the second applies it once when transforming the cross-pairs. Each axis
+uses the provider's phase and ppm display parameters. The generic
+``Experiment.process()`` route retains its NMRPipe-qualified convention.
+Unsupported acquisitions continue through the earlier reader.
+
 Prepare a FID explicitly
 ------------------------
 

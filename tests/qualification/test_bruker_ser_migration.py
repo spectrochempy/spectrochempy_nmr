@@ -31,15 +31,13 @@ def _check_parity(path, monkeypatch, *, migrate, filtered, dc):
 
     options = dict(remove_digital_filter=filtered, remove_dc_offset=dc)
     with monkeypatch.context() as previous:
-        previous.setattr(
-            reader, "_read_normalized_qf_ser", lambda *args, **kwargs: None
-        )
+        previous.setattr(reader, "_read_normalized_ser", lambda *args, **kwargs: None)
         previous.setattr(ng.bruker, "read", old_provider)
         expected = scp.read_topspin(path / "ser", **options)
     with monkeypatch.context() as current:
         if path.parent.name == "exam2d_HH":
             current.setattr(
-                reader, "_read_normalized_qf_ser", lambda *args, **kwargs: None
+                reader, "_read_normalized_ser", lambda *args, **kwargs: None
             )
         current.setattr(reader, "read_fid", legacy)
         current.setattr(ng.bruker, "read", count_binary)

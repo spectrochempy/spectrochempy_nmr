@@ -37,6 +37,7 @@ from spectrochempy_nmr.extern.nmrglue import read_pdata
 from spectrochempy_nmr.extern.nmrglue._bruker import guess_shape
 from spectrochempy_nmr.extern.nmrglue._bruker import read_acqus_file
 from spectrochempy_nmr.extern.nmrglue._bruker import read_procs_file
+from spectrochempy_nmr.readers._channels import pad_channel_metadata
 from spectrochempy_nmr.readers._channels import pair_traces
 from spectrochempy_nmr.readers._channels import set_channel_data
 from spectrochempy_nmr.readers._metadata import apply_reader_metadata_options
@@ -1069,7 +1070,7 @@ def _read_normalized_fid(
     return stored.metadata, dataset
 
 
-def _read_normalized_qf_ser(
+def _read_normalized_ser(
     directory, acqus_files, procs_files, *, remove_filter, remove_dc
 ):
     from inspect import signature  # noqa: PLC0415
@@ -1085,41 +1086,53 @@ def _read_normalized_qf_ser(
         path.name in ("proc2", "proc2s") for path in procs_files
     ):
         return None
-    normalize = getattr(interop, "normalize_bruker_ser_qf", None)
-    if (
-        normalize is None
-        or "qf_only" not in signature(interop.read_bruker_ser).parameters
-    ):
-        return None
     try:
         _require_fft_prevalidation()
     except NotImplementedError:
         return None
-    try:
-        stored = interop.read_bruker_ser(
-            directory,
-            qf_only=True,
-            acqus_files=acqus_files,
-            procs_files=procs_files,
-            read_pulseprogram=(directory / "pulseprogram").is_file(),
+    profiles = (
+        (None, interop.read_bruker_ser, "normalize_bruker_ser_qf", "qf_only"),
+        (
+            "states-tppi",
+            interop.read_bruker_ser_storage,
+            "normalize_bruker_ser_states_tppi",
+            "states_tppi_only",
+        ),
+    )
+    for profile, read, normalizer, preflight in profiles:
+        normalize = getattr(interop, normalizer, None)
+        if normalize is None or preflight not in signature(read).parameters:
+            continue
+        options = {preflight: True}
+        normalizer_options = {}
+        options["read_pulseprogram"] = (directory / "pulseprogram").is_file()
+        if profile is not None:
+            normalizer_options["preserve_storage"] = True
+        try:
+            stored = read(
+                directory, acqus_files=acqus_files, procs_files=procs_files, **options
+            )
+            normalized = normalize(
+                stored,
+                remove_dc_offset=remove_dc,
+                remove_digital_filter=remove_filter,
+                normalize_scan_gain=True,
+                fft_presentation=True,
+                **normalizer_options,
+            )
+            if any(
+                "display_axis" not in axis
+                for axis in normalized.acquisition["fft_presentation"].values()
+            ):
+                return None
+            dataset = from_interop(normalized, profile=profile)
+        except (OSError, ValueError):
+            continue
+        dataset.meta.acquisition_encoding = (
+            tuple(stored.encoding) if profile is None else ("STATES-TPPI", "DQD")
         )
-        normalized = normalize(
-            stored,
-            remove_dc_offset=remove_dc,
-            remove_digital_filter=remove_filter,
-            normalize_scan_gain=True,
-            fft_presentation=True,
-        )
-        if any(
-            "display_axis" not in axis
-            for axis in normalized.acquisition["fft_presentation"].values()
-        ):
-            return None
-        dataset = from_interop(normalized)
-    except (OSError, ValueError):
-        return None
-    dataset.meta.acquisition_encoding = tuple(stored.encoding)
-    return stored.metadata, dataset
+        return stored.metadata, dataset
+    return None
 
 
 def _read_raw_data(directory, filename, acqus_files, procs_files):
@@ -1210,7 +1223,7 @@ def _read_topspin(*args, **kwargs):
                 remove_dc=bool(kwargs.get("remove_dc_offset", False)),
             )
         elif path.name == "ser" and not kwargs.get("use_list", False):
-            normalized = _read_normalized_qf_ser(
+            normalized = _read_normalized_ser(
                 f_expno,
                 acqus_files,
                 procs_files,
@@ -1222,6 +1235,8 @@ def _read_topspin(*args, **kwargs):
         else:
             dic, normalized_dataset = normalized
             data = normalized_dataset.data
+            if normalized_dataset.meta.component_axis == "c":
+                data = data[0]
 
         # The normalized 1D route already supplies canonical samples.
         # The fallback 1D route keeps the decoded convention for its FFT.
@@ -1295,7 +1310,7 @@ def _read_topspin(*args, **kwargs):
     normalized_fid = (
         normalized_dataset is not None and not processed and path.name == "fid"
     )
-    normalized_qf = (
+    normalized_ser = (
         normalized_dataset is not None and not processed and path.name == "ser"
     )
     parmode = int(dic["acqus"].get("PARMODE", data.ndim - 1))
@@ -1341,7 +1356,10 @@ def _read_topspin(*args, **kwargs):
                     meta[key.lower()][dim] = value
 
         else:
-            meta[item.lower()] = dic[item]
+            value = dic[item]
+            if isinstance(value, bytes) and normalized_dataset is not None:
+                value = normalized_dataset.meta.source_metadata[item]
+            meta[item.lower()] = value
 
     # Warning: from now all parameter keys are lowercase.
 
@@ -1408,9 +1426,10 @@ def _read_topspin(*args, **kwargs):
             raise NotImplementedError(
                 f"TopSpin indirect encoding {meta.encoding[0]!r} has no validated channel profile"
             )
-        if data.shape[0] % 2:
-            raise ValueError("TopSpin States SER requires an even number of traces")
-        meta.td[0] //= 2
+        if not normalized_ser:
+            if data.shape[0] % 2:
+                raise ValueError("TopSpin States SER requires an even number of traces")
+            meta.td[0] //= 2
     for axis in range(parmode + 1):
         if meta.iscomplex[axis] and not normalized_fid:
             meta.tdeff[axis] //= 2
@@ -1438,7 +1457,7 @@ def _read_topspin(*args, **kwargs):
     # the public QSIM FFT path already applies the required conjugated Fourier
     # convention; conjugating the raw FID here would cancel that convention and
     # produce a spectrum inconsistent with the bundled TopSpin 1r reference.
-    if not normalized_qf and meta.iscomplex[-1] and (processed or parmode > 0):
+    if not normalized_ser and meta.iscomplex[-1] and (processed or parmode > 0):
         data = np.conj(data * np.exp(np.pi * 1j / 2.0))
 
     # normalised amplitudes to ns=1 and rg=1
@@ -1566,7 +1585,7 @@ def _read_topspin(*args, **kwargs):
             coord.title = rf"$\delta\ {nucleus}$"
             coords.append(coord)
 
-    if paired_ser or processed_components is not None:
+    if (paired_ser and not normalized_ser) or processed_components is not None:
         meta.acquisition_encoding = tuple(meta.encoding)
         if paired_ser:
             channels = pair_traces(data)
@@ -1587,6 +1606,8 @@ def _read_topspin(*args, **kwargs):
         )
     elif normalized_dataset is not None:
         dataset = normalized_dataset
+        if paired_ser:
+            pad_channel_metadata(meta)
         for key, value in meta.items():
             if key not in dataset.meta and not (normalized_fid and key == "encoding"):
                 dataset.meta[key] = value

@@ -719,7 +719,7 @@ def extract_nmr_metadata(meta, *, ndim=None) -> NMRMetadata:
         states_tppi = quadrature == "states-tppi" and (
             domain,
             meta.get("tppi_alternation_state"),
-        ) in (("time", "encoded"), ("frequency", "applied"))
+        ) in (("time", "encoded"), ("mixed", "encoded"), ("frequency", "applied"))
         echo_antiecho = quadrature == "echo-antiecho-stored-2d" and (
             domain,
             meta.get("echo_antiecho_reconstruction"),
@@ -734,11 +734,16 @@ def extract_nmr_metadata(meta, *, ndim=None) -> NMRMetadata:
             and isinstance(acquisition, Mapping)
         ):
             widths = acquisition.get("spectral_width_hz")
+            domains = (domain, domain)
+            if domain == "mixed":
+                domains = tuple(
+                    "frequency" if flag else "time" for flag in meta.isfreq[1:]
+                )
             return NMRMetadata(
                 normalized_interop=True,
                 ndim=3,
-                domains=(domain, domain),
-                source_kind=infer_source_kind(2, (domain, domain)),
+                domains=domains,
+                source_kind=infer_source_kind(2, domains),
                 encoding=("STATES-TPPI" if states_tppi else "ECHO-ANTIECHO", "DQD"),
                 iscomplex=(True, True),
                 spectral_width_hz=tuple(widths)
