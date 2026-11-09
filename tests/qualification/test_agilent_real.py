@@ -160,7 +160,7 @@ def test_real_legacy_parity_without_claiming_scan_normalization(acquisition, pro
     assert legacy.meta.ns == legacy.meta.ne == 1
 
 
-@pytest.mark.parametrize("origin", [None, "research-team"])
+@pytest.mark.parametrize("origin", [None, "", "research-team"])
 def test_real_public_reader_uses_interop_and_preserves_fft(
     acquisition,
     provider,

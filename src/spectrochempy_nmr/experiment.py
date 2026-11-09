@@ -1304,6 +1304,7 @@ class Experiment:
                 origin in {"agilent", "jeol", "tecmag", "simpson"}
                 or (
                     not origin
+                    and not self.dataset.meta.get("origin")
                     and self.dataset.meta.get("acquisition", {}).get(
                         "legacy_presentation"
                     )
