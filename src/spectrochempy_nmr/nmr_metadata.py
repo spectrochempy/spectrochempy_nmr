@@ -738,6 +738,21 @@ def extract_nmr_metadata(meta, *, ndim=None) -> NMRMetadata:
             and meta.get("normalization_state") == "storage-normalized"
         ):
             return _extract_fid_display_metadata(meta)
+        roles = tuple(meta.get("axis_roles", ()))
+        if (
+            quadrature == "series-stored-2d"
+            and physical == dimensions == ("trace", "F2")
+            and roles in (physical, physical[::-1])
+            and meta.get("normalization_state") == "storage-normalized"
+        ):
+            display = _extract_fid_display_metadata(meta)
+            if acquisition.get("legacy_presentation") is not None:
+                return display
+            domains = tuple(
+                state if role == "F2" else "unknown"
+                for role, state in zip(roles, display.domains, strict=True)
+            )
+            return replace(display, domains=domains, source_kind="unknown")
         states_tppi = quadrature == "states-tppi" and (
             domain,
             meta.get("tppi_alternation_state"),

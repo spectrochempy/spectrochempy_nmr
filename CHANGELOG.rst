@@ -18,6 +18,9 @@ Added
 Changed
 ~~~~~~~
 
+* Use the normalized interop dataset for qualified flat Agilent FID series,
+  preserving public display axes, scaling and FFT conventions.
+
 * Use the normalized interop dataset for qualified Agilent TPPI 2D acquisitions.
   Preserve the public display axes, amplitude scaling and direct FFT.
 

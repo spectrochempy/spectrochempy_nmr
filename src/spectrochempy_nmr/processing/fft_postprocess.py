@@ -93,6 +93,18 @@ def _fft_postprocess_result(new, dim=-1, inv=False, **kwargs):
     the spectral axis when the dataset carries NMR metadata (``sfo1``,
     ``bf1``, ``sw_h``, ``nuc1``).
     """
+    if new.meta.get("quadrature_mode") == "series-stored-2d":
+        readonly = new.meta.readonly
+        new.meta.readonly = False
+        flags = list(new.meta.isfreq)
+        flags[_meta_dim_index(new, dim)] = not inv
+        if new.meta.acquisition.get("legacy_presentation") is not None:
+            new.meta.data_domain = (
+                "frequency" if all(flags) else "mixed" if any(flags) else "time"
+            )
+        new.meta.readonly = readonly
+        return new
+
     if new.meta.get("quadrature_mode") in ("states-stored-2d", "tppi-stored-2d"):
         readonly = new.meta.readonly
         new.meta.readonly = False

@@ -419,7 +419,8 @@ def _read_normalized_agilent_2d(directory, path, profile):
 
     from ..interop import from_interop  # noqa: PLC0415
 
-    normalize = getattr(interop, f"normalize_agilent_{profile}_2d", None)
+    name = "fid_series" if profile == "series" else f"{profile}_2d"
+    normalize = getattr(interop, f"normalize_agilent_{name}", None)
     if normalize is None:
         return None
     try:
@@ -456,8 +457,8 @@ def _read_normalized_agilent_2d(directory, path, profile):
             pathname=str(path),
             filename=directory.parent,
             origin="agilent",
-            nblocks=acquisition["storage_shape"][0],
-            ntraces=1,
+            nblocks=acquisition.get("blocks", acquisition["storage_shape"][0]),
+            ntraces=acquisition.get("traces_per_block", 1),
             np_raw=acquisition["storage_shape"][1],
             source_procpar=dataset.meta.source_metadata["procpar"],
             sw=[*prefix, *widths],
@@ -488,7 +489,7 @@ def _read_normalized_agilent_2d(directory, path, profile):
                 arraydim=acquisition["storage_shape"][0],
             )
         )
-    else:
+    elif profile == "tppi":
         dataset.meta.encoding = ["UNVALIDATED:AGILENT-TPPI", "QSIM"]
     return dataset
 
@@ -535,7 +536,7 @@ def _read_agilent(*args, **kwargs):
     if candidate is not None:
         return _finalize_agilent_dataset(candidate, data_dir, kwargs)
 
-    for profile in ("states", "tppi"):
+    for profile in ("states", "tppi", "series"):
         candidate = _read_normalized_agilent_2d(data_dir, path, profile)
         if candidate is not None:
             return _finalize_agilent_dataset(candidate, data_dir, kwargs)
