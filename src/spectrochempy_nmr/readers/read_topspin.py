@@ -33,7 +33,6 @@ from spectrochempy.core.units import ur
 from spectrochempy.utils._logging import warning_
 from spectrochempy.utils.meta import Meta
 from spectrochempy_nmr.extern.nmrglue import read_fid
-from spectrochempy_nmr.extern.nmrglue import read_pdata
 from spectrochempy_nmr.extern.nmrglue._bruker import guess_shape
 from spectrochempy_nmr.extern.nmrglue._bruker import read_acqus_file
 from spectrochempy_nmr.extern.nmrglue._bruker import read_procs_file
@@ -971,6 +970,17 @@ def _validate_proc_axis(dic, data, parmode):
     return use_proc
 
 
+def _read_pdata_fallback(directory, acqus_files, procs_files):
+    from nmrglue import bruker  # noqa: PLC0415
+
+    return bruker.read_pdata(
+        directory,
+        acqus_files=acqus_files,
+        procs_files=list(procs_files),
+        all_components=True,
+    )
+
+
 def _read_processed_data(directory, acqus_files, procs_files, *, proc_axis, use_list):
     from inspect import signature  # noqa: PLC0415
 
@@ -1042,9 +1052,7 @@ def _read_processed_data(directory, acqus_files, procs_files, *, proc_axis, use_
         metadata.update(read_acqus_file(directory, acqus_files))
         return metadata, list(converted.data), None
 
-    metadata, data = read_pdata(
-        directory, acqus_files=acqus_files, procs_files=procs_files, all_components=True
-    )
+    metadata, data = _read_pdata_fallback(directory, acqus_files, procs_files)
     return metadata, data, None
 
 

@@ -18,6 +18,9 @@ Added
 Changed
 ~~~~~~~
 
+* Decode TopSpin processed-data fallbacks with nmrglue-ng while preserving
+  the public reader's processed spectrum conventions.
+
 * Return the normalized interop dataset for qualified Bruker 2D pdata,
   preserving both complex channels, receiver gain and both axis options.
 

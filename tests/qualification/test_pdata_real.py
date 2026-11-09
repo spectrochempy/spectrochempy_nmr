@@ -186,7 +186,7 @@ def test_public_read_topspin_pdata_parity(
         return dataset
 
     with monkeypatch.context() as migrated:
-        migrated.setattr(reader, "read_pdata", reject_legacy)
+        migrated.setattr(reader, "_read_pdata_fallback", reject_legacy)
         migrated.setattr(converter, "from_interop", record_conversion)
         actual = scp.read_topspin(component, proc_axis=proc_axis)
 
@@ -246,14 +246,14 @@ def test_public_read_topspin_falls_back_for_degenerate_calibration(
         re.sub(rb"(?m)^##\$OFFSET=[^\r\n]*", b"##$OFFSET= 1e20", procs.read_bytes())
     )
     reader = import_module("spectrochempy_nmr.readers.read_topspin")
-    legacy_read = reader.read_pdata
+    legacy_read = reader._read_pdata_fallback
     calls = []
 
     def record_legacy(*args, **kwargs):
         calls.append(args[0])
         return legacy_read(*args, **kwargs)
 
-    monkeypatch.setattr(reader, "read_pdata", record_legacy)
+    monkeypatch.setattr(reader, "_read_pdata_fallback", record_legacy)
     result = scp.read_topspin(path / "1r")
     assert calls == [path]
     np.testing.assert_array_equal(result.data, original_data.data)
