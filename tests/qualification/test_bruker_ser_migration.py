@@ -1,6 +1,8 @@
 """Public TopSpin SER parity with the legacy decoder."""
 
+from functools import wraps
 from importlib import import_module
+from inspect import signature
 import os
 from pathlib import Path
 
@@ -18,8 +20,9 @@ def _check_parity(path, monkeypatch, *, migrate, filtered, dc):
     binary_calls = []
     read_binary = ng.bruker.read
 
+    @wraps(read_binary)
     def count_binary(directory, **kwargs):
-        binary_calls.append(directory)
+        binary_calls.append((directory, kwargs))
         return read_binary(directory, **kwargs)
 
     def legacy(directory, **kwargs):
@@ -43,8 +46,16 @@ def _check_parity(path, monkeypatch, *, migrate, filtered, dc):
         current.setattr(ng.bruker, "read", count_binary)
         actual = scp.read_topspin(path / "ser", **options)
 
-    assert calls == ([] if migrate else [path])
-    assert len(binary_calls) <= 1
+    if "recover_shape" in signature(read_binary).parameters:
+        assert calls == []
+        assert len(binary_calls) == 1
+        directory, kwargs = binary_calls[0]
+        assert directory == path
+        assert kwargs["recover_shape"] is False
+        assert kwargs["read_nus_schedule"] is False
+    else:
+        assert calls == ([] if migrate else [path])
+        assert len(binary_calls) <= 1
     assert actual is not None and expected is not None
     assert actual.dims == expected.dims
     assert actual.dtype == expected.dtype
