@@ -37,16 +37,16 @@ def _read_agilent_or_skip(*args, **kwargs):
 
 
 # ---------------------------------------------------------------------------
-# nmrglue vendored layer
+# nmrglue-ng provider
 # ---------------------------------------------------------------------------
 
 
 @pytest.mark.skipif(not _has_agilent_data(), reason="Agilent test data not available")
 class TestAgilentNMRGlue:
-    """Tests for the vendored nmrglue Agilent reading functions."""
+    """Tests for the external nmrglue-ng Agilent reading functions."""
 
     def test_read_varian_procpar(self):
-        from spectrochempy_nmr.extern.nmrglue import read_varian_procpar
+        from nmrglue.fileio.varian import read_procpar as read_varian_procpar
 
         pdic = read_varian_procpar(str(AGILENT_DIR / "agilent_1d" / "procpar"))
         assert isinstance(pdic, dict)
@@ -57,16 +57,16 @@ class TestAgilentNMRGlue:
         assert pdic["sw"]["values"] == ["50000"]
 
     def test_find_varian_shape_1d(self):
-        from spectrochempy_nmr.extern.nmrglue import find_varian_shape
-        from spectrochempy_nmr.extern.nmrglue import read_varian_procpar
+        from nmrglue.fileio.varian import find_shape as find_varian_shape
+        from nmrglue.fileio.varian import read_procpar as read_varian_procpar
 
         pdic = read_varian_procpar(str(AGILENT_DIR / "agilent_1d" / "procpar"))
         shape = find_varian_shape(pdic)
         assert shape == (1500,)
 
     def test_find_varian_shape_2d(self):
-        from spectrochempy_nmr.extern.nmrglue import find_varian_shape
-        from spectrochempy_nmr.extern.nmrglue import read_varian_procpar
+        from nmrglue.fileio.varian import find_shape as find_varian_shape
+        from nmrglue.fileio.varian import read_procpar as read_varian_procpar
 
         pdic = read_varian_procpar(str(AGILENT_DIR / "agilent_2d" / "procpar"))
         shape = find_varian_shape(pdic)
@@ -74,7 +74,7 @@ class TestAgilentNMRGlue:
         assert shape[0] == 332  # ni * 2 phase values
 
     def test_read_varian_fid_1d(self):
-        from spectrochempy_nmr.extern.nmrglue import read_varian
+        from nmrglue.fileio.varian import read as read_varian
 
         dic, data = read_varian(
             str(AGILENT_DIR / "agilent_1d"),
@@ -86,7 +86,7 @@ class TestAgilentNMRGlue:
         assert np.issubdtype(data.dtype, np.complexfloating)
 
     def test_read_varian_fid_2d(self):
-        from spectrochempy_nmr.extern.nmrglue import read_varian
+        from nmrglue.fileio.varian import read as read_varian
 
         dic, data = read_varian(
             str(AGILENT_DIR / "agilent_2d"),
@@ -98,9 +98,9 @@ class TestAgilentNMRGlue:
         assert np.issubdtype(data.dtype, np.complexfloating)
 
     def test_find_varian_torder(self):
-        from spectrochempy_nmr.extern.nmrglue import find_varian_shape
-        from spectrochempy_nmr.extern.nmrglue import find_varian_torder
-        from spectrochempy_nmr.extern.nmrglue import read_varian_procpar
+        from nmrglue.fileio.varian import find_shape as find_varian_shape
+        from nmrglue.fileio.varian import find_torder as find_varian_torder
+        from nmrglue.fileio.varian import read_procpar as read_varian_procpar
 
         pdic = read_varian_procpar(str(AGILENT_DIR / "agilent_2d" / "procpar"))
         shape = find_varian_shape(pdic)
@@ -108,7 +108,7 @@ class TestAgilentNMRGlue:
         assert torder in ("f", "r", "o")
 
     def test_procpar_key_count(self):
-        from spectrochempy_nmr.extern.nmrglue import read_varian_procpar
+        from nmrglue.fileio.varian import read_procpar as read_varian_procpar
 
         pdic = read_varian_procpar(str(AGILENT_DIR / "agilent_1d" / "procpar"))
         assert len(pdic) > 100  # typical procpar has 100+ parameters

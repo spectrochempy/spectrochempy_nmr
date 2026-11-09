@@ -290,16 +290,8 @@ def test_real_tppi_public(monkeypatch):
     )
 
 
-@pytest.mark.skipif(
-    not hasattr(interop, "normalize_agilent_fid_series"),
-    reason="provider does not support flat FID series",
-)
-@pytest.mark.parametrize("prevalidation_api", [0, 1])
-def test_synthetic_multitrace_series_public(tmp_path, monkeypatch, prevalidation_api):
-    fft_module = import_module("spectrochempy.processing.fft.fft")
-    monkeypatch.setattr(
-        fft_module, "FFT_PREVALIDATION_API", prevalidation_api, raising=False
-    )
+@pytest.fixture
+def synthetic_multitrace_series(tmp_path):
     procpar = {
         key: varian.create_pdic_param(key, values)
         for key, values in {
@@ -321,17 +313,61 @@ def test_synthetic_multitrace_series_public(tmp_path, monkeypatch, prevalidation
         for index, block in enumerate(words, 1):
             varian.put_blockheader(stream, (0, 21, index, 0, 3, 0, 0, 0, 0))
             stream.write(block.tobytes())
-    dataset = _check_public_2d(path, monkeypatch, "series")
     expected = words[..., ::2] + 1j * words[..., 1::2]
-    np.testing.assert_array_equal(dataset.data, expected.reshape(6, 4) / 6)
+    return path, expected.reshape(6, 4) / 6
+
+
+@pytest.mark.skipif(
+    not hasattr(interop, "normalize_agilent_fid_series"),
+    reason="provider does not support flat FID series",
+)
+@pytest.mark.parametrize("prevalidation_api", [0, 1])
+def test_synthetic_multitrace_series_public(
+    synthetic_multitrace_series, monkeypatch, prevalidation_api
+):
+    fft_module = import_module("spectrochempy.processing.fft.fft")
+    monkeypatch.setattr(
+        fft_module, "FFT_PREVALIDATION_API", prevalidation_api, raising=False
+    )
+    path, expected = synthetic_multitrace_series
+    dataset = _check_public_2d(path, monkeypatch, "series")
+    np.testing.assert_array_equal(dataset.data, expected)
     assert dataset.meta.nblocks == 2
     assert dataset.meta.ntraces == 3
     assert dataset.meta.interop_domains == ("unknown", "time")
     if prevalidation_api:
-        stored = interop.read_agilent_fid_storage(tmp_path, series_only=True)
+        stored = interop.read_agilent_fid_storage(path.parent, series_only=True)
         canonical = adapter.from_interop(interop.normalize(stored))
         assert scp.nmr.Experiment(canonical).domains == ("unknown", "time")
         assert scp.nmr.Experiment(canonical.fft().T).domains == ("frequency", "unknown")
+
+
+def test_synthetic_inconsistent_3d_uses_external_varian_fallback(
+    synthetic_multitrace_series, monkeypatch
+):
+    path, expected = synthetic_multitrace_series
+    procpar_path = path.with_name("procpar")
+    procpar = varian.read_procpar(procpar_path)
+    for key in ("ni", "ni2"):
+        procpar[key] = varian.create_pdic_param(key, ["2"])
+    varian.write_procpar(procpar_path, procpar, overwrite=True)
+
+    reader = import_module("spectrochempy_nmr.readers.read_agilent")
+    assert reader.read_varian is varian.read
+    calls = []
+
+    def spy(*args, **kwargs):
+        calls.append(kwargs)
+        return varian.read(*args, **kwargs)
+
+    monkeypatch.setattr(reader, "read_varian", spy)
+    with pytest.warns(UserWarning, match="returning raw 2D data"):
+        dataset = scp.read_agilent(path)
+    assert calls == [{"legacy_layout": True}]
+    np.testing.assert_array_equal(dataset.data, expected)
+    np.testing.assert_array_equal(dataset.y.data, np.arange(6))
+    np.testing.assert_array_equal(dataset.x.data, np.arange(4) * 200)
+    assert dataset.meta.encoding == ["QF", "QSIM"]
 
 
 @pytest.mark.skipif(

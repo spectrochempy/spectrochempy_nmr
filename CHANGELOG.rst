@@ -18,6 +18,9 @@ Added
 Changed
 ~~~~~~~
 
+* Require nmrglue-ng 1.2.3 and delegate Agilent compatibility decoding to
+  its Varian reader. Remove the bundled Varian decoder.
+
 * Use the normalized interop dataset for qualified flat Agilent FID series,
   preserving public display axes, scaling and FFT conventions.
 

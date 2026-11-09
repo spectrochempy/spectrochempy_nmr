@@ -37,7 +37,7 @@ jobs:
           from importlib.util import find_spec
           from pathlib import Path
 
-          assert version("nmrglue-ng") == "1.2.2"
+          assert version("nmrglue-ng") == "1.2.3"
           for name in ("spectrochempy", "spectrochempy_nmr", "nmrglue"):
               location = Path(find_spec(name).origin).resolve()
               assert Path.cwd() not in location.parents, location
@@ -120,27 +120,16 @@ jobs:
             tests/qualification/test_bruker_echo_antiecho_public.py -k synthetic
           python -I -m pytest -ra tests/qualification/test_bruker_pdata_2d.py -k "synthetic and public_reader"
           python -I -m pytest -ra tests/qualification/test_bruker_ser_migration.py -k synthetic
-      - name: Qualify the public Agilent States fallback with the published wheel
-        run: python -I -m pytest -ra tests/qualification/test_agilent_states_public.py -k older_provider
-      - name: Check out the candidate Agilent interop provider
-        uses: actions/checkout@v7
-        with:
-          repository: spectrochempy/nmrglue-ng
-          ref: e90ebf1eaeb90c9f9a9a4884048beebe0e4ed464
-          fetch-depth: 0
-          path: provider-candidate
-          persist-credentials: false
-      - name: Qualify the migrated public Agilent readers
+      - name: Qualify the public Agilent readers against the released provider
         run: |
-          python -m pip wheel --no-deps --wheel-dir provider-dist ./provider-candidate
-          python -m pip install --force-reinstall --no-deps provider-dist/*.whl
-          python -m pip check
           python -I - <<'PY'
           from inspect import signature
+          from nmrglue import varian
           from nmrglue.interop import normalize_agilent_fid, read_agilent_fid
 
           assert "legacy_presentation" in signature(normalize_agilent_fid).parameters
           assert "single_trace_only" in signature(read_agilent_fid).parameters
+          assert "legacy_layout" in signature(varian.read).parameters
           from nmrglue.interop import normalize_agilent_tppi_2d
           assert callable(normalize_agilent_tppi_2d)
           from nmrglue.interop import normalize_agilent_fid_series
