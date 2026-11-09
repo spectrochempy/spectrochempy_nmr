@@ -78,6 +78,10 @@ def _apply_interop_fft_presentation(dataset, dim, *, ppm, physical, acquisition=
     if ppm:
         coord.ito("ppm")
         coord.title = rf"$\delta\ {label}$"
+    if "physical_axis" in acquisition:
+        values = coord.data
+        if not np.isfinite(values).all() or not np.all(values[1:] < values[:-1]):
+            raise ValueError("unrepresentable interop FFT display grid")
     dataset.coordset[dim] = coord
 
 

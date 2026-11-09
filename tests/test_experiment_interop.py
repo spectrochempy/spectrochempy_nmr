@@ -175,3 +175,28 @@ def test_fid_preparation_rejects_stale_grid_and_wrong_operation_order():
     with pytest.raises(ValueError, match="preparation order"):
         Experiment(prepared).prepare_fid(remove_dc_offset=True)
     assert "scan_gain" not in source.meta.acquisition
+
+
+def test_qf_display_rejects_repeated_coordinates_after_fft_resize():
+    from spectrochempy_nmr.processing.fft_postprocess import (
+        _apply_interop_fft_presentation,
+    )
+
+    bins = np.arange(4, dtype=float) - 2
+    dataset = scp.NDDataset(np.ones((2, 4)), dims=["y", "x"])
+    dataset.set_coordset(x=scp.Coord(bins, units="Hz"))
+    descriptor = {
+        "physical_axis": "F2",
+        "spectral_width_hz": 4.0,
+        "fft_display_axis": {
+            "grid": "inclusive-endpoints",
+            "direction": "decreasing",
+            "center_hz": -9.99999999999e17,
+            "spectral_width_hz": 256.0,
+            "reference_frequency_mhz": 1.0,
+        },
+    }
+    with pytest.raises(ValueError, match="unrepresentable interop FFT display grid"):
+        _apply_interop_fft_presentation(
+            dataset, "x", ppm=False, physical=False, acquisition=descriptor
+        )
