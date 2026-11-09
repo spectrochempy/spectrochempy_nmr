@@ -73,6 +73,10 @@ def _check_public_2d(path, monkeypatch, profile="states"):
         NotImplementedError, match=f"UNVALIDATED:AGILENT-{profile.upper()}"
     ):
         direct.fft(dim="y")
+    if profile == "tppi":
+        assert scp.nmr.Experiment(actual[0].squeeze()).domains == (
+            scp.nmr.Experiment(old[0].squeeze()).domains
+        )
     return actual
 
 
@@ -232,6 +236,28 @@ def test_synthetic_tppi_older_provider(synthetic_states, monkeypatch):
     assert actual.meta.encoding == ["UNVALIDATED:AGILENT-TPPI", "QSIM"]
     assert actual.meta.get("normalization_state") is None
     np.testing.assert_array_equal(actual.data, samples / 6)
+
+
+@pytest.mark.parametrize("synthetic_states", ["tppi"], indirect=True)
+@pytest.mark.skipif(
+    not hasattr(interop, "normalize_agilent_tppi_2d"),
+    reason="provider does not support TPPI normalization",
+)
+def test_synthetic_tppi_secondary_dimension_uses_compatibility(
+    synthetic_states, monkeypatch
+):
+    path, _ = synthetic_states
+    procpar_path = path.with_name("procpar")
+    procpar = varian.read_procpar(procpar_path)
+    procpar["ni2"] = varian.create_pdic_param("ni2", ["0"])
+    procpar["phase2"] = varian.create_pdic_param("phase2", ["1"])
+    varian.write_procpar(procpar_path, procpar, overwrite=True)
+
+    def reject_normalized(result):
+        pytest.fail("ambiguous indirect dimensions reached from_interop")
+
+    monkeypatch.setattr(adapter, "from_interop", reject_normalized)
+    assert scp.read_agilent(path) is None
 
 
 @pytest.mark.skipif(

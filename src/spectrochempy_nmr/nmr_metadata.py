@@ -732,7 +732,6 @@ def extract_nmr_metadata(meta, *, ndim=None) -> NMRMetadata:
             return _extract_fid_display_metadata(meta)
         if (
             quadrature == "tppi-stored-2d"
-            and ndim in (None, 2)
             and physical == dimensions == ("F1", "F2")
             and tuple(meta.get("axis_roles", ())) == physical
             and domain in ("time", "mixed")
