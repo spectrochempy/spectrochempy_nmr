@@ -76,7 +76,7 @@ jobs:
         uses: actions/checkout@v7
         with:
           repository: spectrochempy/nmrglue-ng
-          ref: 304241bd1ba0e4fd3dc325c6a03d3c8b0e86285f
+          ref: 3a355c7ceffabb277102a50304e0af2c21fe4af4
           fetch-depth: 0
           path: provider-candidate
           persist-credentials: false
@@ -89,6 +89,7 @@ jobs:
           from inspect import signature
           from nmrglue.interop import (
               normalize_bruker_fid,
+              normalize_bruker_pdata_2d,
               normalize_bruker_ser_echo_antiecho,
               normalize_bruker_ser_qf,
               normalize_bruker_ser_states_tppi,
@@ -97,6 +98,7 @@ jobs:
           )
 
           assert "preserve_storage" in signature(normalize_bruker_fid).parameters
+          assert "axis_reference" in signature(normalize_bruker_pdata_2d).parameters
           assert "fft_presentation" in signature(normalize_bruker_ser_qf).parameters
           assert "qf_only" in signature(read_bruker_ser).parameters
           assert "fft_presentation" in signature(normalize_bruker_ser_states_tppi).parameters
@@ -113,7 +115,7 @@ jobs:
           path: baseline-core
           fetch-depth: 0
           persist-credentials: false
-      - name: Qualify public SER FFT ordering before mutation
+      - name: Qualify public Bruker SER and processed 2D routes
         run: |
           git -C baseline-core fetch --no-tags https://github.com/spectrochempy/spectrochempy.git refs/tags/spectrochempy-v1.1.4:refs/tags/spectrochempy-v1.1.4
           test "$(git -C baseline-core rev-parse 'spectrochempy-v1.1.4^{commit}')" = a96cb8a6ec076da2fbd9f0e34f24f9955705cf1a
@@ -124,3 +126,4 @@ jobs:
             tests/qualification/test_bruker_qf_public.py \
             tests/qualification/test_bruker_states_tppi_public.py \
             tests/qualification/test_bruker_echo_antiecho_public.py -k synthetic
+          python -I -m pytest -ra tests/qualification/test_bruker_pdata_2d.py -k "synthetic and public_reader"

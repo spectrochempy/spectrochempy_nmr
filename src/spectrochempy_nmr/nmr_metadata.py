@@ -13,7 +13,7 @@ Bruker-specific field names (``nuc1``, ``pulprog``, ``FnMODE``,
 from __future__ import annotations
 
 from collections.abc import Mapping
-from dataclasses import dataclass
+from dataclasses import dataclass, replace
 from typing import TYPE_CHECKING
 
 if TYPE_CHECKING:
@@ -754,6 +754,29 @@ def extract_nmr_metadata(meta, *, ndim=None) -> NMRMetadata:
                 spectral_width_hz=tuple(widths)
                 if isinstance(widths, (tuple, list))
                 else None,
+            )
+        if (
+            ndim == 3
+            and physical in (("F1", "F2"), ("F2", "F1"))
+            and dimensions == ("channels", *physical)
+            and tuple(meta.get("axis_roles", ())) == ("component", *physical)
+            and quadrature == "complex-channel-pair-2d"
+            and isinstance(acquisition, Mapping)
+            and domain == "frequency"
+            and meta.get("normalization_state") == "storage-normalized"
+        ):
+            domains = ("frequency", "frequency")
+            display = extract_topspin_metadata(meta)
+            return replace(
+                display,
+                normalized_interop=True,
+                domains=domains,
+                source_kind=infer_source_kind(2, domains),
+                encoding=display.encoding or ("complex", "complex"),
+                iscomplex=display.iscomplex or (True, True),
+                spectrometer_freq_mhz=display.spectrometer_freq_mhz
+                or tuple(acquisition.get("acquisition_frequency_mhz", ()))
+                or None,
             )
         if (
             ndim == 2

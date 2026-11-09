@@ -2,6 +2,8 @@
 
 import hashlib
 import importlib
+from inspect import signature
+from dataclasses import replace
 import os
 from pathlib import Path
 
@@ -11,6 +13,7 @@ import spectrochempy as scp
 from spectrochempy.utils.jsonutils import json_encoder
 
 from spectrochempy_nmr import from_interop
+from spectrochempy_nmr.nmr_metadata import extract_nmr_metadata
 
 
 NAMES = ("2rr", "2ri", "2ir", "2ii")
@@ -125,8 +128,18 @@ def _check_public_reader(provider, path, proc_axis, monkeypatch, *, component="2
     def reject_legacy(*args, **kwargs):
         pytest.fail("qualified pdata should not use the vendored binary decoder")
 
+    converter = importlib.import_module("spectrochempy_nmr.interop")
+    convert = converter.from_interop
+    captured = []
+
+    def capture(result, **kwargs):
+        dataset = convert(result, **kwargs)
+        captured.append(dataset)
+        return dataset
+
     with monkeypatch.context() as migrated:
         migrated.setattr(reader, "read_pdata", reject_legacy)
+        migrated.setattr(converter, "from_interop", capture)
         actual = scp.read_topspin(path / component, proc_axis=proc_axis)
 
     assert actual.shape == expected.shape
@@ -135,15 +148,49 @@ def _check_public_reader(provider, path, proc_axis, monkeypatch, *, component="2
     assert actual.units == expected.units
     assert actual.origin == expected.origin
     assert actual.name == expected.name
-    assert json_encoder(actual.meta) == json_encoder(expected.meta)
+    migrated_contract = (
+        "axis_reference"
+        in signature(provider.interop.normalize_bruker_pdata_2d).parameters
+    )
+    if migrated_contract:
+        assert len(captured) == 1 and actual is captured[0]
+        assert actual.meta.acquisition["normalization"] == "receiver-gain"
+        normalized_meta = extract_nmr_metadata(actual.meta, ndim=actual.ndim)
+        legacy_meta = extract_nmr_metadata(expected.meta, ndim=expected.ndim)
+        assert normalized_meta.normalized_interop
+        assert replace(normalized_meta, normalized_interop=False) == legacy_meta
+    got_meta = json_encoder(actual.meta)["data"]
+    want_meta = json_encoder(expected.meta)["data"]
+    assert {key: got_meta[key] for key in want_meta} == want_meta
     np.testing.assert_array_equal(actual.data, expected.data)
     for dim in ("c", "y", "x"):
         got, want = actual.coordset[dim], expected.coordset[dim]
-        np.testing.assert_array_equal(got.data, want.data)
+        if migrated_contract and dim != "c":
+            axis = actual.dims.index(dim)
+            meta = expected.meta
+            sf = meta.sf[axis].to("MHz").m
+            sfo = meta.sfo1[axis].to("MHz").m
+            if proc_axis:
+                width = float(meta.sw_p[axis]) / sf
+                grid = float(meta.offset[axis]) - np.arange(got.size) * width / got.size
+                reference = sf
+            else:
+                width = meta.sw_h[axis].to("Hz").m
+                center = (sfo - sf) * 1e6
+                grid = (
+                    np.linspace(center + width / 2, center - width / 2, got.size) / sfo
+                )
+                reference = sfo
+            np.testing.assert_allclose(got.data, grid, rtol=0, atol=1e-8)
+            assert got.meta.reference_frequency.to("MHz").m == reference
+            assert got.meta.acquisition_frequency.to("MHz").m == sfo
+        else:
+            np.testing.assert_array_equal(got.data, want.data)
         np.testing.assert_array_equal(got.labels, want.labels)
         assert got.units == want.units
         assert got.title == want.title
-        assert json_encoder(got.meta) == json_encoder(want.meta)
+        if not migrated_contract or dim == "c":
+            assert json_encoder(got.meta) == json_encoder(want.meta)
     return actual
 
 
