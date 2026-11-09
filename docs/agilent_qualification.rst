@@ -1,10 +1,10 @@
 Agilent interop qualification
 =============================
 
-This **Unreleased, experimental** bridge uses the external ``nmrglue-ng``
-provider through ``ReadResult → normalize_agilent_fid → from_interop``.
-It does not replace public Agilent reader dispatch. No core changes or new
-runtime dependencies are needed for this 1D path, including on core 1.1.4.
+The experimental ``read_agilent_interop()`` facade and the qualified
+public ``read_agilent()`` routes use the external ``nmrglue-ng``
+provider and convert normalized acquisitions with ``from_interop()``.
+The 1D qualification includes SpectroChemPy core 1.1.4.
 
 The qualification pins the published nmrglue-ng 1.2.3 wheel in
 ``tests/qualification/requirements.txt``. The CI job installs both packages
