@@ -55,7 +55,8 @@ Public QF SER reader
 For a complete, uniformly sampled QF SER with calibrated processing axes,
 ``read_topspin()`` can return the dataset produced by ``from_interop()``.
 The installed provider must support per-trace corrections and the QF FFT
-presentation descriptor. The returned samples retain the stored direct
+presentation descriptor. The core must validate FFT order before mutating
+the dataset (``FFT_PREVALIDATION_API >= 1``). The returned samples retain the stored direct
 complex convention. Their imaginary component therefore has the opposite
 sign from the historical reader output. The provider applies selected
 corrections and scan/gain scaling once.

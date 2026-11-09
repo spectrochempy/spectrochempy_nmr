@@ -164,7 +164,11 @@ def _fft_postprocess_result(new, dim=-1, inv=False, **kwargs):
         index = _meta_dim_index(new, dim)
         dimension = new.dims[index]
         descriptor = presentation[dimension]
+        transformed = set(new.meta.get("fft_presentation_transformed", ()))
         if inv:
+            if dimension in transformed:
+                new.data = np.conj(new.data)
+                transformed.remove(dimension)
             size = new.shape[index]
             new.coordset[dimension] = Coord(
                 np.arange(size) / descriptor["spectral_width_hz"],
@@ -174,6 +178,7 @@ def _fft_postprocess_result(new, dim=-1, inv=False, **kwargs):
                 sigdigits=15,
             )
         else:
+            transformed.add(dimension)
             _apply_interop_fft_presentation(
                 new,
                 dimension,
@@ -183,6 +188,9 @@ def _fft_postprocess_result(new, dim=-1, inv=False, **kwargs):
             )
         readonly = new.meta.readonly
         new.meta.readonly = False
+        new.meta.fft_presentation_transformed = tuple(
+            name for name in presentation if name in transformed
+        )
         flags = list(new.meta.isfreq)
         flags[index] = not inv
         f2 = next(

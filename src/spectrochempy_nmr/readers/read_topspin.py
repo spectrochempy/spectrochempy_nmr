@@ -1077,6 +1077,9 @@ def _read_normalized_qf_ser(
     from nmrglue import interop  # noqa: PLC0415
 
     from spectrochempy_nmr.interop import from_interop  # noqa: PLC0415
+    from spectrochempy_nmr.processing.fft_validation import (  # noqa: PLC0415
+        _require_fft_prevalidation,
+    )
 
     if not any(path.name in ("proc", "procs") for path in procs_files) or not any(
         path.name in ("proc2", "proc2s") for path in procs_files
@@ -1087,6 +1090,10 @@ def _read_normalized_qf_ser(
         normalize is None
         or "qf_only" not in signature(interop.read_bruker_ser).parameters
     ):
+        return None
+    try:
+        _require_fft_prevalidation()
+    except NotImplementedError:
         return None
     try:
         stored = interop.read_bruker_ser(

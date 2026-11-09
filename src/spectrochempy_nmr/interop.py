@@ -344,6 +344,9 @@ def _from_2d(result, data):
     dataset.meta.td = list(plane.shape)
     presentation = result.acquisition.get("fft_presentation")
     if time_qf and presentation is not None:
+        from .processing.fft_validation import _require_fft_prevalidation  # noqa: PLC0415
+
+        _require_fft_prevalidation()
         if not isinstance(presentation, Mapping) or set(presentation) != set(
             dimensions
         ):

@@ -49,10 +49,24 @@ def _check_route(path, monkeypatch, dc, filtered):
     )
     assert Experiment(actual).process().x.units == scp.ur.Hz
     before = actual.data.copy()
+    dims = actual.dims.copy()
     with pytest.raises(NotImplementedError, match="PENDING-F2"):
-        actual.fft(dim="y")
+        actual.fft(dim="y", size=2 * actual.y.size, inplace=True)
     np.testing.assert_array_equal(actual.data, before)
+    assert actual.dims == dims
     assert actual.meta.isfreq == [False, False]
+
+    first_stage = actual.fft(dim="x", ppm=False)
+    inverse = first_stage.ifft(dim="x")
+    assert Experiment(inverse).domains == ("time", "time")
+    if not actual.meta.phc0[1].magnitude and not actual.meta.phc1[1].magnitude:
+        np.testing.assert_allclose(inverse.data, actual.data, rtol=2e-12, atol=1e-7)
+    np.testing.assert_allclose(
+        inverse.fft(dim="x", ppm=False).data,
+        first_stage.data,
+        rtol=2e-12,
+        atol=2e-6,
+    )
 
     for dimension in ("x", "y"):
         actual = actual.fft(dim=dimension)
@@ -104,6 +118,11 @@ def test_synthetic_qf_public_with_nonzero_phase(tmp_path, monkeypatch, dc, filte
     (path / "ser").write_bytes((values * (values % 7 - 3)).astype(">i4").tobytes())
     _check_route(path, monkeypatch, dc, filtered)
     if not dc and not filtered:
+        core_fft = import_module("spectrochempy.processing.fft.fft")
+        with monkeypatch.context() as old_core:
+            old_core.setattr(core_fft, "FFT_PREVALIDATION_API", 0)
+            legacy = scp.read_topspin(path / "ser")
+            assert legacy.meta.normalization_profile is None
         (processing / "proc2s").unlink()
         reader = import_module("spectrochempy_nmr.readers.read_topspin")
         with monkeypatch.context() as legacy:

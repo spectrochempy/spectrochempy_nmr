@@ -95,4 +95,19 @@ jobs:
           PY
           python -I -m pytest -ra tests/qualification/test_bruker_normalized.py -k synthetic
           python -I -m pytest -ra tests/test_experiment_interop.py -k fid_preparation
+      - name: Check out core with FFT prevalidation
+        uses: actions/checkout@v7
+        with:
+          repository: spectrochempy/spectrochempy
+          ref: ba25df0c21d117bc99cb9dbe11c6ed92a3b275a9
+          path: baseline-core
+          fetch-depth: 0
+          persist-credentials: false
+      - name: Qualify QF FFT ordering before mutation
+        run: |
+          git -C baseline-core fetch --no-tags https://github.com/spectrochempy/spectrochempy.git refs/tags/spectrochempy-v1.1.4:refs/tags/spectrochempy-v1.1.4
+          test "$(git -C baseline-core rev-parse 'spectrochempy-v1.1.4^{commit}')" = a96cb8a6ec076da2fbd9f0e34f24f9955705cf1a
+          python -m pip wheel --no-deps --wheel-dir baseline-wheels ./baseline-core
+          python -m pip install --no-deps --force-reinstall baseline-wheels/*.whl
+          python -m pip check
           python -I -m pytest -ra tests/qualification/test_bruker_qf_public.py -k synthetic
