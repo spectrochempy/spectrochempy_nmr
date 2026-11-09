@@ -1175,7 +1175,7 @@ def _read_raw_data(directory, filename, acqus_files, procs_files):
 
     from nmrglue import bruker  # noqa: PLC0415
 
-    if "recover_shape" in signature(bruker.read).parameters:
+    if "legacy_layout" in signature(bruker.read).parameters:
         metadata, data = bruker.read(
             directory,
             bin_file=filename if filename in ("fid", "ser") else None,
@@ -1184,9 +1184,7 @@ def _read_raw_data(directory, filename, acqus_files, procs_files):
             read_pulseprogram=(directory / "pulseprogram").is_file(),
             recover_shape=False,
             read_nus_schedule=False,
-        )
-        metadata["acqus"].setdefault(
-            "PARMODE", int(filename == "ser" or not (directory / "fid").is_file())
+            legacy_layout=True,
         )
         return metadata, data
 

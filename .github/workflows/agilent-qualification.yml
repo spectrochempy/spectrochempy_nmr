@@ -76,7 +76,7 @@ jobs:
         uses: actions/checkout@v7
         with:
           repository: spectrochempy/nmrglue-ng
-          ref: 18bb42a9661cab2ff011826ef3d3d0fafd1b174d
+          ref: b3a470fbaa22f8597a9880422cf466c584262a75
           fetch-depth: 0
           path: provider-candidate
           persist-credentials: false
@@ -99,6 +99,7 @@ jobs:
           )
 
           assert "recover_shape" in signature(bruker.read).parameters
+          assert "legacy_layout" in signature(bruker.read).parameters
           assert "read_nus_schedule" in signature(bruker.read).parameters
           assert "preserve_storage" in signature(normalize_bruker_fid).parameters
           assert "axis_reference" in signature(normalize_bruker_pdata_2d).parameters
