@@ -562,17 +562,20 @@ def _raw_time_or_index_coordinate(axis, size, dim):
     return _raw_time_coordinate(axis, size, dim)
 
 
-def _from_stored_tppi(result, data):
-    """Preserve the TPPI trace matrix with the indirect FFT guarded."""
+def _from_raw_trace_matrix(result, data, *, series):
+    """Preserve independent complex FIDs with the leading FFT guarded."""
     import spectrochempy as scp  # noqa: PLC0415
 
     from .processing.fft_validation import _require_fft_prevalidation  # noqa: PLC0415
 
+    dimensions = ("trace", "F2") if series else ("F1", "F2")
+    domains = ("unknown", "time") if series else ("time", "time")
+    encoding = ("unknown", "complex") if series else ("tppi", "complex")
     if (
-        tuple(result.physical_dimensions) != ("F1", "F2")
-        or tuple(result.dimensions) != ("F1", "F2")
-        or tuple(result.domains) != ("time", "time")
-        or tuple(result.encoding) != ("tppi", "complex")
+        tuple(result.physical_dimensions) != dimensions
+        or tuple(result.dimensions) != dimensions
+        or tuple(result.domains) != domains
+        or tuple(result.encoding) != encoding
         or tuple(result.branch_order) != ("complex",)
         or result.normalization_state != "storage-normalized"
         or getattr(result, "channel_axis", None) is not None
@@ -583,20 +586,28 @@ def _from_stored_tppi(result, data):
         or data.dtype.itemsize not in (8, 16)
         or not np.isfinite(data).all()
     ):
-        raise ValueError("TPPI requires normalized F1/F2 complex time-domain traces")
+        raise ValueError("Raw trace matrix requires normalized complex F2 traces")
     _require_fft_prevalidation()
-    y, x = (
-        _raw_time_or_index_coordinate(axis, size, dim)
-        for axis, size, dim in zip(result.axes, data.shape, ("y", "x"), strict=True)
-    )
+    leading, direct = result.axes
+    if series:
+        if (
+            leading.domain != "unknown"
+            or leading.values is not None
+            or leading.unit is not None
+        ):
+            raise ValueError("Trace series requires an uncalibrated trace axis")
+        y = scp.Coord.arange(data.shape[0], title=leading.label)
+    else:
+        y = _raw_time_or_index_coordinate(leading, data.shape[0], "y")
+    x = _raw_time_or_index_coordinate(direct, data.shape[1], "x")
     dataset = scp.NDDataset(data.copy(), dtype=data.dtype, dims=["y", "x"])
     dataset.set_coordset(y=y, x=x)
     dataset.meta.update(_interop_metadata(result))
     dataset.meta.update(
         {
-            "axis_roles": ("F1", "F2"),
-            "data_domain": "time",
-            "encoding": ["UNVALIDATED:TPPI", "QSIM"],
+            "axis_roles": dimensions,
+            "data_domain": "unknown" if series else "time",
+            "encoding": ["UNVALIDATED:TRACE" if series else "UNVALIDATED:TPPI", "QSIM"],
             "iscomplex": [False, True],
             "isfreq": [False, False],
             "stage": "acquisition",
@@ -685,7 +696,9 @@ def from_interop(result, *, profile=None):
     if profile is not None:
         raise ValueError(f"unsupported interop profile: {profile!r}")
     if result.quadrature_mode == "tppi-stored-2d":
-        return _from_stored_tppi(result, data)
+        return _from_raw_trace_matrix(result, data, series=False)
+    if result.quadrature_mode == "series-stored-2d":
+        return _from_raw_trace_matrix(result, data, series=True)
     if result.quadrature_mode == "states-stored-2d":
         return _from_stored_states(result, data)
     if result.quadrature_mode == "echo-antiecho-stored-2d":

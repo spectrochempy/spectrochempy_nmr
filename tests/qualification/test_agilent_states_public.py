@@ -28,7 +28,8 @@ def _check_public_2d(path, monkeypatch, profile="states"):
 
     reader = import_module("spectrochempy_nmr.readers.read_agilent")
     with monkeypatch.context() as baseline:
-        baseline.setattr(interop, f"normalize_agilent_{profile}_2d", None)
+        name = "fid_series" if profile == "series" else f"{profile}_2d"
+        baseline.setattr(interop, f"normalize_agilent_{name}", None)
         old = scp.read_agilent(path, origin="qualification")
 
     monkeypatch.setattr(adapter, "from_interop", spy)
@@ -69,10 +70,11 @@ def _check_public_2d(path, monkeypatch, profile="states"):
         assert experiment.encoding == previous.encoding
         assert experiment.nuclei == previous.nuclei
         assert experiment.source_kind == previous.source_kind
-    with pytest.raises(
-        NotImplementedError, match=f"UNVALIDATED:AGILENT-{profile.upper()}"
-    ):
-        direct.fft(dim="y")
+    if profile != "series":
+        with pytest.raises(
+            NotImplementedError, match=f"UNVALIDATED:AGILENT-{profile.upper()}"
+        ):
+            direct.fft(dim="y")
     if profile == "tppi":
         assert scp.nmr.Experiment(actual[0].squeeze()).domains == (
             scp.nmr.Experiment(old[0].squeeze()).domains
@@ -282,6 +284,69 @@ def test_real_tppi_public(monkeypatch):
     assert actual.shape == (600, 1400)
     assert actual.y.units is None
     assert actual.meta.acquisition["spectral_widths_hz"] == (66666.6666667, 50000.0)
+    assert (
+        tuple(hashlib.sha256(file.read_bytes()).hexdigest() for file in files)
+        == checksums
+    )
+
+
+@pytest.mark.skipif(
+    not hasattr(interop, "normalize_agilent_fid_series"),
+    reason="provider does not support flat FID series",
+)
+def test_synthetic_multitrace_series_public(tmp_path, monkeypatch):
+    procpar = {
+        key: varian.create_pdic_param(key, values)
+        for key, values in {
+            "np": ["8"],
+            "nf": ["3"],
+            "arraydim": ["2"],
+            "sw": ["5000"],
+            "sfrq": ["125"],
+            "ns": ["3"],
+            "ne": ["2"],
+        }.items()
+    }
+    varian.write_procpar(tmp_path / "procpar", procpar)
+    words = np.arange(48, dtype=">i4").reshape(2, 3, 8)
+    words[..., 1::2] *= -3
+    path = tmp_path / "fid"
+    with path.open("wb") as stream:
+        varian.put_fileheader(stream, (2, 3, 8, 4, 32, 124, 0, 21, 1))
+        for index, block in enumerate(words, 1):
+            varian.put_blockheader(stream, (0, 21, index, 0, 3, 0, 0, 0, 0))
+            stream.write(block.tobytes())
+    dataset = _check_public_2d(path, monkeypatch, "series")
+    expected = words[..., ::2] + 1j * words[..., 1::2]
+    np.testing.assert_array_equal(dataset.data, expected.reshape(6, 4) / 6)
+    assert dataset.meta.nblocks == 2
+    assert dataset.meta.ntraces == 3
+    assert dataset.meta.interop_domains == ("unknown", "time")
+
+
+@pytest.mark.skipif(
+    not hasattr(interop, "normalize_agilent_fid_series"),
+    reason="provider does not support flat FID series",
+)
+def test_real_fid_series_public(monkeypatch):
+    directory = os.environ.get("NMR_AGILENT_SERIES_DATA")
+    if not directory:
+        pytest.skip("set NMR_AGILENT_SERIES_DATA to the OpenVnmrJ CRAFT array")
+    path = Path(directory)
+    files = (path / "fid", path / "procpar")
+    checksums = (
+        "a806ff0f6864f9c521f397510bbcec47d1a297f97b76beed31391d218ea9b760",
+        "96b651b8faea84ce9466b82a5137f13da6e0978b2f0667b23e7d5b3cac13c12a",
+    )
+    assert (
+        tuple(hashlib.sha256(file.read_bytes()).hexdigest() for file in files)
+        == checksums
+    )
+    dataset = _check_public_2d(path, monkeypatch, "series")
+    assert dataset.shape == (4, 16384)
+    assert dataset.meta.nblocks == 4
+    assert dataset.meta.ntraces == 1
+    assert dataset.y.units is None
     assert (
         tuple(hashlib.sha256(file.read_bytes()).hexdigest() for file in files)
         == checksums

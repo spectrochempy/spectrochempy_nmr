@@ -161,3 +161,17 @@ from ``sw1``. The public display retains point indices when ``sw2`` is
 absent. The direct FFT remains available. The indirect TPPI FFT is
 guarded pending processing qualification. Older providers retain the
 compatibility reader.
+
+
+Agilent flat FID series
+-----------------------
+
+The qualified series reader preserves complex FIDs in block and trace
+order. The normalized contract describes its leading dimension as a
+trace index. ``read_agilent()`` retains the historical coordinate
+presentation and NS/NE scaling. Unsupported acquisition layouts and
+older providers use the compatibility reader.
+
+The real OpenVnmrJ CRAFT proton array has four blocks with one trace
+each. The separate synthetic test covers two blocks with three traces
+each, including a non-unit scale and asymmetric samples.
