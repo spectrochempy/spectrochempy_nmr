@@ -587,7 +587,13 @@ def _from_raw_trace_matrix(result, data, *, series):
         or not np.isfinite(data).all()
     ):
         raise ValueError("Raw trace matrix requires normalized complex F2 traces")
-    _require_fft_prevalidation()
+    legacy_series = (
+        series
+        and isinstance(result.acquisition, Mapping)
+        and (result.acquisition.get("legacy_presentation") is not None)
+    )
+    if not legacy_series:
+        _require_fft_prevalidation()
     leading, direct = result.axes
     if series:
         if (
@@ -605,9 +611,16 @@ def _from_raw_trace_matrix(result, data, *, series):
     dataset.meta.update(_interop_metadata(result))
     dataset.meta.update(
         {
-            "axis_roles": dimensions,
-            "data_domain": "unknown" if series else "time",
-            "encoding": ["UNVALIDATED:TRACE" if series else "UNVALIDATED:TPPI", "QSIM"],
+            "axis_roles": list(dimensions) if series else dimensions,
+            "data_domain": "unknown" if series and not legacy_series else "time",
+            "encoding": [
+                "QF"
+                if legacy_series
+                else "UNVALIDATED:TRACE"
+                if series
+                else "UNVALIDATED:TPPI",
+                "QSIM",
+            ],
             "iscomplex": [False, True],
             "isfreq": [False, False],
             "stage": "acquisition",

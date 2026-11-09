@@ -491,9 +491,6 @@ def _read_normalized_agilent_2d(directory, path, profile):
         )
     elif profile == "tppi":
         dataset.meta.encoding = ["UNVALIDATED:AGILENT-TPPI", "QSIM"]
-    else:
-        dataset.meta.encoding = ["QF", "QSIM"]
-        dataset.meta.data_domain = "time"
     return dataset
 
 

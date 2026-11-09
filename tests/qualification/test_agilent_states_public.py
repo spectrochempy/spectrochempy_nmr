@@ -294,7 +294,12 @@ def test_real_tppi_public(monkeypatch):
     not hasattr(interop, "normalize_agilent_fid_series"),
     reason="provider does not support flat FID series",
 )
-def test_synthetic_multitrace_series_public(tmp_path, monkeypatch):
+@pytest.mark.parametrize("prevalidation_api", [0, 1])
+def test_synthetic_multitrace_series_public(tmp_path, monkeypatch, prevalidation_api):
+    fft_module = import_module("spectrochempy.processing.fft.fft")
+    monkeypatch.setattr(
+        fft_module, "FFT_PREVALIDATION_API", prevalidation_api, raising=False
+    )
     procpar = {
         key: varian.create_pdic_param(key, values)
         for key, values in {
@@ -322,6 +327,11 @@ def test_synthetic_multitrace_series_public(tmp_path, monkeypatch):
     assert dataset.meta.nblocks == 2
     assert dataset.meta.ntraces == 3
     assert dataset.meta.interop_domains == ("unknown", "time")
+    if prevalidation_api:
+        stored = interop.read_agilent_fid_storage(tmp_path, series_only=True)
+        canonical = adapter.from_interop(interop.normalize(stored))
+        assert scp.nmr.Experiment(canonical).domains == ("unknown", "time")
+        assert scp.nmr.Experiment(canonical.fft().T).domains == ("frequency", "unknown")
 
 
 @pytest.mark.skipif(
