@@ -235,12 +235,13 @@ def _from_2d(result, data):
         and isinstance(result.acquisition, Mapping)
         and result.acquisition.get("indirect_sampling") == "qf"
     )
+    paired_spectrum = mode == "complex-channel-pair-2d"
     if (
         dimensions not in (("F1", "F2"), ("F2", "F1"))
         or len(result.axes) != 2
         or (domains != ("frequency", "frequency") and not time_qf)
         or result.normalization_state != "storage-normalized"
-        or data.dtype.kind not in "iuf"
+        or data.dtype.kind not in ("c" if paired_spectrum else "iuf")
         or not np.isfinite(data).all()
     ):
         raise ValueError(
@@ -259,6 +260,25 @@ def _from_2d(result, data):
     complex_axis = None
     component_labels = None
     if (
+        paired_spectrum
+        and not time_qf
+        and data.ndim == 3
+        and data.shape[0] == 2
+        and isinstance(channel_axis, (int, np.integer))
+        and not isinstance(channel_axis, (bool, np.bool_))
+        and channel_axis == 0
+        and tuple(result.dimensions) == ("channels", *dimensions)
+        and encoding == ("complex", "complex")
+        and branches == ("S_R", "S_I")
+        and isinstance(result.acquisition, Mapping)
+        and result.acquisition.get("complex_axis") in dimensions
+    ):
+        from .processing.fft_validation import _require_fft_prevalidation  # noqa: PLC0415
+
+        _require_fft_prevalidation()
+        component_labels = branches
+        plane = np.array(data, copy=True)
+    elif (
         not time_qf
         and mode == "real-2d"
         and data.ndim == 2
@@ -324,12 +344,39 @@ def _from_2d(result, data):
             _frequency_coordinate(axis, size, linearize_below=0.0)
             for axis, size in zip(result.axes, plane.shape[-2:], strict=True)
         ]
+    if paired_spectrum:
+        acquisition = result.acquisition.get("acquisition_frequency_mhz")
+        if (
+            not isinstance(acquisition, (tuple, list))
+            or len(acquisition) != len(coords)
+            or any(
+                isinstance(value, (bool, np.bool_))
+                or not isinstance(value, (int, float, np.integer, np.floating))
+                or not np.isfinite(value)
+                or value <= 0
+                for value in acquisition
+            )
+        ):
+            raise ValueError(
+                "normalized spectrum requires positive acquisition frequencies"
+            )
+        for coord, frequency in zip(coords, acquisition, strict=True):
+            reference = coord.meta.get("acquisition_frequency")
+            if reference is None:
+                raise ValueError("normalized spectrum requires a frequency reference")
+            coord.ito("ppm")
+            coord.meta["acquisition_frequency"] = frequency * scp.ur.MHz
+            coord.meta["reference_frequency"] = reference
     coordinates = dict(zip(dims, coords, strict=True))
     axis_roles = dimensions
     isfreq = [not time_qf, not time_qf]
     if component_labels is not None:
         dims.insert(0, "c")
-        coordinates["c"] = scp.Coord(labels=list(component_labels))
+        coordinates["c"] = (
+            scp.Coord.arange(2, dims="c", labels=list(component_labels))
+            if paired_spectrum
+            else scp.Coord(labels=list(component_labels))
+        )
         axis_roles = ("component", *dimensions)
         isfreq.insert(0, False)
     dataset = scp.NDDataset(plane, dtype=plane.dtype, dims=dims)
@@ -344,6 +391,9 @@ def _from_2d(result, data):
         dataset.meta.component_labels = component_labels
         dataset.meta.stage = "spectrum"
     dataset.meta.td = list(plane.shape)
+    if paired_spectrum:
+        dataset.meta.storage_profile = result.normalization_profile
+        dataset.meta.interop_complex_axis = result.acquisition["complex_axis"]
     if time_qf:
         _set_ser_fft_presentation(dataset, result)
     if complex_axis is not None:
@@ -547,7 +597,12 @@ def from_interop(result, *, profile=None):
     if result.quadrature_mode == "echo-antiecho-stored-2d":
         return _from_echo_antiecho(result, data)
     if data.ndim == 2 or (
-        data.ndim == 3 and result.quadrature_mode == "stored-components-2d"
+        data.ndim == 3
+        and result.quadrature_mode
+        in (
+            "stored-components-2d",
+            "complex-channel-pair-2d",
+        )
     ):
         return _from_2d(result, data)
     if data.ndim != 1 or data.dtype.kind not in "iufc":

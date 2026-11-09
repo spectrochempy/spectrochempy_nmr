@@ -102,6 +102,18 @@ Rance–Kay reconstruction. The two routes have distinct reconstruction
 metadata. Profiles without the required calibration retain the historical
 reader.
 
+Public Bruker 2D processed spectra
+----------------------------------
+
+For complete four-plane int32 Bruker pdata with calibrated axes, the public
+reader returns the interop dataset with two complex channels. The provider
+pairs the stored planes, applies the receiver gain once and selects either
+the acquisition-centered axis or the processing axis requested with
+``proc_axis=True``. The latter uses SF for ppm calibration while SFO1 remains
+available as acquisition metadata. The four stored planes remain available
+through the provider's default normalization. The historical reader
+continues to cover profiles outside this contract and custom list axes.
+
 Prepare a FID explicitly
 ------------------------
 

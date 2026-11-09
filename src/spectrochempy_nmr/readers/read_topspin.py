@@ -971,7 +971,9 @@ def _validate_proc_axis(dic, data, parmode):
     return use_proc
 
 
-def _read_processed_data(directory, acqus_files, procs_files, *, proc_axis):
+def _read_processed_data(directory, acqus_files, procs_files, *, proc_axis, use_list):
+    from inspect import signature  # noqa: PLC0415
+
     from nmrglue import interop  # noqa: PLC0415
 
     from spectrochempy_nmr.interop import from_interop  # noqa: PLC0415
@@ -1010,6 +1012,23 @@ def _read_processed_data(directory, acqus_files, procs_files, *, proc_axis):
             # The public reader also accepts spectra outside the calibrated profile.
             pass
     elif all((directory / name).is_file() for name in ("2rr", "2ri", "2ir", "2ii")):
+        if (
+            not use_list
+            and "axis_reference"
+            in signature(interop.normalize_bruker_pdata_2d).parameters
+        ):
+            try:
+                stored = interop.read_bruker_pdata_2d(
+                    directory, acqus_files=acqus_files, procs_files=procs_files
+                )
+                normalized = interop.normalize_bruker_pdata_2d(
+                    stored, axis_reference="processing" if proc_axis else "acquisition"
+                )
+                candidate = from_interop(normalized)
+            except (ValueError, NotImplementedError):
+                pass
+            else:
+                return stored.metadata, candidate.data[0].real, candidate
         try:
             stored = interop.read_bruker_pdata_2d(directory)
         except ValueError:
@@ -1285,7 +1304,11 @@ def _read_topspin(*args, **kwargs):
 
     else:
         dic, datalist, normalized_dataset = _read_processed_data(
-            f_procno, acqus_files, procs_files, proc_axis=bool(kwargs.get("proc_axis"))
+            f_procno,
+            acqus_files,
+            procs_files,
+            proc_axis=bool(kwargs.get("proc_axis")),
+            use_list=kwargs.get("use_list", False),
         )
         if isinstance(datalist, list):
             if datalist[0].ndim == 2:
@@ -1557,7 +1580,9 @@ def _read_topspin(*args, **kwargs):
             sf_val = meta.sf[axis]
 
             if normalized_dataset is not None:
-                coord = normalized_dataset.x
+                coord = normalized_dataset.coordset[
+                    ("y", "x")[axis] if parmode else "x"
+                ]
             elif (
                 use_proc_axis[axis]
                 and sw_p_val is not None
@@ -1614,7 +1639,10 @@ def _read_topspin(*args, **kwargs):
         )
     elif normalized_dataset is not None:
         dataset = normalized_dataset
-        if paired_ser:
+        if processed and dataset.ndim == 3:
+            dataset.meta.acquisition_encoding = tuple(meta.encoding)
+            dataset.meta.storage_profile = "bruker-pdata-components"
+        if paired_ser or (processed and dataset.ndim == 3):
             pad_channel_metadata(meta)
         for key, value in meta.items():
             if key not in dataset.meta and not (normalized_fid and key == "encoding"):

@@ -756,6 +756,24 @@ def extract_nmr_metadata(meta, *, ndim=None) -> NMRMetadata:
                 else None,
             )
         if (
+            ndim == 3
+            and physical in (("F1", "F2"), ("F2", "F1"))
+            and dimensions == ("channels", *physical)
+            and tuple(meta.get("axis_roles", ())) == ("component", *physical)
+            and quadrature == "complex-channel-pair-2d"
+            and domain == "frequency"
+            and meta.get("normalization_state") == "storage-normalized"
+        ):
+            domains = ("frequency", "frequency")
+            return NMRMetadata(
+                normalized_interop=True,
+                ndim=3,
+                domains=domains,
+                source_kind=infer_source_kind(2, domains),
+                encoding=("complex", "complex"),
+                iscomplex=(True, True),
+            )
+        if (
             ndim == 2
             and physical in (("F1", "F2"), ("F2", "F1"))
             and dimensions == ("channels", *physical)
