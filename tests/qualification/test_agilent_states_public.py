@@ -56,6 +56,19 @@ def _check_states(path, monkeypatch):
     np.testing.assert_array_equal(direct.data, baseline.data)
     np.testing.assert_array_equal(direct.x.data, baseline.x.data)
     assert direct.x.units == baseline.x.units
+    assert actual.meta.data_domain == "time"
+    assert direct.meta.data_domain == "mixed"
+    for current, historical, domains in (
+        (actual, old, ("time", "time")),
+        (direct, baseline, ("time", "frequency")),
+    ):
+        experiment = scp.nmr.Experiment(current)
+        previous = scp.nmr.Experiment(historical)
+        assert experiment.ndim == previous.ndim == 2
+        assert experiment.domains == previous.domains == domains
+        assert experiment.encoding == previous.encoding
+        assert experiment.nuclei == previous.nuclei
+        assert experiment.source_kind == previous.source_kind
     with pytest.raises(NotImplementedError, match="UNVALIDATED:AGILENT-STATES"):
         direct.fft(dim="y")
     return actual

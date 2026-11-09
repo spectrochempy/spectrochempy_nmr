@@ -302,6 +302,10 @@ def extract_agilent_metadata(meta) -> NMRMetadata:
     NMRMetadata
         Canonical NMR metadata.
     """
+    return _extract_fid_display_metadata(meta)
+
+
+def _extract_fid_display_metadata(meta):
     if meta is None or len(meta) == 0:
         return NMRMetadata(ndim=0, domains=())
 
@@ -716,6 +720,16 @@ def extract_nmr_metadata(meta, *, ndim=None) -> NMRMetadata:
         acquisition = meta.get("acquisition", {})
         domain = meta.get("data_domain")
         quadrature = meta.get("quadrature_mode")
+        if (
+            quadrature == "states-stored-2d"
+            and ndim in (None, 3)
+            and physical == ("F1", "F2")
+            and dimensions == ("channels", *physical)
+            and tuple(meta.get("axis_roles", ())) == ("component", *physical)
+            and domain in ("time", "mixed")
+            and meta.get("normalization_state") == "storage-normalized"
+        ):
+            return _extract_fid_display_metadata(meta)
         states_tppi = quadrature == "states-tppi" and (
             domain,
             meta.get("tppi_alternation_state"),
