@@ -29,6 +29,7 @@ from datetime import datetime
 import numpy as np
 
 from spectrochempy.core.dataset.coord import Coord
+from spectrochempy.core.dataset.nddataset import NDDataset
 from spectrochempy.core.readers.importer import Importer
 from spectrochempy.core.readers.importer import _importer_method
 from spectrochempy.core.units import ur
@@ -210,7 +211,7 @@ def _read_jdf(*args, **kwargs):
 
     normalized = (
         _read_normalized_jeol_fid(path)
-        if kwargs.get("_jeol_single_acquisition", not kwargs.get("merge"))
+        if kwargs.get("_jeol_single_acquisition") and type(dataset) is NDDataset
         else None
     )
     if normalized is not None:

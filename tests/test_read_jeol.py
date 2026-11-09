@@ -250,23 +250,42 @@ def test_public_jeol_reference_interop_parity(monkeypatch):
 @pytest.mark.skipif(
     not os.environ.get("NMR_JEOL_REFERENCE"), reason="Set NMR_JEOL_REFERENCE"
 )
-@pytest.mark.parametrize("mode", ["automatic", "explicit"])
+@pytest.mark.parametrize("mode", ["automatic", "explicit", "core"])
 def test_public_jeol_reference_stack_retains_legacy_contract(mode, monkeypatch):
     from spectrochempy_nmr import Experiment
 
     def unexpected_normalization(*args):
         pytest.fail("stacked JDFs require the legacy presentation")
 
+    path = Path(os.environ["NMR_JEOL_REFERENCE"])
+    if mode == "core":
+        assert scp.nmr.read_jeol(path) is not None
+    reader = import_module("spectrochempy_nmr.readers.read_jeol")
+    monkeypatch.setattr(reader, "_read_normalized_jeol_fid", unexpected_normalization)
+    if mode == "automatic":
+        merged = scp.nmr.read_jeol(path, path)
+    elif mode == "explicit":
+        merged = scp.nmr.read_jeol([path, path], merge=True)
+    else:
+        merged = scp.read(path, path)
+    assert merged.shape[0] == 2
+    assert Experiment(merged).domain == "time"
+
+
+@pytest.mark.skipif(
+    not os.environ.get("NMR_JEOL_REFERENCE"), reason="Set NMR_JEOL_REFERENCE"
+)
+def test_public_jeol_reference_preserves_custom_dataset_type(monkeypatch):
+    class CustomDataset(scp.NDDataset):
+        pass
+
+    def unexpected_normalization(*args):
+        pytest.fail("a custom dataset type requires the historical importer")
+
     reader = import_module("spectrochempy_nmr.readers.read_jeol")
     monkeypatch.setattr(reader, "_read_normalized_jeol_fid", unexpected_normalization)
     path = Path(os.environ["NMR_JEOL_REFERENCE"])
-    merged = (
-        scp.nmr.read_jeol(path, path)
-        if mode == "automatic"
-        else scp.nmr.read_jeol([path, path], merge=True)
-    )
-    assert merged.shape[0] == 2
-    assert Experiment(merged).domain == "time"
+    assert isinstance(scp.nmr.read_jeol(path, objtype=CustomDataset), CustomDataset)
 
 
 def _assert_public_jeol_fid_interop_parity(
