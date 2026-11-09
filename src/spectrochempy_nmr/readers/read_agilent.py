@@ -382,8 +382,6 @@ def _read_normalized_agilent_fid(directory, path):
         return None
     acquisition = dataset.meta.acquisition
     display = acquisition["legacy_presentation"]
-    if display["fft_input_transform"] != "conjugate-input":
-        raise ValueError("unsupported Agilent FFT presentation")
     width = acquisition["spectral_width_hz"]
     observation = acquisition["observation_frequency_mhz"]
     dataset.x.ito("us")
@@ -404,7 +402,6 @@ def _read_normalized_agilent_fid(directory, path):
             sfrq=[observation],
             dfrq=[display["decoupler_frequency_mhz"]],
             nucleus=[display["reported_nucleus"]],
-            encoding=list(result.encoding),
             iscomplex=[True],
             ns=display["ns"],
             ne=display["ne"],

@@ -832,7 +832,11 @@ def extract_nmr_metadata(meta, *, ndim=None) -> NMRMetadata:
             ndim=1,
             domains=(domain,),
             source_kind=infer_source_kind(1, (domain,)),
-            nuclei=(acquisition.get("nucleus"),),
+            nuclei=(
+                acquisition.get("legacy_presentation", {}).get(
+                    "reported_nucleus", acquisition.get("nucleus")
+                ),
+            ),
             encoding=tuple(meta.get("encoding") or ()) or None,
             pulse_program=meta.get("pulprog"),
             datatype=meta.get("datatype"),

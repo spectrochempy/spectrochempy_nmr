@@ -202,6 +202,17 @@ def test_real_public_reader_uses_interop_and_preserves_fft(
     np.testing.assert_allclose(
         actual_fft.x.data, expected_fft.x.data, atol=1e-3, rtol=0
     )
+    expected_experiment, actual_experiment = Experiment(expected), Experiment(actual)
+    assert actual_experiment.nuclei == expected_experiment.nuclei
+    display, expected_display = (
+        actual_experiment.process(),
+        expected_experiment.process(),
+    )
+    assert display.x.units == expected_display.x.units == scp.ur.ppm
+    np.testing.assert_array_equal(display.data, expected_display.data)
+    np.testing.assert_allclose(
+        display.x.data, expected_display.x.data, atol=1e-9, rtol=0
+    )
     physical = Experiment(actual).process(reference="rfl-rfp")
     canonical = Experiment(read_agilent_interop(acquisition)).process(
         reference="rfl-rfp"
