@@ -14,7 +14,7 @@ classifiers = [
 dependencies = [
     "spectrochempy>=1.1.0,<2",
     "numpy",
-    "nmrglue-ng>=1.2.2,<2",
+    "nmrglue-ng>=1.2.3,<2",
 ]
 
 [project.entry-points."spectrochempy.plugins"]

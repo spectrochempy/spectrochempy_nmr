@@ -32,7 +32,7 @@ from spectrochempy.core.readers.importer import _importer_method
 from spectrochempy.core.units import ur
 from spectrochempy.utils._logging import warning_
 from spectrochempy.utils.meta import Meta
-from spectrochempy_nmr.extern.nmrglue import read_varian
+from nmrglue.fileio.varian import read as read_varian
 from spectrochempy_nmr.processing.fft_validation import _require_fft_prevalidation
 from spectrochempy_nmr.readers._channels import pair_traces
 from spectrochempy_nmr.readers._channels import set_channel_data
@@ -541,8 +541,8 @@ def _read_agilent(*args, **kwargs):
         if candidate is not None:
             return _finalize_agilent_dataset(candidate, data_dir, kwargs)
 
-    # Compatibility path for unsupported profiles and older providers.
-    dic, data = read_varian(str(data_dir), fid_file="fid", procpar_file="procpar")
+    # Compatibility presentation for profiles outside the normalized contracts.
+    dic, data = read_varian(data_dir, legacy_layout=True)
     pdic = dic.get("procpar", {})
 
     # Determine ndim from data shape

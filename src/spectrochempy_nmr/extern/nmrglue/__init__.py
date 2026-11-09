@@ -10,19 +10,11 @@ from ._base import uc_from_udic
 from ._simpson import read as read_simpson
 from ._tecmag import guess_udic as guess_udic_tecmag
 from ._tecmag import read as read_tecmag
-from ._varian import find_varian_shape
-from ._varian import find_varian_torder
-from ._varian import read_varian
-from ._varian import read_varian_procpar
 
 __all__ = [
     "create_blank_udic",
-    "find_varian_shape",
-    "find_varian_torder",
     "guess_udic_tecmag",
     "read_simpson",
     "read_tecmag",
-    "read_varian",
-    "read_varian_procpar",
     "uc_from_udic",
 ]

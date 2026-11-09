@@ -1,15 +1,14 @@
 Agilent interop qualification
 =============================
 
-This **Unreleased, experimental** bridge uses the external ``nmrglue-ng``
-provider through ``ReadResult → normalize_agilent_fid → from_interop``.
-It does not replace public Agilent reader dispatch. No core changes or new
-runtime dependencies are needed for this 1D path, including on core 1.1.4.
+The experimental ``read_agilent_interop()`` facade and the qualified
+public ``read_agilent()`` routes use the external ``nmrglue-ng``
+provider and convert normalized acquisitions with ``from_interop()``.
+The 1D qualification includes SpectroChemPy core 1.1.4.
 
-The qualification pins provider commit
-``202bb5df1aa04893ec3feb839cf90af64c2c1d9d`` in
+The qualification pins the published nmrglue-ng 1.2.3 wheel in
 ``tests/qualification/requirements.txt``. The CI job installs both packages
-as wheels, verifies the provider's VCS provenance and imports outside the
+as wheels, verifies the provider version and imports outside the
 checkout, then runs the real-provider tests on Python 3.11 and 3.13.
 The usual synthetic facade tests remain separate.
 
@@ -139,8 +138,7 @@ the validated ``phase=[1, 2]`` layout. The provider pairs adjacent
 complex FIDs and applies the historical NS/NE divisor once. The plugin
 preserves the public branch labels, display coordinates and direct FFT.
 The indirect FFT remains guarded until the States processing convention
-has been qualified. Older providers and profiles outside this layout
-use the compatibility reader.
+has been qualified. Profiles outside this layout use the nmrglue-ng compatibility reader.
 
 The historical ``agilent_2d`` dataset is qualified locally. It contains
 332 stored traces paired into 166 increments with 1500 complex points
@@ -159,8 +157,7 @@ historical public presentation. The real reference has 600 increments
 and 1400 complex points per trace. The physical F1 time grid derives
 from ``sw1``. The public display retains point indices when ``sw2`` is
 absent. The direct FFT remains available. The indirect TPPI FFT is
-guarded pending processing qualification. Older providers retain the
-compatibility reader.
+guarded pending processing qualification. Other layouts use the compatibility reader.
 
 
 Agilent flat FID series
@@ -169,8 +166,9 @@ Agilent flat FID series
 The qualified series reader preserves complex FIDs in block and trace
 order. The normalized contract describes its leading dimension as a
 trace index. ``read_agilent()`` retains the historical coordinate
-presentation and NS/NE scaling. Unsupported acquisition layouts and
-older providers use the compatibility reader.
+presentation and NS/NE scaling. Profiles outside the normalized contracts use the nmrglue-ng Varian
+compatibility reader. It retains all traces in file order when the
+declared multidimensional shape disagrees with the binary matrix.
 
 The real OpenVnmrJ CRAFT proton array has four blocks with one trace
 each. The separate synthetic test covers two blocks with three traces
