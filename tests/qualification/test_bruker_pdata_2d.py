@@ -3,6 +3,7 @@
 import hashlib
 import importlib
 from inspect import signature
+from dataclasses import replace
 import os
 from pathlib import Path
 
@@ -12,7 +13,7 @@ import spectrochempy as scp
 from spectrochempy.utils.jsonutils import json_encoder
 
 from spectrochempy_nmr import from_interop
-from spectrochempy_nmr.experiment import Experiment
+from spectrochempy_nmr.nmr_metadata import extract_nmr_metadata
 
 
 NAMES = ("2rr", "2ri", "2ir", "2ii")
@@ -154,7 +155,10 @@ def _check_public_reader(provider, path, proc_axis, monkeypatch, *, component="2
     if migrated_contract:
         assert len(captured) == 1 and actual is captured[0]
         assert actual.meta.acquisition["normalization"] == "receiver-gain"
-        assert Experiment(actual).domains == ("frequency", "frequency")
+        normalized_meta = extract_nmr_metadata(actual.meta, ndim=actual.ndim)
+        legacy_meta = extract_nmr_metadata(expected.meta, ndim=expected.ndim)
+        assert normalized_meta.normalized_interop
+        assert replace(normalized_meta, normalized_interop=False) == legacy_meta
     got_meta = json_encoder(actual.meta)["data"]
     want_meta = json_encoder(expected.meta)["data"]
     assert {key: got_meta[key] for key in want_meta} == want_meta
