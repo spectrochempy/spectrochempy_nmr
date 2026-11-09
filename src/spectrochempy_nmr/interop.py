@@ -364,6 +364,7 @@ def _from_2d(result, data):
             zero.append(angles[0] * scp.ur.degree)
             first.append(angles[1] * scp.ur.degree)
             fft_axes[dim] = {
+                "physical_axis": role,
                 "fft_display_axis": _plain(descriptor.get("display_axis")),
                 "spectral_width_hz": width,
                 "nucleus": coordinates[dim].title,

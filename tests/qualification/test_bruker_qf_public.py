@@ -16,7 +16,10 @@ from spectrochempy_nmr.experiment import Experiment
 
 def _check_route(path, monkeypatch, dc, filtered):
     normalizer = getattr(ng.interop, "normalize_bruker_ser_qf", None)
-    if normalizer is None or "fft_presentation" not in signature(normalizer).parameters:
+    if (
+        normalizer is None
+        or "qf_only" not in signature(ng.interop.read_bruker_ser).parameters
+    ):
         pytest.skip("requires the provider QF FFT presentation contract")
     reader = import_module("spectrochempy_nmr.readers.read_topspin")
     converter = import_module("spectrochempy_nmr.interop")
@@ -62,6 +65,15 @@ def _check_route(path, monkeypatch, dc, filtered):
             rtol=0,
             atol=0.00101,
         )
+        domains = (
+            ("time", "frequency") if dimension == "x" else ("frequency", "frequency")
+        )
+        assert Experiment(actual).domains == domains
+
+    partial = actual.ifft(dim="y")
+    assert Experiment(partial).domains == ("time", "frequency")
+    assert partial.y.units == scp.ur.s
+    assert Experiment(partial.ifft(dim="x")).domains == ("time", "time")
 
 
 @pytest.mark.parametrize("dc", [False, True])

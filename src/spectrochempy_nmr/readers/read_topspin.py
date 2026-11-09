@@ -1078,12 +1078,20 @@ def _read_normalized_qf_ser(
 
     from spectrochempy_nmr.interop import from_interop  # noqa: PLC0415
 
+    if not any(path.name in ("proc", "procs") for path in procs_files) or not any(
+        path.name in ("proc2", "proc2s") for path in procs_files
+    ):
+        return None
     normalize = getattr(interop, "normalize_bruker_ser_qf", None)
-    if normalize is None or "fft_presentation" not in signature(normalize).parameters:
+    if (
+        normalize is None
+        or "qf_only" not in signature(interop.read_bruker_ser).parameters
+    ):
         return None
     try:
         stored = interop.read_bruker_ser(
             directory,
+            qf_only=True,
             acqus_files=acqus_files,
             procs_files=procs_files,
             read_pulseprogram=(directory / "pulseprogram").is_file(),

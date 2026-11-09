@@ -757,8 +757,18 @@ def extract_nmr_metadata(meta, *, ndim=None) -> NMRMetadata:
             and meta.get("interop_complex_axis") == "F2"
         ):
             domain = meta.get("data_domain")
-            if domain in ("time", "frequency"):
+            flags = meta.get("isfreq")
+            if (
+                domain == "mixed"
+                and isinstance(flags, (tuple, list))
+                and len(flags) == 2
+            ):
+                domains = tuple("frequency" if flag else "time" for flag in flags)
+            elif domain in ("time", "frequency"):
                 domains = (domain, domain)
+            else:
+                domains = ()
+            if domains:
                 widths = acquisition.get("spectral_width_hz")
                 return NMRMetadata(
                     normalized_interop=True,

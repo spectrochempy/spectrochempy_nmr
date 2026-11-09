@@ -15,6 +15,12 @@ def _check_parity(path, monkeypatch, *, migrate, filtered, dc):
     reader = import_module("spectrochempy_nmr.readers.read_topspin")
     vendored = reader.read_fid
     calls = []
+    binary_calls = []
+    read_binary = ng.bruker.read
+
+    def count_binary(directory, **kwargs):
+        binary_calls.append(directory)
+        return read_binary(directory, **kwargs)
 
     def legacy(directory, **kwargs):
         calls.append(directory)
@@ -31,11 +37,16 @@ def _check_parity(path, monkeypatch, *, migrate, filtered, dc):
         previous.setattr(ng.bruker, "read", old_provider)
         expected = scp.read_topspin(path / "ser", **options)
     with monkeypatch.context() as current:
-        current.setattr(reader, "_read_normalized_qf_ser", lambda *args, **kwargs: None)
+        if path.parent.name == "exam2d_HH":
+            current.setattr(
+                reader, "_read_normalized_qf_ser", lambda *args, **kwargs: None
+            )
         current.setattr(reader, "read_fid", legacy)
+        current.setattr(ng.bruker, "read", count_binary)
         actual = scp.read_topspin(path / "ser", **options)
 
     assert calls == ([] if migrate else [path])
+    assert len(binary_calls) <= 1
     assert actual is not None and expected is not None
     assert actual.dims == expected.dims
     assert actual.dtype == expected.dtype
