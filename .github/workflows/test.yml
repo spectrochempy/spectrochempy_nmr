@@ -224,7 +224,7 @@ jobs:
         uses: actions/checkout@v7
         with:
           repository: spectrochempy/nmrglue-ng
-          ref: 291080f964b0899f4598bc182fde541f97faa9e5
+          ref: 86ea960c807d21dd82662a25dba7196016025e2f
           path: jeol-provider
           fetch-depth: 0
           persist-credentials: false
