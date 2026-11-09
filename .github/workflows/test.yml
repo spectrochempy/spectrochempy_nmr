@@ -209,6 +209,7 @@ jobs:
       NMR_JEOL_REFERENCE: /tmp/epicatechin_1h.jdf
       NMR_JEOL_COSY: /tmp/epicatechin_cosy.jdf
       NMR_JEOL_HSQC: /tmp/epicatechin_hsqc.jdf
+      NMR_JEOL_HMBC: /tmp/epicatechin_hmbc.jdf
     steps:
       - uses: actions/checkout@v7
       - uses: actions/setup-python@v7
@@ -224,7 +225,7 @@ jobs:
         uses: actions/checkout@v7
         with:
           repository: spectrochempy/nmrglue-ng
-          ref: 86ea960c807d21dd82662a25dba7196016025e2f
+          ref: 875a7873ae2a65f58e3373c94063502dd6bd47fc
           path: jeol-provider
           fetch-depth: 0
           persist-credentials: false
@@ -246,4 +247,6 @@ jobs:
           cp jeol-provider/tests/fixtures/fileio/data/jeol/epicatechin_hsqc.jdf "$NMR_JEOL_HSQC"
           echo "f109351f2102435faa7d302659e073b77ecc1184f1c3ef8817087ca91b9df3aa  $NMR_JEOL_COSY" | sha256sum -c -
           echo "eaa28b4b1fe05f95a41ace4f69f33ee6f31f26f392d3aea1d94bf3978b153625  $NMR_JEOL_HSQC" | sha256sum -c -
-          python -I -m pytest -ra tests/test_read_jeol.py -k 'cosy_preserves or listed_hsqc'
+          cp jeol-provider/tests/fixtures/fileio/data/jeol/epicatechin_hmbc.jdf "$NMR_JEOL_HMBC"
+          echo "578db932e166b04beeb0e9a5db443ff7a042b50e24af2789e535c06c1f6af859  $NMR_JEOL_HMBC" | sha256sum -c -
+          python -I -m pytest -ra tests/test_read_jeol.py -k 'cosy_preserves or listed_preserves'
