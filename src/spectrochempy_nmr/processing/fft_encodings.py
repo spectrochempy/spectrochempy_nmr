@@ -123,6 +123,12 @@ def _fft_encoding_handler(data, encoding, **kwargs):
         raise NotImplementedError(
             f"NMR encoding {encoding!r} is not ready for this transform"
         )
+    if (
+        data.ndim == 1
+        and encoding == "QSIM"
+        and kwargs.get("_interop_physical_fft", False)
+    ):
+        return _complex_fft(data)
     if encoding == "CONJUGATE-FFT":
         return _qf_fft(data)
     if encoding.startswith("DIRECT:"):

@@ -117,3 +117,14 @@ To add the existing historical corpus, also set
 Without ``NMR_AGILENT_REAL_DATA`` the suite skips explicitly. Once configured,
 missing files, wrong checksums or an unavailable provider fail the suite.
 No test modifies the original acquisition files.
+
+Public single-trace FID reader
+------------------------------
+
+With a provider supporting the legacy-presentation contract, the public
+``read_agilent()`` reader returns the converted interop dataset for calibrated
+single-trace complex FIDs. The provider applies the historical NS/NE divisor
+and leaves the completed scan counts as provenance. The direct public FFT
+preserves the historical conjugated-input display. An explicit physical
+reference through ``Experiment.process(reference=...)`` selects the canonical
+FFT convention. Other profiles still use the compatibility reader.

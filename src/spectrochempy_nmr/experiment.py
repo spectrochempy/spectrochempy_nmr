@@ -917,10 +917,14 @@ class Experiment:
                 phc1=phc1,
             )
 
-        # 5. Calibrate the final spectral axis using canonical NMR metadata.
+        # 5. Preserve the public display while explicit physical referencing
+        # keeps the canonical grid for the reference transformation.
+        legacy_display = not physical_fft and ds.meta.get("acquisition", {}).get(
+            "legacy_presentation"
+        )
         calibrated = (
             work
-            if self._nmr_meta.normalized_interop
+            if self._nmr_meta.normalized_interop and not legacy_display
             else self._calibrate_1d_spectral_axis(work)
         )
         if self._axis_calibration_changed_axis(work, calibrated):
@@ -1296,7 +1300,16 @@ class Experiment:
 
         origin = getattr(self.dataset, "origin", None)
         if (
-            origin in {"agilent", "jeol", "tecmag", "simpson"}
+            (
+                origin in {"agilent", "jeol", "tecmag", "simpson"}
+                or (
+                    not origin
+                    and not self.dataset.meta.get("origin")
+                    and self.dataset.meta.get("acquisition", {}).get(
+                        "legacy_presentation"
+                    )
+                )
+            )
             and self.source_kind == "fid"
             and sw_hz
             and sw_hz[0] is not None

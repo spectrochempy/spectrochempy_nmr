@@ -647,6 +647,15 @@ def from_interop(result, *, profile=None):
     dataset.meta.isfreq = [domain == ("frequency",)]
     dataset.meta.td = [int(data.size)]
     if domain == ("time",):
+        presentation = result.acquisition.get("legacy_presentation")
+        if presentation is not None:
+            if (
+                not isinstance(presentation, Mapping)
+                or presentation.get("fft_input_transform") != "conjugate-input"
+                or tuple(result.encoding) != ("QSIM",)
+            ):
+                raise ValueError("unsupported 1D interop FFT presentation")
+            dataset.meta.encoding = list(result.encoding)
         phase = result.acquisition.get("fft_initial_phase")
         if phase is not None:
             if not isinstance(phase, Mapping) or phase.get("pivot_index") != 0:

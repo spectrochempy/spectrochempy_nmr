@@ -120,3 +120,24 @@ jobs:
             tests/qualification/test_bruker_echo_antiecho_public.py -k synthetic
           python -I -m pytest -ra tests/qualification/test_bruker_pdata_2d.py -k "synthetic and public_reader"
           python -I -m pytest -ra tests/qualification/test_bruker_ser_migration.py -k synthetic
+      - name: Check out the candidate Agilent FID provider
+        uses: actions/checkout@v7
+        with:
+          repository: spectrochempy/nmrglue-ng
+          ref: 0ba7f0ccfb4e227ad286b697e8f6b4d6a336ff8d
+          fetch-depth: 0
+          path: provider-candidate
+          persist-credentials: false
+      - name: Qualify the migrated public Agilent FID reader
+        run: |
+          python -m pip wheel --no-deps --wheel-dir provider-dist ./provider-candidate
+          python -m pip install --force-reinstall --no-deps provider-dist/*.whl
+          python -m pip check
+          python -I - <<'PY'
+          from inspect import signature
+          from nmrglue.interop import normalize_agilent_fid, read_agilent_fid
+
+          assert "legacy_presentation" in signature(normalize_agilent_fid).parameters
+          assert "single_trace_only" in signature(read_agilent_fid).parameters
+          PY
+          python -I -m pytest -ra tests/qualification/test_agilent_real.py -k "public_reader and FAM013"

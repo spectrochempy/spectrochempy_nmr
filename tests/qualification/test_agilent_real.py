@@ -19,6 +19,7 @@ import spectrochempy as scp
 
 from spectrochempy_nmr import from_interop, read_agilent_interop
 from spectrochempy_nmr import reference_agilent_1d
+from spectrochempy_nmr.experiment import Experiment
 from pint.errors import DimensionalityError
 
 HOP = "FAM013_AHTM.PROTON_04.fid"
@@ -157,6 +158,73 @@ def test_real_legacy_parity_without_claiming_scan_normalization(acquisition, pro
     assert result.meta.acquisition["NS"] is None
     assert result.meta.acquisition["NE"] is None
     assert legacy.meta.ns == legacy.meta.ne == 1
+
+
+@pytest.mark.parametrize("origin", [None, "", "research-team"])
+def test_real_public_reader_uses_interop_and_preserves_fft(
+    acquisition,
+    provider,
+    monkeypatch,
+    origin,
+):
+    from importlib import import_module
+    from inspect import signature
+
+    if (
+        "legacy_presentation"
+        not in signature(provider.interop.normalize_agilent_fid).parameters
+    ):
+        pytest.skip("requires the candidate provider presentation contract")
+    reader = import_module("spectrochempy_nmr.readers.read_agilent")
+    converter = import_module("spectrochempy_nmr.interop")
+    with monkeypatch.context() as legacy:
+        legacy.setattr(reader, "_read_normalized_agilent_fid", lambda *a: None)
+        expected = scp.read_agilent(acquisition, origin=origin)
+
+    captured = []
+    convert = converter.from_interop
+
+    def capture(result):
+        dataset = convert(result)
+        captured.append(dataset)
+        return dataset
+
+    def refuse_legacy(*args, **kwargs):
+        pytest.fail("qualified public reader called the vendored decoder")
+
+    monkeypatch.setattr(converter, "from_interop", capture)
+    monkeypatch.setattr(reader, "read_varian", refuse_legacy)
+    actual = scp.read_agilent(acquisition, origin=origin)
+    assert actual.origin == expected.origin
+    assert len(captured) == 1 and actual is captured[0]
+    np.testing.assert_array_equal(actual.data, expected.data)
+    assert actual.x.units == expected.x.units
+    np.testing.assert_allclose(actual.x.data, expected.x.data, atol=1e-3, rtol=0)
+    for key in ("nucleus", "sfrq", "dfrq", "encoding", "ns", "ne", "date_raw", "at"):
+        assert actual.meta[key] == expected.meta[key]
+    actual_fft, expected_fft = actual.fft(), expected.fft()
+    np.testing.assert_array_equal(actual_fft.data, expected_fft.data)
+    np.testing.assert_allclose(
+        actual_fft.x.data, expected_fft.x.data, atol=1e-3, rtol=0
+    )
+    expected_experiment, actual_experiment = Experiment(expected), Experiment(actual)
+    if origin is None:
+        assert actual_experiment.nuclei == expected_experiment.nuclei
+    display, expected_display = (
+        actual_experiment.process(),
+        expected_experiment.process(),
+    )
+    assert display.x.units == expected_display.x.units == scp.ur.ppm
+    np.testing.assert_array_equal(display.data, expected_display.data)
+    np.testing.assert_allclose(
+        display.x.data, expected_display.x.data, atol=1e-9, rtol=0
+    )
+    physical = Experiment(actual).process(reference="rfl-rfp")
+    canonical = Experiment(read_agilent_interop(acquisition)).process(
+        reference="rfl-rfp"
+    )
+    np.testing.assert_allclose(physical.data, canonical.data, atol=1e-5, rtol=1e-6)
+    np.testing.assert_allclose(physical.x.data, canonical.x.data, atol=1e-9, rtol=0)
 
 
 def _assert_real_scan_counts(dataset, acquisition):
