@@ -40,6 +40,8 @@ time coordinates. Qualified standalone spectra use frequency coordinates
 in Hz. The direct FFT is available for qualified 2D FIDs. Their indirect
 quadrature remains unqualified. Files with simulation metadata from an
 ``.in`` file and other legacy layouts use the compatibility presentation.
+nmrglue-ng decodes these data files. For indexed XYREIM, the plugin keeps
+the historical ascending order on both axes.
 
 Tecmag
 ------

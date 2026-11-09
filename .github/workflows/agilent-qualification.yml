@@ -37,7 +37,7 @@ jobs:
           from importlib.util import find_spec
           from pathlib import Path
 
-          assert version("nmrglue-ng") == "1.2.3"
+          assert version("nmrglue-ng") == "1.2.4"
           for name in ("spectrochempy", "spectrochempy_nmr", "nmrglue"):
               location = Path(find_spec(name).origin).resolve()
               assert Path.cwd() not in location.parents, location

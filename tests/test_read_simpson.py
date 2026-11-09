@@ -104,10 +104,10 @@ par {
 
 
 class TestSimpsonParser:
-    """Tests for the custom SIMPSON parser."""
+    """Tests for the nmrglue-ng SIMPSON reader."""
 
     def test_read_text_1d(self, tmp_path):
-        from spectrochempy_nmr.extern.nmrglue._simpson import read
+        from nmrglue.fileio.simpson import read
 
         path = tmp_path / "1d_text.spe"
         expected = _write_text_1d(path)
@@ -118,7 +118,7 @@ class TestSimpsonParser:
         assert dic["SW"] == 10000.0
 
     def test_read_text_2d(self, tmp_path):
-        from spectrochempy_nmr.extern.nmrglue._simpson import read
+        from nmrglue.fileio.simpson import read
 
         path = tmp_path / "2d_text.spe"
         expected = _write_text_2d(path)
@@ -129,7 +129,7 @@ class TestSimpsonParser:
         assert dic["SW1"] == 5000.0
 
     def test_read_xreim_1d(self, tmp_path):
-        from spectrochempy_nmr.extern.nmrglue._simpson import read
+        from nmrglue.fileio.simpson import read
 
         path = tmp_path / "1d_xreim.txt"
         expected = _write_xreim_1d(path)
@@ -139,7 +139,7 @@ class TestSimpsonParser:
         assert "units" in dic
 
     def test_read_xyreim_2d(self, tmp_path):
-        from spectrochempy_nmr.extern.nmrglue._simpson import read
+        from nmrglue.fileio.simpson import read
 
         path = tmp_path / "2d_xyreim.txt"
         expected = _write_xyreim_2d(path)
@@ -149,14 +149,14 @@ class TestSimpsonParser:
         assert "units" in dic
 
     def test_guess_ftype_text(self, tmp_path):
-        from spectrochempy_nmr.extern.nmrglue._simpson import guess_ftype
+        from nmrglue.fileio.simpson import guess_ftype
 
         path = tmp_path / "1d_text.spe"
         _write_text_1d(path)
         assert guess_ftype(str(path)) == "TEXT"
 
     def test_guess_ftype_xreim(self, tmp_path):
-        from spectrochempy_nmr.extern.nmrglue._simpson import guess_ftype
+        from nmrglue.fileio.simpson import guess_ftype
 
         path = tmp_path / "1d_xreim.txt"
         _write_xreim_1d(path)

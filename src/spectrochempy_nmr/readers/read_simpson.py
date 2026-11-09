@@ -34,7 +34,6 @@ from spectrochempy.core.readers.importer import _importer_method
 from spectrochempy.core.units import ur
 from spectrochempy.utils._logging import warning_
 from spectrochempy.utils.meta import Meta
-from spectrochempy_nmr.extern.nmrglue._simpson import read as _read_simpson_raw
 from spectrochempy_nmr.readers._metadata import SingleAcquisitionImporter
 from spectrochempy_nmr.readers._metadata import apply_reader_metadata_options
 
@@ -261,17 +260,7 @@ def _read_simpson_core(dataset, path, **kwargs):
             return _finish_simpson(normalized, path, kwargs)
 
     try:
-        try:
-            filename = str(data_path)
-            ftype = simpson.guess_ftype(filename)
-            if ftype == "XYREIM":
-                dic, data = _read_simpson_raw(filename)
-            else:
-                dic, data = simpson.read(filename, ftype=ftype)
-            if any(key != key.strip() for key in dic):
-                dic, data = _read_simpson_raw(str(data_path))
-        except (ValueError, KeyError, IndexError, UnboundLocalError):
-            dic, data = _read_simpson_raw(str(data_path))
+        dic, data = simpson.read(data_path, legacy_layout=True)
     except Exception as exc:
         warning_(f"Failed to read SIMPSON file {data_path}: {exc}")
         return None
