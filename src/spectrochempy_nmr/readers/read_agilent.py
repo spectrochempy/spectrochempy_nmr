@@ -414,6 +414,70 @@ def _read_normalized_agilent_fid(directory, path):
     return dataset
 
 
+def _read_normalized_agilent_states(directory, path):
+    from nmrglue import interop  # noqa: PLC0415
+
+    from ..interop import from_interop  # noqa: PLC0415
+
+    normalize = getattr(interop, "normalize_agilent_states_2d", None)
+    if normalize is None:
+        return None
+    try:
+        stored = interop.read_agilent_fid_storage(directory, states_only=True)
+        result = normalize(stored, legacy_presentation=True)
+        dataset = from_interop(result)
+    except ValueError:
+        return None
+
+    acquisition = dataset.meta.acquisition
+    display = acquisition["legacy_presentation"]
+    widths = display["spectral_widths_hz"]
+    observation = display["observation_frequencies_mhz"]
+    for index, (coord, width, frequency) in enumerate(
+        zip((dataset.y, dataset.x), widths, observation, strict=True), 1
+    ):
+        if width is not None:
+            coord.ito("us")
+        coord.title = f"F{index} acquisition time"
+        if frequency is not None:
+            coord.meta["acquisition_frequency"] = frequency * ur.MHz
+
+    dataset.meta.update(
+        Meta(
+            datatype="2D",
+            pathname=str(path),
+            filename=directory.parent,
+            origin="agilent",
+            nblocks=acquisition["storage_shape"][0],
+            ntraces=1,
+            np_raw=acquisition["storage_shape"][1],
+            source_procpar=dataset.meta.source_metadata["procpar"],
+            sw=[None, *widths],
+            sw_h=[
+                None,
+                *(None if width is None else width * ur.Hz for width in widths),
+            ],
+            sfrq=[None, *observation],
+            dfrq=[None, *display["decoupler_frequencies_mhz"]],
+            nucleus=[None, *display["reported_nuclei"]],
+            encoding=["CHANNELS", "UNVALIDATED:AGILENT-STATES", "DIRECT:QSIM"],
+            acquisition_encoding=("STATES", "QSIM"),
+            storage_profile="agilent-phase-1-2-trace-pairs",
+            ns=display["ns"],
+            ne=display["ne"],
+            ns_norm=1.0,
+            pulprog=display["pulse_program"],
+            seqfil=display["sequence"],
+            date_raw=display["date_raw"],
+            at=display["acquisition_time_s"],
+            phase=acquisition["phase"],
+            ni=acquisition["physical_indirect_increments"],
+            arraydim=acquisition["storage_shape"][0],
+        )
+    )
+    return dataset
+
+
 def _finalize_agilent_dataset(dataset, directory, options):
     dataset.meta.readonly = True
     dataset.units = "count"
@@ -453,6 +517,10 @@ def _read_agilent(*args, **kwargs):
         return None
 
     candidate = _read_normalized_agilent_fid(data_dir, path)
+    if candidate is not None:
+        return _finalize_agilent_dataset(candidate, data_dir, kwargs)
+
+    candidate = _read_normalized_agilent_states(data_dir, path)
     if candidate is not None:
         return _finalize_agilent_dataset(candidate, data_dir, kwargs)
 

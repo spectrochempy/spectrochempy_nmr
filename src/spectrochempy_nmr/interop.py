@@ -523,17 +523,57 @@ def _from_echo_antiecho(result, data):
     return dataset
 
 
-def _raw_channel_dataset(result, channels, labels):
+def _from_stored_states(result, data):
+    """Preserve acquired States branches with the indirect FFT guarded."""
+    from .processing.fft_validation import _require_fft_prevalidation  # noqa: PLC0415
+
+    if (
+        tuple(result.physical_dimensions) != ("F1", "F2")
+        or tuple(result.dimensions) != ("channels", "F1", "F2")
+        or tuple(result.domains) != ("time", "time")
+        or tuple(result.encoding) != ("states", "complex")
+        or tuple(result.branch_order) != ("branch_0", "branch_1")
+        or result.normalization_state != "storage-normalized"
+        or getattr(result, "channel_axis", None) != 0
+        or isinstance(result.channel_axis, (bool, np.bool_))
+        or len(result.axes) != 2
+        or data.ndim != 3
+        or data.shape[0] != 2
+        or 0 in data.shape
+        or data.dtype.kind != "c"
+        or data.dtype.itemsize not in (8, 16)
+        or not np.isfinite(data).all()
+    ):
+        raise ValueError(
+            "States requires normalized F1/F2 complex time-domain branches"
+        )
+    _require_fft_prevalidation()
+    dataset = _raw_channel_dataset(
+        result, data.copy(), tuple(result.branch_order), allow_unknown_time=True
+    )
+    dataset.meta.encoding = ["CHANNELS", "UNVALIDATED:STATES", "DIRECT:QSIM"]
+    dataset.meta.iscomplex = [False, True, True]
+    return dataset
+
+
+def _raw_channel_dataset(result, channels, labels, *, allow_unknown_time=False):
     import spectrochempy as scp  # noqa: PLC0415
 
     y, x = (
-        _raw_time_coordinate(axis, size, dim)
+        _axis_coordinate(axis, size, dim)
+        if allow_unknown_time and axis.values is None and axis.unit is None
+        else _raw_time_coordinate(axis, size, dim)
         for axis, size, dim in zip(
             result.axes, channels.shape[1:], ("y", "x"), strict=True
         )
     )
     dataset = scp.NDDataset(channels, dtype=channels.dtype, dims=["c", "y", "x"])
-    dataset.set_coordset(c=scp.Coord(labels=list(labels)), y=y, x=x)
+    c = (
+        scp.Coord.arange(2, dims="c", labels=list(labels))
+        if allow_unknown_time
+        else scp.Coord(labels=list(labels))
+    )
+    dataset.set_coordset(c=c, y=y, x=x)
     dataset.meta.update(_interop_metadata(result))
     dataset.meta.update(
         {
@@ -562,7 +602,7 @@ def from_interop(result, *, profile=None):
     States-TPPI acquisition, profile="states-tppi" confirms that the
     input channels are adjacent E1/E2 pairs with alternation still encoded.
     Explicitly normalized echo/anti-echo input retains both complex branches
-    in storage order.
+    in storage order. Stored States branches retain the indirect FFT guard.
     """
     required = (
         "data",
@@ -594,6 +634,8 @@ def from_interop(result, *, profile=None):
         return _from_states_tppi(result, data)
     if profile is not None:
         raise ValueError(f"unsupported interop profile: {profile!r}")
+    if result.quadrature_mode == "states-stored-2d":
+        return _from_stored_states(result, data)
     if result.quadrature_mode == "echo-antiecho-stored-2d":
         return _from_echo_antiecho(result, data)
     if data.ndim == 2 or (
