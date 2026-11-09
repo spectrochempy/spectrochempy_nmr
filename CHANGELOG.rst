@@ -18,6 +18,10 @@ Added
 Changed
 ~~~~~~~
 
+* Use the normalized interop dataset for qualified Agilent States 2D
+  acquisitions when the provider supports States storage normalization.
+  Preserve the public axes, scaling and FFT guard.
+
 * Use the normalized interop dataset for qualified single-trace Agilent 1D
   FIDs when the provider supports the public presentation contract.
 

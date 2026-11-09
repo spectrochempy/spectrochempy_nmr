@@ -1,5 +1,5 @@
-Agilent 1D interop qualification
-================================
+Agilent interop qualification
+=============================
 
 This **Unreleased, experimental** bridge uses the external ``nmrglue-ng``
 provider through ``ReadResult → normalize_agilent_fid → from_interop``.
@@ -128,3 +128,23 @@ and leaves the completed scan counts as provenance. The direct public FFT
 preserves the historical conjugated-input display. An explicit physical
 reference through ``Experiment.process(reference=...)`` selects the canonical
 FFT convention. Other profiles still use the compatibility reader.
+
+
+Agilent States 2D public reader
+-------------------------------
+
+With a provider that supports States storage normalization,
+``read_agilent()`` uses the dataset returned by ``from_interop()`` for
+the validated ``phase=[1, 2]`` layout. The provider pairs adjacent
+complex FIDs and applies the historical NS/NE divisor once. The plugin
+preserves the public branch labels, display coordinates and direct FFT.
+The indirect FFT remains guarded until the States processing convention
+has been qualified. Older providers and profiles outside this layout
+use the compatibility reader.
+
+The historical ``agilent_2d`` dataset is qualified locally. It contains
+332 stored traces paired into 166 increments with 1500 complex points
+each. The public reader retains the F1 point index because the file has
+no ``sw2``. The physical width from ``sw1`` remains available through
+the normalized acquisition metadata. Synthetic binary input in CI
+checks branch order, a nontrivial divisor and public dataset identity.
