@@ -72,19 +72,8 @@ jobs:
       - name: Run nmrML raw and processed interop qualification
         run: python -I -m pytest -ra tests/qualification/test_nmrml_interop.py
 
-      - name: Check out the candidate Bruker interop provider
-        uses: actions/checkout@v7
-        with:
-          repository: spectrochempy/nmrglue-ng
-          ref: 8f86b9cb0dc6eda191572d8a3c84ab3961d101f2
-          fetch-depth: 0
-          path: provider-candidate
-          persist-credentials: false
-      - name: Qualify the public Bruker FID route with the candidate wheel
+      - name: Qualify the public Bruker FID route with the published wheel
         run: |
-          python -m pip wheel --no-deps --wheel-dir provider-dist ./provider-candidate
-          python -m pip install --force-reinstall --no-deps provider-dist/*.whl
-          python -m pip check
           python -I - <<'PY'
           from inspect import signature
           from nmrglue import bruker
