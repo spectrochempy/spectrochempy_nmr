@@ -27,6 +27,7 @@ import re
 from datetime import datetime
 
 import numpy as np
+from nmrglue.fileio.jeol import read as _read_jeol_raw
 
 from spectrochempy.core.dataset.coord import Coord
 from spectrochempy.core.dataset.nddataset import NDDataset
@@ -35,7 +36,6 @@ from spectrochempy.core.readers.importer import _importer_method
 from spectrochempy.core.units import ur
 from spectrochempy.utils._logging import warning_
 from spectrochempy.utils.meta import Meta
-from spectrochempy_nmr.extern.nmrglue._jeol import read_jeol as _read_jeol_raw
 from spectrochempy_nmr.readers._metadata import apply_reader_metadata_options
 
 # ======================================================================================

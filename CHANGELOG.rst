@@ -18,6 +18,9 @@ Added
 Changed
 ~~~~~~~
 
+* Delegate JEOL JDF compatibility decoding to nmrglue-ng and remove
+  the bundled decoder.
+
 * Use the normalized interop dataset for qualified regular JEOL 2D FID
   matrices. Correct the previously swapped F1 and F2 time calibrations
   and use the physical F2 sweep for the direct FFT frequency axis.

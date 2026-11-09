@@ -247,3 +247,8 @@ jobs:
           echo "f109351f2102435faa7d302659e073b77ecc1184f1c3ef8817087ca91b9df3aa  $NMR_JEOL_COSY" | sha256sum -c -
           echo "eaa28b4b1fe05f95a41ace4f69f33ee6f31f26f392d3aea1d94bf3978b153625  $NMR_JEOL_HSQC" | sha256sum -c -
           python -I -m pytest -ra tests/test_read_jeol.py -k 'cosy_preserves or listed_hsqc'
+      - name: Qualify the JEOL compatibility reader with the released wheel
+        run: |
+          python -m pip install --only-binary nmrglue-ng "nmrglue-ng==1.2.3"
+          python -m pip check
+          python -I -m pytest -ra tests/qualification/test_jeol_fallback.py
