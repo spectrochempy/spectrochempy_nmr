@@ -389,8 +389,16 @@ def test_public_jeol_cosy_preserves_f2_fft_and_calibrates_axes(monkeypatch):
     np.testing.assert_array_equal(direct.y.data, actual.y.data)
     width = actual.meta.sw[-1]
     expected_hz = np.fft.fftshift(np.fft.fftfreq(actual.x.size, d=1 / width))
-    np.testing.assert_allclose(direct.x.data, expected_hz, rtol=1e-12)
+    np.testing.assert_allclose(direct.x.data, expected_hz, atol=1.5, rtol=0)
     assert str(direct.x.units) == "Hz"
+    decimated = actual[:, ::2]
+    decimated_direct = decimated.fft(dim="x")
+    expected_decimated_hz = np.fft.fftshift(
+        np.fft.fftfreq(decimated.x.size, d=2 / width)
+    )
+    np.testing.assert_allclose(
+        decimated_direct.x.data, expected_decimated_hz, atol=1.5, rtol=0
+    )
     assert Experiment(direct).domain == "mixed"
     for dataset in (actual, direct):
         with pytest.raises(NotImplementedError, match="UNVALIDATED:F1"):

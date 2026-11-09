@@ -119,18 +119,6 @@ def _fft_postprocess_result(new, dim=-1, inv=False, **kwargs):
             flags = list(new.meta.isfreq)
             flags[index] = not inv
             new.meta.isfreq = flags
-            if not inv:
-                _apply_interop_fft_presentation(
-                    new,
-                    new.dims[index],
-                    ppm=False,
-                    physical=True,
-                    acquisition={
-                        "spectral_width_hz": new.meta.acquisition["spectral_width_hz"][
-                            -1
-                        ]
-                    },
-                )
         new.meta.readonly = readonly
         return new
 
