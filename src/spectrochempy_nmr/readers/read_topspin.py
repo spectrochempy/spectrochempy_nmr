@@ -32,10 +32,6 @@ from spectrochempy.core.readers.importer import _importer_method
 from spectrochempy.core.units import ur
 from spectrochempy.utils._logging import warning_
 from spectrochempy.utils.meta import Meta
-from spectrochempy_nmr.extern.nmrglue import read_fid
-from spectrochempy_nmr.extern.nmrglue._bruker import guess_shape
-from spectrochempy_nmr.extern.nmrglue._bruker import read_acqus_file
-from spectrochempy_nmr.extern.nmrglue._bruker import read_procs_file
 from spectrochempy_nmr.readers._channels import pad_channel_metadata
 from spectrochempy_nmr.readers._channels import pair_traces
 from spectrochempy_nmr.readers._channels import set_channel_data
@@ -1048,8 +1044,10 @@ def _read_processed_data(directory, acqus_files, procs_files, *, proc_axis, use_
 
     if converted is not None:
         # Keep the public reader's parameter selection, axes and gain.
-        metadata = read_procs_file(directory, procs_files)
-        metadata.update(read_acqus_file(directory, acqus_files))
+        from nmrglue import bruker  # noqa: PLC0415
+
+        metadata = bruker.read_procs_file(directory, list(procs_files))
+        metadata.update(bruker.read_acqus_file(directory, acqus_files))
         return metadata, list(converted.data), None
 
     metadata, data = _read_pdata_fallback(directory, acqus_files, procs_files)
@@ -1171,60 +1169,18 @@ def _read_normalized_ser(
 
 
 def _read_raw_data(directory, filename, acqus_files, procs_files):
-    from inspect import signature  # noqa: PLC0415
-
     from nmrglue import bruker  # noqa: PLC0415
 
-    if "legacy_layout" in signature(bruker.read).parameters:
-        metadata, data = bruker.read(
-            directory,
-            bin_file=filename if filename in ("fid", "ser") else None,
-            acqus_files=acqus_files,
-            procs_files=list(procs_files),
-            read_pulseprogram=(directory / "pulseprogram").is_file(),
-            recover_shape=False,
-            read_nus_schedule=False,
-            legacy_layout=True,
-        )
-        return metadata, data
-
-    acqus_path = directory / "acqus"
-    migrate_ser = (
-        filename == "ser" and acqus_path.is_file() and not (directory / "fid").is_file()
+    return bruker.read(
+        directory,
+        bin_file=filename if filename in ("fid", "ser") else None,
+        acqus_files=acqus_files,
+        procs_files=list(procs_files),
+        read_pulseprogram=(directory / "pulseprogram").is_file(),
+        recover_shape=False,
+        read_nus_schedule=False,
+        legacy_layout=True,
     )
-    if migrate_ser:
-        acqus = read_acqus_file(directory, [acqus_path])["acqus"]
-        migrate_ser = acqus.get("FnTYPE", 0) != 2
-
-    if filename == "fid" or migrate_ser:
-        try:
-            metadata, data = bruker.read(
-                directory,
-                bin_file=filename,
-                acqus_files=acqus_files,
-                procs_files=procs_files,
-                read_pulseprogram=(directory / "pulseprogram").is_file(),
-            )
-        except ValueError:
-            # Preserve the historical diagnostics for unsupported acquisitions.
-            pass
-        else:
-            expected_parmode = int(filename == "ser")
-            acqus = metadata["acqus"]
-            parmode = acqus.setdefault("PARMODE", expected_parmode)
-            if parmode == expected_parmode and data.ndim == expected_parmode + 1:
-                if filename == "fid":
-                    return metadata, data
-                if acqus.get("FnTYPE", 0) != 2:
-                    # nmrglue-ng can infer a 2D layout for incomplete SERs.
-                    # Keep the historical flat-read recovery for those files.
-                    shape, complex_direct = guess_shape(metadata)
-                    if complex_direct:
-                        shape = (*shape[:-1], shape[-1] // 2)
-                    if data.shape == shape:
-                        return metadata, data
-
-    return read_fid(directory, acqus_files=acqus_files, procs_files=procs_files)
 
 
 @_importer_method

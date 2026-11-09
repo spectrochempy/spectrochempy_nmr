@@ -1,8 +1,7 @@
-"""Public TopSpin SER parity with the legacy decoder."""
+"""Public TopSpin fallback parity with independently decoded SER traces."""
 
 from functools import wraps
 from importlib import import_module
-from inspect import signature
 import os
 from pathlib import Path
 
@@ -10,64 +9,60 @@ import nmrglue as ng
 import numpy as np
 import pytest
 import spectrochempy as scp
-from spectrochempy.utils.jsonutils import json_encoder
 
 
-def _check_parity(path, monkeypatch, *, migrate, filtered, dc):
+def _check_parity(path, monkeypatch, *, storage, rows, points, filtered, dc):
     reader = import_module("spectrochempy_nmr.readers.read_topspin")
-    vendored = reader.read_fid
     calls = []
-    binary_calls = []
-    read_binary = ng.bruker.read
+    decode = ng.bruker.read
 
-    @wraps(read_binary)
-    def count_binary(directory, **kwargs):
-        binary_calls.append((directory, kwargs))
-        return read_binary(directory, **kwargs)
+    @wraps(decode)
+    def capture(directory, **kwargs):
+        calls.append((directory, kwargs))
+        return decode(directory, **kwargs)
 
-    def legacy(directory, **kwargs):
-        calls.append(directory)
-        return vendored(directory, **kwargs)
+    monkeypatch.setattr(reader, "_read_normalized_ser", lambda *args, **kwargs: None)
+    monkeypatch.setattr(ng.bruker, "read", capture)
+    result = scp.read_topspin(
+        path / "ser", remove_digital_filter=filtered, remove_dc_offset=dc
+    )
 
-    def old_provider(directory, *, read_pulseprogram, **kwargs):
-        return vendored(directory, read_pulseprogram=read_pulseprogram, **kwargs)
+    assert len(calls) == 1
+    directory, kwargs = calls[0]
+    assert directory == path
+    assert kwargs["recover_shape"] is False
+    assert kwargs["read_nus_schedule"] is False
+    assert kwargs["legacy_layout"] is True
+    assert result is not None
 
-    options = dict(remove_digital_filter=filtered, remove_dc_offset=dc)
-    with monkeypatch.context() as previous:
-        previous.setattr(reader, "_read_normalized_ser", lambda *args, **kwargs: None)
-        previous.setattr(ng.bruker, "read", old_provider)
-        expected = scp.read_topspin(path / "ser", **options)
-    with monkeypatch.context() as current:
-        if path.parent.name in ("exam2d_HH", "exam2d_HC"):
-            current.setattr(
-                reader, "_read_normalized_ser", lambda *args, **kwargs: None
-            )
-        current.setattr(reader, "read_fid", legacy)
-        current.setattr(ng.bruker, "read", count_binary)
-        actual = scp.read_topspin(path / "ser", **options)
-
-    if "legacy_layout" in signature(read_binary).parameters:
-        assert calls == []
-        assert len(binary_calls) == 1
-        directory, kwargs = binary_calls[0]
-        assert directory == path
-        assert kwargs["recover_shape"] is False
-        assert kwargs["read_nus_schedule"] is False
-        assert kwargs["legacy_layout"] is True
-    else:
-        assert calls == ([] if migrate else [path])
-        assert len(binary_calls) <= 1
-    assert actual is not None and expected is not None
-    assert actual.dims == expected.dims
-    assert actual.dtype == expected.dtype
-    assert actual.units == expected.units
-    assert json_encoder(actual.meta) == json_encoder(expected.meta)
-    np.testing.assert_array_equal(actual.data, expected.data)
-    for dim in actual.dims:
-        got, want = actual.coordset[dim], expected.coordset[dim]
-        np.testing.assert_array_equal(got.data, want.data)
-        np.testing.assert_array_equal(got.labels, want.labels)
-        assert got.units == want.units
+    meta = ng.bruker.read_acqus_file(path)
+    direct, indirect = meta["acqus"], meta["acqu2s"]
+    words = np.fromfile(path / "ser", dtype=storage).reshape(rows, -1)
+    expected = words[:, : 2 * points : 2] + 1j * words[:, 1 : 2 * points : 2]
+    if dc:
+        expected -= expected.mean(axis=-1, keepdims=True)
+    if filtered:
+        delay = int(direct["GRPDLY"])
+        expected = np.roll(expected, -delay, axis=-1)
+        removed = delay + 2
+        fold = max(removed - 6, 0)
+        if fold:
+            expected[:, :fold] += expected[:, -fold:][:, ::-1]
+        expected = expected[:, :-removed]
+    expected = expected.conj() / (direct["RG"] * direct["NS"])
+    paired = indirect["FnMODE"] in (5, 6)
+    if paired:
+        expected = np.stack((expected[::2], expected[1::2]))
+        assert tuple(result.c.labels) == ("branch_0", "branch_1")
+    np.testing.assert_allclose(result.data, expected, rtol=1e-12, atol=1e-8)
+    assert result.dims == (["c", "y", "x"] if paired else ["y", "x"])
+    for dim, params in (("x", direct), ("y", indirect)):
+        coord = result.coordset[dim]
+        width = params["SW"] * params["SFO1"]
+        actual_seconds = (coord.data * coord.units).to("s").m
+        np.testing.assert_allclose(
+            actual_seconds, np.arange(coord.size) / width, atol=1e-6
+        )
 
 
 @pytest.mark.parametrize(
@@ -103,29 +98,33 @@ def test_synthetic_public_ser_parity(
     _check_parity(
         path,
         monkeypatch,
-        migrate=complete and not nus and not floating,
+        storage=dtype,
+        rows=8,
+        points=60 if floating else 128,
         filtered=True,
         dc=True,
     )
 
 
 @pytest.mark.parametrize(
-    ("reference", "migrate"),
+    ("reference", "rows", "points"),
     [
-        ("exam2d_HH/1", True),
-        ("exam2d_HC/3", True),
-        ("topspin_2d/1", False),
+        ("exam2d_HH/1", 128, 1024),
+        ("exam2d_HC/3", 256, 512),
+        ("topspin_2d/1", 192, 1024),
     ],
 )
 @pytest.mark.parametrize("filtered", [False, True])
-def test_local_public_ser_parity(reference, migrate, filtered, monkeypatch):
+def test_local_public_ser_parity(reference, rows, points, filtered, monkeypatch):
     root = os.environ.get("NMR_BRUKER_SER_DATA")
     if not root:
         pytest.skip("set NMR_BRUKER_SER_DATA to the Bruker test-data directory")
     _check_parity(
         Path(root) / reference,
         monkeypatch,
-        migrate=migrate,
+        storage="<i4",
+        rows=rows,
+        points=points,
         filtered=filtered,
         dc=False,
     )

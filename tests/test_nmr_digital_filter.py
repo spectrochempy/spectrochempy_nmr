@@ -11,7 +11,7 @@ from pathlib import Path
 
 import numpy as np
 import pytest
-from spectrochempy_nmr.extern.nmrglue import read_fid
+from nmrglue import bruker
 from spectrochempy_nmr.readers.read_topspin import _remove_digital_filter
 
 import spectrochempy as scp
@@ -149,7 +149,7 @@ class TestRemoveDigitalFilter:
         (``nmrglue/fileio/bruker.py::remove_digital_filter``); raw-output
         SHA-256
         ``810a05b9471b6a47123b388883ff4137391ec079d797dd5a4e889196ed4d4a75``.
-        The bundled ``read_fid`` feeds the exact reader path used by
+        The provider's raw read uses the fallback layout selected by
         ``read_topspin``.
 
         Tolerance: ``atol=1e-8``/``rtol=1e-12`` leave a wide margin over the
@@ -159,7 +159,12 @@ class TestRemoveDigitalFilter:
         if not _TOPSPIN_1D_FID.exists():
             pytest.skip(f"NMR test data not available: {_TOPSPIN_1D_FID}")
 
-        dic, data = read_fid(_TOPSPIN_1D_FID.parent)
+        dic, data = bruker.read(
+            _TOPSPIN_1D_FID.parent,
+            recover_shape=False,
+            read_nus_schedule=False,
+            legacy_layout=True,
+        )
         out = _remove_digital_filter(dic, data)
 
         reference = np.load(_REFERENCE_FILE)["expected"]
