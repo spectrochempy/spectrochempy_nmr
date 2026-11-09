@@ -250,3 +250,8 @@ jobs:
           cp jeol-provider/tests/fixtures/fileio/data/jeol/epicatechin_hmbc.jdf "$NMR_JEOL_HMBC"
           echo "578db932e166b04beeb0e9a5db443ff7a042b50e24af2789e535c06c1f6af859  $NMR_JEOL_HMBC" | sha256sum -c -
           python -I -m pytest -ra tests/test_read_jeol.py -k 'cosy_preserves or listed_preserves'
+      - name: Qualify the JEOL compatibility reader with the released wheel
+        run: |
+          python -m pip install --only-binary nmrglue-ng "nmrglue-ng==1.2.3"
+          python -m pip check
+          python -I -m pytest -ra tests/qualification/test_jeol_fallback.py

@@ -38,16 +38,16 @@ def _read_jeol_or_skip(*args, **kwargs):
 
 
 # ---------------------------------------------------------------------------
-# nmrglue vendored layer
+# nmrglue-ng provider layer
 # ---------------------------------------------------------------------------
 
 
 @pytest.mark.skipif(not _has_jeol_data(), reason="JEOL test data not available")
 class TestJeolNMRGlue:
-    """Tests for the vendored nmrglue JEOL reading functions."""
+    """Tests for the nmrglue-ng JEOL reading functions."""
 
     def test_read_jeol_1d(self):
-        from spectrochempy_nmr.extern.nmrglue._jeol import read_jeol
+        from nmrglue.fileio.jeol import read as read_jeol
 
         dic, data = read_jeol(str(JEOL_DIR / "1H.jdf"))
         assert data.ndim == 1
@@ -55,7 +55,7 @@ class TestJeolNMRGlue:
         assert np.issubdtype(data.dtype, np.complexfloating)
 
     def test_read_jeol_2d(self):
-        from spectrochempy_nmr.extern.nmrglue._jeol import read_jeol
+        from nmrglue.fileio.jeol import read as read_jeol
 
         dic, data = read_jeol(str(JEOL_DIR / "COSY.jdf"))
         assert data.ndim == 2
@@ -64,8 +64,8 @@ class TestJeolNMRGlue:
         assert np.issubdtype(data.dtype, np.complexfloating)
 
     def test_guess_udic_1d(self):
-        from spectrochempy_nmr.extern.nmrglue._jeol import guess_udic
-        from spectrochempy_nmr.extern.nmrglue._jeol import read_jeol
+        from nmrglue.fileio.jeol import guess_udic
+        from nmrglue.fileio.jeol import read as read_jeol
 
         dic, data = read_jeol(str(JEOL_DIR / "1H.jdf"))
         udic = guess_udic(dic, data)
@@ -75,8 +75,8 @@ class TestJeolNMRGlue:
         assert udic[0]["obs"] > 0
 
     def test_guess_udic_2d(self):
-        from spectrochempy_nmr.extern.nmrglue._jeol import guess_udic
-        from spectrochempy_nmr.extern.nmrglue._jeol import read_jeol
+        from nmrglue.fileio.jeol import guess_udic
+        from nmrglue.fileio.jeol import read as read_jeol
 
         dic, data = read_jeol(str(JEOL_DIR / "COSY.jdf"))
         udic = guess_udic(dic, data)
@@ -85,8 +85,8 @@ class TestJeolNMRGlue:
         assert udic[1]["label"] == "1H"
 
     def test_guess_udic_hsqc(self):
-        from spectrochempy_nmr.extern.nmrglue._jeol import guess_udic
-        from spectrochempy_nmr.extern.nmrglue._jeol import read_jeol
+        from nmrglue.fileio.jeol import guess_udic
+        from nmrglue.fileio.jeol import read as read_jeol
 
         dic, data = read_jeol(str(JEOL_DIR / "HSQC.jdf"))
         udic = guess_udic(dic, data)
@@ -95,7 +95,7 @@ class TestJeolNMRGlue:
         assert udic[1]["label"] == "13C"
 
     def test_header_fields(self):
-        from spectrochempy_nmr.extern.nmrglue._jeol import read_jeol
+        from nmrglue.fileio.jeol import read as read_jeol
 
         dic, _ = read_jeol(str(JEOL_DIR / "1H.jdf"))
         assert "header" in dic
