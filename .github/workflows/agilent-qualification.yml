@@ -126,7 +126,7 @@ jobs:
         uses: actions/checkout@v7
         with:
           repository: spectrochempy/nmrglue-ng
-          ref: d0ddc766bf312dece2ac77d1dd08ab710224201e
+          ref: fd844b386124164ace18ca7e46b19c483eee23f8
           fetch-depth: 0
           path: provider-candidate
           persist-credentials: false
