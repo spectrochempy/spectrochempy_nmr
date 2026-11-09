@@ -105,20 +105,31 @@ def _fft_postprocess_result(new, dim=-1, inv=False, **kwargs):
         new.meta.readonly = readonly
         return new
 
+    if new.meta.get("quadrature_mode") == "simpson-stored-complex-2d":
+        readonly = new.meta.readonly
+        new.meta.readonly = False
+        flags = list(new.meta.isfreq)
+        flags[_meta_dim_index(new, dim)] = not inv
+        new.meta.isfreq = flags
+        if all(flags):
+            new.meta.data_domain, new.meta.stage = "frequency", "spectrum"
+        elif any(flags):
+            new.meta.data_domain, new.meta.stage = "mixed", "mixed"
+        else:
+            new.meta.data_domain, new.meta.stage = "time", "acquisition"
+        new.meta.readonly = readonly
+        return new
+
     if new.meta.get("quadrature_mode") in (
         "states-stored-2d",
         "tppi-stored-2d",
         "f2-traces-stored-2d",
-        "simpson-stored-complex-2d",
     ):
         readonly = new.meta.readonly
         new.meta.readonly = False
         new.meta.stage = "acquisition" if inv else "F2-spectrum"
         new.meta.data_domain = "time" if inv else "mixed"
-        if new.meta.quadrature_mode in (
-            "f2-traces-stored-2d",
-            "simpson-stored-complex-2d",
-        ):
+        if new.meta.quadrature_mode == "f2-traces-stored-2d":
             index = _meta_dim_index(new, dim)
             flags = list(new.meta.isfreq)
             flags[index] = not inv

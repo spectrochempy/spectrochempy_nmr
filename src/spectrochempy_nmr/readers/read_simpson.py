@@ -262,7 +262,12 @@ def _read_simpson_core(dataset, path, **kwargs):
 
     try:
         try:
-            dic, data = simpson.read(str(data_path))
+            filename = str(data_path)
+            ftype = simpson.guess_ftype(filename)
+            if ftype == "XYREIM":
+                dic, data = _read_simpson_raw(filename)
+            else:
+                dic, data = simpson.read(filename, ftype=ftype)
             if any(key != key.strip() for key in dic):
                 dic, data = _read_simpson_raw(str(data_path))
         except (ValueError, KeyError, IndexError, UnboundLocalError):

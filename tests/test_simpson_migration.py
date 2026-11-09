@@ -23,7 +23,7 @@ def test_public_simpson_returns_normalized_dataset(tmp_path, monkeypatch, kind, 
         returned.append(dataset)
         return dataset
 
-    def unexpected_compatibility(*args):
+    def unexpected_compatibility(*args, **kwargs):
         pytest.fail("qualified standalone SIMPSON input took the compatibility path")
 
     monkeypatch.setattr(bridge, "from_interop", record)
@@ -52,6 +52,41 @@ def test_public_simpson_returns_normalized_dataset(tmp_path, monkeypatch, kind, 
         )
         with pytest.raises(NotImplementedError, match="UNVALIDATED:F1"):
             result.fft(dim="y")
+
+
+@pytest.mark.parametrize("dim", ["x", "y"])
+def test_simpson_partial_inverse_keeps_other_axis_in_frequency(tmp_path, dim):
+    path = tmp_path / "sample.spe"
+    path.write_text(
+        "SIMP\nNP=8\nNI=8\nSW=4000\nSW1=1500\nTYPE=SPE\nDATA\n" + "1 2\n" * 64 + "END\n"
+    )
+    spectrum = scp.nmr.read_simpson(path)
+    partial = spectrum.ifft(dim=dim)
+    other = next(axis for axis in spectrum.dims if axis != dim)
+    assert partial.meta.data_domain == "mixed"
+    assert partial.meta.stage == "mixed"
+    assert partial.meta.isfreq == [axis != dim for axis in partial.dims]
+    assert partial.coordset[dim].units.is_compatible_with(scp.ur.s)
+    assert partial.coordset[other].units == scp.ur.Hz
+    if dim == "y":
+        with pytest.raises(NotImplementedError, match="UNVALIDATED:F1"):
+            partial.fft(dim="y")
+    fid = partial.ifft(dim=other)
+    assert fid.meta.isfreq == [False, False]
+    assert fid.meta.data_domain == "time"
+    assert fid.meta.stage == "acquisition"
+
+
+def test_descending_xyreim_keeps_historical_row_and_column_order(tmp_path):
+    path = tmp_path / "descending.spe"
+    path.write_text(
+        "".join(
+            "".join(f"{y} {x} {10 * y + x} 0\n" for x in (4, 3, 2, 1)) + "\n"
+            for y in (2, 1)
+        )
+    )
+    result = scp.nmr.read_simpson(path)
+    np.testing.assert_array_equal(result.data, [[11, 12, 13, 14], [21, 22, 23, 24]])
 
 
 def test_simpson_input_sidecar_preserves_public_metadata(tmp_path):

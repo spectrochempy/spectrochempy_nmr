@@ -411,6 +411,9 @@ def _from_2d(result, data):
         _set_ser_fft_presentation(dataset, result)
     if complex_axis is not None:
         dataset.meta.interop_complex_axis = complex_axis
+    if complex_matrix:
+        dataset.meta.encoding = ["UNVALIDATED:F1", "DIRECT:QSIM"]
+        dataset.meta.stage = "spectrum"
     return dataset
 
 
