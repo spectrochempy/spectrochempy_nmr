@@ -45,6 +45,11 @@ def _check_route(path, monkeypatch, dc, filtered):
         expected.meta.rgold[-1] * expected.meta.nsold[-1]
     )
     assert Experiment(actual).process().x.units == scp.ur.Hz
+    before = actual.data.copy()
+    with pytest.raises(NotImplementedError, match="PENDING-F2"):
+        actual.fft(dim="y")
+    np.testing.assert_array_equal(actual.data, before)
+    assert actual.meta.isfreq == [False, False]
 
     for dimension in ("x", "y"):
         actual = actual.fft(dim=dimension)

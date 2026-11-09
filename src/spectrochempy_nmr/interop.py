@@ -369,7 +369,10 @@ def _from_2d(result, data):
                 "nucleus": coordinates[dim].title,
             }
         dataset.meta.fft_presentation = fft_axes
-        dataset.meta.encoding = ["CONJUGATE-FFT"] * 2
+        dataset.meta.encoding = [
+            "PENDING-F2:CONJUGATE-FFT" if role == "F1" else "CONJUGATE-FFT"
+            for role in dimensions
+        ]
         dataset.meta.phc0 = zero
         dataset.meta.phc1 = first
         dataset.meta.pivot = [0, 0]

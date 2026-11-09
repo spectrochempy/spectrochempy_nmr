@@ -160,7 +160,12 @@ def _fft_postprocess_result(new, dim=-1, inv=False, **kwargs):
         )
         readonly = new.meta.readonly
         new.meta.readonly = False
-        other = new.meta.isfreq[1 - index]
+        other_index = 1 - index
+        other = new.meta.isfreq[other_index]
+        if not other:
+            new.meta.encoding[other_index] = new.meta.encoding[
+                other_index
+            ].removeprefix("PENDING-F2:")
         new.meta.data_domain = "frequency" if other else "mixed"
         new.meta.readonly = readonly
         return new

@@ -62,6 +62,8 @@ corrections and scan/gain scaling once.
 
 The historical ``dataset.fft(dim="x").fft(dim="y")`` presentation is retained
 using the declared transforms, initial phases and decreasing ppm axes.
+Transform F2 before F1. The reader rejects an F1 transform while F2 is
+still in the time domain.
 ``Experiment(dataset).process()`` uses the separately qualified physical QF
 FFT convention and carrier-relative Hz axes. SERs outside this qualified
 path continue through the previous reader.
