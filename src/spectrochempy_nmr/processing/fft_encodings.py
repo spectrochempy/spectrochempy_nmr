@@ -123,6 +123,8 @@ def _fft_encoding_handler(data, encoding, **kwargs):
         raise NotImplementedError(
             f"NMR encoding {encoding!r} is not ready for this transform"
         )
+    if encoding == "CONJUGATE-FFT":
+        return _qf_fft(data)
     if encoding.startswith("DIRECT:"):
         return _complex_fft(data)
     tppi = kwargs.get("tppi", False)

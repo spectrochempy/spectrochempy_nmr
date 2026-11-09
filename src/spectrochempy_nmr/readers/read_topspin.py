@@ -1069,6 +1069,44 @@ def _read_normalized_fid(
     return stored.metadata, dataset
 
 
+def _read_normalized_qf_ser(
+    directory, acqus_files, procs_files, *, remove_filter, remove_dc
+):
+    from inspect import signature  # noqa: PLC0415
+
+    from nmrglue import interop  # noqa: PLC0415
+
+    from spectrochempy_nmr.interop import from_interop  # noqa: PLC0415
+
+    normalize = getattr(interop, "normalize_bruker_ser_qf", None)
+    if normalize is None or "fft_presentation" not in signature(normalize).parameters:
+        return None
+    try:
+        stored = interop.read_bruker_ser(
+            directory,
+            acqus_files=acqus_files,
+            procs_files=procs_files,
+            read_pulseprogram=(directory / "pulseprogram").is_file(),
+        )
+        normalized = normalize(
+            stored,
+            remove_dc_offset=remove_dc,
+            remove_digital_filter=remove_filter,
+            normalize_scan_gain=True,
+            fft_presentation=True,
+        )
+        if any(
+            "display_axis" not in axis
+            for axis in normalized.acquisition["fft_presentation"].values()
+        ):
+            return None
+        dataset = from_interop(normalized)
+    except (OSError, ValueError):
+        return None
+    dataset.meta.acquisition_encoding = tuple(stored.encoding)
+    return stored.metadata, dataset
+
+
 def _read_raw_data(directory, filename, acqus_files, procs_files):
     acqus_path = directory / "acqus"
     migrate_ser = (
@@ -1156,6 +1194,14 @@ def _read_topspin(*args, **kwargs):
                 remove_filter=bool(kwargs.get("remove_digital_filter", True)),
                 remove_dc=bool(kwargs.get("remove_dc_offset", False)),
             )
+        elif path.name == "ser" and not kwargs.get("use_list", False):
+            normalized = _read_normalized_qf_ser(
+                f_expno,
+                acqus_files,
+                procs_files,
+                remove_filter=bool(kwargs.get("remove_digital_filter", True)),
+                remove_dc=bool(kwargs.get("remove_dc_offset", False)),
+            )
         if normalized is None:
             dic, data = _read_raw_data(f_expno, path.name, acqus_files, procs_files)
         else:
@@ -1165,7 +1211,7 @@ def _read_topspin(*args, **kwargs):
         # The normalized 1D route already supplies canonical samples.
         # The fallback 1D route keeps the decoded convention for its FFT.
         # The legacy SER route applies the direct-dimension rotation.
-        if path.name == "ser":
+        if path.name == "ser" and normalized_dataset is None:
             data = data * np.exp(-1j * np.pi / 2.0)
 
         # Look the case when the reshaping was not correct
@@ -1231,7 +1277,12 @@ def _read_topspin(*args, **kwargs):
     keys = sorted(dic.keys())
 
     # we need the ndim of the data
-    normalized_fid = normalized_dataset is not None and not processed
+    normalized_fid = (
+        normalized_dataset is not None and not processed and path.name == "fid"
+    )
+    normalized_qf = (
+        normalized_dataset is not None and not processed and path.name == "ser"
+    )
     parmode = int(dic["acqus"].get("PARMODE", data.ndim - 1))
     if parmode + 1 != data.ndim:
         raise KeyError(
@@ -1372,7 +1423,7 @@ def _read_topspin(*args, **kwargs):
     # the public QSIM FFT path already applies the required conjugated Fourier
     # convention; conjugating the raw FID here would cancel that convention and
     # produce a spectrum inconsistent with the bundled TopSpin 1r reference.
-    if meta.iscomplex[-1] and (processed or parmode > 0):
+    if not normalized_qf and meta.iscomplex[-1] and (processed or parmode > 0):
         data = np.conj(data * np.exp(np.pi * 1j / 2.0))
 
     # normalised amplitudes to ns=1 and rg=1

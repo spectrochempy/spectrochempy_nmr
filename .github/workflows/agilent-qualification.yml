@@ -76,7 +76,7 @@ jobs:
         uses: actions/checkout@v7
         with:
           repository: spectrochempy/nmrglue-ng
-          ref: c49375dd2b873c063ec3c5f337971d221589b712
+          ref: eb23c10409f2176209cf6cbe16f0e1f13630d004
           fetch-depth: 0
           path: provider-candidate
           persist-credentials: false
@@ -87,9 +87,11 @@ jobs:
           python -m pip check
           python -I - <<'PY'
           from inspect import signature
-          from nmrglue.interop import normalize_bruker_fid
+          from nmrglue.interop import normalize_bruker_fid, normalize_bruker_ser_qf
 
           assert "preserve_storage" in signature(normalize_bruker_fid).parameters
+          assert "fft_presentation" in signature(normalize_bruker_ser_qf).parameters
           PY
           python -I -m pytest -ra tests/qualification/test_bruker_normalized.py -k synthetic
           python -I -m pytest -ra tests/test_experiment_interop.py -k fid_preparation
+          python -I -m pytest -ra tests/qualification/test_bruker_qf_public.py -k synthetic

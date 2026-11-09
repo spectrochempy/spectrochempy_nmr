@@ -49,6 +49,23 @@ The neutral descriptor supplies BF1/O1 acquisition referencing. Its opaque
 the processed-data reference or the initial phase. Experiment uses normalized
 properties for these choices, independent of origin or profile identity.
 
+Public QF SER reader
+--------------------
+
+For a complete, uniformly sampled QF SER with calibrated processing axes,
+``read_topspin()`` can return the dataset produced by ``from_interop()``.
+The installed provider must support per-trace corrections and the QF FFT
+presentation descriptor. The returned samples retain the stored direct
+complex convention. Their imaginary component therefore has the opposite
+sign from the historical reader output. The provider applies selected
+corrections and scan/gain scaling once.
+
+The historical ``dataset.fft(dim="x").fft(dim="y")`` presentation is retained
+using the declared transforms, initial phases and decreasing ppm axes.
+``Experiment(dataset).process()`` uses the separately qualified physical QF
+FFT convention and carrier-relative Hz axes. SERs outside this qualified
+path continue through the previous reader.
+
 Prepare a FID explicitly
 ------------------------
 

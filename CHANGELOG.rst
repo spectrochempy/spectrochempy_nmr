@@ -18,6 +18,11 @@ Added
 Changed
 ~~~~~~~
 
+* Use the normalized interop dataset for complete Bruker QF SER data when
+  the provider supplies the public FFT presentation contract. Preserve the
+  existing two-stage FFT display and correction options.
+
+
 * Return the normalized Bruker 1D FID dataset from ``read_topspin()`` when
   the provider supports the FID contract. Use canonical complex samples and
   preserve the default public FFT presentation. Keep the previous reader

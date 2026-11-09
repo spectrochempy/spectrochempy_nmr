@@ -18,8 +18,9 @@ def _meta_dim_index(new, dim):
     return axis
 
 
-def _apply_interop_fft_presentation(dataset, dim, *, ppm, physical):
-    acquisition = dataset.meta.get("acquisition", {})
+def _apply_interop_fft_presentation(dataset, dim, *, ppm, physical, acquisition=None):
+    if acquisition is None:
+        acquisition = dataset.meta.get("acquisition", {})
     display = acquisition.get("fft_display_axis")
     if physical:
         width = acquisition.get("spectral_width_hz")
@@ -144,6 +145,24 @@ def _fft_postprocess_result(new, dim=-1, inv=False, **kwargs):
                     )
         finally:
             new.meta.readonly = readonly
+        return new
+
+    presentation = new.meta.get("fft_presentation")
+    if presentation is not None and new.ndim == 2 and not inv:
+        index = _meta_dim_index(new, dim)
+        dimension = new.dims[index]
+        _apply_interop_fft_presentation(
+            new,
+            dimension,
+            ppm=kwargs.get("ppm", True),
+            physical=False,
+            acquisition=presentation[dimension],
+        )
+        readonly = new.meta.readonly
+        new.meta.readonly = False
+        other = new.meta.isfreq[1 - index]
+        new.meta.data_domain = "frequency" if other else "mixed"
+        new.meta.readonly = readonly
         return new
 
     # Only act when NMR metadata is present
