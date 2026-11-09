@@ -1171,6 +1171,23 @@ def _read_normalized_ser(
 
 
 def _read_raw_data(directory, filename, acqus_files, procs_files):
+    from inspect import signature  # noqa: PLC0415
+
+    from nmrglue import bruker  # noqa: PLC0415
+
+    if "legacy_layout" in signature(bruker.read).parameters:
+        metadata, data = bruker.read(
+            directory,
+            bin_file=filename if filename in ("fid", "ser") else None,
+            acqus_files=acqus_files,
+            procs_files=list(procs_files),
+            read_pulseprogram=(directory / "pulseprogram").is_file(),
+            recover_shape=False,
+            read_nus_schedule=False,
+            legacy_layout=True,
+        )
+        return metadata, data
+
     acqus_path = directory / "acqus"
     migrate_ser = (
         filename == "ser" and acqus_path.is_file() and not (directory / "fid").is_file()
@@ -1180,8 +1197,6 @@ def _read_raw_data(directory, filename, acqus_files, procs_files):
         migrate_ser = acqus.get("FnTYPE", 0) != 2
 
     if filename == "fid" or migrate_ser:
-        from nmrglue import bruker  # noqa: PLC0415
-
         try:
             metadata, data = bruker.read(
                 directory,

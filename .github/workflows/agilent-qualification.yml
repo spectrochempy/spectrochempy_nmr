@@ -76,7 +76,7 @@ jobs:
         uses: actions/checkout@v7
         with:
           repository: spectrochempy/nmrglue-ng
-          ref: 3a355c7ceffabb277102a50304e0af2c21fe4af4
+          ref: 8f86b9cb0dc6eda191572d8a3c84ab3961d101f2
           fetch-depth: 0
           path: provider-candidate
           persist-credentials: false
@@ -87,6 +87,7 @@ jobs:
           python -m pip check
           python -I - <<'PY'
           from inspect import signature
+          from nmrglue import bruker
           from nmrglue.interop import (
               normalize_bruker_fid,
               normalize_bruker_pdata_2d,
@@ -97,6 +98,9 @@ jobs:
               read_bruker_ser_storage,
           )
 
+          assert "recover_shape" in signature(bruker.read).parameters
+          assert "legacy_layout" in signature(bruker.read).parameters
+          assert "read_nus_schedule" in signature(bruker.read).parameters
           assert "preserve_storage" in signature(normalize_bruker_fid).parameters
           assert "axis_reference" in signature(normalize_bruker_pdata_2d).parameters
           assert "fft_presentation" in signature(normalize_bruker_ser_qf).parameters
@@ -127,3 +131,4 @@ jobs:
             tests/qualification/test_bruker_states_tppi_public.py \
             tests/qualification/test_bruker_echo_antiecho_public.py -k synthetic
           python -I -m pytest -ra tests/qualification/test_bruker_pdata_2d.py -k "synthetic and public_reader"
+          python -I -m pytest -ra tests/qualification/test_bruker_ser_migration.py -k synthetic

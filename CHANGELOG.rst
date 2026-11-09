@@ -18,6 +18,9 @@ Added
 Changed
 ~~~~~~~
 
+* Use the nmrglue-ng raw decoder for TopSpin fallbacks when it can preserve
+  declared-shape recovery and defer NUS schedule handling.
+
 * Decode TopSpin processed-data fallbacks with nmrglue-ng while preserving
   the public reader's processed spectrum conventions.
 

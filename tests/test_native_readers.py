@@ -44,7 +44,7 @@ def _bruker_raw(tmp_path, monkeypatch):
     path.touch()
     raw = np.arange(24).reshape(6, 4) + 1j * np.arange(24, 48).reshape(6, 4)
     monkeypatch.setattr(
-        reader, "read_fid", lambda *a, **k: (_bruker_dictionary(), raw.copy())
+        reader, "_read_raw_data", lambda *a, **k: (_bruker_dictionary(), raw.copy())
     )
     dataset = reader._read_topspin(scp.NDDataset(), path, remove_digital_filter=False)
     return dataset, raw

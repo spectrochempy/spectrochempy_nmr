@@ -398,7 +398,7 @@ def test_read_topspin_3d_rejected(tmp_path):
         return dic, data
 
     with (
-        patch("spectrochempy_nmr.readers.read_topspin.read_fid", _mock_read_fid),
+        patch("spectrochempy_nmr.readers.read_topspin._read_raw_data", _mock_read_fid),
         pytest.raises(NotImplementedError, match="3D"),
     ):
         _read_topspin(NDDataset(), fid)
