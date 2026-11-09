@@ -261,7 +261,7 @@ def test_public_jeol_reference_stack_retains_legacy_contract(mode, monkeypatch):
     if mode == "core":
         assert scp.nmr.read_jeol(path) is not None
     reader = import_module("spectrochempy_nmr.readers.read_jeol")
-    monkeypatch.setattr(reader, "_read_normalized_jeol_fid", unexpected_normalization)
+    monkeypatch.setattr(reader, "_read_normalized_jeol", unexpected_normalization)
     if mode == "automatic":
         merged = scp.nmr.read_jeol(path, path)
     elif mode == "explicit":
@@ -283,7 +283,7 @@ def test_public_jeol_reference_preserves_custom_dataset_type(monkeypatch):
         pytest.fail("a custom dataset type requires the historical importer")
 
     reader = import_module("spectrochempy_nmr.readers.read_jeol")
-    monkeypatch.setattr(reader, "_read_normalized_jeol_fid", unexpected_normalization)
+    monkeypatch.setattr(reader, "_read_normalized_jeol", unexpected_normalization)
     path = Path(os.environ["NMR_JEOL_REFERENCE"])
     assert isinstance(scp.nmr.read_jeol(path, objtype=CustomDataset), CustomDataset)
 
@@ -303,7 +303,7 @@ def _assert_public_jeol_fid_interop_parity(
 
     reader = import_module("spectrochempy_nmr.readers.read_jeol")
     with monkeypatch.context() as fallback:
-        fallback.setattr(reader, "_read_normalized_jeol_fid", lambda path: None)
+        fallback.setattr(reader, "_read_normalized_jeol", lambda path: None)
         historical = scp.nmr.read_jeol(path, origin=origin)
     assert historical is not None
 
@@ -343,3 +343,68 @@ def _assert_public_jeol_fid_interop_parity(
         assert migrated.x.units == legacy.x.units
         assert migrated.x.title == legacy.x.title
         assert migrated.units == legacy.units
+
+
+@pytest.mark.skipif(not os.environ.get("NMR_JEOL_COSY"), reason="Set NMR_JEOL_COSY")
+def test_public_jeol_cosy_preserves_f2_fft_and_calibrates_axes(monkeypatch):
+    from spectrochempy_nmr import Experiment
+    from spectrochempy_nmr import interop as bridge
+
+    path = Path(os.environ["NMR_JEOL_COSY"])
+    reader = import_module("spectrochempy_nmr.readers.read_jeol")
+    with monkeypatch.context() as fallback:
+        fallback.setattr(reader, "_read_normalized_jeol", lambda path: None)
+        historical = scp.nmr.read_jeol(path)
+
+    from_interop = bridge.from_interop
+    converted = []
+
+    def convert(result):
+        dataset = from_interop(result)
+        converted.append(dataset)
+        return dataset
+
+    def unexpected_fallback(*args):
+        pytest.fail("qualified COSY was sent to the embedded decoder")
+
+    monkeypatch.setattr(bridge, "from_interop", convert)
+    monkeypatch.setattr(reader, "_read_jeol_raw", unexpected_fallback)
+    actual = scp.nmr.read_jeol(path)
+    assert len(converted) == 1
+    assert actual is converted[0]
+    assert actual.meta.axis_roles == ("F1", "F2")
+    assert actual.meta.applied_operations[0]["conjugation"] == "conjugate"
+    assert len(actual.meta.applied_operations) == 1
+    assert actual.meta.experiment == historical.meta.experiment
+    assert actual.meta.ns == historical.meta.ns
+    assert actual.meta.sw == historical.meta.sw[::-1]
+    assert Experiment(actual).domain == "time"
+    np.testing.assert_array_equal(actual.data, historical.data)
+    for dim, width in zip(actual.dims, actual.meta.sw, strict=True):
+        coord = actual.coordset[dim]
+        np.testing.assert_allclose(coord.to("s").data, np.arange(coord.size) / width)
+
+    direct = actual.fft(dim="x")
+    np.testing.assert_array_equal(direct.data, historical.fft(dim="x").data)
+    np.testing.assert_array_equal(direct.y.data, actual.y.data)
+    width = actual.meta.sw[-1]
+    expected_hz = np.fft.fftshift(np.fft.fftfreq(actual.x.size, d=1 / width))
+    np.testing.assert_allclose(direct.x.data, expected_hz, rtol=1e-12)
+    assert str(direct.x.units) == "Hz"
+    assert Experiment(direct).domain == "mixed"
+    for dataset in (actual, direct):
+        with pytest.raises(NotImplementedError, match="UNVALIDATED:F1"):
+            dataset.fft(dim="y")
+
+
+@pytest.mark.skipif(not os.environ.get("NMR_JEOL_HSQC"), reason="Set NMR_JEOL_HSQC")
+def test_public_jeol_listed_hsqc_keeps_fallback(monkeypatch):
+    from spectrochempy_nmr import interop as bridge
+
+    def unexpected_conversion(*args):
+        pytest.fail("listed HSQC was sent to the regular COSY converter")
+
+    monkeypatch.setattr(bridge, "from_interop", unexpected_conversion)
+    dataset = scp.nmr.read_jeol(Path(os.environ["NMR_JEOL_HSQC"]))
+    assert dataset is not None
+    assert dataset.meta.normalization_state == "storage-decoded"
