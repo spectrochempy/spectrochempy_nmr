@@ -14,7 +14,7 @@ import spectrochempy as scp
 from spectrochempy_nmr.experiment import Experiment
 
 
-def _check_route(path, monkeypatch, dc, filtered):
+def _check_route(path, monkeypatch, dc, filtered, *, saved_legacy=None):
     normalizer = getattr(ng.interop, "normalize_bruker_ser_qf", None)
     if (
         normalizer is None
@@ -48,6 +48,18 @@ def _check_route(path, monkeypatch, dc, filtered):
         expected.meta.rgold[-1] * expected.meta.nsold[-1]
     )
     assert Experiment(actual).process().x.units == scp.ur.Hz
+    if saved_legacy is not None:
+        legacy = actual.copy()
+        legacy.meta.readonly = False
+        for axis in legacy.meta.fft_presentation.values():
+            axis.pop("encoding")
+        legacy.write(saved_legacy, confirm=False)
+        restored = scp.read(saved_legacy)
+        np.testing.assert_allclose(
+            restored.fft(dim="x").fft(dim="y").data,
+            actual.fft(dim="x").fft(dim="y").data,
+        )
+
     before = actual.data.copy()
     dims = actual.dims.copy()
     with pytest.raises(NotImplementedError, match="PENDING-F2"):
@@ -116,7 +128,13 @@ def test_synthetic_qf_public_with_nonzero_phase(tmp_path, monkeypatch, dc, filte
         )
     values = np.arange(8 * 256, dtype=np.int32)
     (path / "ser").write_bytes((values * (values % 7 - 3)).astype(">i4").tobytes())
-    _check_route(path, monkeypatch, dc, filtered)
+    _check_route(
+        path,
+        monkeypatch,
+        dc,
+        filtered,
+        saved_legacy=tmp_path / "legacy-qf.scp" if not dc and not filtered else None,
+    )
     if not dc and not filtered:
         core_fft = import_module("spectrochempy.processing.fft.fft")
         with monkeypatch.context() as old_core:

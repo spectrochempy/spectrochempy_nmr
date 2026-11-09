@@ -1,5 +1,6 @@
 """Qualify the public States-TPPI reader and its FFT presentation."""
 
+from dataclasses import replace
 import hashlib
 import os
 from importlib import import_module
@@ -42,11 +43,13 @@ def _check_route(path, monkeypatch, tmp_path, dc, filtered):
         expected = scp.read_topspin(path / "ser", **options)
 
     captured = []
+    contracts = []
     convert = converter.from_interop
 
     def capture(result, **kwargs):
         dataset = convert(result, **kwargs)
         captured.append(dataset)
+        contracts.append(result)
         return dataset
 
     with monkeypatch.context() as migrated:
@@ -54,6 +57,20 @@ def _check_route(path, monkeypatch, tmp_path, dc, filtered):
         actual = scp.read_topspin(path / "ser", **options)
 
     assert len(captured) == 1 and actual is captured[0]
+    contract = contracts[0]
+    presentation = contract.acquisition["fft_presentation"]
+    malformed = replace(
+        contract,
+        acquisition={
+            **contract.acquisition,
+            "fft_presentation": {
+                **presentation,
+                "F1": {**presentation["F1"], "transform": "conjugate-input"},
+            },
+        },
+    )
+    with pytest.raises(ValueError, match="unsupported SER FFT presentation transform"):
+        convert(malformed, profile="states-tppi")
     assert tuple(actual.c.labels) == ("E1", "E2")
     assert actual.meta.tppi_alternation_state == "encoded"
     assert actual.meta.acquisition["dc_offset"]["applied"] is dc

@@ -204,7 +204,7 @@ def _fft_postprocess_result(new, dim=-1, inv=False, **kwargs):
                 new.meta.encoding.append("CHANNELS")
                 continue
             item = presentation[name]
-            encoding = item["encoding"]
+            encoding = item.get("encoding", "CONJUGATE-FFT")
             if item["physical_axis"] == "F1" and not flags[f2]:
                 encoding = "PENDING-F2:" + encoding
             new.meta.encoding.append(encoding)

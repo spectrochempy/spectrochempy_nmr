@@ -372,7 +372,7 @@ def _set_ser_fft_presentation(dataset, result):
     for dim, role, width in zip(dataset.dims[-2:], dimensions, widths, strict=True):
         descriptor = presentation[role]
         transform = descriptor.get("transform")
-        if transform == "conjugate-input":
+        if transform == "conjugate-input" and not (channel and role == "F1"):
             fft_encoding = "CONJUGATE-FFT"
         elif channel and role == "F1" and transform == "states-tppi-cross-pairs":
             fft_encoding = "INDIRECT:STATES-TPPI"
