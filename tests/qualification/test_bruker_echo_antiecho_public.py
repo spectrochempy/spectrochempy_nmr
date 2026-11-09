@@ -27,6 +27,16 @@ def test_public_echo_antiecho_uses_normalized_dataset(monkeypatch, dc, filtered)
         for name in ("ser", "acqus", "acqu2s", "pdata/1/procs", "pdata/1/proc2s")
     ]
     before = [hashlib.sha256(file.read_bytes()).hexdigest() for file in files]
+    _check_route(path, monkeypatch, dc, filtered)
+    assert [hashlib.sha256(file.read_bytes()).hexdigest() for file in files] == before
+
+
+@pytest.mark.parametrize("paired_ser", [6], indirect=True)
+def test_synthetic_public_echo_antiecho(paired_ser, monkeypatch):
+    _check_route(paired_ser, monkeypatch, True, True)
+
+
+def _check_route(path, monkeypatch, dc, filtered):
     options = dict(remove_dc_offset=dc, remove_digital_filter=filtered)
     reader = import_module("spectrochempy_nmr.readers.read_topspin")
     converter = import_module("spectrochempy_nmr.interop")
@@ -98,4 +108,3 @@ def test_public_echo_antiecho_uses_normalized_dataset(monkeypatch, dc, filtered)
         np.testing.assert_allclose(
             actual.coordset[dim].data, expected.coordset[dim].data, rtol=0, atol=0.01
         )
-    assert [hashlib.sha256(file.read_bytes()).hexdigest() for file in files] == before

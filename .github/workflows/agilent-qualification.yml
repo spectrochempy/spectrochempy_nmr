@@ -72,11 +72,11 @@ jobs:
       - name: Run nmrML raw and processed interop qualification
         run: python -I -m pytest -ra tests/qualification/test_nmrml_interop.py
 
-      - name: Check out the merged Bruker FID provider contract
+      - name: Check out the candidate Bruker interop provider
         uses: actions/checkout@v7
         with:
           repository: spectrochempy/nmrglue-ng
-          ref: 65d2e601acca1bad188004cca70ad64121b376e7
+          ref: 304241bd1ba0e4fd3dc325c6a03d3c8b0e86285f
           fetch-depth: 0
           path: provider-candidate
           persist-credentials: false
@@ -87,12 +87,21 @@ jobs:
           python -m pip check
           python -I - <<'PY'
           from inspect import signature
-          from nmrglue.interop import normalize_bruker_fid, normalize_bruker_ser_qf, normalize_bruker_ser_states_tppi, read_bruker_ser
+          from nmrglue.interop import (
+              normalize_bruker_fid,
+              normalize_bruker_ser_echo_antiecho,
+              normalize_bruker_ser_qf,
+              normalize_bruker_ser_states_tppi,
+              read_bruker_ser,
+              read_bruker_ser_storage,
+          )
 
           assert "preserve_storage" in signature(normalize_bruker_fid).parameters
           assert "fft_presentation" in signature(normalize_bruker_ser_qf).parameters
           assert "qf_only" in signature(read_bruker_ser).parameters
           assert "fft_presentation" in signature(normalize_bruker_ser_states_tppi).parameters
+          assert "fft_presentation" in signature(normalize_bruker_ser_echo_antiecho).parameters
+          assert "echo_antiecho_only" in signature(read_bruker_ser_storage).parameters
           PY
           python -I -m pytest -ra tests/qualification/test_bruker_normalized.py -k synthetic
           python -I -m pytest -ra tests/test_experiment_interop.py -k fid_preparation
@@ -111,4 +120,7 @@ jobs:
           python -m pip wheel --no-deps --wheel-dir baseline-wheels ./baseline-core
           python -m pip install --no-deps --force-reinstall baseline-wheels/*.whl
           python -m pip check
-          python -I -m pytest -ra tests/qualification/test_bruker_qf_public.py tests/qualification/test_bruker_states_tppi_public.py -k synthetic
+          python -I -m pytest -ra \
+            tests/qualification/test_bruker_qf_public.py \
+            tests/qualification/test_bruker_states_tppi_public.py \
+            tests/qualification/test_bruker_echo_antiecho_public.py -k synthetic
