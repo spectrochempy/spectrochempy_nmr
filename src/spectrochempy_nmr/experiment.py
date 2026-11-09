@@ -1302,7 +1302,12 @@ class Experiment:
         if (
             (
                 origin in {"agilent", "jeol", "tecmag", "simpson"}
-                or self.dataset.meta.get("acquisition", {}).get("legacy_presentation")
+                or (
+                    not origin
+                    and self.dataset.meta.get("acquisition", {}).get(
+                        "legacy_presentation"
+                    )
+                )
             )
             and self.source_kind == "fid"
             and sw_hz

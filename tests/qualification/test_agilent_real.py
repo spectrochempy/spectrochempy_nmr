@@ -160,8 +160,12 @@ def test_real_legacy_parity_without_claiming_scan_normalization(acquisition, pro
     assert legacy.meta.ns == legacy.meta.ne == 1
 
 
+@pytest.mark.parametrize("origin", [None, "research-team"])
 def test_real_public_reader_uses_interop_and_preserves_fft(
-    acquisition, provider, monkeypatch
+    acquisition,
+    provider,
+    monkeypatch,
+    origin,
 ):
     from importlib import import_module
     from inspect import signature
@@ -175,7 +179,7 @@ def test_real_public_reader_uses_interop_and_preserves_fft(
     converter = import_module("spectrochempy_nmr.interop")
     with monkeypatch.context() as legacy:
         legacy.setattr(reader, "_read_normalized_agilent_fid", lambda *a: None)
-        expected = scp.read_agilent(acquisition)
+        expected = scp.read_agilent(acquisition, origin=origin)
 
     captured = []
     convert = converter.from_interop
@@ -190,7 +194,8 @@ def test_real_public_reader_uses_interop_and_preserves_fft(
 
     monkeypatch.setattr(converter, "from_interop", capture)
     monkeypatch.setattr(reader, "read_varian", refuse_legacy)
-    actual = scp.read_agilent(acquisition)
+    actual = scp.read_agilent(acquisition, origin=origin)
+    assert actual.origin == expected.origin
     assert len(captured) == 1 and actual is captured[0]
     np.testing.assert_array_equal(actual.data, expected.data)
     assert actual.x.units == expected.x.units
@@ -203,7 +208,8 @@ def test_real_public_reader_uses_interop_and_preserves_fft(
         actual_fft.x.data, expected_fft.x.data, atol=1e-3, rtol=0
     )
     expected_experiment, actual_experiment = Experiment(expected), Experiment(actual)
-    assert actual_experiment.nuclei == expected_experiment.nuclei
+    if origin is None:
+        assert actual_experiment.nuclei == expected_experiment.nuclei
     display, expected_display = (
         actual_experiment.process(),
         expected_experiment.process(),
