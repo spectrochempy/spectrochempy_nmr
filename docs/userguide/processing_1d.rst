@@ -25,3 +25,24 @@ apodization methods, :external+core:py:class:`spectrochempy.NDDataset`,
 :external+core:py:class:`spectrochempy.CoordSet`, and units belong to the
 core documentation.
 This site documents their NMR use without duplicating their technical API.
+
+Replay TopSpin EFP on a Bruker DQD FID
+-------------------------------------
+
+Use the raw FID and the processing status file (``procs``) from a completed
+TopSpin ``efp`` run in the same experiment:
+
+.. code-block:: python
+
+   fid = scp.read_topspin("experiment/1/fid", remove_digital_filter=False)
+   spectrum = scp.nmr.Experiment(fid).process(replay="topspin")
+
+Replay uses the recorded exponential window, FFT size and phase. It applies
+digital-filter compensation on the final FFT grid, including fractional group
+delay, and uses the processing ppm axis. Intensities retain the FID reader's
+scan and receiver gain normalization, so comparison to TopSpin may require an
+overall amplitude factor.
+
+The supported profile is a full-spectrum DQD 1D ``efp`` run with
+``PKNL`` enabled, ``FCOR=1``, and baseline correction, linear prediction and
+axis reversal disabled.
