@@ -12,6 +12,9 @@ Unreleased
 Added
 ~~~~~
 
+* Read qualified NMRPipe, nmrML and NMR JCAMP-DX profiles via
+  ``scp.nmr.read(path, protocol="interop")``.
+
 * Prepare normalized complex 1D FIDs explicitly with
   ``Experiment.prepare_fid()`` before FFT, using provider-declared corrections.
 

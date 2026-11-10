@@ -16,6 +16,7 @@ jobs:
       NMR_AGILENT_REAL_DATA: /tmp/agilent-real
       NMR_PIPE_COSY_REFERENCE: /tmp/nmrpipe_2d_cosy_example.ft2
       NMRML_QUALIFICATION_DATA: /tmp/nmrml-real
+      NMR_INTEROP_QUALIFICATION_DATA: /tmp/interop-references
       NMR_PDATA_TOMATO_DATA: /tmp/pdata-real/MMBBI_10M12-CE01-1a/1/pdata/1
     steps:
       - uses: actions/checkout@v7
@@ -69,6 +70,16 @@ jobs:
         run: python tools/fetch_nmrml_qualification.py "$NMRML_QUALIFICATION_DATA"
       - name: Run nmrML raw and processed interop qualification
         run: python -I -m pytest -ra tests/qualification/test_nmrml_interop.py
+
+      - name: Qualify the public interop reader on pinned provider fixtures
+        run: |
+          mkdir -p "$NMR_INTEROP_QUALIFICATION_DATA"
+          base=https://raw.githubusercontent.com/spectrochempy/nmrglue-ng/d2852b0fa970c28c11a32b41c4a47cf2fce8be3b/tests/fixtures
+          for file in fileio/data/jcampdx/{epicatechin_1h,betapinene_cosy_400mhz}.jdx nmrml/synthetic-2d-real.nmrML; do
+            curl --fail --silent --show-error --location --retry 3 \
+              "$base/$file" --output "$NMR_INTEROP_QUALIFICATION_DATA/${file##*/}"
+          done
+          python -I -m pytest -ra tests/qualification/test_public_interop.py
 
       - name: Qualify the public Bruker FID route with the published wheel
         run: |
