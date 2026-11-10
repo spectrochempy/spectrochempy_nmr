@@ -4,7 +4,7 @@
 # Adapted from Masaï PULSAR (main.f90, ll.f90, util.f90).
 # Distributed under the CeCILL-B license. See LICENSE.
 
-"""PULSAR powder lines for an isolated spin 3/2 under an ideal pulse.
+"""PULSAR central-transition powder lines under an ideal pulse.
 
 The historical Fortran provides numerical regression references. Scientific
 validation also requires independent checks of the model and its conventions.
@@ -152,15 +152,18 @@ def _central_transition_profile(
     spinning_hz=0.0,
     accuracy=16,
     sidebands=0,
+    spin=1.5,
 ):
     points, accuracy, sidebands = index(points), index(accuracy), index(sidebands)
-    values = (cq_hz, eta, larmor_hz, spectral_width_hz, shift_hz, spinning_hz)
+    values = (cq_hz, eta, larmor_hz, spectral_width_hz, shift_hz, spinning_hz, spin)
     if not all(isinstance(value, Real) for value in values):
         raise TypeError("PULSAR parameters must be real scalars.")
     values = tuple(map(float, values))
     if not np.isfinite(values).all():
         raise ValueError("PULSAR parameters must be finite.")
-    cq_hz, eta, larmor_hz, spectral_width_hz, shift_hz, spinning_hz = values
+    cq_hz, eta, larmor_hz, spectral_width_hz, shift_hz, spinning_hz, spin = values
+    if spin < 1.5 or spin % 1 != 0.5:
+        raise ValueError("spin must be a half-integer greater than or equal to 3/2.")
     if not 0 <= eta <= 1:
         raise ValueError("eta must lie between 0 and 1.")
     if larmor_hz <= 0 or spectral_width_hz <= 0 or spinning_hz < 0:
@@ -178,8 +181,10 @@ def _central_transition_profile(
     directions, weights, triangles = _powder_mesh(accuracy)
     angle = np.deg2rad(54.736) if spinning_hz else 0
     harmonics = _quadrupolar_harmonics(directions, eta, angle)
-    # The spin-3/2 second-order scale is separate from the angular terms.
-    harmonics *= cq_hz**2 / (16 * larmor_hz)
+    # For the central pair, both second-order spin factors scale together
+    # relative to I=3/2. The Wigner products themselves are independent of I.
+    spin_scale = 3 * (spin + 1.5) / (4 * spin**2 * (spin - 0.5))
+    harmonics *= spin_scale * cq_hz**2 / (16 * larmor_hz)
     frequencies = shift_hz + harmonics[0].real
     axis = np.linspace(-spectral_width_hz / 2, spectral_width_hz / 2, points)
     band_offset = sidebands * spinning_hz
@@ -243,9 +248,11 @@ def simulate_central_transition(
     spinning_hz=0.0,
     accuracy=16,
     sidebands=0,
+    spin=1.5,
 ):
-    """Simulate the central transition of one spin 3/2 as an NDDataset.
+    """Simulate the central transition of an isolated spin as an NDDataset.
 
+    Set the dimensionless spin quantum number with `spin` (3/2, 5/2, ...).
     The model uses second-order quadrupolar shifts and an ideal pulse with
     zero delay. Set `spinning_hz` to zero for a static powder or to a positive
     rate for MAS at 54.736 degrees. `sidebands` adds that many orders
@@ -269,6 +276,7 @@ def simulate_central_transition(
         spinning_hz=spinning_hz,
         accuracy=accuracy,
         sidebands=sidebands,
+        spin=spin,
     )
     dataset = NDDataset(profile, name="PULSAR central transition")
     dataset.set_coordset(x=Coord(axis, units="Hz", title="frequency offset"))

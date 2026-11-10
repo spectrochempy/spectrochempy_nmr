@@ -9,7 +9,7 @@ sources in `masai/masai/core/fit/pulsar/f90/` use CeCILL-B.
 ## Model and output
 
 The simulation models the $+1/2 \leftrightarrow -1/2$ transition of an
-isolated spin $I=3/2$, with second-order quadrupolar shifts, an ideal
+isolated half-integer spin $I\geq 3/2$, with second-order quadrupolar shifts, an ideal
 pulse, zero evolution delay and a powder distribution. The model supports
 a static powder or magic-angle spinning at the historical rotor angle
 of $54.736^\circ$. It excludes chemical shift anisotropy, spin
@@ -21,6 +21,7 @@ from spectrochempy_nmr.pulsar import simulate_central_transition
 
 spectrum = simulate_central_transition(
     cq_hz=4.0e6,
+    spin=2.5,
     eta=0.7,
     larmor_hz=100e6,
     shift_hz=4500,
@@ -30,6 +31,7 @@ spectrum = simulate_central_transition(
 )
 ```
 
+The dimensionless spin quantum number defaults to $I=3/2$.
 All frequencies are in Hz. `larmor_hz` is the positive Larmor frequency
 and `eta` is the quadrupolar asymmetry in $[0,1]$. The frequency origin
 is the midpoint of the simulated window. A positive `shift_hz` adds
@@ -85,7 +87,7 @@ $$
 
 The Wigner coefficients $d_{mk}(\theta_r)$ rotate the tensor using
 the conventions in `wigner` in `util.f90`. Only $k=\pm1,\pm2$
-enter the spin-3/2 central-transition expression. Products of rank-two
+enter the central-transition expression. Products of rank-two
 components give harmonics up to order four. For $l=0,\ldots,4$, define
 
 $$
@@ -94,11 +96,19 @@ B_l = \sum_{k=1}^{2} a_k \sum_{m+m'=l}
 \qquad (a_1,a_2)=(6,3).
 $$
 
-The weights (6) and (3) follow from `u1s` and `u2s` in
-`main.f90`, specialized to the central transition. The code multiplies
-$B_l$ by $C_Q^2/(16\nu_0)$ and doubles $l>0$ to include the
-conjugate negative harmonics. Call the resulting coefficients $H_l$
-in Hz. The mean transition frequency for a vertex is
+The weights $6$ and $3$ follow from `u1s` and `u2s` in `main.f90`,
+specialized to the central transition of a spin 3/2. For other
+half-integer spins the ratio of the two weights stays at 2:1.
+Their common spin dependence enters the frequency scale,
+
+$$
+S_I = \frac{3(I+3/2)}{4I^2(I-1/2)}, \qquad
+H_0 = S_I\frac{C_Q^2}{16\nu_0}B_0 .
+$$
+
+Here $S_{3/2}=1$. For $l>0$, the code doubles the scaled $B_l$ to
+include the conjugate negative harmonics. The resulting coefficients
+$H_l$ are in Hz. The mean transition frequency for a vertex is
 $f_0=\text{shift}+\operatorname{Re}H_0$. For a static powder,
 $\theta_r=0$ and only $f_0$ is used.
 
@@ -186,12 +196,14 @@ The [tests](../../tests/test_pulsar.py) separate three kinds of checks.
   matrix elements in the Zeeman eigenbasis, then averages over the
   whole sphere using Gauss–Legendre quadrature in the polar cosine and
   a uniform azimuth grid. The test compares the centroid and standard
-  deviation with the binned spectrum. For the MAS check, the field
+  deviation with the binned spectrum for spins 3/2, 5/2 and 7/2.
+  For the MAS check, the field
   sweeps a cone around each sampled rotor axis. The same spin matrices
   give the instantaneous shift. Trapezoidal integration of the shift
   after subtracting its cycle average gives a time-domain phase.
   Direct Fourier sums and a whole-sphere average give the relative
-  areas for five resolved bands, independently of the port's Wigner
+  areas for five resolved bands for spins 3/2 and 5/2, independently of
+  the port's Wigner
   harmonics, FFT and triangular mesh. The zero-coupling case checks
   that MAS sidebands vanish. Experimental spectra are still needed
   to assess the model against measurements.

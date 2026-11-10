@@ -138,39 +138,42 @@ def test_mas_sidebands_match_asymmetric_fortran_reference():
     )
 
 
-def _second_order_offsets(directions, cq_hz, eta, larmor_hz):
+def _second_order_offsets(directions, cq_hz, eta, larmor_hz, spin):
     # Work directly in the quadrupolar principal axes. Diagonalize the
     # Zeeman term for each field direction and apply second-order
     # perturbation theory to the central pair of Zeeman levels.
-    m = np.arange(-1.5, 2)
-    spin_squared = 15 / 4
+    m = np.arange(-spin, spin + 1)
+    levels = m.size
+    spin_squared = spin * (spin + 1)
     raising = np.diag(np.sqrt(spin_squared - m[:-1] * (m[:-1] + 1)), k=-1)
     ix = (raising + raising.T) / 2
     iy = (raising - raising.T) / (2j)
     iz = np.diag(m)
     quadrupolar = (
         cq_hz
-        / 12
-        * (3 * (iz @ iz) - spin_squared * np.eye(4) + eta * (ix @ ix - iy @ iy))
+        / (4 * spin * (2 * spin - 1))
+        * (3 * (iz @ iz) - spin_squared * np.eye(levels) + eta * (ix @ ix - iy @ iy))
     )
 
-    spin = np.stack((ix, iy, iz))
-    field_operator = (directions @ spin.reshape(3, 16)).reshape(
-        *directions.shape[:-1], 4, 4
+    operators = np.stack((ix, iy, iz))
+    field_operator = (directions @ operators.reshape(3, -1)).reshape(
+        *directions.shape[:-1], levels, levels
     )
     zeeman = -larmor_hz * field_operator
     energies, basis = np.linalg.eigh(zeeman)
     matrix_elements = basis.conj().swapaxes(-1, -2) @ quadrupolar @ basis
     gaps = energies[..., :, None] - energies[..., None, :]
-    gaps[..., np.arange(4), np.arange(4)] = np.inf
+    gaps[..., np.arange(levels), np.arange(levels)] = np.inf
     corrections = (np.abs(matrix_elements) ** 2 / gaps).sum(axis=-1)
-    return corrections[..., 2] - corrections[..., 1]
+    center = levels // 2
+    return corrections[..., center] - corrections[..., center - 1]
 
 
-def test_nonaxial_static_powder_matches_spin_hamiltonian_moments():
+@pytest.mark.parametrize("spin", [1.5, 2.5, 3.5])
+def test_nonaxial_static_powder_matches_spin_hamiltonian_moments(spin):
     cq_hz, larmor_hz, eta = 4e6, 100e6, 0.7
     dataset = simulate_central_transition(
-        cq_hz=cq_hz, eta=eta, larmor_hz=larmor_hz, spectral_width_hz=60e3
+        cq_hz=cq_hz, eta=eta, larmor_hz=larmor_hz, spectral_width_hz=60e3, spin=spin
     )
 
     # Independent powder average with Gauss-Legendre weights in cos(theta)
@@ -180,7 +183,7 @@ def test_nonaxial_static_powder_matches_spin_hamiltonian_moments():
     z, phi = np.meshgrid(cosine, azimuth, indexing="ij")
     sine = np.sqrt(1 - z**2)
     directions = np.stack((sine * np.cos(phi), sine * np.sin(phi), z), axis=-1)
-    shifts = _second_order_offsets(directions, cq_hz, eta, larmor_hz)
+    shifts = _second_order_offsets(directions, cq_hz, eta, larmor_hz, spin)
     reference_mean = weights @ shifts.mean(axis=1) / 2
     reference_std = np.sqrt(weights @ ((shifts - reference_mean) ** 2).mean(axis=1) / 2)
 
@@ -193,7 +196,8 @@ def test_nonaxial_static_powder_matches_spin_hamiltonian_moments():
     assert std == pytest.approx(reference_std, abs=6)
 
 
-def test_mas_sideband_areas_match_time_domain_spin_hamiltonian():
+@pytest.mark.parametrize("spin", [1.5, 2.5])
+def test_mas_sideband_areas_match_time_domain_spin_hamiltonian(spin):
     cq_hz, larmor_hz, eta, spinning_hz = 2.8e6, 100e6, 0.7, 10e3
     dataset = simulate_central_transition(
         cq_hz=cq_hz,
@@ -202,6 +206,7 @@ def test_mas_sideband_areas_match_time_domain_spin_hamiltonian():
         spectral_width_hz=80e3,
         spinning_hz=spinning_hz,
         sidebands=2,
+        spin=spin,
     )
 
     # Sample rotor axes over the whole sphere in the tensor frame. The
@@ -221,7 +226,7 @@ def test_mas_sideband_areas_match_time_domain_spin_hamiltonian():
         np.cos(angles)[:, None] * polar[..., None, :]
         + np.sin(angles)[:, None] * tangential[..., None, :]
     )
-    shifts = _second_order_offsets(directions, cq_hz, eta, larmor_hz)
+    shifts = _second_order_offsets(directions, cq_hz, eta, larmor_hz, spin)
     modulation = shifts - shifts.mean(axis=-1, keepdims=True)
 
     # Integrate the cyclic modulation by trapezoids and project the
@@ -234,8 +239,16 @@ def test_mas_sideband_areas_match_time_domain_spin_hamiltonian():
     areas = weights @ (np.abs(coefficients) ** 2).mean(axis=1) / 2
     expected = areas / areas.sum()
 
-    # The mean offsets span about -5.2 to -0.1 kHz, so these
-    # boundaries separate the five bands without cutting their support.
+    # For both spins the mean offsets lie between -5.3 kHz and zero.
+    # These boundaries separate the five bands without cutting their support.
     windows = [-np.inf, -17.5e3, -7.5e3, 2.5e3, 12.5e3, np.inf]
     actual, _ = np.histogram(dataset.x.data, bins=windows, weights=dataset.data)
     np.testing.assert_allclose(actual, expected, rtol=0, atol=8e-5)
+
+
+@pytest.mark.parametrize("spin", [0.5, 2, 2.25])
+def test_central_transition_rejects_unsupported_spin(spin):
+    with pytest.raises(ValueError, match="spin must be a half-integer"):
+        simulate_central_transition(
+            cq_hz=1e6, eta=0, larmor_hz=100e6, spectral_width_hz=60e3, spin=spin
+        )
