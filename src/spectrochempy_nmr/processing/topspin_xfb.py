@@ -31,7 +31,7 @@ def _check_axis(params, points, words_per_point, ft_mode, phase_mode):
         or params.get("PH_mod") != phase_mode
         or params.get("REVERSE") is not False
         or params.get("BC_mod") != 0
-        or params.get("WDW") not in (0, 4)
+        or params.get("WDW") not in (0, 1, 3, 4)
     ):
         raise ValueError(
             "TopSpin XFB requires a full grid and supported window and phase"
@@ -42,19 +42,33 @@ def _check_axis(params, points, words_per_point, ft_mode, phase_mode):
             raise ValueError(f"TopSpin XFB requires a finite {key}")
     if min(params["SW_p"], params["SF"]) <= 0:
         raise ValueError("TopSpin XFB requires a calibrated processing grid")
-    if params["WDW"] == 4:
+    if params["WDW"] == 1:
+        lb = params.get("LB")
+        if not isinstance(lb, (int, float)) or not np.isfinite(lb):
+            raise ValueError("TopSpin XFB requires finite exponential LB")
+    if params["WDW"] in (3, 4):
         shift = params.get("SSB")
         if not isinstance(shift, (int, float)) or not np.isfinite(shift) or shift < 0:
-            raise ValueError("TopSpin XFB requires a valid squared sine window shift")
+            raise ValueError("TopSpin XFB requires a valid sine window shift")
 
 
-def _window(params, points, delay=0):
-    weights = np.ones(points)
-    if params["WDW"] == 4:
+def _window(params, points, width, delay=0):
+    mode = params["WDW"]
+    if mode == 1:
+        time = (np.arange(points) - delay) / width
+        with np.errstate(over="ignore"):
+            weights = np.exp(-np.pi * time * params["LB"])
+        if not np.isfinite(weights).all():
+            raise ValueError("TopSpin XFB exponential window overflowed")
+    elif mode in (3, 4):
         shift = params["SSB"]
         phase = np.pi / shift if shift >= 2 else 0
         position = (np.arange(points) - delay) / (points - delay + 0.5)
-        weights = np.sin(phase + (np.pi - phase) * position) ** 2
+        weights = np.sin(phase + (np.pi - phase) * position)
+        if mode == 4:
+            weights **= 2
+    else:
+        weights = np.ones(points)
     weights[0] *= params["FCOR"]
     return weights
 
@@ -166,14 +180,14 @@ def replay_xfb(source):
     ):
         raise ValueError("TopSpin XFB requires a known integer direct group delay")
 
-    f2_input = data * _window(x, nx, int(delay))
+    f2_input = data * _window(x, nx, widths[1], int(delay))
     if mode == "echo-antiecho":
         f2_input = _rance_kay(f2_input)
     sx, sy = x["SI"], y["SI"]
     f2 = _positive_fft(f2_input, sx, -1)
     phase_x = x["PHC0"] + (x["PHC1"] + 360 * delay * x["PKNL"]) * np.arange(sx) / sx
     f2 *= np.exp(-1j * np.deg2rad(phase_x))
-    f1_window = _window(y, f1_points)[:, None]
+    f1_window = _window(y, f1_points, widths[0])[:, None]
     if qf:
         f1_input = _prepare_f1(f2, f1_window, f1_points, lp_order)
         f1 = np.fft.fftshift(np.fft.fft(f1_input, n=sy, axis=-2), axes=-2)
