@@ -57,3 +57,7 @@ For segmentation, peak simulation, and multidimensional fitting,
 see the :external+core:doc:`core analysis guide <userguide/analysis/index>`.
 For an example of fitting relaxation curves across a series, see
 :doc:`/examples/gallery/analysis/plot_processing_nmr_relax`.
+
+For an example of assembling separate Bruker FIDs and comparing
+cross-polarization buildup by contact time, see
+:doc:`/examples/gallery/analysis/plot_processing_cp_nmr`.

@@ -56,3 +56,8 @@ section_ref = "examples-analysis-index"
 path = "analysis/nmr/plot_analyze_cosy_2d.py"
 section = "Analysis"
 section_ref = "examples-analysis-index"
+
+[[examples]]
+path = "analysis/nmr/plot_processing_cp_nmr.py"
+section = "Analysis"
+section_ref = "examples-analysis-index"

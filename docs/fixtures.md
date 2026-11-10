@@ -6,7 +6,7 @@ the complete SpectroChemPy data corpus. The manifest is
 
 The TopSpin source is `spectrochempy_data` revision
 `08bb9b0cbff8f4363c48b6bff7ccb743f8140e0a`. The provenance register identifies
-the TopSpin 1D and relaxation measurements as LCS data released under CC BY
+the TopSpin 1D, CP and relaxation measurements as LCS data released under CC BY
 4.0, with attribution to Christian Fernandez, LCS. Pulse programs and generated
 `__index__` files are intentionally not fetched because they are excluded from
 that grant or are generated metadata.
@@ -17,7 +17,7 @@ under CC0 1.0. They are retrieved from pinned revisions of nmrglue-ng.
 The NMRPipe file is a conversion of the processed Bruker RR plane from
 [nmrXiv sample S213](https://nmrxiv.org/sample/S213).
 
-The selected files total about 10.5 MiB. Run the same fetch as the RTD
+The selected files total about 11 MiB. Run the same fetch as the RTD
 pre-build job locally with:
 
 ```console
