@@ -108,33 +108,75 @@ def _check_baseline(params, supported, points):
         )
     if mode in (1, 2) and (points < 4 or points % 4):
         raise ValueError("TopSpin XFB tail-mean baseline requires full quarters")
-    if mode in (3, 4):
+    if mode in (3, 4, 5, 6):
         offset = params.get("COROFFS")
-        if points < 6:
+        if mode in (3, 4) and points < 6:
             raise ValueError(
                 "TopSpin XFB polynomial baseline requires at least six points"
             )
         if (
             not isinstance(offset, (int, float))
             or not np.isfinite(offset)
-            or (mode == 3 and offset != 0)
+            or (mode in (3, 5) and offset != 0)
         ):
             raise ValueError(
                 "TopSpin XFB requires a valid COROFFS for the baseline mode"
             )
+    if mode in (5, 6):
+        width = params.get("BCFW")
+        if not isinstance(width, (int, float)) or not np.isfinite(width) or width <= 0:
+            raise ValueError("TopSpin XFB requires a positive finite BCFW")
+        if points < 8:
+            raise ValueError(
+                "TopSpin XFB Gaussian baseline requires at least eight points"
+            )
 
 
-def _subtract_baseline(data, mode, cycles_per_point=0):
-    """Subtract the measured XFB tail mean or weighted Legendre moments."""
+def _gaussian_baseline(data, radius):
+    """Reproduce XFB convolution and linear extension at both trace ends."""
+    points = data.shape[-1]
+    step = 2 * radius
+    last = points - radius - 2
+    kernel = np.exp(-4 * (np.arange(-radius, radius + 1) / radius) ** 2)
+    kernel /= kernel.sum()
+    interior = np.apply_along_axis(np.convolve, -1, data[..., :-1], kernel, "valid")
+    first_value, last_value = interior[..., :1], interior[..., -1:]
+    left_anchor = interior[..., radius : radius + 1]
+    right_index = points - step - radius
+    right_anchor = interior[..., right_index : right_index + 1] if radius > 1 else 0
+    left = (
+        first_value + (first_value - left_anchor) * (radius - np.arange(radius)) / step
+    )
+    right = (
+        last_value
+        + (last_value - right_anchor) * (np.arange(last + 1, points) - last) / step
+    )
+    return np.concatenate((left, interior, right), axis=-1)
+
+
+def _gaussian_radius(params, points):
+    width_ppm = params["SW_p"] / params["SF"]
+    return int(min(points // 4, max(1, 0.625 * width_ppm / params["BCFW"])))
+
+
+def _subtract_baseline(data, mode, cycles_per_point=0, radius=0):
+    """Subtract the measured XFB time-domain baseline."""
     points = data.shape[-1]
     if mode in (1, 2):
         return data - data[..., 3 * points // 4 :].mean(axis=-1, keepdims=True)
-    basis = legvander(np.linspace(-1, 1, points), 5)
-    factors = np.array([1, 3, 5, 7, 9, 121 / 63]) / points
-    if not cycles_per_point:
-        return data - ((data @ basis) * factors) @ basis.T
-    ramp = np.exp(2j * np.pi * (cycles_per_point % 1) * np.arange(points))
-    return data - (((data * ramp) @ basis) * factors) @ basis.T * ramp.conj()
+    ramp = (
+        np.exp(2j * np.pi * (cycles_per_point % 1) * np.arange(points))
+        if cycles_per_point
+        else 1
+    )
+    shifted = data * ramp
+    if radius:
+        baseline = _gaussian_baseline(shifted, radius)
+    else:
+        basis = legvander(np.linspace(-1, 1, points), 5)
+        factors = np.array([1, 3, 5, 7, 9, 121 / 63]) / points
+        baseline = ((shifted @ basis) * factors) @ basis.T
+    return data - baseline * np.conj(ramp)
 
 
 def _correct_f1_baseline(data, params, profile, width):
@@ -143,21 +185,24 @@ def _correct_f1_baseline(data, params, profile, width):
     if not baseline:
         return data
     traces = data.swapaxes(-2, -1)
-    if baseline in (1, 3):
+    radius = _gaussian_radius(params, traces.shape[-1]) if baseline in (5, 6) else 0
+    if baseline in (1, 3, 5):
         if profile == "qf":
             traces = traces.conj()
         elif profile == "echo-antiecho":
             traces = 1j * traces
         words = np.ascontiguousarray(traces).view(traces.real.dtype)
-        corrected = _subtract_baseline(words, baseline).view(traces.dtype)
+        corrected = _subtract_baseline(words, baseline, radius=radius).view(
+            traces.dtype
+        )
         if profile == "qf":
             corrected = corrected.conj()
         elif profile == "echo-antiecho":
             corrected = -1j * corrected
     else:
         sign = 1 if profile == "qf" else -1
-        cycles_per_point = sign * params["COROFFS"] / width if baseline == 4 else 0
-        corrected = _subtract_baseline(traces, baseline, cycles_per_point)
+        cycles_per_point = sign * params["COROFFS"] / width if baseline in (4, 6) else 0
+        corrected = _subtract_baseline(traces, baseline, cycles_per_point, radius)
     return corrected.swapaxes(-2, -1)
 
 
@@ -242,12 +287,13 @@ def replay_xfb(source):
         raise ValueError("TopSpin XFB requires a known integer direct group delay")
 
     delay = int(delay)
-    _check_baseline(y, (0, 1, 2, 3, 4), ny)
-    _check_baseline(x, (0, 4), nx - delay)
+    _check_baseline(y, (0, 1, 2, 3, 4, 5, 6), ny)
+    _check_baseline(x, (0, 4, 6), nx - delay)
     f2_input = data.copy() if x["BC_mod"] else data
     if x["BC_mod"]:
+        radius = _gaussian_radius(x, nx - delay) if x["BC_mod"] == 6 else 0
         f2_input[..., delay:] = _subtract_baseline(
-            data[..., delay:], x["BC_mod"], -x["COROFFS"] / widths[1]
+            data[..., delay:], x["BC_mod"], -x["COROFFS"] / widths[1], radius
         )
     f2_input = f2_input * _window(x, nx, widths[1], delay)
     if mode == "echo-antiecho":

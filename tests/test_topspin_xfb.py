@@ -5,6 +5,7 @@ import pytest
 import spectrochempy as scp
 
 from spectrochempy_nmr.experiment import Experiment
+from spectrochempy_nmr.processing.topspin_xfb import _gaussian_baseline
 from spectrochempy_nmr.processing.topspin_xfb import _subtract_baseline
 
 
@@ -147,7 +148,13 @@ def test_qf_xfb_f1_tail_baseline(qf_fid, baseline):
     ("axis", "settings", "message"),
     [
         ("procs", {"BC_mod": 1}, "not supported on this axis"),
-        ("proc2s", {"BC_mod": 6}, "not supported on this axis"),
+        ("procs", {"BC_mod": 5}, "not supported on this axis"),
+        ("proc2s", {"BC_mod": 6, "COROFFS": 0}, "positive finite BCFW"),
+        (
+            "proc2s",
+            {"BC_mod": 6, "COROFFS": 0, "BCFW": 0.2},
+            "requires at least eight points",
+        ),
         ("proc2s", {"BC_mod": 2}, "requires full quarters"),
         ("procs", {"BC_mod": 4, "COROFFS": 0}, "at least six points"),
     ],
@@ -169,6 +176,21 @@ def test_xfb_shifted_polynomial_baseline_from_endpoint_impulse():
     result = _subtract_baseline(data, 4, cycles)
 
     np.testing.assert_allclose(result[[0, -1]], [expected_at_first, expected_at_last])
+
+
+@pytest.mark.parametrize("radius", [1, 2, 4])
+def test_xfb_gaussian_edges(radius):
+    data = np.arange(16, dtype=float)
+    result = _gaussian_baseline(data, radius)
+
+    # Symmetric convolution preserves the ramp in the interior.
+    last = data.size - radius - 2
+    np.testing.assert_allclose(result[radius : last + 1], data[radius : last + 1])
+    assert result[0] == pytest.approx(radius / 2)
+    right_anchor = data.size - 2 * radius if radius > 1 else 0
+    assert result[-1] == pytest.approx(
+        last + (last - right_anchor) * (data.size - 1 - last) / (2 * radius)
+    )
 
 
 def test_qf_xfb_rejects_missing_f1_center_neighbor(qf_fid):

@@ -280,7 +280,12 @@ while ``spol`` requires zero. On F2, the DQD processing status records
 ``single`` and ``quad`` requests as off, and ``spol`` as ``qpol``.
 F2 ``qpol`` fits and corrects only the points after the integer group delay.
 Corrections precede the window and linear prediction on their axis.
-Replay rejects the Gaussian filter modes ``sfil`` and ``qfil``.
+``sfil`` (5) and ``qfil`` (6) use a Gaussian convolution with linear
+extrapolation at the trace ends. Both require positive finite ``BCFW``
+in ppm and at least eight increments. F1 ``sfil`` operates on the
+interleaved scalar words with zero ``COROFFS``. F1 and F2 ``qfil``
+support a finite ``COROFFS`` in hertz. DQD records an F2 ``sfil``
+request as ``qfil``, which operates from the integer group delay onward.
 
 To run the external comparisons, set ``NMR_TOPSPIN_XFB_REFERENCES`` to
 a directory containing experiment folders ``20``, ``30`` and ``40``
@@ -345,3 +350,18 @@ subdirectory contains processed experiment copies ``20``, ``30`` and
   Retain the original F1 prediction settings and phases and enable F2 PKNL.
 
 Run ``pytest tests/qualification/test_topspin_examdata.py -k xfb_baseline``.
+
+For Gaussian qualification, set ``NMR_TOPSPIN_XFB_GAUSSIAN_REFERENCES``
+to the same reference root. Add the isolated ``bc-modes/bc{5,6}-f{1,2}``
+cases with ``BCFW=0.2`` ppm and zero offsets. Add the following cases
+under ``bc-gaussian-combined``, with the same windows, prediction,
+phases and PKNL as the combined baseline recipes.
+
+- ``sfil-combined`` uses mode 5 and 6, with widths 0.65 and 1.1 ppm
+  and offsets 0 and −217 Hz in F1 and F2, respectively.
+- ``qfil-combined`` uses mode 6 on both axes, the same widths, and
+  offsets 314 and −217 Hz.
+- ``qfil-radius-one`` uses the same modes and offsets, with widths
+  200 and 20 ppm to exercise the minimum radius.
+
+Run ``pytest tests/qualification/test_topspin_examdata.py -k xfb_gaussian``.
