@@ -582,7 +582,8 @@ class Experiment:
             selected, the default is to resolve it from acquisition metadata.
             Supplying a delay alone selects "phase".
         replay : str, optional
-            Select "topspin" to replay the recorded DQD 1D EFP parameters.
+            Select "topspin" to replay recorded DQD 1D EFP or supported
+            uniform 2D XFB processing parameters.
             Import with remove_digital_filter=False. Replay uses the
             processing ppm grid and retains the FID's scan/gain normalization.
             Other processing options cannot be combined with replay.
@@ -636,7 +637,14 @@ class Experiment:
                 replay_dqd_efp,
             )
 
-            result, applied = replay_dqd_efp(ds)
+            if ds.ndim == 1:
+                result, applied = replay_dqd_efp(ds)
+            else:
+                from spectrochempy_nmr.processing.topspin_xfb import (  # noqa: PLC0415
+                    replay_xfb,
+                )
+
+                result, applied = replay_xfb(ds)
             return self._attach_scp_processing_trace(
                 result, requested={"replay": replay}, applied=applied
             )
