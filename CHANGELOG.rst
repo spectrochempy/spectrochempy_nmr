@@ -12,6 +12,9 @@ Unreleased
 Added
 ~~~~~
 
+* Read and process qualified Bruker States SER acquisitions through
+  ``read_topspin()`` and interop without TPPI alternation.
+
 * Process explicitly confirmed NMRPipe States 2D acquisitions with
   ``Experiment.process()``, without applying TPPI alternation.
 * Select Agilent 2D States or States-TPPI quadrature manually or from a

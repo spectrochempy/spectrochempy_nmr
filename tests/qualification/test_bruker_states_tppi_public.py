@@ -75,7 +75,9 @@ def _check_route(path, monkeypatch, tmp_path, dc, filtered):
     assert actual.meta.tppi_alternation_state == "encoded"
     assert actual.meta.acquisition["dc_offset"]["applied"] is dc
     assert actual.meta.acquisition["digital_filter"]["applied"] is filtered
-    assert actual.meta.acquisition["scan_gain"]["divisor"] == 288
+    assert actual.meta.acquisition["scan_gain"]["divisor"] == (
+        contract.metadata["acqus"]["NS"] * contract.metadata["acqus"]["RG"]
+    )
     np.testing.assert_allclose(actual.data.conj(), expected.data, rtol=2e-12, atol=1e-7)
     assert Experiment(actual).process().x.units == scp.ur.Hz
     if not dc and not filtered:
