@@ -244,9 +244,13 @@ Read the uniform Bruker SER with ``remove_digital_filter=False`` and
 ``Experiment(dataset).process(replay="topspin")``. Replay uses the recorded
 processing status of both axes. The supported profiles cover direct DQD
 with indirect QF magnitude, States-TPPI, or Bruker echo/anti-echo. They
-support no window or a squared sine window, F1 first-point weighting
-with ``FCOR=1`` on F2,
-zero filling, phase, and F2 ``PKNL`` with an integer group delay.
+support no window, exponential (``WDW=1``), sine (``WDW=3``), and
+squared sine (``WDW=4``) on either axis. Replay uses the recorded
+``LB`` in hertz for the exponential, including signed values, and
+``SSB`` for both sine windows. In F2, the integer group delay sets
+the window origin with either setting of ``PKNL``. Replay also supports
+F1 first-point weighting with ``FCOR=1`` on F2, zero filling, phase,
+and F2 ``PKNL``.
 The F1 status can also request forward linear prediction (``ME_mod=2``,
 TopSpin ``LPfr``). Replay predicts complex traces with the Burg recurrence
 after F2 processing and before the F1 window and first-point weighting.
@@ -274,3 +278,41 @@ comparisons, set ``NMR_TOPSPIN_XFB_LP_REFERENCES`` to a separate set of the
 same experiment folders processed with the original F1 ``LPfr`` settings.
 Run
 ``pytest tests/qualification/test_topspin_examdata.py -k xfb``.
+
+For the window comparisons, set ``NMR_TOPSPIN_XFB_WINDOW_REFERENCES`` to
+a directory with six case subdirectories, each containing the same three
+experiment folders processed by ``xfb``. Use ``LB=37`` Hz in F1 and
+``LB=47`` Hz in F2 wherever the exponential is selected.
+
+.. list-table::
+   :header-rows: 1
+
+   * - Case directory
+     - F1 / F2 WDW
+     - F1 LPfr and F2 PKNL
+   * - ``em-f1``
+     - 1 / 0
+     - Off
+   * - ``em-f2``
+     - 0 / 1
+     - Off
+   * - ``sine-f1``
+     - 3 / 0
+     - Off
+   * - ``sine-f2``
+     - 0 / 3
+     - Off
+   * - ``em-sine-lp-pknl``
+     - 1 / 3
+     - On
+   * - ``sine-em-lp-pknl``
+     - 3 / 1
+     - On
+
+Use ``SSB=0`` in F1 and ``SSB=2`` in F2 for the isolated windows,
+and ``SSB=2.5`` in F1 and ``SSB=3`` in F2 for the combined recipes.
+Use ``SI=256`` in F1 and ``SI=1024`` in F2. For the isolated cases,
+zero the manual phases and use ``FCOR=1`` on both axes. For the combined
+cases, retain the original prediction lengths, orders and phases, and
+use ``FCOR=0.5`` in F1 and ``FCOR=1`` in F2. Run
+``pytest tests/qualification/test_topspin_examdata.py -k xfb_windows``.

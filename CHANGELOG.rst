@@ -15,6 +15,8 @@ Added
 * Replay qualified Bruker 2D XFB processing with recorded window, phase,
   digital delay and ppm calibration. Replay also supports qualified forward
   linear prediction in F1.
+* Replay TopSpin XFB exponential and sine-bell windows in F1 and F2,
+  including recipes with forward F1 prediction and F2 digital delay.
 
 * Read and process qualified Bruker States SER acquisitions through
   ``read_topspin()`` and interop without TPPI alternation.

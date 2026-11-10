@@ -72,6 +72,49 @@ def test_qf_xfb_replaces_only_the_center_bin(qf_fid, predict):
     assert result.meta.nmr_processing["scp_processing"]["applied"]["command"] == "xfb"
 
 
+@pytest.mark.parametrize(("mode", "lb"), [(1, 100), (1, -100), (3, 0)])
+@pytest.mark.parametrize("axis", ["proc2s", "procs"])
+def test_qf_xfb_windows(qf_fid, mode, lb, axis):
+    status = qf_fid.meta.source_metadata
+    status[axis].update(WDW=mode, LB=lb, SSB=2)
+    status["acqus"]["GRPDLY"] = 1
+    f1 = axis == "proc2s"
+    points, delay, width = (2, 0, 1000) if f1 else (4, 1, 2000)
+    positions = np.arange(points) - delay
+    if mode == 1:
+        weights = np.exp(-np.pi * lb * positions / width)
+    else:
+        weights = np.cos(np.pi / 2 * positions / (points - delay + 0.5))
+    data = qf_fid.data if f1 else qf_fid.data * weights
+    f2 = 4 * np.fft.fftshift(np.fft.ifft(data, axis=1), axes=1)
+    if f1:
+        f2 *= weights[:, None]
+    expected = np.abs(np.fft.fftshift(np.fft.fft(f2, n=4, axis=0), axes=0))
+    expected[2, 2] = (expected[1, 2] + expected[3, 2]) / 2
+
+    result = Experiment(qf_fid).process(replay="topspin")
+
+    np.testing.assert_allclose(result.data, expected)
+
+
+@pytest.mark.parametrize(
+    ("settings", "message"),
+    [
+        ({"WDW": 1}, "exponential LB"),
+        ({"WDW": 1, "LB": np.inf}, "exponential LB"),
+        ({"WDW": 1, "LB": -1e9}, "window overflowed"),
+        ({"WDW": 3}, "sine window shift"),
+        ({"WDW": 3, "SSB": np.nan}, "sine window shift"),
+        ({"WDW": 2}, "supported window"),
+    ],
+)
+def test_qf_xfb_rejects_unqualified_windows(qf_fid, settings, message):
+    qf_fid.meta.source_metadata["procs"].update(settings)
+
+    with pytest.raises(ValueError, match=message):
+        Experiment(qf_fid).process(replay="topspin")
+
+
 def test_qf_xfb_rejects_missing_f1_center_neighbor(qf_fid):
     qf_fid.meta.source_metadata["proc2s"].update(SI=2, FTSIZE=2, STSI=2)
 

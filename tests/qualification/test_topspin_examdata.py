@@ -314,6 +314,33 @@ def test_topspin_xfb_replay(experiment, variable, with_prediction):
     if root is None:
         pytest.skip(f"set {variable} to the corresponding TopSpin XFB copies")
     path = Path(root).resolve(strict=True) / experiment
+    _assert_topspin_xfb(path, with_prediction)
+
+
+@pytest.mark.parametrize("experiment", ["20", "30", "40"])
+@pytest.mark.parametrize(
+    ("case", "windows", "combined"),
+    [
+        ("em-f1", (1, 0), False),
+        ("em-f2", (0, 1), False),
+        ("sine-f1", (3, 0), False),
+        ("sine-f2", (0, 3), False),
+        ("em-sine-lp-pknl", (1, 3), True),
+        ("sine-em-lp-pknl", (3, 1), True),
+    ],
+)
+def test_topspin_xfb_windows(experiment, case, windows, combined):
+    root = os.environ.get("NMR_TOPSPIN_XFB_WINDOW_REFERENCES")
+    if root is None:
+        pytest.skip("set NMR_TOPSPIN_XFB_WINDOW_REFERENCES to the window copies")
+    path = Path(root).resolve(strict=True) / case / experiment
+    trace = _assert_topspin_xfb(path, combined)
+    assert trace["window"] == windows
+    assert trace["pknl"] is combined
+
+
+def _assert_topspin_xfb(path, with_prediction):
+    experiment = path.name
     raw = _local_read(path / "ser")
     before = raw.data.copy()
 
@@ -364,3 +391,4 @@ def test_topspin_xfb_replay(experiment, variable, with_prediction):
 
     with pytest.raises(ValueError, match="uncorrected SER"):
         Experiment(_local_read(path / "ser", filtered=True)).process(replay="topspin")
+    return trace
