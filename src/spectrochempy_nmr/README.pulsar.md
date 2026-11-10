@@ -843,15 +843,41 @@ separate model supplies the isotropic chemical shift and any correlation
 with the EFG. The 3QMAS ridge comparison above uses an empirical spread
 of $P_Q$ and chemical shift at fixed $\eta$.
 
-A distribution layer can produce normalized weighted tensors for the
-existing simulator, with deterministic nodes reused between fitting
-iterations. Tests can check rotational invariance, the zero-noise limit
-of the extended model, and the five-degree-of-freedom chi law of $P_Q$
-for the standard model before checking spectral convergence and runtime.
-The 3QMAS centroids constrain $P_Q$, which is proportional to the EFG
-norm. Constraining the mean tensor asymmetry and a chemical-shift
-correlation would require additional information about the line shapes
-or an independent tensor constraint.
+The implementation is in [czjzek.py](czjzek.py), with examples and API
+conventions in the [Czjzek guide](../../../docs/userguide/czjzek.rst).
+It constructs
+
+$$
+V=\operatorname{diag}\left(\tfrac{C_0(\eta_0-1)}2,
+-\tfrac{C_0(\eta_0+1)}2,C_0\right)
++\sigma\sum_{i=1}^{5} z_i B_i.
+$$
+
+The $B_i$ form a Frobenius-orthonormal basis of symmetric traceless
+3-by-3 matrices, and $z_i$ are standard normal coordinates. Consequently,
+the noise is isotropic under rotations. Here $\sigma$ is the standard
+deviation of each orthonormal tensor coordinate in Hz. A zero local
+tensor gives the standard model. The local tensor plus noise gives the
+extended model. An independent Gaussian chemical shift uses a sixth
+normal coordinate.
+
+The sampler transforms scrambled Sobol nodes through the inverse normal
+CDF. A fixed seed and power-of-two sample count reuse the standardized
+nodes between parameter evaluations. After diagonalization, eigenvalues
+are ordered by absolute magnitude. The largest supplies signed $C_Q$,
+and the difference of the remaining two supplies $\eta$ in $[0,1]$.
+The invariant $P_Q^2=2\lVert V\rVert_F^2/3$ gives a five-degree-of-freedom
+chi law with scale $\sqrt{2/3}\sigma$ in the standard model. Tests compare
+that law, the universal $\eta$ marginal and rotational invariance.
+
+Ideal-pulse spectra average the unnormalized component masses and then
+normalize once over the chosen transitions and bands. Finite-sequence
+spectra average the complex responses with their ideal-reference
+excitation scale. Work is streamed per tensor, while powder and normal
+nodes are reused. The zero-noise case reduces to one tensor. Increase
+distribution sampling and orientation accuracy separately when checking
+convergence. Shift/EFG correlations and tensor-relative CSA orientations
+would require extending this initial distribution API.
 
 ## Experimental check of phosphorus CSA bands
 

@@ -93,6 +93,28 @@ sensitivity to the low-coupling tail. A Czjzek distribution supplies a
 physical tensor model for that tail, with parameters requiring their own
 experimental constraints.
 
+Additional Storage candidates
+-----------------------------
+
+Two independent cursor walks of ``STORAGE`` returned the same 52,603
+files. The subsequent content pass classified all 4,433 acquisition
+headers, including 123 quadrupolar records. Beyond the alumina overlay,
+these candidates can support further gallery work after qualification.
+
+* ``/STORAGE/bruker/data/aurelie/nmr/RbNO3/1`` supplies a processed
+  complex 87Rb spectrum and a raw FID, with three resolved features.
+  Its title gives 14.286 kHz MAS, while the status rotor fields disagree.
+* ``/STORAGE/bruker/data/eddy/nmr/150113/3`` and ``/4`` supply 23Na
+  single-pulse spectra on MFI samples. Their phase and offset require
+  checking before fitting.
+* ``/STORAGE/bruker/data/christian/nmr/E11560(nov).zip`` contains
+  27Al one-pulse and MQMAS/SPAM acquisitions. Sample identification
+  and processing qualification are needed to use them together.
+* ``/STORAGE/bruker/data/christian/nmr/CL4627(dec).zip`` contains a
+  23Na pulse-length optimization. Its peak-height maximum occurs at
+  10 µs and its integral maximum at 11 µs. The calibration regime and
+  sample identity remain to be established.
+
 References
 ----------
 
