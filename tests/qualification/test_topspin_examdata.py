@@ -398,15 +398,26 @@ def test_topspin_xfb_gaussian_baseline(experiment, folder, case, modes):
 
 @pytest.mark.parametrize("experiment", ["20", "30", "40"])
 @pytest.mark.parametrize(
-    "case", ["plain", "phase", "em", "sine", "qpol", "qfil", "combined"]
+    ("case", "windows", "baseline", "pknl"),
+    [
+        ("plain", (0, 0), 0, False),
+        ("phase", (0, 0), 0, True),
+        ("em", (0, 1), 0, False),
+        ("sine", (0, 3), 0, False),
+        ("qpol", (0, 0), 4, False),
+        ("qfil", (0, 0), 6, False),
+        ("combined", (4, 3), 6, True),
+    ],
 )
-def test_topspin_xfb_fractional_delay(experiment, case):
+def test_topspin_xfb_fractional_delay(experiment, case, windows, baseline, pknl):
     root = os.environ.get("NMR_TOPSPIN_XFB_FRACTIONAL_REFERENCES")
     if root is None:
         pytest.skip("set NMR_TOPSPIN_XFB_FRACTIONAL_REFERENCES to the CMCse copies")
     path = Path(root).resolve(strict=True) / case / experiment
     trace = _assert_topspin_xfb(path, case == "combined")
-    assert trace["pknl"] is (case in ("phase", "combined"))
+    assert trace["pknl"] is pknl
+    assert trace["window"] == windows
+    assert trace.get("baseline", (0, 0)) == (0, baseline)
     delay = trace["group_delay_points"]
     assert 67 < delay < 68
     assert trace["f2_time_origin_points"] == 68
