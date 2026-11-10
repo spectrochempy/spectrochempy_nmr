@@ -254,7 +254,8 @@ An even ``NCOEF``, at most the acquired F1 increment count, specifies
 twice the complex predictor order. ``LPBIN``
 and ``TDeff`` must agree and describe the extended length in F1 scalar words
 (one per QF increment, two per paired increment). The extended length must
-fit within F1 ``SI``.
+fit within F1 ``SI``. Replay rejects a requested order if the residual energy
+of a nonzero trace falls below floating-point precision during the fit.
 The result uses the processing ppm
 axes and retains the FID scan/gain normalization.
 

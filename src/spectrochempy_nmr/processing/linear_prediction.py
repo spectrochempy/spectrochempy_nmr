@@ -68,9 +68,14 @@ def _burg_predict_after(data, final_size, order):
     scale = np.max(np.abs(data), axis=-1, keepdims=True)
     normalized = np.divide(data, scale, out=np.zeros_like(data), where=scale > 0)
     forward, backward = normalized[..., 1:], normalized[..., :-1]
+    minimum_energy = np.finfo(data.real.dtype).eps * np.sum(
+        np.abs(forward) ** 2 + np.abs(backward) ** 2, axis=-1
+    )
     coefficients = np.ones((*data.shape[:-1], 1), dtype=data.dtype)
     for _ in range(order):
         energy = np.sum(np.abs(forward) ** 2 + np.abs(backward) ** 2, axis=-1)
+        if np.any((minimum_energy > 0) & (energy <= minimum_energy)):
+            raise ValueError("TopSpin XFB F1 linear prediction is ill-conditioned")
         cross = -2 * np.sum(backward.conj() * forward, axis=-1)
         reflection = np.divide(
             cross, energy, out=np.zeros_like(cross), where=energy > 0
