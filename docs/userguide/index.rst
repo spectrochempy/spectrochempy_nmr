@@ -11,3 +11,5 @@ Guides
    ../concepts/quadrature
    ../concepts/hypercomplex
    qualification
+
+   pulsar
