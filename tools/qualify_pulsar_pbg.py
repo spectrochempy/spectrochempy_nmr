@@ -68,7 +68,7 @@ def mqmas_parameters(experiment):
 
 
 def simulate_components(sites, eta, acqu, proc, pulse, accuracy, sidebands):
-    """Return absorptive profiles on a common grid in the experimental frame."""
+    """Return complex profiles on a common grid in the experimental frame."""
     larmor_hz = proc["SF"] * 1e6
     carrier_hz = acqu["SFO1"] * 1e6 - larmor_hz
     components = []
@@ -89,7 +89,7 @@ def simulate_components(sites, eta, acqu, proc, pulse, accuracy, sidebands):
         )
         axis = spectrum.x.data
         step_hz = axis[1] - axis[0]
-        components.append(spectrum.data.real)
+        components.append(spectrum.data)
     return axis + step_hz / 2 + carrier_hz, np.column_stack(components)
 
 
@@ -151,7 +151,7 @@ def main():
             sites, eta, acqu, proc, pulse, args.accuracy, args.sidebands
         )
         rms, width, weights, profile = calibrate_center(
-            frequency, observed, axis, components
+            frequency, observed, axis, components.real
         )
         predicted = ratios(frequency, profile)
         modeled[kind, eta] = predicted

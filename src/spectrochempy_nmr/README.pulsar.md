@@ -699,6 +699,63 @@ transfer function. The TopSpin data have already been phased and
 baseline-corrected. This comparison tests a constrained effective model
 against held-out areas from the [associated experiment](https://doi.org/10.1016/j.jnoncrysol.2026.124054).
 
+### Matched processing of the recorded and simulated FIDs
+
+```sh
+OPENBLAS_NUM_THREADS=1 python tools/qualify_pulsar_pbg_fid.py "/path/to/raw data/PBG1_2,5mm"
+```
+
+The [FID replay](../../tools/qualify_pulsar_pbg_fid.py) uses the final
+`efp` settings from the 1D experiment. It reads the 5000 acquired complex
+points at 2.5 MHz, multiplies by the 15 Hz exponential window, zero fills
+to 16384 points, and transforms the conjugated FID into TopSpin order.
+The digital-filter lead-in stays in the measured FID. At output bin
+fraction $u=j/16384$, the phase in degrees is
+$360(68)(u-1/2)+145.1991-5595.55u$. This combines the recorded group-delay
+compensation with the final receiver phases. On scratch copies, TopSpin
+4.5.0 reproduces the Python complex spectrum after one positive scaling
+factor, with relative RMS differences below $7\times 10^{-8}$ for the
+recorded FID and the simulated $\eta=0.5$ FID.
+
+The synthetic FID sums the complex PULSAR line amplitudes at the recorded
+dwell. It retains the same component weights and Gaussian broadening as
+the direct simulation, uses a flat in-band receiver gain, and represents
+the digital-filter delay by a 68-point zero lead-in. A constant receiver
+phase aligns the carrier with the recorded phase convention. The main
+replay starts at the recorded pre-scan delay `DE` (6.500 µs) after the
+pulse. The experiment used standard digital filtering (`DIGMOD=1`).
+The Bruker Pulse Programming manual (H166633_022, §4.1.6) reserves
+`ACQT0` for `baseopt`, so the 6.182 µs start (`DE + ACQT0`) is shown
+only as a timing sensitivity.
+The real parts of the measured and simulated `efp` spectra use the same
+local baseline and integration windows.
+
+The archived spectrum also includes an iterative baseline correction
+with a 32-point truncation filter. The difference between the archived
+spectrum and the vendor replay is concentrated in the lowest Fourier
+modes. The replay uses the documented `efp` operations and the shared
+local baseline, leaving that subsequent iterative correction out of
+both replays. The measured sum changes from 88.03% archived to 89.40%
+after the matched replay. Individual normalized areas change by an
+average of 0.20 percentage points and at most 0.46.
+
+| Common $\eta$ | Direct simulation | Matched `efp`, DE | Matched `efp`, timing sensitivity | Mean absolute error, DE |
+| ---: | ---: | ---: | ---: | ---: |
+| 0 | 143.28% | 151.73% | 141.76% | 3.79 pp |
+| 0.5 | 137.55% | 144.83% | 136.33% | 3.04 pp |
+| 1 | 124.94% | 130.71% | 124.39% | 2.07 pp |
+
+Sums are percentages of the respective central window. Errors are against
+the replay of the recorded FID (89.40%). At the nominal delay, the
+remaining gap in the sum is 41.31–62.33 percentage points, an increase
+of 4.41–7.08 points relative to the direct comparison with the archive.
+At the shorter test delay the gap decreases by 1.91–2.88 points and
+remains 34.99–52.36 points. The documented software processing and the
+tested timing offsets explain little of the excess simulated area.
+The in-band amplitude response of the hardware and the digital-filter
+kernel remain unmeasured, so the residual still combines receiver and
+sample-model effects.
+
 ## Experimental check of phosphorus CSA bands
 
 The [MRSimulator phosphorus example](https://mrsimulator.readthedocs.io/en/v1.0/fitting/1D_fitting/plot_1_31P_Na2PO4_MAS.html)
