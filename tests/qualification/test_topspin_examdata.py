@@ -478,3 +478,44 @@ def _assert_topspin_xfb(path, with_prediction):
     with pytest.raises(ValueError, match="uncorrected SER"):
         Experiment(_local_read(path / "ser", filtered=True)).process(replay="topspin")
     return trace
+
+
+@pytest.mark.parametrize("expno", range(80, 95))
+def test_qsim_cp_pknl_matches_topspin_ft(expno):
+    """Compare em → ft (BC_mod=0, PKNL on) on copies of the CP FIDs."""
+    root = os.environ.get("NMR_TOPSPIN_CP_REFERENCES")
+    if root is None:
+        pytest.skip("set NMR_TOPSPIN_CP_REFERENCES to the captured CP series")
+    root = Path(root).resolve(strict=True)
+    path = root / "cp" / str(expno) / "fid"
+    fid = _local_read(path)
+    original = fid.data.copy()
+    spectrum = Experiment(fid).process(
+        digital_filter="pknl", apodization="em", lb=50, size=8192
+    )
+
+    pars, (real, imag) = ng.bruker.read_pdata(
+        root / "ft" / str(expno), bin_files=["1r", "1i"]
+    )
+    reference = real + 1j * imag
+    # The reader and TopSpin use different intensity scales. Fit a single
+    # positive real factor, which cannot hide a phase or quadrature error.
+    scale = (
+        np.vdot(spectrum.data, reference).real
+        / np.vdot(spectrum.data, spectrum.data).real
+    )
+    assert scale > 0
+    assert (
+        np.linalg.norm(scale * spectrum.data - reference) / np.linalg.norm(reference)
+        < 1e-7
+    )
+    p = pars["procs"]
+    assert p["BC_mod"] == 0 and p["PKNL"] is True
+    bins = np.arange(p["SI"]) / p["SI"]
+    np.testing.assert_allclose(
+        spectrum.x.data, p["OFFSET"] - bins * p["SW_p"] / p["SF"], atol=5e-5, rtol=0
+    )
+    assert spectrum.meta.acquisition["digital_filter"]["group_delay_points"] == 66.625
+    np.testing.assert_array_equal(fid.data, original)
+    with pytest.raises(ValueError, match="already applied"):
+        Experiment(_local_read(path, filtered=True)).process(digital_filter="pknl")

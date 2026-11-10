@@ -576,7 +576,13 @@ class Experiment:
             An explicit selection is required for imported echo/anti-echo data.
         digital_filter : str, optional
             Select "phase" for NMRPipe FT -df or "time" for the historical
-            reader's time-domain correction, which shortens F2.
+            reader's time-domain correction, which shortens F2. For a raw
+            Bruker QSIM 1D FID, select "pknl" to apply the fractional group
+            delay on the final FFT grid. Import with
+            ``remove_digital_filter=False`` and ``remove_dc_offset=False``.
+            This mode uses the processing ppm reference, supports exponential
+            apodization and optional manual phase angles at the first bin,
+            and defaults to the recorded FFT size when ``size`` is omitted.
         bruker_group_delay : float, optional
             Override the group delay in complex F2 samples. With a method
             selected, the default is to resolve it from acquisition metadata.
@@ -659,6 +665,30 @@ class Experiment:
         phc0 = 0.0 if phc0 is _UNSET_ZERO else phc0
         phc1 = 0.0 if phc1 is _UNSET_ZERO else phc1
 
+        if digital_filter == "pknl":
+            if self.is_multi_dataset:
+                raise ValueError("QSIM PKNL requires one FID at a time")
+            if any(
+                value is not None
+                for value in (reference, echo_antiecho, bruker_group_delay)
+            ):
+                raise ValueError(
+                    "QSIM PKNL uses the recorded group delay and ppm reference"
+                )
+            return self._process_qsim_pknl(
+                ds,
+                apodization=apodization,
+                lb=lb,
+                gb=gb,
+                ssb=ssb,
+                pow=pow,
+                size=size,
+                phase=phase,
+                phc0=phc0,
+                phc1=phc1,
+                explicit_arguments=explicit_arguments,
+            )
+
         supports_echo = self._supports_echo_antiecho_fft
         if supports_echo and echo_antiecho != "bruker-rance-kay":
             raise ValueError(
@@ -669,7 +699,7 @@ class Experiment:
                 "echo_antiecho requires an imported raw echo/anti-echo FID"
             )
         if digital_filter not in (None, "phase", "time"):
-            raise ValueError('digital_filter must be "phase" or "time"')
+            raise ValueError('digital_filter must be "phase", "time" or "pknl"')
         if digital_filter is not None and not supports_echo:
             raise ValueError(
                 "digital_filter requires an imported raw echo/anti-echo FID"
@@ -861,6 +891,64 @@ class Experiment:
                 result, requested=requested, applied=applied
             )
         return result
+
+    def _process_qsim_pknl(
+        self,
+        ds,
+        *,
+        apodization,
+        lb,
+        gb,
+        ssb,
+        pow,
+        size,
+        phase,
+        phc0,
+        phc1,
+        explicit_arguments,
+    ):
+        from .processing.topspin_replay import process_qsim_pknl  # noqa: PLC0415
+
+        apodization_kwargs = self._validate_apodization_arguments(
+            apodization, lb=lb, gb=gb, ssb=ssb, pow=pow
+        )
+        if apodization is not None and apodization.lower() != "em":
+            raise ValueError("QSIM PKNL supports only exponential apodization")
+        if phase not in (None, "manual") or (phase is None and (phc0 or phc1)):
+            raise ValueError(
+                "QSIM PKNL accepts phase=None or explicit manual phase angles"
+            )
+        if not np.isfinite([phc0, phc1]).all():
+            raise ValueError("QSIM PKNL requires finite phase angles")
+        lb_hz = None
+        if apodization is not None:
+            lb_hz = self._as_hz_quantity(apodization_kwargs.get("lb", 1.0)).magnitude
+        result, filter_trace = process_qsim_pknl(
+            ds, size=size, lb_hz=lb_hz, phase_zero=phc0, phase_first=phc1
+        )
+        requested = self._build_requested_trace(
+            explicit_arguments,
+            apodization=apodization,
+            apodization_kwargs=apodization_kwargs,
+            size=size,
+            phase=phase,
+            phc0=phc0,
+            phc1=phc1,
+        )
+        applied = {
+            "digital_filter": filter_trace,
+            "fft": True,
+            "axis_calibration": "procs",
+        }
+        if apodization is not None:
+            applied.update(apodization="em", lb=lb_hz * ur.Hz)
+        if phase == "manual":
+            applied["phase"] = self._build_applied_phase_trace(
+                phase, phc0=phc0, phc1=phc1
+            )
+        return self._attach_scp_processing_trace(
+            result, requested={**requested, "digital_filter": "pknl"}, applied=applied
+        )
 
     def _reject_frequency_domain_apodization_requests(
         self,

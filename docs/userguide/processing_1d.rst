@@ -94,3 +94,26 @@ overall amplitude factor.
 The supported profile is a full-spectrum DQD 1D ``efp`` run with
 ``PKNL`` enabled, ``FCOR=1``, and baseline correction, linear prediction and
 axis reversal disabled.
+
+Fractional PKNL correction for a Bruker QSIM FID
+------------------------------------------------
+
+Read the original FID with digital-filter and DC correction disabled.
+The plugin obtains the group delay from the acquisition and applies its
+fractional phase ramp on the final FFT grid. It rejects a FID whose
+digital filter was already corrected at import.
+
+.. code-block:: python
+
+   fid = scp.nmr.read_topspin(
+       "experiment/80/fid", remove_digital_filter=False, remove_dc_offset=False
+   )
+   spectrum = scp.nmr.Experiment(fid).process(
+       apodization="em", lb=50.0, size=8192, digital_filter="pknl"
+   )
+
+The result uses the processing ppm reference. To apply measured phase
+angles at the first frequency bin, pass ``phase="manual"`` with ``phc0``
+and ``phc1`` in degrees. The
+:doc:`cross-polarization example </examples/gallery/analysis/plot_processing_cp_nmr>`
+uses angles recorded separately for each FID after TopSpin ``apk``.

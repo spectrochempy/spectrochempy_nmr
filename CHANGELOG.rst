@@ -17,6 +17,9 @@ Added
   windows, forward F1 linear prediction, baseline and Gaussian solvent
   correction, manual phase, and integer or fractional F2 digital delay.
 
+* Apply fractional PKNL correction on the final FFT grid of raw Bruker
+  QSIM 1D acquisitions with ``Experiment.process(digital_filter="pknl")``.
+
 * Read and process qualified Bruker States SER acquisitions through
   ``read_topspin()`` and interop without TPPI alternation.
 

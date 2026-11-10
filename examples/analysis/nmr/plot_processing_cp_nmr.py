@@ -78,38 +78,35 @@ topspin_phase = {
 }
 
 # %%
-# Use the stored complex samples for the forward FFT in this Bruker
-# QSIM profile. Apply the fractional PKNL delay on the final FFT grid
-# together with the recorded phase. The constant term accounts for
-# centering the FFT and the sign convention of this profile.
-size = 8192
-
-
-def process_qsim(fid, phase_zero, phase_first):
-    acquisition = fid.meta.acquisition
-    delay = acquisition["fid_preparation"]["digital_filter"]["group_delay_points"]
-    acquired = fid[: acquisition["acquired_points"]]
-    work = scp.NDDataset(acquired.data, coordset=[acquired.x], units=fid.units)
-    work.meta.td = [acquired.size]
-    transformed = work.em(lb=50.0).fft(size=size)
-    phased = transformed.pk(
-        phc0=phase_zero + 180 * (1 - round(delay)),
-        phc1=phase_first + 360 * delay,
-        pivot=0,
-        rel=True,
+# PKNL reads the fractional delay from each acquisition and applies it
+# once on the final FFT grid. The manual angles reproduce the recorded
+# TopSpin phase at the first frequency bin.
+phased = [
+    scp.nmr.Experiment(fid).process(
+        apodization="em",
+        lb=50.0,
+        size=8192,
+        digital_filter="pknl",
+        phase="manual",
+        phc0=topspin_phase[expno][0],
+        phc1=topspin_phase[expno][1],
     )
-    params = fid.meta.nmr_processing["vendor_profile"]["parameters"]
-    bins = scp.Coord.arange(size)
-    phased.x = scp.Coord(
-        params["OFFSET"] - bins.data * (params["SW_p"] / params["SF"] / size),
-        units="ppm",
-        title="carbon-13 chemical shift",
-        rounding=False,
-    )
-    return phased
+    for expno, fid in acquisitions
+]
 
-
-phased = [process_qsim(fid, *topspin_phase[expno]) for expno, fid in acquisitions]
+# %%
+# Check the phase away from the main peak
+# ----------------------------------------
+# On experiments 88, 89 and 92, the recorded first-order angles leave
+# dispersion around 175 ppm. Use the first-order angle of experiment 86
+# as a reference for these three spectra, while preserving their phase
+# at the main peak near 71 ppm.
+for index, (expno, _) in enumerate(acquisitions):
+    if expno in (88, 89, 92):
+        spectrum = phased[index]
+        pivot = int(spectrum.x.loc2index(71.0))
+        phase_change = topspin_phase[86][1] - topspin_phase[expno][1]
+        phased[index] = spectrum.pk(phc1=phase_change, pivot=pivot, rel=True)
 
 # %%
 # Correct the baseline and integrate
