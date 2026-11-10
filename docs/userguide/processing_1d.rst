@@ -3,6 +3,29 @@
 Processing 1D NMR data
 ======================
 
+.. _nmr-processing-validation:
+
+Processing, validation, and qualification
+-----------------------------------------
+
+* **Processing** means applying operations to the data. For example, apply
+  exponential apodization and then an FFT to a time-domain ``NDDataset``.
+  When working step by step, you choose the operations and their order.
+* **Validation** is the set of checks made when you call
+  ``Experiment.process()``. The plugin checks whether it can run the
+  requested workflow on that dataset, using properties such as its domain,
+  dimensions and acquisition encoding. Individual core operations also
+  have their own input checks.
+* **Qualification** is evidence from testing a specific acquisition and
+  processing configuration. For example, the TopSpin EFP replay below was
+  compared with a TopSpin reference for the documented Bruker DQD profile.
+  That comparison applies to the settings covered by the reference tests.
+  A successful call to ``Experiment.process()`` tells you the input passed
+  the runtime checks.
+
+Processing a FID
+----------------
+
 Wrap a dataset in :class:`~spectrochempy_nmr.Experiment` and select explicit
 processing parameters:
 
@@ -12,7 +35,7 @@ processing parameters:
    result = experiment.process(apodization="em", lb=5.0, phase=None)
 
 The supported apodization modes are ``em``, ``gm`` and ``sp``. The result
-records the SpectroChemPy-owned call in
+records the workflow in
 ``result.meta.nmr_processing["scp_processing"]``. ``requested`` contains
 explicit user arguments and ``applied`` records operations actually executed.
 
@@ -25,17 +48,16 @@ dataset methods or as functions such as ``scp.em(experiment.dataset, lb=5.0)``.
    windowed = experiment.dataset.em(lb=5.0)
    spectrum = windowed.fft()
 
-The original FID is preserved by default in both workflows.
-Use ``Experiment.process()`` when you want the plugin to validate the
-processing sequence for the acquisition and record the operations it applies.
+Both approaches preserve the original FID by default. A supported complex
+JEOL 1D FID read with ``scp.nmr.read_jeol()`` can use either approach.
+For example, on the epicatechin JDF reference, ``Experiment.process()``
+produces a spectrum referenced in ppm, and the two core calls above
+produce a frequency axis in Hz.
 
-This workflow also applies to supported complex JEOL 1D FIDs. Read the
-``.jdf`` file with ``scp.nmr.read_jeol()``, then use
-``Experiment.process()`` or apply the core operations individually.
-For other 1D acquisitions, a workflow outside the scope of
-``Experiment.process()`` can still be processed step by step when the
-dataset meets each operation's requirements. For example, apodization
-and FFT require a suitable time-domain axis.
+For a 1D acquisition outside the scope of ``Experiment.process()``, you
+can still apply individual operations when the data meet their input
+requirements. For example, use a suitable time-domain axis for apodization
+and FFT.
 
 A pseudo-2D series contains ordinary 1D spectra that can be processed one
 spectrum at a time. For acquisitions with two Fourier dimensions, see
