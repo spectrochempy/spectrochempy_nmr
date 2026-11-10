@@ -7,6 +7,7 @@ from spectrochempy.core.units import ur
 from spectrochempy_nmr.pulsar import Coherence
 from spectrochempy_nmr.pulsar import Delay
 from spectrochempy_nmr.pulsar import IdealPulse
+from spectrochempy_nmr.pulsar import PassiveJ
 from spectrochempy_nmr.pulsar import Pulse
 from spectrochempy_nmr.pulsar import simulate_central_transition
 from spectrochempy_nmr.pulsar import simulate_csa
@@ -657,3 +658,37 @@ def test_rf_central_selection_allows_a_narrow_window():
     np.testing.assert_allclose(central.data, ideal.data, atol=1e-12, rtol=0)
     with pytest.raises(ValueError, match="spectral window"):
         simulate_pulse_sequence([IdealPulse(90)], **settings)
+
+
+def test_two_equivalent_passive_spins_give_one_two_one_triplet():
+    settings = dict(
+        spectral_width_hz=2000,
+        points=2001,
+        accuracy=2,
+        j_partners=(PassiveJ(0.5, 200), PassiveJ(0.5, 200)),
+    )
+    ideal = simulate_csa(anisotropy_hz=0, eta=0, **settings)
+    rf = simulate_pulse_sequence(
+        [IdealPulse(90)], spin=0.5, larmor_hz=100e6, **settings
+    )
+    selected = np.flatnonzero(ideal.data)
+    np.testing.assert_array_equal(ideal.x.data[selected], [-200, 0, 200])
+    np.testing.assert_allclose(ideal.data[selected], [0.25, 0.5, 0.25])
+    np.testing.assert_allclose(rf.data, ideal.data, atol=1e-12, rtol=0)
+
+
+def test_passive_j_offset_also_acts_during_preparation():
+    j_hz, delay = 400, 0.5e-3
+    result = simulate_pulse_sequence(
+        [IdealPulse(90), Delay(delay)],
+        spin=0.5,
+        larmor_hz=100e6,
+        spectral_width_hz=2000,
+        points=2001,
+        accuracy=2,
+        j_partners=[PassiveJ(0.5, j_hz)],
+    )
+    peaks = np.flatnonzero(np.abs(result.data) > 1e-10)
+    np.testing.assert_array_equal(result.x.data[peaks], [-j_hz / 2, j_hz / 2])
+    expected = np.exp(2j * np.pi * result.x.data[peaks] * delay) / 2
+    np.testing.assert_allclose(result.data[peaks], expected, atol=1e-12, rtol=0)

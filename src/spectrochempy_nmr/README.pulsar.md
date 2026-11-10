@@ -12,7 +12,7 @@ The simulation models the $+1/2 \leftrightarrow -1/2$ transition of an
 isolated half-integer spin $I\geq 3/2$, with second-order quadrupolar shifts, an ideal
 pulse, zero evolution delay and a powder distribution. The model supports
 a static powder or magic-angle spinning at the historical rotor angle
-of $54.736^\circ$. The ideal-pulse model excludes spin couplings, relaxation and line broadening. MAS
+of $54.736^\circ$. The ideal-pulse model includes optional passive isotropic J couplings. It excludes relaxation and line broadening. MAS
 sidebands here are sidebands of the central transition.
 
 ```python
@@ -343,6 +343,23 @@ selected transitions set the reference amplitude for an ideal x90
 pulse. An equal-delay Hahn echo tests refocusing in a static powder
 and over complete MAS rotor periods, including the predicted
 transverse attenuation.
+
+## Isotropic J coupling to passive partners
+
+`j_partners` accepts a sequence of `PassiveJ(spin, j_hz)` objects.
+For a partner that is never pulsed, the secular isotropic term
+$J I_z S_z$ is diagonal in its magnetic quantum number $m_S$.
+The observed-spin transition therefore gains the offset $Jm_S$.
+For multiple partners, sum their offsets. The ensemble uses equal
+populations of the partner states. Equivalent offsets are combined
+with their multiplicities, and the state product is limited to 256.
+
+For an ideal pulse, the offsets translate the bands without changing
+their modulation. For a finite preparation sequence the same offsets
+also act during pulses and delays. The simulator therefore averages
+the complex responses after propagating each distinct offset. Tests
+check the 1:2:1 triplet for two equivalent spin-1/2 partners and the
+opposite phase evolution of an isotropic doublet.
 
 ## Verification and performance
 

@@ -231,6 +231,35 @@ def _validate_grid(spectral_width_hz, spinning_hz, points, accuracy, sidebands):
         )
 
 
+@dataclass(frozen=True)
+class PassiveJ:
+    """Isotropic J coupling in Hz to an unpulsed spin."""
+
+    spin: float
+    j_hz: float
+
+
+def _passive_offsets(partners):
+    offsets = np.array([0.0])
+    for partner in partners:
+        if not isinstance(partner, PassiveJ):
+            raise TypeError("j_partners must contain PassiveJ instances.")
+        spin, coupling = _real_scalars(partner.spin, partner.j_hz)
+        if not 0.5 <= spin <= 16 or spin % 0.5 != 0:
+            raise ValueError(
+                "Passive partner spin must be from 1/2 to 16 in steps of 1/2."
+            )
+        if not coupling:
+            continue
+        levels = int(2 * spin + 1)
+        if offsets.size * levels > 256:
+            raise ValueError("Passive J coupling supports at most 256 partner states.")
+        projections = np.arange(levels) - spin
+        offsets = (offsets[:, None] + coupling * projections).ravel()
+    values, multiplicities = np.unique(offsets, return_counts=True)
+    return tuple(zip(values, multiplicities / offsets.size, strict=True))
+
+
 def _central_transition_profile(
     *,
     cq_hz,
@@ -247,6 +276,7 @@ def _central_transition_profile(
     csa_eta=0.0,
     csa_rotation=None,
     transitions="central",
+    j_partners=(),
 ):
     points, accuracy, sidebands = index(points), index(accuracy), index(sidebands)
     values = (
@@ -305,6 +335,7 @@ def _central_transition_profile(
         spinning_hz,
         accuracy,
         sidebands,
+        _passive_offsets(j_partners),
     )
     if transitions == "central":
         harmonics = _quadrupolar_harmonics(directions, quadrupolar_eta, angle)
@@ -397,18 +428,23 @@ def _powder_profile(
     spinning_hz,
     accuracy,
     sidebands,
+    passive_offsets=((0.0, 1.0),),
 ):
     """Integrate the selected orders for a set of vertex harmonics."""
     frequencies = shift_hz + harmonics[0].real
     axis = np.linspace(-spectral_width_hz / 2, spectral_width_hz / 2, points)
     band_offset = sidebands * spinning_hz
     if (
-        frequencies.min() - band_offset < axis[0]
-        or frequencies.max() + band_offset > axis[-1]
+        frequencies.min() - band_offset + passive_offsets[0][0] < axis[0]
+        or frequencies.max() + band_offset + passive_offsets[-1][0] > axis[-1]
     ):
         raise ValueError("The spectral window must contain the requested bands.")
     if not spinning_hz:
-        spectrum = _deposit_triangles(axis, frequencies, weights, triangles)
+        spectrum = np.zeros_like(axis)
+        for offset, population in passive_offsets:
+            spectrum += population * _deposit_triangles(
+                axis, frequencies + offset, weights, triangles
+            )
         return axis, spectrum
 
     rotor_samples = spectral_width_hz / spinning_hz
@@ -445,9 +481,11 @@ def _powder_profile(
     # Deposit raw band masses on the same grid to preserve relative areas.
     spectrum = np.zeros_like(axis)
     for band_order, intensity in zip(band_orders, band_intensity.T, strict=True):
-        spectrum += _deposit_triangles(
-            axis, frequencies + band_order * spinning_hz, weights * intensity, triangles
-        )
+        band = frequencies + band_order * spinning_hz
+        for offset, population in passive_offsets:
+            spectrum += population * _deposit_triangles(
+                axis, band + offset, weights * intensity, triangles
+            )
     return axis, spectrum
 
 
@@ -466,6 +504,7 @@ def simulate_central_transition(
     csa_anisotropy_hz=0.0,
     csa_eta=0.0,
     csa_rotation=None,
+    j_partners=(),
 ):
     """Simulate the central transition of an isolated spin as an NDDataset.
 
@@ -496,6 +535,7 @@ def simulate_central_transition(
         csa_anisotropy_hz=csa_anisotropy_hz,
         csa_eta=csa_eta,
         csa_rotation=csa_rotation,
+        j_partners=j_partners,
     )
     return _as_dataset(axis, profile, "PULSAR central transition")
 
@@ -516,6 +556,7 @@ def simulate_quadrupolar(
     csa_anisotropy_hz=0.0,
     csa_eta=0.0,
     csa_rotation=None,
+    j_partners=(),
 ):
     """Simulate a selected set of quadrupolar transitions of one spin.
 
@@ -541,6 +582,7 @@ def simulate_quadrupolar(
         csa_anisotropy_hz=csa_anisotropy_hz,
         csa_eta=csa_eta,
         csa_rotation=csa_rotation,
+        j_partners=j_partners,
     )
     return _as_dataset(axis, profile, "PULSAR quadrupolar spectrum")
 
@@ -555,6 +597,7 @@ def simulate_csa(
     spinning_hz=0.0,
     accuracy=16,
     sidebands=0,
+    j_partners=(),
 ):
     """Simulate first-order chemical shift anisotropy for an isolated spin.
 
@@ -585,6 +628,7 @@ def simulate_csa(
         spinning_hz,
         accuracy,
         sidebands,
+        _passive_offsets(j_partners),
     )
     return _as_dataset(
         axis, profile / profile.sum(), "PULSAR chemical shift anisotropy"
@@ -868,6 +912,7 @@ def simulate_pulse_sequence(
     t2_s=None,
     receiver_phase_deg=0.0,
     transitions="all",
+    j_partners=(),
 ):
     """Simulate a sequence of pulses, delays and coherence selections.
 
@@ -967,33 +1012,40 @@ def simulate_pulse_sequence(
             harmonics[:, i] = terms[1:].T
     axis = np.linspace(-spectral_width_hz / 2, spectral_width_hz / 2, points)
     band_offset = sidebands * spinning_hz
+    passive_offsets = _passive_offsets(j_partners)
     if (
-        offsets[:, selected].min() - band_offset < axis[0]
-        or offsets[:, selected].max() + band_offset > axis[-1]
+        offsets[:, selected].min() - band_offset + passive_offsets[0][0] < axis[0]
+        or offsets[:, selected].max() + band_offset + passive_offsets[-1][0] > axis[-1]
     ):
         raise ValueError("The spectral window must contain the requested transitions.")
 
     ix, iy, iz = _spin_operators(spin)
     prepared = _prepare_events(events, ix, iy, iz, spinning_hz, max_rf_step_s, t2_s)
-    signals = _sequence_signals(
-        offsets,
-        harmonics if spinning_hz else None,
-        strengths,
-        iz,
-        prepared,
-        spinning_hz,
-        count if spinning_hz else 1,
-        sidebands,
-    )
-    signals *= np.exp(1j * np.deg2rad(receiver_phase_deg))
-
+    receiver = np.exp(1j * np.deg2rad(receiver_phase_deg))
     profile = np.zeros(points, dtype=complex)
-    for i in np.flatnonzero(selected):
-        for j, order in enumerate(range(-sidebands, sidebands + 1)):
-            signal = weights * signals[:, i, j]
-            frequency = offsets[:, i] + order * spinning_hz
-            profile.real += _deposit_triangles(axis, frequency, signal.real, triangles)
-            profile.imag += _deposit_triangles(axis, frequency, signal.imag, triangles)
+    for offset, population in passive_offsets:
+        shifted = offsets + offset
+        signals = _sequence_signals(
+            shifted,
+            harmonics if spinning_hz else None,
+            strengths,
+            iz,
+            prepared,
+            spinning_hz,
+            count if spinning_hz else 1,
+            sidebands,
+        )
+        signals *= receiver * population
+        for i in np.flatnonzero(selected):
+            for j, order in enumerate(range(-sidebands, sidebands + 1)):
+                signal = weights * signals[:, i, j]
+                frequency = shifted[:, i] + order * spinning_hz
+                profile.real += _deposit_triangles(
+                    axis, frequency, signal.real, triangles
+                )
+                profile.imag += _deposit_triangles(
+                    axis, frequency, signal.imag, triangles
+                )
     ideal_signal = strengths[selected].sum() / 2
     powder_mass = weights[triangles].sum()
     return _as_dataset(
