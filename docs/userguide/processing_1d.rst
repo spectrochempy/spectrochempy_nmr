@@ -1,5 +1,7 @@
-Validated 1D processing
-=======================
+.. _validated-1d-processing:
+
+Processing 1D NMR data
+======================
 
 Wrap a dataset in :class:`~spectrochempy_nmr.Experiment` and select explicit
 processing parameters:
@@ -26,6 +28,14 @@ dataset methods or as functions such as ``scp.em(experiment.dataset, lb=5.0)``.
 The original FID is preserved by default in both workflows.
 Use ``Experiment.process()`` when you want the plugin to validate the
 processing sequence for the acquisition and record the operations it applies.
+
+This workflow also applies to supported complex JEOL 1D FIDs. Read the
+``.jdf`` file with ``scp.nmr.read_jeol()``, then use
+``Experiment.process()`` or apply the core operations individually.
+For other 1D acquisitions, a workflow outside the scope of
+``Experiment.process()`` can still be processed step by step when the
+dataset meets each operation's requirements. For example, apodization
+and FFT require a suitable time-domain axis.
 
 A pseudo-2D series contains ordinary 1D spectra that can be processed one
 spectrum at a time. For acquisitions with two Fourier dimensions, see
