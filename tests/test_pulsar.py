@@ -6,6 +6,7 @@ import pytest
 from spectrochempy.core.units import ur
 from spectrochempy_nmr.pulsar import simulate_central_transition
 from spectrochempy_nmr.pulsar import simulate_csa
+from spectrochempy_nmr.pulsar import simulate_quadrupolar
 
 
 @pytest.mark.parametrize(
@@ -139,7 +140,7 @@ def test_mas_sidebands_match_asymmetric_fortran_reference():
     )
 
 
-def _second_order_offsets(directions, cq_hz, eta, larmor_hz, spin):
+def _perturbative_level_offsets(directions, cq_hz, eta, larmor_hz, spin):
     # Work directly in the quadrupolar principal axes. Diagonalize the
     # Zeeman term for each field direction and apply second-order
     # perturbation theory to the central pair of Zeeman levels.
@@ -166,8 +167,13 @@ def _second_order_offsets(directions, cq_hz, eta, larmor_hz, spin):
     gaps = energies[..., :, None] - energies[..., None, :]
     gaps[..., np.arange(levels), np.arange(levels)] = np.inf
     corrections = (np.abs(matrix_elements) ** 2 / gaps).sum(axis=-1)
-    center = levels // 2
-    return corrections[..., center] - corrections[..., center - 1]
+    return matrix_elements.diagonal(axis1=-2, axis2=-1).real, corrections
+
+
+def _second_order_offsets(directions, cq_hz, eta, larmor_hz, spin):
+    _, second = _perturbative_level_offsets(directions, cq_hz, eta, larmor_hz, spin)
+    center = second.shape[-1] // 2
+    return second[..., center] - second[..., center - 1]
 
 
 @pytest.mark.parametrize("spin", [1.5, 2.5, 3.5])
@@ -352,3 +358,51 @@ def test_aligned_csa_matches_explicit_identity_rotation():
     implicit = simulate_central_transition(**settings)
     explicit = simulate_central_transition(**settings, csa_rotation=np.eye(3))
     np.testing.assert_allclose(implicit.data, explicit.data, atol=1e-12, rtol=0)
+
+
+@pytest.mark.parametrize(
+    ("spin", "transitions"), [(1, "all"), (1.5, "satellites"), (2.5, "all")]
+)
+def test_static_quadrupolar_multiplet_matches_spin_hamiltonian(spin, transitions):
+    cq_hz, eta, larmor_hz = 1e6, 0.65, 100e6
+    dataset = simulate_quadrupolar(
+        cq_hz=cq_hz,
+        eta=eta,
+        larmor_hz=larmor_hz,
+        spectral_width_hz=2e6,
+        points=32768,
+        accuracy=32,
+        spin=spin,
+        transitions=transitions,
+    )
+    cosine, weights = np.polynomial.legendre.leggauss(32)
+    z, phi = np.meshgrid(cosine, 2 * np.pi * np.arange(64) / 64, indexing="ij")
+    sine = np.sqrt(1 - z**2)
+    directions = np.stack((sine * np.cos(phi), sine * np.sin(phi), z), axis=-1)
+    first, second = _perturbative_level_offsets(directions, cq_hz, eta, larmor_hz, spin)
+    offsets = np.diff(first + second, axis=-1)
+    # The Zeeman eigenstates are ordered from m=+I to m=-I.
+    m = np.arange(spin, -spin, -1)
+    strengths = spin * (spin + 1) - m * (m - 1)
+    if transitions == "satellites":
+        strengths[m == 0.5] = 0
+    strengths = strengths / strengths.sum()
+    ref_mean = weights @ (offsets @ strengths).mean(axis=1) / 2
+    ref_std = np.sqrt(
+        weights @ (((offsets - ref_mean) ** 2) @ strengths).mean(axis=1) / 2
+    )
+
+    frequency = dataset.x.data
+    centers = frequency + (frequency[1] - frequency[0]) / 2
+    profile = dataset.data
+    mean = profile @ centers
+    assert profile.sum() == pytest.approx(1)
+    assert mean == pytest.approx(ref_mean, abs=8)
+    assert np.sqrt(profile @ (centers - mean) ** 2) == pytest.approx(ref_std, rel=4e-4)
+
+
+def test_quadrupolar_multiplet_rejects_unbounded_spin():
+    with pytest.raises(ValueError, match="multiplets support spin up to 16"):
+        simulate_quadrupolar(
+            cq_hz=1e6, eta=0, larmor_hz=100e6, spectral_width_hz=1e6, spin=1e9
+        )

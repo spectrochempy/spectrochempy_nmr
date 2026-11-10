@@ -12,8 +12,7 @@ The simulation models the $+1/2 \leftrightarrow -1/2$ transition of an
 isolated half-integer spin $I\geq 3/2$, with second-order quadrupolar shifts, an ideal
 pulse, zero evolution delay and a powder distribution. The model supports
 a static powder or magic-angle spinning at the historical rotor angle
-of $54.736^\circ$. The model excludes spin couplings, satellite transitions,
-relaxation and line broadening. MAS
+of $54.736^\circ$. The ideal-pulse model excludes spin couplings, relaxation and line broadening. MAS
 sidebands here are sidebands of the central transition.
 
 ```python
@@ -111,6 +110,37 @@ include the conjugate negative harmonics. The resulting coefficients
 $H_l$ are in Hz. The mean transition frequency for a vertex is
 $f_0=\text{shift}+\operatorname{Re}H_0$. For a static powder,
 $\theta_r=0$ and only $f_0$ is used.
+
+## Quadrupolar satellite transitions
+
+`simulate_quadrupolar` uses all adjacent Zeeman transitions by
+default and supports both integer and half-integer spins up to 16. For
+half-integer spins select `transitions="satellites"` to omit
+the central transition, or `transitions="central"` to select it.
+Use a window wide enough to cover the selected transitions and MAS
+orders.
+
+For the pair $m \to m-1$, define $p=m(m-1)$, $A=I(I+1)$ and
+$K=3C_Q/[4I(2I-1)]$. In the physical EFG axes the first-order
+frequency has the same rank-two form as a CSA tensor with
+$\Delta=-K(2m-1)$ and the transverse asymmetry sign reversed.
+The second-order harmonics use the Wigner products above with
+transition-specific factors,
+
+$$
+a_1=-\tfrac12(24p-4A+9), \qquad
+a_2=-\tfrac14(12p-4A+6).
+$$
+
+Their frequency scale is $K^2/\nu_0$ and the nonzero harmonics are
+doubled as before. Both orders and any CSA contribution are combined
+before computing the rotor phase for each transition. Each spectrum
+is weighted by $A-p$, proportional to the squared transverse
+matrix element for ideal excitation and detection. Raw contributions
+are summed before normalization over the requested transitions and
+orders, preserving their relative intensities. Static multiplet tests
+compare the first- and second-order moments to Zeeman-basis perturbation
+theory for integer and half-integer spins.
 
 ## Chemical shift anisotropy
 

@@ -118,8 +118,8 @@ def _validate_rotation(rotation):
     return matrix
 
 
-def _quadrupolar_harmonics(directions, eta, angle):
-    """Return the rank-two tensor products for the central transition."""
+def _quadrupolar_harmonics(directions, eta, angle, factors=(6, 3)):
+    """Return second-order rank-two tensor products for one transition."""
     tensor = _rank_two_tensor(directions, eta)
     c, s = np.cos(angle), np.sin(angle)
     root = np.sqrt(3 / 8)
@@ -142,7 +142,9 @@ def _quadrupolar_harmonics(directions, eta, angle):
         ],
     )
     result = np.zeros_like(tensor)
-    for order, (factor, column) in enumerate(zip((6, 3), columns), start=1):
+    for order, (factor, column) in enumerate(
+        zip(factors, columns, strict=True), start=1
+    ):
         positive = np.asarray(column)
         negative = positive[::-1] * (-1.0) ** (np.arange(-2, 3) + order)
         for harmonic in range(5):
@@ -233,6 +235,7 @@ def _central_transition_profile(
     csa_anisotropy_hz=0.0,
     csa_eta=0.0,
     csa_rotation=None,
+    transitions="central",
 ):
     points, accuracy, sidebands = index(points), index(accuracy), index(sidebands)
     values = (
@@ -262,8 +265,21 @@ def _central_transition_profile(
         csa_anisotropy_hz,
         csa_eta,
     ) = values
-    if spin < 1.5 or spin % 1 != 0.5:
-        raise ValueError("spin must be a half-integer greater than or equal to 3/2.")
+    if transitions not in ("central", "satellites", "all"):
+        raise ValueError("transitions must be 'central', 'satellites', or 'all'.")
+    if transitions == "central":
+        if spin < 1.5 or spin % 1 != 0.5:
+            raise ValueError(
+                "spin must be a half-integer greater than or equal to 3/2."
+            )
+    elif spin < 1 or spin % 1 not in (0, 0.5):
+        raise ValueError(
+            "spin must be an integer or half-integer greater than or equal to 1."
+        )
+    if transitions != "central" and spin > 16:
+        raise ValueError("Quadrupolar multiplets support spin up to 16.")
+    if transitions == "satellites" and spin % 1 == 0:
+        raise ValueError("For an integer spin, use transitions='all'.")
     if not 0 <= eta <= 1 or not 0 <= csa_eta <= 1:
         raise ValueError("eta and csa_eta must lie between 0 and 1.")
     if larmor_hz <= 0:
@@ -276,22 +292,19 @@ def _central_transition_profile(
     hemisphere = bool(csa_anisotropy_hz and rotation is not None)
     directions, weights, triangles = _powder_mesh(accuracy, hemisphere)
     angle = np.deg2rad(54.736) if spinning_hz else 0
-    # The historical quadrupolar tensor interchanges the transverse axes.
-    # Use the physical EFG frame when the CSA orientation makes them observable.
-    quadrupolar_eta = -eta if csa_anisotropy_hz else eta
-    harmonics = _quadrupolar_harmonics(directions, quadrupolar_eta, angle)
-    # For the central pair, both second-order spin factors scale together
-    # relative to I=3/2. The Wigner products themselves are independent of I.
-    spin_scale = 3 * (spin + 1.5) / (4 * spin**2 * (spin - 0.5))
-    harmonics *= spin_scale * cq_hz**2 / (16 * larmor_hz)
     if hemisphere:
-        harmonics += _rotated_csa_harmonics(
+        csa = _rotated_csa_harmonics(
             directions, csa_anisotropy_hz, csa_eta, angle, rotation
         )
     elif csa_anisotropy_hz:
-        harmonics += _csa_harmonics(directions, csa_anisotropy_hz, csa_eta, angle)
-    return _powder_profile(
-        harmonics,
+        csa = _csa_harmonics(directions, csa_anisotropy_hz, csa_eta, angle)
+    else:
+        csa = 0.0
+
+    # The historical quadrupolar tensor interchanges the transverse axes.
+    # Use the physical EFG frame when the CSA orientation makes them observable.
+    quadrupolar_eta = -eta if csa_anisotropy_hz else eta
+    grid = (
         weights,
         triangles,
         shift_hz,
@@ -301,6 +314,37 @@ def _central_transition_profile(
         accuracy,
         sidebands,
     )
+    if transitions == "central":
+        harmonics = _quadrupolar_harmonics(directions, quadrupolar_eta, angle)
+        # For the central pair both spin factors scale together relative to I=3/2.
+        spin_scale = 3 * (spin + 1.5) / (4 * spin**2 * (spin - 0.5))
+        harmonics *= spin_scale * cq_hz**2 / (16 * larmor_hz)
+        axis, mass = _powder_profile(harmonics + csa, *grid)
+        return axis, mass / mass.sum()
+
+    # First-order and second-order terms differ for each m -> m-1 pair.
+    # The ideal excitation and transverse detection weight each pair by
+    # the squared transition matrix element, up to a common factor.
+    interaction = 3 * cq_hz / (4 * spin * (2 * spin - 1))
+    first_order = _csa_harmonics(directions, -interaction, quadrupolar_eta, angle)
+    second_order_scale = interaction**2 / larmor_hz
+    spin_squared = spin * (spin + 1)
+    spectrum = np.zeros(points)
+    for index_from_top in range(int(2 * spin)):
+        m = spin - index_from_top
+        if transitions == "satellites" and m == 0.5:
+            continue
+        pair = m * (m - 1)
+        factors = (
+            -0.5 * (24 * pair - 4 * spin_squared + 9),
+            -0.25 * (12 * pair - 4 * spin_squared + 6),
+        )
+        harmonics = _quadrupolar_harmonics(directions, quadrupolar_eta, angle, factors)
+        harmonics *= second_order_scale
+        harmonics += (2 * m - 1) * first_order + csa
+        axis, mass = _powder_profile(harmonics, *grid)
+        spectrum += (spin_squared - pair) * mass
+    return axis, spectrum / spectrum.sum()
 
 
 def _powder_profile(
@@ -325,7 +369,7 @@ def _powder_profile(
         raise ValueError("The spectral window must contain the requested bands.")
     if not spinning_hz:
         spectrum = _deposit_triangles(axis, frequencies, weights, triangles)
-        return axis, spectrum / spectrum.sum()
+        return axis, spectrum
 
     rotor_samples = spectral_width_hz / spinning_hz
     if rotor_samples >= 4095.5:
@@ -364,7 +408,7 @@ def _powder_profile(
         spectrum += _deposit_triangles(
             axis, frequencies + band_order * spinning_hz, weights * intensity, triangles
         )
-    return axis, spectrum / spectrum.sum()
+    return axis, spectrum
 
 
 def simulate_central_transition(
@@ -416,6 +460,51 @@ def simulate_central_transition(
     return _as_dataset(axis, profile, "PULSAR central transition")
 
 
+def simulate_quadrupolar(
+    *,
+    cq_hz,
+    eta,
+    larmor_hz,
+    spectral_width_hz,
+    spin=1.5,
+    transitions="all",
+    points=8192,
+    shift_hz=0.0,
+    spinning_hz=0.0,
+    accuracy=16,
+    sidebands=0,
+    csa_anisotropy_hz=0.0,
+    csa_eta=0.0,
+    csa_rotation=None,
+):
+    """Simulate a selected set of quadrupolar transitions of one spin.
+
+    Multiplet calculations support spin up to 16. Use all transitions
+    for integer spins. Half-integer spins also
+    support "central" or "satellites". Satellites include first- and
+    second-order shifts. Intensities are normalized once over the
+    requested transitions and MAS orders. See simulate_central_transition
+    for frequency, powder mesh and CSA conventions.
+    """
+    axis, profile = _central_transition_profile(
+        cq_hz=cq_hz,
+        eta=eta,
+        larmor_hz=larmor_hz,
+        spectral_width_hz=spectral_width_hz,
+        spin=spin,
+        transitions=transitions,
+        points=points,
+        shift_hz=shift_hz,
+        spinning_hz=spinning_hz,
+        accuracy=accuracy,
+        sidebands=sidebands,
+        csa_anisotropy_hz=csa_anisotropy_hz,
+        csa_eta=csa_eta,
+        csa_rotation=csa_rotation,
+    )
+    return _as_dataset(axis, profile, "PULSAR quadrupolar spectrum")
+
+
 def simulate_csa(
     *,
     anisotropy_hz,
@@ -461,7 +550,9 @@ def simulate_csa(
         accuracy,
         sidebands,
     )
-    return _as_dataset(axis, profile, "PULSAR chemical shift anisotropy")
+    return _as_dataset(
+        axis, profile / profile.sum(), "PULSAR chemical shift anisotropy"
+    )
 
 
 def _as_dataset(axis, profile, name):
