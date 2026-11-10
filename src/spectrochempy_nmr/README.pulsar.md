@@ -351,6 +351,18 @@ pulse. An equal-delay Hahn echo tests refocusing in a static powder
 and over complete MAS rotor periods, including the predicted
 transverse attenuation.
 
+## Combining preparation pathways
+
+Pass a `PhaseCycle(scans, coefficients=None)` as the sequence input
+to combine several explicit pulse or coherence-selection pathways.
+Each scan is an independent sequence starting from thermal equilibrium.
+With no coefficients, the simulator takes their arithmetic mean,
+as in the historical coherence-pathway list. Explicit real or complex
+coefficients are used as given and can encode receiver phase cycling.
+For a spectrum, each scan is detected at its own final rotor phase
+before the signals are combined. For density output, complex weighting
+returns the linear combination of prepared deviation matrices.
+
 ## Isotropic J coupling to passive partners
 
 `j_partners` accepts a sequence of `PassiveJ(spin, j_hz)` objects.

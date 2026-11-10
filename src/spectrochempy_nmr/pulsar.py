@@ -13,7 +13,7 @@ See the adjacent README.pulsar.md for the equations and implementation notes.
 
 from dataclasses import dataclass
 from functools import lru_cache
-from numbers import Real
+from numbers import Complex, Real
 from operator import index
 
 import numpy as np
@@ -765,6 +765,37 @@ class Coherence:
     order: int
 
 
+@dataclass(frozen=True)
+class PhaseCycle:
+    """Explicit pulse or coherence pathways and their optional coefficients."""
+
+    scans: tuple
+    coefficients: tuple | None = None
+
+
+def _prepare_scans(events, *args, **kwargs):
+    if not isinstance(events, PhaseCycle):
+        return ((1.0, _prepare_events(events, *args, **kwargs)),)
+    scans = tuple(events.scans)
+    if not 1 <= len(scans) <= 256:
+        raise ValueError("A phase cycle must contain 1 to 256 scans.")
+    if events.coefficients is None:
+        coefficients = (1 / len(scans),) * len(scans)
+    else:
+        coefficients = tuple(events.coefficients)
+        if len(coefficients) != len(scans) or not all(
+            isinstance(weight, Complex) for weight in coefficients
+        ):
+            raise ValueError("Supply one numeric coefficient per phase-cycle scan.")
+        coefficients = tuple(map(complex, coefficients))
+        if not np.isfinite(coefficients).all():
+            raise ValueError("Phase-cycle coefficients must be finite.")
+    return tuple(
+        (weight, _prepare_events(scan, *args, **kwargs))
+        for weight, scan in zip(coefficients, scans, strict=True)
+    )
+
+
 def _rf_axis(ix, iy, phase_deg):
     phase = np.deg2rad(phase_deg)
     return np.cos(phase) * ix + np.sin(phase) * iy
@@ -1008,14 +1039,22 @@ def _powder_density(
     vertex_weights = weights * np.bincount(triangles.ravel(), minlength=weights.size)
     density = np.zeros_like(initial, dtype=complex)
     for offset, population in passive_offsets:
-        for block, states, _ in _sequence_state_blocks(
-            offsets + offset * passive_shift, terms, initial, events, spinning_hz, count
-        ):
-            if spinning_hz:
-                states = states.mean(axis=1)
-            density += population * np.einsum(
-                "v,vab->ab", vertex_weights[block], states
-            )
+        for coefficient, prepared in events:
+            for block, states, _ in _sequence_state_blocks(
+                offsets + offset * passive_shift,
+                terms,
+                initial,
+                prepared,
+                spinning_hz,
+                count,
+            ):
+                if spinning_hz:
+                    states = states.mean(axis=1)
+                density += (
+                    population
+                    * coefficient
+                    * np.einsum("v,vab->ab", vertex_weights[block], states)
+                )
     return density / vertex_weights.sum()
 
 
@@ -1041,30 +1080,31 @@ def _sequence_signals(
 ):
     """Average complex band amplitudes over rotor phase at preparation onset."""
     band_orders = np.arange(-sidebands, sidebands + 1)
-    amplitudes = np.empty(
+    amplitudes = np.zeros(
         (offsets.shape[0], strengths.size, band_orders.size), dtype=complex
     )
-    for block, density, gamma_end in _sequence_state_blocks(
-        offsets, terms, initial, events, spinning_hz, count
-    ):
-        if readout is None:
-            coherence = np.diagonal(density, offset=1, axis1=-2, axis2=-1)
-        else:
-            coherence = density[..., readout[0], readout[1]]
-        signal = -1j * np.sqrt(strengths) * coherence
-        if not spinning_hz:
-            amplitudes[block, :, 0] = signal
-            continue
-        detected_terms = (terms if readout_terms is None else readout_terms)[block]
-        wave = np.exp(
-            1j * _phase_integral(detected_terms, gamma_end, spinning_hz)
-        ).swapaxes(-1, -2)
-        # Opposite-sign Fourier sums for detection and preparation.
-        detection = np.fft.fft(wave, axis=-1)[..., band_orders] / count
-        preparation = np.fft.ifft(signal.swapaxes(-1, -2) * wave.conj(), axis=-1)[
-            ..., band_orders
-        ]
-        amplitudes[block] = detection * preparation
+    for coefficient, prepared in events:
+        for block, density, gamma_end in _sequence_state_blocks(
+            offsets, terms, initial, prepared, spinning_hz, count
+        ):
+            if readout is None:
+                coherence = np.diagonal(density, offset=1, axis1=-2, axis2=-1)
+            else:
+                coherence = density[..., readout[0], readout[1]]
+            signal = -1j * np.sqrt(strengths) * coherence
+            if not spinning_hz:
+                amplitudes[block, :, 0] += coefficient * signal
+                continue
+            detected_terms = (terms if readout_terms is None else readout_terms)[block]
+            wave = np.exp(
+                1j * _phase_integral(detected_terms, gamma_end, spinning_hz)
+            ).swapaxes(-1, -2)
+            # Opposite-sign Fourier sums for detection and preparation.
+            detection = np.fft.fft(wave, axis=-1)[..., band_orders] / count
+            preparation = np.fft.ifft(signal.swapaxes(-1, -2) * wave.conj(), axis=-1)[
+                ..., band_orders
+            ]
+            amplitudes[block] += coefficient * detection * preparation
     return amplitudes
 
 
@@ -1242,7 +1282,7 @@ def simulate_pulse_sequence(
         if spinning_hz:
             harmonics[:, i] = terms[1:].T
     ix, iy, iz = _spin_operators(spin)
-    prepared = _prepare_events(events, ix, iy, iz, spinning_hz, max_rf_step_s, t2_s)
+    prepared = _prepare_scans(events, ix, iy, iz, spinning_hz, max_rf_step_s, t2_s)
     passive_offsets = _passive_offsets(j_partners)
     if output == "density":
         return _powder_density(
@@ -1501,7 +1541,7 @@ def simulate_coupled_sequence(
     level_differences = np.diff(levels, axis=1)
     product_offsets = level_differences[..., 0].real
     product_terms = level_differences[..., 1:] if spinning_hz else None
-    prepared = _prepare_events(
+    prepared = _prepare_scans(
         events,
         *ops_a,
         spinning_hz,

@@ -8,6 +8,7 @@ from spectrochempy_nmr.pulsar import Coherence
 from spectrochempy_nmr.pulsar import Delay
 from spectrochempy_nmr.pulsar import IdealPulse
 from spectrochempy_nmr.pulsar import PassiveJ
+from spectrochempy_nmr.pulsar import PhaseCycle
 from spectrochempy_nmr.pulsar import Pulse
 from spectrochempy_nmr.pulsar import SpinSite
 from spectrochempy_nmr.pulsar import simulate_central_transition
@@ -891,3 +892,39 @@ def test_probe_bandwidth_cannot_return_nan_when_all_intensity_underflows():
             probe_bandwidth_hz=1e-160,
             accuracy=2,
         )
+
+
+def test_phase_cycle_cancels_or_recovers_opposite_pulse_phases():
+    scans = ((IdealPulse(90),), (IdealPulse(-90),))
+    settings = dict(spin=0.5, larmor_hz=100e6, spectral_width_hz=1000, accuracy=2)
+    cancelled = simulate_pulse_sequence(PhaseCycle(scans), **settings)
+    recovered = simulate_pulse_sequence(PhaseCycle(scans, (0.5, -0.5)), **settings)
+    assert np.abs(cancelled.data).sum() < 1e-12
+    assert recovered.data.sum() == pytest.approx(1, abs=1e-12)
+
+
+@pytest.mark.parametrize("output", ["spectrum", "density"])
+def test_mas_phase_cycle_combines_each_scan_at_its_own_rotor_phase(output):
+    scans = (
+        (IdealPulse(90), Delay(23e-6)),
+        (IdealPulse(90, 27), Delay(47e-6)),
+    )
+    weights = (0.2 + 0.3j, -0.5j)
+    settings = dict(
+        spin=0.5,
+        larmor_hz=100e6,
+        csa_anisotropy_hz=2000,
+        csa_eta=0.3,
+        spectral_width_hz=20e3,
+        spinning_hz=5e3,
+        accuracy=2,
+        output=output,
+    )
+    results = [simulate_pulse_sequence(scan, **settings) for scan in scans]
+    combined = simulate_pulse_sequence(PhaseCycle(scans, weights), **settings)
+    if output == "spectrum":
+        results = [result.data for result in results]
+        combined = combined.data
+    np.testing.assert_allclose(
+        combined, weights[0] * results[0] + weights[1] * results[1], atol=1e-12
+    )
