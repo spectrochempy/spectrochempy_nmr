@@ -1403,9 +1403,18 @@ def _polar_frame(directions):
 
 
 def _site_transitions(directions, angle, parameters, harmonic_count):
-    spin, larmor, shift, cq, eta, csa, csa_eta, efg_rotation, csa_rotation, _ = (
-        parameters
-    )
+    (
+        spin,
+        larmor,
+        shift,
+        cq,
+        eta,
+        csa,
+        csa_eta,
+        efg_rotation,
+        csa_rotation,
+        _,
+    ) = parameters
     if efg_rotation is None:
         local = directions
     else:
@@ -1473,10 +1482,14 @@ def simulate_coupled_sequence(
     with partner indices varying fastest.
     """
     points, accuracy, sidebands = index(points), index(accuracy), index(sidebands)
-    j_hz, spectral_width_hz, spinning_hz, max_rf_step_s, receiver_phase_deg = (
-        _real_scalars(
-            j_hz, spectral_width_hz, spinning_hz, max_rf_step_s, receiver_phase_deg
-        )
+    (
+        j_hz,
+        spectral_width_hz,
+        spinning_hz,
+        max_rf_step_s,
+        receiver_phase_deg,
+    ) = _real_scalars(
+        j_hz, spectral_width_hz, spinning_hz, max_rf_step_s, receiver_phase_deg
     )
     if max_rf_step_s <= 0:
         raise ValueError("max_rf_step_s must be positive.")

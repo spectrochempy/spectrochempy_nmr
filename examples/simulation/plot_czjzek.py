@@ -1,6 +1,6 @@
 """
 Powder spectra from Czjzek distributions
-=======================================
+========================================
 
 The standard Czjzek model describes a statistically isotropic distribution
 of electric-field-gradient tensors. Its extended form adds that disorder
@@ -17,7 +17,7 @@ from spectrochempy_nmr.czjzek import simulate_czjzek
 
 # %%
 # Define disorder and a persistent local tensor
-# -------------------------------------------
+# ---------------------------------------------
 # Frequencies are in Hz. The noise scale is the standard deviation of each
 # orthonormal tensor coordinate. A fixed seed keeps these nodes reproducible.
 standard = CzjzekDistribution(sigma_hz=0.7e6, shift_hz=5000)
@@ -46,7 +46,7 @@ axes[1].legend()
 
 # %%
 # Average the spectra over the distribution
-# ----------------------------------------
+# -----------------------------------------
 # This small node count keeps the example quick. Increase both ``samples``
 # and powder ``accuracy`` when checking convergence for an actual fit.
 fig, ax = plt.subplots(figsize=(8, 3.4), constrained_layout=True)

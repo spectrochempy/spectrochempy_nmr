@@ -1,5 +1,5 @@
 Czjzek distributions of quadrupolar tensors
-==========================================
+===========================================
 
 The NMR module can average powder spectra over an electric-field-gradient
 (EFG) distribution. The standard Czjzek model describes isotropic Gaussian
@@ -7,7 +7,7 @@ disorder in the five independent coordinates of a symmetric traceless
 tensor. The extended model adds that disorder to a persistent local tensor.
 
 Construct a model and simulate its powder spectrum
--------------------------------------------------
+--------------------------------------------------
 
 .. code-block:: python
 

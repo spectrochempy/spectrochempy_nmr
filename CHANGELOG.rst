@@ -1,7 +1,22 @@
 Changelog
-==
+=========
+
 This changelog covers the independently versioned ``spectrochempy-nmr``
 distribution. The sections below describe changes in each plugin release.
+
+
+Unreleased
+----------
+
+Added
+~~~~~
+
+* Add experimental PULSAR powder simulation and central-transition fitting.
+  The NumPy port supports quadrupolar and CSA interactions, spinning bands,
+  RF preparation sequences and secular isotropic J coupling.
+
+* Add standard and extended Czjzek EFG distributions with reproducible tensor
+  sampling, ensemble powder simulation and executable gallery examples.
 
 
 0.3.0
@@ -29,12 +44,6 @@ Added
 
 * Read qualified NMRPipe, nmrML and NMR JCAMP-DX profiles via
   ``scp.nmr.read(path, protocol="interop")``.
-* Add standard and extended Czjzek EFG distributions with reproducible tensor
-  sampling, ensemble powder simulation and executable gallery examples.
-
-* Add experimental PULSAR powder simulation and central-transition fitting.
-  The NumPy port supports quadrupolar and CSA interactions, spinning bands,
-  RF preparation sequences and secular isotropic J coupling.
 
 * Prepare normalized complex 1D FIDs explicitly with
   ``Experiment.prepare_fid()`` before FFT, using provider-declared corrections.

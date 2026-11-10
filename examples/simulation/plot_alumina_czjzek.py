@@ -1,6 +1,6 @@
 """
 Explore an alumina spectrum with an extended Czjzek model
-=======================================================
+=========================================================
 
 An archived Bruker acquisition in Dropbox Storage is titled
 ``Alumine 800 C`` and records 27Al at 130.306 MHz. Its central region is a
@@ -26,7 +26,7 @@ from spectrochempy_nmr.czjzek import simulate_czjzek
 
 # %%
 # Simulate broad tetrahedral and octahedral environments
-# ----------------------------------------------------
+# ------------------------------------------------------
 # The 12 kHz MAS rate agrees approximately with the archived sideband
 # spacing. The stored MASR=5 kHz and CNST31=12.5 kHz differ, so this rate
 # should be checked before quantitative interpretation of satellite areas.
@@ -77,7 +77,7 @@ ax.plot(
 
 # %%
 # Optionally inspect the locally supplied experimental central region
-# ------------------------------------------------------------------
+# -------------------------------------------------------------------
 experiment_path = os.environ.get("SCPY_NMR_ALUMINA_EXPERIMENT")
 if experiment_path:
     import nmrglue as ng
