@@ -136,3 +136,53 @@ def test_mas_sidebands_match_asymmetric_fortran_reference():
         atol=3e-6,
         rtol=0,
     )
+
+
+def test_nonaxial_static_powder_matches_spin_hamiltonian_moments():
+    cq_hz, larmor_hz, eta = 4e6, 100e6, 0.7
+    dataset = simulate_central_transition(
+        cq_hz=cq_hz, eta=eta, larmor_hz=larmor_hz, spectral_width_hz=60e3
+    )
+
+    # Work directly in the quadrupolar principal axes. Diagonalize the
+    # Zeeman term for each field direction and apply second-order
+    # perturbation theory to the central pair of Zeeman levels.
+    m = np.arange(-1.5, 2)
+    spin_squared = 15 / 4
+    raising = np.diag(np.sqrt(spin_squared - m[:-1] * (m[:-1] + 1)), k=-1)
+    ix = (raising + raising.T) / 2
+    iy = (raising - raising.T) / (2j)
+    iz = np.diag(m)
+    quadrupolar = (
+        cq_hz
+        / 12
+        * (3 * (iz @ iz) - spin_squared * np.eye(4) + eta * (ix @ ix - iy @ iy))
+    )
+
+    # Independent powder average with Gauss-Legendre weights in cos(theta)
+    # and uniform azimuth samples, over the whole sphere.
+    cosine, weights = np.polynomial.legendre.leggauss(48)
+    azimuth = 2 * np.pi * np.arange(96) / 96
+    sine = np.sqrt(1 - cosine**2)
+    transverse = (
+        np.cos(azimuth)[:, None, None] * ix + np.sin(azimuth)[:, None, None] * iy
+    )
+    zeeman = -larmor_hz * (
+        sine[:, None, None, None] * transverse + cosine[:, None, None, None] * iz
+    )
+    energies, basis = np.linalg.eigh(zeeman)
+    matrix_elements = basis.conj().swapaxes(-1, -2) @ quadrupolar @ basis
+    gaps = energies[..., :, None] - energies[..., None, :]
+    gaps[..., np.arange(4), np.arange(4)] = np.inf
+    corrections = (np.abs(matrix_elements) ** 2 / gaps).sum(axis=-1)
+    shifts = corrections[..., 2] - corrections[..., 1]
+    reference_mean = weights @ shifts.mean(axis=1) / 2
+    reference_std = np.sqrt(weights @ ((shifts - reference_mean) ** 2).mean(axis=1) / 2)
+
+    # Use bin centers for moments of the binned profile.
+    axis = dataset.x.data
+    centers = axis + (axis[-1] - axis[0]) / (2 * (axis.size - 1))
+    mean = dataset.data @ centers
+    std = np.sqrt(dataset.data @ ((centers - mean) ** 2))
+    assert mean == pytest.approx(reference_mean, abs=3)
+    assert std == pytest.approx(reference_std, abs=6)

@@ -180,9 +180,15 @@ The [tests](../../tests/test_pulsar.py) separate three kinds of checks.
   implementation can itself contain errors.
 - **Checks independent of the Fortran executable.** The static axial
   centroid is compared with $-C_Q^2/(40\nu_0)$, obtained by angular
-  averaging the analytic spin-3/2 frequency. The zero-coupling case
-  checks that the MAS sidebands vanish. Broader physical validation
-  requires other independent results and experimental spectra.
+  averaging the analytic spin-3/2 frequency. A nonaxial static test
+  builds the Zeeman and quadrupolar Hamiltonians as spin matrices in the
+  principal axes. It computes the second-order shifts from off-diagonal
+  matrix elements in the Zeeman eigenbasis, then averages over the
+  whole sphere using Gauss–Legendre quadrature in the polar cosine and
+  a uniform azimuth grid. The test compares the centroid and standard
+  deviation with the binned spectrum. The zero-coupling case checks
+  that MAS sidebands vanish. Broader physical validation requires
+  additional independent results and experimental spectra.
 - **Numerical edge cases.** Tests cover degenerate triangle frequencies,
   the upper bin edge, integer scalar types and the memory limit.
 
