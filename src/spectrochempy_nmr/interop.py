@@ -433,6 +433,7 @@ def _set_ser_fft_presentation(dataset, result):
     fft_axes = {}
     channel = dataset.ndim == 3
     indirect_transform = {
+        "states": ("states-cross-pairs", "INDIRECT:STATES"),
         "states-tppi": ("states-tppi-cross-pairs", "INDIRECT:STATES-TPPI"),
         "echo-antiecho-stored-2d": (
             "echo-antiecho-branch-fft",
@@ -505,8 +506,6 @@ def _from_states(result, data, profile):
             raise ValueError(
                 "Pure States requires data without declared TPPI alternation"
             )
-        if result.acquisition.get("fft_presentation") is not None:
-            raise ValueError("States interop does not support SER FFT presentation")
         from .processing.fft_validation import _require_fft_prevalidation
 
         _require_fft_prevalidation()
@@ -520,9 +519,9 @@ def _from_states(result, data, profile):
     dataset.meta.quadrature_mode = profile
     if profile == "states-tppi":
         dataset.meta.tppi_alternation_state = "encoded"
-        _set_ser_fft_presentation(dataset, result)
     else:
         dataset.meta.encoding = ["CHANNELS", "UNVALIDATED:STATES", "UNVALIDATED:STATES"]
+    _set_ser_fft_presentation(dataset, result)
     return dataset
 
 

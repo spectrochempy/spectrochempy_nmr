@@ -148,23 +148,29 @@ jobs:
           PY
           python -I -m pytest -ra tests/qualification/test_agilent_real.py -k "public_reader and FAM013"
           python -I -m pytest -ra tests/qualification/test_agilent_states_public.py -k synthetic
-      - name: Check out the Agilent quadrature provider candidate
+      - name: Check out the States quadrature provider candidate
         uses: actions/checkout@v7
         with:
           repository: spectrochempy/nmrglue-ng
-          ref: 97d13421ff44176d33bdd7d995d4b73c145dab1f
-          path: agilent-quadrature-provider
+          ref: 86c8587eb6dedb84c67022325f60c15f515bc261
+          path: states-quadrature-provider
           fetch-depth: 0
           persist-credentials: false
-      - name: Qualify Agilent quadrature with the candidate provider
+      - name: Qualify Agilent States with the candidate provider
         run: |
-          python -m pip wheel --no-deps --wheel-dir provider-wheels ./agilent-quadrature-provider
+          python -m pip wheel --no-deps --wheel-dir provider-wheels ./states-quadrature-provider
           python -m pip install --no-deps --force-reinstall provider-wheels/*.whl
           python -m pip check
           python -I - <<'PY'
           from inspect import signature
-          from nmrglue.interop import normalize_agilent_states_2d
+          from nmrglue.interop import normalize_agilent_states_2d, normalize_bruker_ser_states
 
           assert "quadrature" in signature(normalize_agilent_states_2d).parameters
+          assert callable(normalize_bruker_ser_states)
           PY
           python -I -m pytest -ra tests/qualification/test_agilent_states_public.py -k synthetic
+      - name: Qualify Bruker States with the candidate provider and FFT prevalidation
+        run: |
+          python -m pip install "spectrochempy==1.2.0"
+          python -m pip check
+          python -I -m pytest -ra tests/qualification/test_bruker_states_public.py -k synthetic

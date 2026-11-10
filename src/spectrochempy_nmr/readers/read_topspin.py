@@ -1118,6 +1118,12 @@ def _read_normalized_ser(
     profiles = (
         (None, interop.read_bruker_ser, "normalize_bruker_ser_qf", "qf_only"),
         (
+            "states",
+            interop.read_bruker_ser_storage,
+            "normalize_bruker_ser_states",
+            "states_only",
+        ),
+        (
             "states-tppi",
             interop.read_bruker_ser_storage,
             "normalize_bruker_ser_states_tppi",
@@ -1157,7 +1163,8 @@ def _read_normalized_ser(
             ):
                 return None
             dataset = from_interop(
-                normalized, profile="states-tppi" if profile == "states-tppi" else None
+                normalized,
+                profile=profile if profile in ("states", "states-tppi") else None,
             )
         except (OSError, ValueError):
             continue

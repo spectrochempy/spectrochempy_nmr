@@ -69,6 +69,27 @@ still in the time domain.
 FFT convention and carrier-relative Hz axes. SERs outside this qualified
 path continue through the previous reader.
 
+Public States SER reader
+------------------------
+
+For complete uniform Bruker States SERs with direct DQD and calibrated
+processing axes, ``read_topspin()`` selects States from ``acqu2s/FnMODE=4``
+and returns the normalized E1/E2 dataset. A provider with the States
+normalizer and a core with FFT prevalidation are required. The public
+reader preserves aligned trace length and applies the selected corrections
+before pairing. Other storage profiles continue through the earlier reader.
+
+Transform F2 before F1. States uses the same cross-pairs as States-TPPI
+without sign alternation. Public FFTs use the declared initial phases and
+ppm presentation. ``Experiment(dataset).process()`` uses the NMRPipe
+FFT convention and carrier-relative Hz axes.
+
+To replay the opt-in NMRPipe comparison, set
+``NMR_BRUKER_PUBLIC_STATES_DATA`` to the pinned reference directory.
+Put ``nmrPipe`` and ``bruk2pipe`` on ``PATH``, or point
+``NMR_PIPE_EXECUTABLE`` and ``NMR_BRUK2PIPE_EXECUTABLE`` at them.
+Run ``pytest tests/qualification/test_bruker_states_public.py``.
+
 Public States-TPPI SER reader
 -----------------------------
 
