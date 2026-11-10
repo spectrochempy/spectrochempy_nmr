@@ -27,7 +27,7 @@ core documentation.
 This site documents their NMR use without duplicating their technical API.
 
 Replay TopSpin EFP on a Bruker DQD FID
--------------------------------------
+--------------------------------------
 
 Use the raw FID and the processing status file (``procs``) from a completed
 TopSpin ``efp`` run in the same experiment:
