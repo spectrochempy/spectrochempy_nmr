@@ -533,3 +533,36 @@ truncation explicitly. The offset above uses the processed carrier
 rather than the tutorial's external chemical-shift reference. This
 check covers one measured central band. It does not qualify
 experimental sideband intensities.
+
+## Experimental check of YAG satellite bands
+
+The [MRSimulator YAG example](https://mrsimulator.readthedocs.io/en/latest/fitting/1D_fitting/plot_4_27Al_YAG.html)
+provides a processed $^{27}$Al MAS spectrum from DMFIT with two aluminum
+sites. Download the
+[original CSDF](https://ssnmr.org/sites/default/files/mrsimulator/27Al%20Quad%20MAS%20YAG%20400MHz.csdf)
+locally. The file used here has SHA-256
+`707eb4876c4b843ad86a25d41075d35d56318de45b1aa2cb98995821e5804f6a`.
+
+```sh
+OPENBLAS_NUM_THREADS=1 python tools/qualify_pulsar_yag.py "/path/to/yag.csdf"
+```
+
+The [script](../../tools/qualify_pulsar_yag.py) uses the two fitted
+tensors, MAS rate and Gaussian width from the MRSimulator example.
+Those parameters were obtained from this same experiment. PULSAR
+simulates all spin-5/2 transitions on a wide axis and interpolates
+them onto the measured grid. It subtracts the baseline estimated in
+the example's noise window and calibrates the two site amplitudes
+using only data within 10 kHz of the frequency origin. The subsequent
+comparison covers 16 windows of width 6 kHz centered on MAS orders
+−8 to −1 and +1 to +8.
+
+At accuracy 8 with 96 sideband orders on each side, the pointwise
+correlation in those windows is 0.97745. The median peak difference
+is zero and the maximum is one measured bin (122 Hz). The median
+relative area error is 13.70%, with a maximum of 35.54%. Increasing
+accuracy to 16 and the order count to 120 yields a correlation of
+0.97747 and nearly the same area errors. The positions are reproduced
+more closely than the intensities. This comparison does not isolate
+which effects of excitation, processing or model assumptions explain
+the residual intensity differences.
