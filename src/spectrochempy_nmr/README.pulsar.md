@@ -3,8 +3,9 @@
 This note describes the NumPy port in [`pulsar.py`](pulsar.py). It is a
 developer reference for the PULSAR module and a source for future plugin
 documentation. The implementation follows the central-transition path of
-Masaï PULSAR by Christian Fernandez and Jean-Paul Amoureux. The original
-sources in `masai/masai/core/fit/pulsar/f90/` use CeCILL-B.
+Masaï PULSAR by Christian Fernandez and Jean-Paul Amoureux, available in
+the archived [fernandezc/masai repository](https://github.com/fernandezc/masai)
+and its [PULSAR component](https://github.com/fernandezc/masai/tree/master/masai/core/fit/pulsar).
 
 ## Model and output
 
