@@ -152,7 +152,7 @@ jobs:
         uses: actions/checkout@v7
         with:
           repository: spectrochempy/nmrglue-ng
-          ref: 1f8a086545f65f4c97f268c33a526afabba8579e
+          ref: 97d13421ff44176d33bdd7d995d4b73c145dab1f
           path: agilent-quadrature-provider
           fetch-depth: 0
           persist-credentials: false
