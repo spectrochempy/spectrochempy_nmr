@@ -19,6 +19,8 @@ Added
   including recipes with forward F1 prediction and F2 digital delay.
 * Replay qualified TopSpin XFB time-domain tail-mean and polynomial baseline
   corrections in F1 and DQD polynomial correction in F2.
+* Replay TopSpin XFB Gaussian solvent filters, with the recorded width,
+  offset and treatment of both trace ends.
 
 * Read and process qualified Bruker States SER acquisitions through
   ``read_topspin()`` and interop without TPPI alternation.

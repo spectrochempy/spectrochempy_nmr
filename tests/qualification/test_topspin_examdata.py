@@ -372,6 +372,30 @@ def test_topspin_xfb_baseline(experiment, folder, case, modes):
         assert trace["window"] == (4, 1)
 
 
+@pytest.mark.parametrize("experiment", ["20", "30", "40"])
+@pytest.mark.parametrize(
+    ("folder", "case", "modes"),
+    [
+        ("bc-modes", "bc5-f1", (5, 0)),
+        ("bc-modes", "bc6-f1", (6, 0)),
+        ("bc-modes", "bc5-f2", (0, 6)),
+        ("bc-modes", "bc6-f2", (0, 6)),
+        ("bc-gaussian-combined", "sfil-combined", (5, 6)),
+        ("bc-gaussian-combined", "qfil-combined", (6, 6)),
+        ("bc-gaussian-combined", "qfil-radius-one", (6, 6)),
+    ],
+)
+def test_topspin_xfb_gaussian_baseline(experiment, folder, case, modes):
+    root = os.environ.get("NMR_TOPSPIN_XFB_GAUSSIAN_REFERENCES")
+    if root is None:
+        pytest.skip("set NMR_TOPSPIN_XFB_GAUSSIAN_REFERENCES to the Gaussian copies")
+    path = Path(root).resolve(strict=True) / folder / case / experiment
+    combined = folder == "bc-gaussian-combined"
+    trace = _assert_topspin_xfb(path, combined)
+    assert trace["baseline"] == modes
+    assert trace["pknl"] is combined
+
+
 def _assert_topspin_xfb(path, with_prediction):
     experiment = path.name
     raw = _local_read(path / "ser")
