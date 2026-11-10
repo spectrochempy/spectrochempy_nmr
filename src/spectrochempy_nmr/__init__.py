@@ -343,6 +343,22 @@ def _resolve_topspin_directory_target(filename, **kwargs):
     if filename.name in _VALID_TOPSPIN_FILENAMES:
         return None
 
+    if (
+        kwargs.get("expno") is None
+        and not kwargs.get("iterdir", False)
+        and kwargs.get("glob") is None
+        and ((filename / "acqus").is_file() or (filename / "acqu").is_file())
+    ):
+        procno = kwargs.get("procno")
+        if procno is not None or kwargs.get("processed", False):
+            processed = filename / "pdata" / str(procno if procno is not None else 1)
+            candidates = (processed / name for name in ("3rrr", "2rr", "1r"))
+        else:
+            candidates = (filename / name for name in ("ser", "fid"))
+        target = next((path for path in candidates if path.is_file()), None)
+        if target is not None:
+            return [target]
+
     if kwargs.get("iterdir", False) or kwargs.get("glob") is not None:
         glob = kwargs.get("glob")
         if glob:

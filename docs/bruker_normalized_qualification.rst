@@ -218,3 +218,20 @@ errors below 1e-5 ppm (tolerance 2e-5 for float32 NMRPipe headers). These result
 do not qualify NMRPipe's separate digital-filter algorithm, absolute phase or
 physical amplitude calibration. Both original files are hash-checked before and
 after; all generated files stay in temporary directories.
+
+Local TopSpin example acquisitions
+----------------------------------
+
+Set ``NMR_TOPSPIN_EXAMDATA`` to the installed TopSpin ``examdata``
+directory and run ``pytest tests/qualification/test_topspin_examdata.py``.
+The experiment-folder regression in ``test_bruker_ser_migration.py`` uses
+a synthetic acquisition and runs
+without the corpus. With ``bruk2pipe`` and ``nmrPipe`` on ``PATH``, the
+uniform 2D cases also compare the carrier-relative FFT planes to NMRPipe.
+Temporary transport copies are used for conversion. The installed data
+are read in place.
+
+The NUS cases characterize storage and the current refusal to run a
+uniform FFT. The Ubiquitin case checks the provider's native 3D storage
+layout; public TopSpin processing is currently qualified for 1D and
+supported 2D profiles.
