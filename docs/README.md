@@ -31,7 +31,7 @@ version selected for that release; release mode intentionally refuses to use
 the moving ``latest`` default.
 
 The gallery is non-executing by default for quick local documentation checks.
-To execute the six public examples with the approved immutable fixtures:
+To execute the public gallery examples with the approved immutable fixtures:
 
 ```console
 python docs/fetch_gallery_data.py

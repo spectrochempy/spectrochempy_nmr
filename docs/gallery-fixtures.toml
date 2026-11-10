@@ -1,4 +1,4 @@
-# Targeted, immutable fixtures for the six public NMR gallery examples.
+# Targeted, immutable fixtures for the public NMR gallery examples.
 # The source revision is covered by spectrochempy_data/testdata/PROVENANCE.md.
 source_repository = "https://github.com/spectrochempy/spectrochempy_data"
 source_commit = "08bb9b0cbff8f4363c48b6bff7ccb743f8140e0a"
@@ -70,3 +70,22 @@ size = 147456
 path = "nmrdata/bruker/tests/nmr/relax/100/vdlist"
 sha256 = "21dc9da5fdcfb6189f201510afc8b63fff55362406ff61e9bfea8d8d5215764b"
 size = 25
+
+# CC0 1.0, nmrXiv project P33. See docs/fixtures.md.
+[[files]]
+path = "nmrdata/jeol/epicatechin_1h.jdf"
+url = "https://raw.githubusercontent.com/spectrochempy/nmrglue-ng/4c18843dc5ce620d63cb35a81bc0b2f862b54346/tests/fixtures/fileio/data/jeol/epicatechin_1h.jdf"
+sha256 = "6ab899b72d314f05d187e07c69389efae30572bae9b0c74fb0249cfa468ae7e0"
+size = 1081024
+
+[[files]]
+path = "nmrdata/jeol/epicatechin_cosy.jdf"
+url = "https://raw.githubusercontent.com/spectrochempy/nmrglue-ng/4c18843dc5ce620d63cb35a81bc0b2f862b54346/tests/fixtures/fileio/data/jeol/epicatechin_cosy.jdf"
+sha256 = "f109351f2102435faa7d302659e073b77ecc1184f1c3ef8817087ca91b9df3aa"
+size = 5271680
+
+[[files]]
+path = "nmrdata/nmrpipe/nmrpipe_2d_cosy_example.ft2"
+url = "https://raw.githubusercontent.com/spectrochempy/nmrglue-ng/14f5ee8b06592060a987cbd12f79c6e9a36c8a20/tests/fixtures/fileio/data/nmrpipe_2d_cosy_example.ft2"
+sha256 = "d13dc13c928394d2f8c7c57c0f65bdeab510d935093793406f53d7609ee70cb5"
+size = 4196352

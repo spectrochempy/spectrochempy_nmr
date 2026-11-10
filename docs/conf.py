@@ -130,7 +130,7 @@ html_context = {
     "doc_path": "docs",
 }
 
-# The six public examples are sourced from this checkout. They are rendered
+# The public gallery examples are sourced from this checkout. They are rendered
 # without execution by default; ``-D plot_gallery=True`` opts into execution.
 _examples = PROJECT / "examples"
 sphinx_gallery_conf = {

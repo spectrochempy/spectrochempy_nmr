@@ -27,7 +27,8 @@ def main() -> None:
         relative = Path(entry["path"])
         target = destination / relative
         target.parent.mkdir(parents=True, exist_ok=True)
-        with urlopen(f"{base_url}/{entry['path']}", timeout=60) as response:
+        url = entry.get("url", f"{base_url}/{entry['path']}")
+        with urlopen(url, timeout=60) as response:
             payload = response.read()
         digest = hashlib.sha256(payload).hexdigest()
         if len(payload) != entry["size"] or digest != entry["sha256"]:
@@ -39,7 +40,7 @@ def main() -> None:
         total += len(payload)
     print(
         f"Fetched and verified {len(manifest['files'])} fixtures "
-        f"({total} bytes) from {manifest['source_commit']} into {destination}"
+        f"({total} bytes) into {destination}"
     )
 
 
