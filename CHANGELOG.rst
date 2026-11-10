@@ -17,6 +17,8 @@ Added
   linear prediction in F1.
 * Replay TopSpin XFB exponential and sine-bell windows in F1 and F2,
   including recipes with forward F1 prediction and F2 digital delay.
+* Replay qualified TopSpin XFB time-domain tail-mean and polynomial baseline
+  corrections in F1 and DQD polynomial correction in F2.
 
 * Read and process qualified Bruker States SER acquisitions through
   ``read_topspin()`` and interop without TPPI alternation.
