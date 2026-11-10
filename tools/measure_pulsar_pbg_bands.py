@@ -33,11 +33,9 @@ def measure_bands(frequency, signal):
     return np.asarray(areas), np.asarray(peaks)
 
 
-def main():
-    parser = ArgumentParser(description=__doc__)
-    parser.add_argument("experiment", type=Path, help="Path to PBG1_2,5mm/1")
-    args = parser.parse_args()
-    metadata, signal = ng.bruker.read_pdata(str(args.experiment / "pdata" / "1"))
+def read_pbg_spectrum(experiment):
+    """Return the original 1D acquisition metadata, grid and signal."""
+    metadata, signal = ng.bruker.read_pdata(str(experiment / "pdata" / "1"))
     proc, acqu = metadata["procs"], metadata["acqus"]
     if (
         acqu["NUC1"] != "27Al"
@@ -49,12 +47,23 @@ def main():
         or proc["SW_p"] != 2_500_000
         or signal.shape != (16_384,)
     ):
-        parser.error("Expected the original PBG1 27Al spectrum, experiment 1.")
+        raise ValueError("Expected the original PBG1 27Al spectrum, experiment 1.")
 
     # TopSpin OFFSET is the left edge in ppm, and SF is in MHz.
     frequency = proc["OFFSET"] * proc["SF"] - np.arange(signal.size) * (
         proc["SW_p"] / signal.size
     )
+    return acqu, proc, frequency, signal
+
+
+def main():
+    parser = ArgumentParser(description=__doc__)
+    parser.add_argument("experiment", type=Path, help="Path to PBG1_2,5mm/1")
+    args = parser.parse_args()
+    try:
+        _, _, frequency, signal = read_pbg_spectrum(args.experiment)
+    except ValueError as error:
+        parser.error(str(error))
     areas, peaks = measure_bands(frequency, signal)
     central = areas[ORDERS.index(0)]
     if not np.all(np.isfinite(areas)) or np.any(central <= 0):

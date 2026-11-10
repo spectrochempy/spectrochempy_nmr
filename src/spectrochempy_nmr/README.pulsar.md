@@ -637,14 +637,67 @@ percentage of the central **window** area at the same width. Across the
 using shoulder medians instead of a linear baseline changed individual
 ±6 kHz ratios by up to 0.67 percentage points.
 
-These measurements supply experimental targets for a finite-pulse
-comparison. The sample is an amorphous binder with multiple aluminum
-environments, as described in the [associated article](https://doi.org/10.1016/j.jnoncrysol.2026.124054).
-A quantitative test of PULSAR still requires a sample model determined
-independently of these windows and an assessment of the receiver and
-processing response. The TopSpin spectrum already has a baseline
-correction. The window ratios describe that processed spectrum and
-include any contribution from overlapping transitions.
+The archive also contains a separate sheared $^{27}$Al 3QMAS measurement
+(experiment 13). Its processing log records the $19/12$ shear and its F1
+reference frequency already applies the $17/12$ chemical-shift scaling.
+For spin $5/2$, the resulting centroids satisfy
+$\delta_{F2}=\delta_{iso}+q$ and $\delta_{F1}=\delta_{iso}-10q/17$,
+where $q=-0.006(P_Q/\nu_L)^2\times 10^6$ in ppm and
+$P_Q=|C_Q|\sqrt{1+\eta^2/3}$.
+See [Wang et al., Table 1](https://pines.berkeley.edu/sites/default/files/publications/multiple-quantum_magic-angle_spinning_and_dynamic-angle_spinning_nmr_spectroscopy_of_quadrupolar_nuclei.pdf).
+
+The [qualification script](../../tools/qualify_pulsar_pbg.py) estimates
+centroids in five regions of the 3QMAS map. It subtracts the median of a
+nearby F2 interval from each row and takes the first moment of the positive
+residual. In order of increasing isotropic shift, it obtains
+$(\delta_{iso},P_Q)$ of (−6.92 ppm, 3.62 MHz), (3.32, 4.76),
+(42.51, 2.50), (50.13, 2.81), and (69.49, 2.23).
+These are effective parameters of regions in a heterogeneous sample.
+The weaker features are sensitive to the window and baseline, and
+3Q excitation can bias the centroids of overlapping distributions.
+The moments constrain the combination $P_Q$. The calculation holds
+it fixed and evaluates common $\eta$ values of 0, 0.5 and 1 as sensitivity
+scenarios, deriving $|C_Q|$ for each one.
+
+```sh
+OPENBLAS_NUM_THREADS=1 python tools/qualify_pulsar_pbg.py "/path/to/raw data/PBG1_2,5mm"
+```
+
+The simulation propagates all five single-quantum transitions of each
+spin-$5/2$ component after the recorded 0.5 µs pulse at 50 kHz. It uses
+the documented carrier and MAS frequency. For each scenario, only the
+1D region $|f|<14$ kHz is used to select a shared Gaussian width and fit
+nonnegative component weights with an additive constant. An ideal 90°
+pulse at $\eta=0.5$ is included as a separately calibrated comparison.
+Observation and prediction use the same baseline and ±6 kHz windows
+defined above. The central baseline flank can include signal from higher
+chemical-shift components, so the ratios are specific to this protocol.
+
+At accuracy 8 with 45 orders on each side and four midpoint steps
+during the pulse, the measured sum of the 20 areas is 88.03% of the
+central window area. The errors below are absolute differences in
+percentage points of that central-window normalization.
+
+| Excitation | Common $\eta$ | Sum of satellite areas | Mean absolute error | Max absolute error |
+| --- | ---: | ---: | ---: | ---: |
+| 0.5 µs, 50 kHz | 0 | 143.28% | 3.45 | 10.07 |
+| 0.5 µs, 50 kHz | 0.5 | 137.55% | 2.77 | 4.22 |
+| 0.5 µs, 50 kHz | 1 | 124.94% | 1.85 | 3.31 |
+| Ideal 90° | 0.5 | 145.40% | 3.16 | 5.18 |
+
+All four central calibrations select a 2.4 kHz Gaussian FWHM and give
+RMS residuals of 3.58–3.64% of the measured peak height. At $\eta=0.5$,
+using the recorded RF pulse reduces the excess area relative to the
+independently calibrated ideal pulse case. The sum still exceeds the
+measurement by 49.52 percentage points. Across the three finite-pulse
+scenarios, the excess is 36.91–55.25 percentage points.
+
+The model assumes thermal initial populations and ideal phased
+acquisition. It leaves out CSA, distributions within each component,
+and the instrument's dead time, frequency response and processing
+transfer function. The TopSpin data have already been phased and
+baseline-corrected. This comparison tests a constrained effective model
+against held-out areas from the [associated experiment](https://doi.org/10.1016/j.jnoncrysol.2026.124054).
 
 ## Experimental check of phosphorus CSA bands
 
