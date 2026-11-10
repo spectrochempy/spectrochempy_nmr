@@ -12,6 +12,9 @@ Unreleased
 Added
 ~~~~~
 
+* Replay qualified Bruker 2D XFB processing with recorded window, phase,
+  digital delay and ppm calibration when linear prediction is disabled.
+
 * Read and process qualified Bruker States SER acquisitions through
   ``read_topspin()`` and interop without TPPI alternation.
 

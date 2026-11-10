@@ -299,3 +299,52 @@ def test_dqd_topspin_efp_replay(experiment, delay, reference_scale):
         Experiment(fid).process(replay="topspin", phase="manual")
     with pytest.raises(ValueError, match="original calibrated time grid"):
         Experiment(fid[1:]).process(replay="topspin")
+
+
+@pytest.mark.parametrize("experiment", ["20", "30", "40"])
+def test_topspin_xfb_replay_without_prediction(experiment):
+    root = os.environ.get("NMR_TOPSPIN_XFB_REFERENCES")
+    if root is None:
+        pytest.skip("set NMR_TOPSPIN_XFB_REFERENCES to the no-prediction XFB copies")
+    path = Path(root).resolve(strict=True) / experiment
+    raw = _local_read(path / "ser")
+    before = raw.data.copy()
+
+    result = Experiment(raw).process(replay="topspin")
+
+    names = ["2rr"] if experiment == "20" else ["2rr", "2ri", "2ir", "2ii"]
+    pdata = path / "pdata" / "1"
+    meta, planes = ng.bruker.read_pdata(pdata, bin_files=names, scale_data=True)
+    if experiment == "20":
+        actual = result.data[None]
+        expected = planes[None]
+    else:
+        assert tuple(result.c.labels) == ("S_R", "S_I")
+        first, second = result.data
+        actual = np.stack((first.real, second.real, first.imag, second.imag))
+        expected = np.asarray(planes)
+
+    gain = meta["acqus"]["NS"] * meta["acqus"]["RG"]
+    residual = actual * gain - expected
+    relative = np.linalg.norm(residual, axis=(1, 2)) / np.linalg.norm(
+        expected, axis=(1, 2)
+    )
+    assert np.max(relative) < 2e-6
+    for axis, key in ((result.y, "proc2s"), (result.x, "procs")):
+        pars = meta[key]
+        grid = pars["OFFSET"] - np.arange(pars["SI"]) * pars["SW_p"] / (
+            pars["SF"] * pars["SI"]
+        )
+        np.testing.assert_allclose(axis.data, grid, atol=2e-12, rtol=0)
+        assert axis.units == scp.ur.ppm
+    assert Experiment(result).is_frequency_domain
+    np.testing.assert_array_equal(raw.data, before)
+
+    with pytest.raises(ValueError, match="uncorrected SER"):
+        Experiment(_local_read(path / "ser", filtered=True)).process(replay="topspin")
+
+
+def test_topspin_xfb_refuses_unqualified_linear_prediction(examdata):
+    path = examdata / "Menthyl-Anthranilate" / "30" / "ser"
+    with pytest.raises(ValueError, match="linear prediction"):
+        Experiment(_local_read(path)).process(replay="topspin")
