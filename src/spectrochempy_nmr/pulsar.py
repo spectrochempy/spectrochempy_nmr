@@ -209,6 +209,15 @@ def _deposit_triangles(axis, frequencies, weights, triangles):
     return spectrum
 
 
+def _real_scalars(*values):
+    if not all(isinstance(value, Real) for value in values):
+        raise TypeError("PULSAR parameters must be real scalars.")
+    scalars = tuple(map(float, values))
+    if not np.isfinite(scalars).all():
+        raise ValueError("PULSAR parameters must be finite.")
+    return scalars
+
+
 def _validate_grid(spectral_width_hz, spinning_hz, points, accuracy, sidebands):
     if spectral_width_hz <= 0 or spinning_hz < 0:
         raise ValueError("Use a positive spectral width and a nonnegative MAS rate.")
@@ -249,11 +258,7 @@ def _central_transition_profile(
         csa_anisotropy_hz,
         csa_eta,
     )
-    if not all(isinstance(value, Real) for value in values):
-        raise TypeError("PULSAR parameters must be real scalars.")
-    values = tuple(map(float, values))
-    if not np.isfinite(values).all():
-        raise ValueError("PULSAR parameters must be finite.")
+    values = _real_scalars(*values)
     (
         cq_hz,
         eta,
@@ -286,24 +291,9 @@ def _central_transition_profile(
         raise ValueError("Use a positive Larmor frequency.")
     _validate_grid(spectral_width_hz, spinning_hz, points, accuracy, sidebands)
 
-    rotation = None if csa_rotation is None else _validate_rotation(csa_rotation)
-    # Misaligned tensors break octant reflection symmetry, but their
-    # even-in-field shifts retain the powder average under axis inversion.
-    hemisphere = bool(csa_anisotropy_hz and rotation is not None)
-    directions, weights, triangles = _powder_mesh(accuracy, hemisphere)
-    angle = np.deg2rad(54.736) if spinning_hz else 0
-    if hemisphere:
-        csa = _rotated_csa_harmonics(
-            directions, csa_anisotropy_hz, csa_eta, angle, rotation
-        )
-    elif csa_anisotropy_hz:
-        csa = _csa_harmonics(directions, csa_anisotropy_hz, csa_eta, angle)
-    else:
-        csa = 0.0
-
-    # The historical quadrupolar tensor interchanges the transverse axes.
-    # Use the physical EFG frame when the CSA orientation makes them observable.
-    quadrupolar_eta = -eta if csa_anisotropy_hz else eta
+    directions, weights, triangles, angle, csa, quadrupolar_eta = _powder_interactions(
+        accuracy, spinning_hz, eta, csa_anisotropy_hz, csa_eta, csa_rotation
+    )
     grid = (
         weights,
         triangles,
@@ -322,29 +312,65 @@ def _central_transition_profile(
         axis, mass = _powder_profile(harmonics + csa, *grid)
         return axis, mass / mass.sum()
 
-    # First-order and second-order terms differ for each m -> m-1 pair.
-    # The ideal excitation and transverse detection weight each pair by
-    # the squared transition matrix element, up to a common factor.
-    interaction = 3 * cq_hz / (4 * spin * (2 * spin - 1))
-    first_order = _csa_harmonics(directions, -interaction, quadrupolar_eta, angle)
-    second_order_scale = interaction**2 / larmor_hz
-    spin_squared = spin * (spin + 1)
     spectrum = np.zeros(points)
-    for index_from_top in range(int(2 * spin)):
-        m = spin - index_from_top
+    for m, strength, harmonics in _transition_harmonics(
+        directions, cq_hz, quadrupolar_eta, angle, spin, larmor_hz, csa
+    ):
         if transitions == "satellites" and m == 0.5:
             continue
+        axis, mass = _powder_profile(harmonics, *grid)
+        spectrum += strength * mass
+    return axis, spectrum / spectrum.sum()
+
+
+def _powder_interactions(
+    accuracy, spinning_hz, eta, csa_anisotropy_hz, csa_eta, csa_rotation
+):
+    rotation = None if csa_rotation is None else _validate_rotation(csa_rotation)
+    # Misaligned tensors break octant reflection symmetry, but their
+    # even-in-field shifts retain the powder average under axis inversion.
+    hemisphere = bool(csa_anisotropy_hz and rotation is not None)
+    directions, weights, triangles = _powder_mesh(accuracy, hemisphere)
+    angle = np.deg2rad(54.736) if spinning_hz else 0
+    if hemisphere:
+        csa = _rotated_csa_harmonics(
+            directions, csa_anisotropy_hz, csa_eta, angle, rotation
+        )
+    elif csa_anisotropy_hz:
+        csa = _csa_harmonics(directions, csa_anisotropy_hz, csa_eta, angle)
+    else:
+        csa = 0.0
+
+    # The historical quadrupolar tensor interchanges the transverse axes.
+    # Use the physical EFG frame when the CSA orientation makes them observable.
+    quadrupolar_eta = -eta if csa_anisotropy_hz else eta
+    return directions, weights, triangles, angle, csa, quadrupolar_eta
+
+
+def _transition_harmonics(directions, cq_hz, eta, angle, spin, larmor_hz, csa):
+    """Yield m, transverse strength and frequency harmonics in descending m."""
+    if cq_hz == 0:
+        harmonics = np.zeros((5, directions.shape[1]), dtype=complex) + csa
+        for index_from_top in range(int(2 * spin)):
+            m = spin - index_from_top
+            yield m, spin * (spin + 1) - m * (m - 1), harmonics
+        return
+
+    interaction = 3 * cq_hz / (4 * spin * (2 * spin - 1))
+    first_order = _csa_harmonics(directions, -interaction, eta, angle)
+    second_order_scale = interaction**2 / larmor_hz
+    spin_squared = spin * (spin + 1)
+    for index_from_top in range(int(2 * spin)):
+        m = spin - index_from_top
         pair = m * (m - 1)
         factors = (
             -0.5 * (24 * pair - 4 * spin_squared + 9),
             -0.25 * (12 * pair - 4 * spin_squared + 6),
         )
-        harmonics = _quadrupolar_harmonics(directions, quadrupolar_eta, angle, factors)
+        harmonics = _quadrupolar_harmonics(directions, eta, angle, factors)
         harmonics *= second_order_scale
         harmonics += (2 * m - 1) * first_order + csa
-        axis, mass = _powder_profile(harmonics, *grid)
-        spectrum += (spin_squared - pair) * mass
-    return axis, spectrum / spectrum.sum()
+        yield m, spin_squared - pair, harmonics
 
 
 def _powder_profile(
@@ -526,11 +552,7 @@ def simulate_csa(
     """
     points, accuracy, sidebands = index(points), index(accuracy), index(sidebands)
     values = (anisotropy_hz, eta, spectral_width_hz, shift_hz, spinning_hz)
-    if not all(isinstance(value, Real) for value in values):
-        raise TypeError("PULSAR parameters must be real scalars.")
-    values = tuple(map(float, values))
-    if not np.isfinite(values).all():
-        raise ValueError("PULSAR parameters must be finite.")
+    values = _real_scalars(*values)
     anisotropy_hz, eta, spectral_width_hz, shift_hz, spinning_hz = values
     if not 0 <= eta <= 1:
         raise ValueError("eta must lie between 0 and 1.")
@@ -552,6 +574,132 @@ def simulate_csa(
     )
     return _as_dataset(
         axis, profile / profile.sum(), "PULSAR chemical shift anisotropy"
+    )
+
+
+def _spin_operators(spin):
+    m = np.arange(spin, -spin - 1, -1)
+    raising = np.diag(np.sqrt(spin * (spin + 1) - m[1:] * (m[1:] + 1)), k=1)
+    return (raising + raising.T) / 2, (raising - raising.T) / (2j), np.diag(m)
+
+
+def _evolve_density(density, hamiltonian_hz, duration_s):
+    """Apply a constant Hamiltonian, in Hz, to a batch of density matrices."""
+    eigenvalues, eigenvectors = np.linalg.eigh(hamiltonian_hz)
+    phase = np.exp(-2j * np.pi * duration_s * eigenvalues)
+    propagator = (eigenvectors * phase[..., None, :]) @ eigenvectors.conj().swapaxes(
+        -1, -2
+    )
+    return propagator @ density @ propagator.conj().swapaxes(-1, -2)
+
+
+def simulate_rectangular_pulse(
+    *,
+    spin,
+    larmor_hz,
+    spectral_width_hz,
+    rf_hz,
+    duration_s,
+    phase_deg=0.0,
+    cq_hz=0.0,
+    eta=0.0,
+    csa_anisotropy_hz=0.0,
+    csa_eta=0.0,
+    csa_rotation=None,
+    shift_hz=0.0,
+    points=8192,
+    accuracy=16,
+):
+    """Simulate a static powder after one finite rectangular RF pulse.
+
+    The pulse is on the simulation carrier. Frequencies are in Hz and
+    duration_s is in seconds. Thermal Iz is the initial density matrix.
+    The returned complex spectrum is scaled to unit total absorption for
+    an ideal on-carrier 90 degree x pulse. Actual excitation losses and
+    phase are retained. Only the secular Hamiltonian is propagated.
+    """
+    points, accuracy = index(points), index(accuracy)
+    (
+        spin,
+        larmor_hz,
+        spectral_width_hz,
+        rf_hz,
+        duration_s,
+        phase_deg,
+        cq_hz,
+        eta,
+        csa_anisotropy_hz,
+        csa_eta,
+        shift_hz,
+    ) = _real_scalars(
+        spin,
+        larmor_hz,
+        spectral_width_hz,
+        rf_hz,
+        duration_s,
+        phase_deg,
+        cq_hz,
+        eta,
+        csa_anisotropy_hz,
+        csa_eta,
+        shift_hz,
+    )
+    if not 0.5 <= spin <= 16 or spin % 0.5 != 0 or (spin == 0.5 and cq_hz):
+        raise ValueError(
+            "Use spin from 1/2 to 16 in steps of 1/2 and Cq=0 for spin 1/2."
+        )
+    if larmor_hz <= 0 or rf_hz < 0 or duration_s <= 0:
+        raise ValueError(
+            "Use positive Larmor frequency and pulse duration, and nonnegative RF."
+        )
+    if not 0 <= eta <= 1 or not 0 <= csa_eta <= 1:
+        raise ValueError("eta and csa_eta must lie between 0 and 1.")
+    _validate_grid(spectral_width_hz, 0, points, accuracy, 0)
+    directions, weights, triangles, angle, csa, quadrupolar_eta = _powder_interactions(
+        accuracy, 0, eta, csa_anisotropy_hz, csa_eta, csa_rotation
+    )
+    transition_count = int(2 * spin)
+    offsets = np.empty((directions.shape[1], transition_count))
+    strengths = np.empty(transition_count)
+    for i, (_, strength, terms) in enumerate(
+        _transition_harmonics(
+            directions, cq_hz, quadrupolar_eta, angle, spin, larmor_hz, csa
+        )
+    ):
+        offsets[:, i] = shift_hz + terms[0].real
+        strengths[i] = strength
+    axis = np.linspace(-spectral_width_hz / 2, spectral_width_hz / 2, points)
+    if offsets.min() < axis[0] or offsets.max() > axis[-1]:
+        raise ValueError("The spectral window must contain the requested transitions.")
+
+    ix, iy, iz = _spin_operators(spin)
+    phase = np.deg2rad(phase_deg)
+    rf = rf_hz * (np.cos(phase) * ix + np.sin(phase) * iy)
+    size = ix.shape[0]
+    rows = np.arange(size)
+    coherence = np.empty_like(offsets, dtype=complex)
+    for start in range(0, directions.shape[1], 128):
+        block = slice(start, start + 128)
+        # Adjacent differences of the diagonal must equal the offsets.
+        levels = np.pad(offsets[block].cumsum(axis=-1), ((0, 0), (1, 0)))
+        hamiltonian = np.broadcast_to(rf, (*levels.shape, size)).copy()
+        hamiltonian[:, rows, rows] += levels
+        density = _evolve_density(iz, hamiltonian, duration_s)
+        coherence[block] = density[:, rows[:-1], rows[1:]]
+
+    profile = np.zeros(points, dtype=complex)
+    for i, strength in enumerate(strengths):
+        signal = -1j * np.sqrt(strength) * coherence[:, i]
+        profile.real += _deposit_triangles(
+            axis, offsets[:, i], weights * signal.real, triangles
+        )
+        profile.imag += _deposit_triangles(
+            axis, offsets[:, i], weights * signal.imag, triangles
+        )
+    ideal_signal = strengths.sum() / 2
+    powder_mass = weights[triangles].sum()
+    return _as_dataset(
+        axis, profile / (ideal_signal * powder_mass), "PULSAR rectangular pulse"
     )
 
 

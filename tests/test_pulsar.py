@@ -7,6 +7,7 @@ from spectrochempy.core.units import ur
 from spectrochempy_nmr.pulsar import simulate_central_transition
 from spectrochempy_nmr.pulsar import simulate_csa
 from spectrochempy_nmr.pulsar import simulate_quadrupolar
+from spectrochempy_nmr.pulsar import simulate_rectangular_pulse
 
 
 @pytest.mark.parametrize(
@@ -406,3 +407,44 @@ def test_quadrupolar_multiplet_rejects_unbounded_spin():
         simulate_quadrupolar(
             cq_hz=1e6, eta=0, larmor_hz=100e6, spectral_width_hz=1e6, spin=1e9
         )
+
+
+@pytest.mark.parametrize("offset", [-1250.0, 0.0, 1250.0])
+def test_static_rectangular_pulse_matches_bloch_rotation(offset):
+    rf_hz, duration = 2500, 73e-6
+    result = simulate_rectangular_pulse(
+        spin=0.5,
+        larmor_hz=100e6,
+        spectral_width_hz=5000,
+        rf_hz=rf_hz,
+        duration_s=duration,
+        shift_hz=offset,
+        points=1001,
+        accuracy=2,
+    )
+    effective_rf = np.hypot(rf_hz, offset)
+    angle = 2 * np.pi * effective_rf * duration
+    expected = rf_hz / effective_rf * np.sin(angle) + (
+        1j * rf_hz * offset / effective_rf**2 * (1 - np.cos(angle))
+    )
+    assert result.data.sum() == pytest.approx(expected, abs=1e-12)
+    assert result.x.data[np.argmax(np.abs(result.data))] == pytest.approx(offset)
+
+
+def test_hard_rectangular_pulse_approaches_ideal_quadrupolar_powder():
+    settings = dict(
+        spin=1.5,
+        cq_hz=600e3,
+        eta=0.6,
+        larmor_hz=100e6,
+        spectral_width_hz=1e6,
+        points=2048,
+        accuracy=6,
+    )
+    rf_hz = 1e9
+    finite = simulate_rectangular_pulse(
+        **settings, rf_hz=rf_hz, duration_s=0.25 / rf_hz
+    )
+    ideal = simulate_quadrupolar(**settings)
+    assert np.abs(finite.data.real - ideal.data).sum() < 1e-6
+    assert np.abs(finite.data.imag).sum() < 2e-4

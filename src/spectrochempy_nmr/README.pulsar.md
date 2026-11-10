@@ -261,6 +261,32 @@ bins. This avoids a Python loop per triangle while keeping temporary
 storage proportional to a batch, or to the span of one triangle if it
 exceeds the batch target. Only the final summed spectrum is normalized.
 
+## Static powder after a finite RF pulse
+
+`simulate_rectangular_pulse` propagates the thermal deviation
+density matrix $\rho_0=I_z$ through a rectangular pulse for a static
+powder. Use a positive pulse duration in seconds, RF nutation frequency
+in Hz and a phase in degrees. The transmitter is on the simulation
+carrier. The model retains the secular quadrupolar and CSA terms during
+the pulse, so a shift relative to the carrier detunes the excitation.
+
+The adjacent transition offsets determine the diagonal level energies
+up to a constant. In descending magnetic quantum-number order, the
+difference $E_{m-1}-E_m$ is the transition offset. For each orientation
+the RF term is $\nu_1(I_x\cos\phi+I_y\sin\phi)$. The total
+Hamiltonian in Hz is constant during the pulse and is diagonalized
+with a Hermitian eigensolver. The propagator is
+$U=\exp(-2\pi i H t)$ and the final state is $U\rho_0 U^\dagger$.
+
+The detected weights are the adjacent coherences multiplied by their
+transverse matrix elements. Real and imaginary weights are deposited
+separately on the same frequency grid. The receiver convention maps an
+ideal on-carrier $90^\circ$ x pulse to positive absorption. This ideal
+pulse defines the amplitude scale for the complex spectrum, so finite
+pulse excitation losses and phase shifts are retained. Tests compare
+the on- and off-resonance spin-1/2 response with a Bloch rotation and
+check the hard-pulse limit for a quadrupolar powder.
+
 ## Verification and performance
 
 The [tests](../../tests/test_pulsar.py) separate three kinds of checks.
