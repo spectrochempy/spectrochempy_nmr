@@ -89,29 +89,45 @@ def _quadrupolar_harmonics(directions, eta, angle):
 def _deposit_triangles(axis, frequencies, weights, triangles):
     """Integrate each triangular frequency density over the PULSAR bins."""
     step = (axis[-1] - axis[0]) / (axis.size - 1)
+    low, mid, high = np.sort((frequencies[triangles] - axis[0]) / step, axis=1).T
+    first, last = low.astype(np.intp), high.astype(np.intp)
+    masses = weights[triangles].sum(axis=1)
     spectrum = np.zeros_like(axis)
-    first = axis[0]
-    for vertices in triangles:
-        low, mid, high = np.sort((frequencies[vertices] - first) / step)
-        start = int(low)
-        stop = int(high)
-        mass = weights[vertices].sum()
-        if start == stop:
-            spectrum[start] += mass
-            continue
-        edges = np.arange(start + 1, stop + 1)
-        cdf = np.empty(edges.size + 2)
-        cdf[0], cdf[-1] = 0, 1
-        rising = edges <= mid
-        if rising.any():
-            cdf[1:-1][rising] = (edges[rising] - low) ** 2 / (
-                (mid - low) * (high - low)
-            )
-        if (~rising).any():
-            cdf[1:-1][~rising] = 1 - (high - edges[~rising]) ** 2 / (
-                (high - mid) * (high - low)
-            )
-        spectrum[start : stop + 1] += mass * np.diff(cdf)
+
+    # Flatten the bins covered by each triangle. Batch by bin count so that
+    # wide triangles do not require a dense triangles-by-frequency array.
+    counts = last - first + 1
+    offsets = np.r_[0, counts.cumsum()]
+    start = 0
+    while start < counts.size:
+        end = np.searchsorted(offsets, offsets[start] + 262_144, side="right") - 1
+        end = max(start + 1, end)
+        owners = np.repeat(np.arange(start, end), counts[start:end])
+        bins = first[owners] + np.arange(offsets[start], offsets[end]) - offsets[owners]
+        at_end = bins == last[owners]
+        cdf = np.ones(bins.size)
+
+        # Evaluate the CDF only at interior bin edges. The ascending and
+        # descending masks exclude the zero-width half of a flat-sided triangle.
+        edges = bins + 1
+        rising = ~at_end & (edges <= mid[owners])
+        falling = ~at_end & ~rising
+        row = owners[rising]
+        cdf[rising] = (edges[rising] - low[row]) ** 2 / (
+            (mid[row] - low[row]) * (high[row] - low[row])
+        )
+        row = owners[falling]
+        cdf[falling] = 1 - (high[row] - edges[falling]) ** 2 / (
+            (high[row] - mid[row]) * (high[row] - low[row])
+        )
+
+        # Difference successive CDF values, starting each triangle at zero.
+        previous = np.r_[0.0, cdf[:-1]]
+        previous[bins == first[owners]] = 0
+        spectrum += np.bincount(
+            bins, weights=(cdf - previous) * masses[owners], minlength=axis.size
+        )
+        start = end
     return spectrum / spectrum.sum()
 
 

@@ -73,3 +73,17 @@ def test_axial_static_powder_matches_analytic_centroid():
     centroid = dataset.data @ dataset.x.data
     # Allow for the powder mesh and the left-edge frequency convention.
     assert centroid == pytest.approx(-(cq_hz**2) / (40 * larmor_hz), abs=10)
+
+
+def test_triangle_batches_preserve_flat_sides_and_endpoint_mass():
+    from spectrochempy_nmr.pulsar import _deposit_triangles
+
+    axis = np.arange(8192, dtype=float)
+    # Equal rising and falling densities sum to a uniform distribution.
+    # The last triangle is a point mass at the upper endpoint.
+    frequencies = np.array([axis[0], axis[-1]])
+    triangles = np.array([[0, 0, 1], [0, 1, 1]] * 33 + [[1, 1, 1]])
+    result = _deposit_triangles(axis, frequencies, np.ones(2), triangles)
+    expected = np.full(axis.size, 66 / (67 * (axis.size - 1)))
+    expected[-1] = 1 / 67
+    np.testing.assert_allclose(result, expected, rtol=1e-11)
