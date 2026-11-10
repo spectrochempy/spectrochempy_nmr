@@ -850,3 +850,44 @@ def test_coupled_density_preserves_the_order_and_thermal_partner_polarization():
     partner = np.diag([0.4, -0.4])
     expected = np.kron(observed, np.eye(2)) + np.kron(np.eye(2), partner)
     np.testing.assert_allclose(density, expected, atol=1e-12)
+
+
+def test_probe_bandwidth_weights_vertices_before_normalizing_ideal_spectrum():
+    spectrum = simulate_csa(
+        anisotropy_hz=0,
+        eta=0,
+        spectral_width_hz=4000,
+        shift_hz=500,
+        j_partners=[PassiveJ(0.5, 1000)],
+        probe_bandwidth_hz=2000,
+        points=4001,
+        accuracy=2,
+    )
+    nonzero = spectrum.data > 0
+    np.testing.assert_array_equal(spectrum.x.data[nonzero], [0, 1000])
+    np.testing.assert_allclose(spectrum.data[nonzero], [2 / 3, 1 / 3])
+
+
+def test_probe_bandwidth_preserves_rf_signal_attenuation():
+    spectrum = simulate_pulse_sequence(
+        [IdealPulse(90)],
+        spin=0.5,
+        larmor_hz=100e6,
+        spectral_width_hz=4000,
+        shift_hz=1000,
+        probe_bandwidth_hz=2000,
+        accuracy=2,
+    )
+    assert spectrum.data.sum() == pytest.approx(0.5, abs=1e-12)
+
+
+def test_probe_bandwidth_cannot_return_nan_when_all_intensity_underflows():
+    with pytest.raises(ValueError, match="no finite positive intensity"):
+        simulate_csa(
+            anisotropy_hz=0,
+            eta=0,
+            spectral_width_hz=4000,
+            shift_hz=500,
+            probe_bandwidth_hz=1e-160,
+            accuracy=2,
+        )

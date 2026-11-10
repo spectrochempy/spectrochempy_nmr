@@ -415,6 +415,20 @@ to obtain the reduced matrices by partial trace. Divide a partial
 trace by the traced spin's dimension to use the same deviation
 scale as the single-spin thermal initialization.
 
+## Receiver bandwidth
+
+Optional `probe_bandwidth_hz` applies the legacy Lorentzian
+receiver weighting at each vertex and band frequency before depositing
+its intensity. For offset $f$ from the simulation carrier and full
+width at half height $W$, the factor is $1/[1+(2f/W)^2]$. The original
+quality-factor parameter corresponds to $W=\nu_0/Q$ for $Q>0$.
+Leaving the bandwidth unset gives a flat receiver response.
+
+The ideal powder entry points retain unit area over the requested
+transitions and bands after this weighting. Pulse-sequence spectra
+retain the loss in absolute signal relative to the ideal x90 reference.
+The receiver weighting does not affect the prepared density matrix.
+
 ## Verification and performance
 
 The [tests](../../tests/test_pulsar.py) separate three kinds of checks.

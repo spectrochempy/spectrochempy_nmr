@@ -227,6 +227,33 @@ def _rotor_angle(rotor_angle_deg, spinning_hz):
     return np.deg2rad(angle) if spinning_hz else 0.0
 
 
+def _validate_probe_bandwidth(bandwidth):
+    if bandwidth is None:
+        return None
+    (bandwidth,) = _real_scalars(bandwidth)
+    if bandwidth <= 0:
+        raise ValueError("probe_bandwidth_hz must be positive.")
+    return bandwidth
+
+
+def _probe_weights(frequency, weights, bandwidth):
+    if bandwidth is None:
+        return weights
+    half = bandwidth / 2
+    radius = np.hypot(frequency, half)
+    ratio = np.divide(half, radius, out=np.ones_like(radius), where=radius > 0)
+    return weights * ratio**2
+
+
+def _normalize_profile(profile):
+    total = profile.sum()
+    if not np.isfinite(total) or total <= 0:
+        raise ValueError(
+            "The selected spectrum has no finite positive intensity to normalize."
+        )
+    return profile / total
+
+
 def _validate_grid(spectral_width_hz, spinning_hz, points, accuracy, sidebands):
     if spectral_width_hz <= 0 or spinning_hz < 0:
         raise ValueError("Use a positive spectral width and a nonnegative MAS rate.")
@@ -285,6 +312,7 @@ def _central_transition_profile(
     csa_rotation=None,
     transitions="central",
     j_partners=(),
+    probe_bandwidth_hz=None,
 ):
     points, accuracy, sidebands = index(points), index(accuracy), index(sidebands)
     values = (
@@ -350,6 +378,7 @@ def _central_transition_profile(
         accuracy,
         sidebands,
         _passive_offsets(j_partners),
+        _validate_probe_bandwidth(probe_bandwidth_hz),
     )
     if transitions == "central":
         harmonics = _quadrupolar_harmonics(directions, quadrupolar_eta, angle)
@@ -357,7 +386,7 @@ def _central_transition_profile(
         spin_scale = 3 * (spin + 1.5) / (4 * spin**2 * (spin - 0.5))
         harmonics *= spin_scale * cq_hz**2 / (16 * larmor_hz)
         axis, mass = _powder_profile(harmonics + csa, *grid)
-        return axis, mass / mass.sum()
+        return axis, _normalize_profile(mass)
 
     spectrum = np.zeros(points)
     for m, strength, harmonics in _transition_harmonics(
@@ -367,7 +396,7 @@ def _central_transition_profile(
             continue
         axis, mass = _powder_profile(harmonics, *grid)
         spectrum += strength * mass
-    return axis, spectrum / spectrum.sum()
+    return axis, _normalize_profile(spectrum)
 
 
 def _powder_interactions(
@@ -444,6 +473,7 @@ def _powder_profile(
     accuracy,
     sidebands,
     passive_offsets=((0.0, 1.0),),
+    probe_bandwidth_hz=None,
 ):
     """Integrate the selected orders for a set of vertex harmonics."""
     frequencies = shift_hz + harmonics[0].real
@@ -457,8 +487,10 @@ def _powder_profile(
     if not spinning_hz:
         spectrum = np.zeros_like(axis)
         for offset, population in passive_offsets:
+            frequency = frequencies + offset
+            detected = _probe_weights(frequency, weights, probe_bandwidth_hz)
             spectrum += population * _deposit_triangles(
-                axis, frequencies + offset, weights, triangles
+                axis, frequency, detected, triangles
             )
         return axis, spectrum
 
@@ -498,8 +530,12 @@ def _powder_profile(
     for band_order, intensity in zip(band_orders, band_intensity.T, strict=True):
         band = frequencies + band_order * spinning_hz
         for offset, population in passive_offsets:
+            frequency = band + offset
+            detected = _probe_weights(
+                frequency, weights * intensity, probe_bandwidth_hz
+            )
             spectrum += population * _deposit_triangles(
-                axis, band + offset, weights * intensity, triangles
+                axis, frequency, detected, triangles
             )
     return axis, spectrum
 
@@ -521,6 +557,7 @@ def simulate_central_transition(
     csa_eta=0.0,
     csa_rotation=None,
     j_partners=(),
+    probe_bandwidth_hz=None,
 ):
     """Simulate the central transition of an isolated spin as an NDDataset.
 
@@ -536,7 +573,8 @@ def simulate_central_transition(
     PULSAR bins. The spectral window must contain all requested bands.
     Powder accuracy ranges from 1 to 64, and MAS quadrature is limited
     to 4096 rotor samples. The table of intensities across powder vertices
-    and requested bands is limited to 64 MiB.
+    and requested bands is limited to 64 MiB. Optional probe_bandwidth_hz
+    is the Lorentzian receiver bandwidth at half height.
     """
     axis, profile = _central_transition_profile(
         cq_hz=cq_hz,
@@ -554,6 +592,7 @@ def simulate_central_transition(
         csa_eta=csa_eta,
         csa_rotation=csa_rotation,
         j_partners=j_partners,
+        probe_bandwidth_hz=probe_bandwidth_hz,
     )
     return _as_dataset(axis, profile, "PULSAR central transition")
 
@@ -576,6 +615,7 @@ def simulate_quadrupolar(
     csa_eta=0.0,
     csa_rotation=None,
     j_partners=(),
+    probe_bandwidth_hz=None,
 ):
     """Simulate a selected set of quadrupolar transitions of one spin.
 
@@ -603,6 +643,7 @@ def simulate_quadrupolar(
         csa_eta=csa_eta,
         csa_rotation=csa_rotation,
         j_partners=j_partners,
+        probe_bandwidth_hz=probe_bandwidth_hz,
     )
     return _as_dataset(axis, profile, "PULSAR quadrupolar spectrum")
 
@@ -619,6 +660,7 @@ def simulate_csa(
     accuracy=16,
     sidebands=0,
     j_partners=(),
+    probe_bandwidth_hz=None,
 ):
     """Simulate first-order chemical shift anisotropy for an isolated spin.
 
@@ -650,9 +692,10 @@ def simulate_csa(
         accuracy,
         sidebands,
         _passive_offsets(j_partners),
+        _validate_probe_bandwidth(probe_bandwidth_hz),
     )
     return _as_dataset(
-        axis, profile / profile.sum(), "PULSAR chemical shift anisotropy"
+        axis, _normalize_profile(profile), "PULSAR chemical shift anisotropy"
     )
 
 
@@ -1045,6 +1088,7 @@ def simulate_rectangular_pulse(
     rotor_angle_deg=54.736,
     sidebands=0,
     max_rf_step_s=2e-6,
+    probe_bandwidth_hz=None,
 ):
     """Simulate a powder after one finite rectangular RF pulse.
 
@@ -1072,6 +1116,7 @@ def simulate_rectangular_pulse(
         rotor_angle_deg=rotor_angle_deg,
         sidebands=sidebands,
         max_rf_step_s=max_rf_step_s,
+        probe_bandwidth_hz=probe_bandwidth_hz,
     )
 
 
@@ -1098,6 +1143,7 @@ def simulate_pulse_sequence(
     transitions="all",
     j_partners=(),
     output="spectrum",
+    probe_bandwidth_hz=None,
 ):
     """Simulate a sequence of pulses, delays and coherence selections.
 
@@ -1151,6 +1197,7 @@ def simulate_pulse_sequence(
         raise ValueError("max_rf_step_s must be positive.")
     _validate_grid(spectral_width_hz, spinning_hz, points, accuracy, sidebands)
     _validate_output(output, sidebands)
+    bandwidth = _validate_probe_bandwidth(probe_bandwidth_hz)
     directions, weights, triangles, angle, csa, quadrupolar_eta = _powder_interactions(
         accuracy,
         spinning_hz,
@@ -1235,8 +1282,10 @@ def simulate_pulse_sequence(
         signals *= receiver * population
         for i in np.flatnonzero(selected):
             for j, order in enumerate(range(-sidebands, sidebands + 1)):
-                signal = weights * signals[:, i, j]
                 frequency = shifted[:, i] + order * spinning_hz
+                signal = _probe_weights(
+                    frequency, weights * signals[:, i, j], bandwidth
+                )
                 profile.real += _deposit_triangles(
                     axis, frequency, signal.real, triangles
                 )
@@ -1371,6 +1420,7 @@ def simulate_coupled_sequence(
     transitions="all",
     j_partners=(),
     output="spectrum",
+    probe_bandwidth_hz=None,
 ):
     """Simulate two RF-active spins with a secular isotropic J coupling.
 
@@ -1391,6 +1441,7 @@ def simulate_coupled_sequence(
         raise ValueError("max_rf_step_s must be positive.")
     _validate_grid(spectral_width_hz, spinning_hz, points, accuracy, sidebands)
     _validate_output(output, sidebands)
+    bandwidth = _validate_probe_bandwidth(probe_bandwidth_hz)
     site_a, site_b = _site_parameters(observed), _site_parameters(partner)
     spin_a, spin_b = site_a[0], site_b[0]
     size_a, size_b = int(2 * spin_a + 1), int(2 * spin_b + 1)
@@ -1512,7 +1563,9 @@ def simulate_coupled_sequence(
         for i in range(strengths.size):
             for j, order in enumerate(range(-sidebands, sidebands + 1)):
                 shifted = frequency[:, i] + offset + order * spinning_hz
-                weighted = weights * signals[:, i, j]
+                weighted = _probe_weights(
+                    shifted, weights * signals[:, i, j], bandwidth
+                )
                 profile.real += _deposit_triangles(
                     axis, shifted, weighted.real, triangles
                 )
