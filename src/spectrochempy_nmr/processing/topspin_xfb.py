@@ -282,20 +282,21 @@ def replay_xfb(source):
         not isinstance(delay, (int, float))
         or not np.isfinite(delay)
         or not 0 <= delay < nx - 1
-        or delay != int(delay)
     ):
-        raise ValueError("TopSpin XFB requires a known integer direct group delay")
+        raise ValueError("TopSpin XFB requires a known direct group delay")
 
-    delay = int(delay)
+    origin = int(np.ceil(delay))
+    if origin >= nx - 1:
+        raise ValueError("TopSpin XFB group delay leaves fewer than two direct points")
     _check_baseline(y, (0, 1, 2, 3, 4, 5, 6), ny)
-    _check_baseline(x, (0, 4, 6), nx - delay)
+    _check_baseline(x, (0, 4, 6), nx - origin)
     f2_input = data.copy() if x["BC_mod"] else data
     if x["BC_mod"]:
-        radius = _gaussian_radius(x, nx - delay) if x["BC_mod"] == 6 else 0
-        f2_input[..., delay:] = _subtract_baseline(
-            data[..., delay:], x["BC_mod"], -x["COROFFS"] / widths[1], radius
+        radius = _gaussian_radius(x, nx - origin) if x["BC_mod"] == 6 else 0
+        f2_input[..., origin:] = _subtract_baseline(
+            data[..., origin:], x["BC_mod"], -x["COROFFS"] / widths[1], radius
         )
-    f2_input = f2_input * _window(x, nx, widths[1], delay)
+    f2_input = f2_input * _window(x, nx, widths[1], origin)
     if mode == "echo-antiecho":
         f2_input = _rance_kay(f2_input)
     sx, sy = x["SI"], y["SI"]
@@ -369,6 +370,7 @@ def replay_xfb(source):
         "size": (sy, sx),
         "window": (y["WDW"], x["WDW"]),
         "group_delay_points": delay,
+        "f2_time_origin_points": origin,
         "pknl": x["PKNL"],
         "phase": {
             "f1": (y["PHC0"], y["PHC1"]),

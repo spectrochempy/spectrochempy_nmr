@@ -396,6 +396,33 @@ def test_topspin_xfb_gaussian_baseline(experiment, folder, case, modes):
     assert trace["pknl"] is combined
 
 
+@pytest.mark.parametrize("experiment", ["20", "30", "40"])
+@pytest.mark.parametrize(
+    ("case", "windows", "baseline", "pknl"),
+    [
+        ("plain", (0, 0), 0, False),
+        ("phase", (0, 0), 0, True),
+        ("em", (0, 1), 0, False),
+        ("sine", (0, 3), 0, False),
+        ("qpol", (0, 0), 4, False),
+        ("qfil", (0, 0), 6, False),
+        ("combined", (4, 3), 6, True),
+    ],
+)
+def test_topspin_xfb_fractional_delay(experiment, case, windows, baseline, pknl):
+    root = os.environ.get("NMR_TOPSPIN_XFB_FRACTIONAL_REFERENCES")
+    if root is None:
+        pytest.skip("set NMR_TOPSPIN_XFB_FRACTIONAL_REFERENCES to the CMCse copies")
+    path = Path(root).resolve(strict=True) / case / experiment
+    trace = _assert_topspin_xfb(path, case == "combined")
+    assert trace["pknl"] is pknl
+    assert trace["window"] == windows
+    assert trace.get("baseline", (0, 0)) == (0, baseline)
+    delay = trace["group_delay_points"]
+    assert 67 < delay < 68
+    assert trace["f2_time_origin_points"] == 68
+
+
 def _assert_topspin_xfb(path, with_prediction):
     experiment = path.name
     raw = _local_read(path / "ser")
@@ -418,6 +445,8 @@ def _assert_topspin_xfb(path, with_prediction):
         expected = np.asarray(planes)
 
     gain = meta["acqus"]["NS"] * meta["acqus"]["RG"]
+    if meta["acqus"]["DTYPA"] == 0:
+        gain *= 2.0 ** meta["acqus"]["NC"]
     residual = actual * gain - expected
     relative = np.linalg.norm(residual, axis=(1, 2)) / np.linalg.norm(
         expected, axis=(1, 2)

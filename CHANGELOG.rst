@@ -21,6 +21,8 @@ Added
   corrections in F1 and DQD polynomial correction in F2.
 * Replay TopSpin XFB Gaussian solvent filters, with the recorded width,
   offset and treatment of both trace ends.
+* Replay TopSpin XFB fractional digital-filter delays, preserving the
+  fractional phase ramp and using the rounded-up origin for F2 preprocessing.
 
 * Read and process qualified Bruker States SER acquisitions through
   ``read_topspin()`` and interop without TPPI alternation.
