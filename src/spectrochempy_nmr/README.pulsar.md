@@ -315,6 +315,35 @@ persistent complex work arrays to 64 MiB and propagation to 4096 steps
 per pulse. A batch of rotor phases must also fit within 131,072 matrix
 elements for at least one powder vertex.
 
+## Pulse sequences and free evolution
+
+`simulate_pulse_sequence` takes an ordered list of immutable events.
+`Pulse(duration_s, rf_hz, phase_deg, offset_hz)` is rectangular;
+`IdealPulse(flip_deg, phase_deg)` is an instantaneous rotation;
+`Delay(duration_s)` is free evolution; and
+`Coherence(order)` projects the density matrix onto a chosen
+row-minus-column magnetic quantum-number difference. Acquisition
+detects order +1 in this convention.
+
+During a delay the secular Hamiltonian is diagonal at all times.
+Its diagonal entries commute, so the rotor harmonics integrate
+analytically. The propagator uses the sum of the mean offset times
+the delay and the difference of the periodic phase at both endpoints.
+Each RF pulse's phase is defined at its onset. An offset transmitter
+uses its own rotating frame during that pulse, then transforms the
+density matrix back to the simulation carrier.
+
+Optional `t2_s` multiplies off-diagonal elements by
+$\exp(-t/T_2)$ after each timed event, the eventwise approximation
+used here for transverse relaxation. The receiver applies
+$\exp(i\phi_\mathrm{rec})$ to the detected signal. RF always propagates
+all levels. The `transitions` option restricts acquisition to the
+central transition, the satellites, or all transitions, and the
+selected transitions set the reference amplitude for an ideal x90
+pulse. An equal-delay Hahn echo tests refocusing in a static powder
+and over complete MAS rotor periods, including the predicted
+transverse attenuation.
+
 ## Verification and performance
 
 The [tests](../../tests/test_pulsar.py) separate three kinds of checks.

@@ -4,8 +4,13 @@ import numpy as np
 import pytest
 
 from spectrochempy.core.units import ur
+from spectrochempy_nmr.pulsar import Coherence
+from spectrochempy_nmr.pulsar import Delay
+from spectrochempy_nmr.pulsar import IdealPulse
+from spectrochempy_nmr.pulsar import Pulse
 from spectrochempy_nmr.pulsar import simulate_central_transition
 from spectrochempy_nmr.pulsar import simulate_csa
+from spectrochempy_nmr.pulsar import simulate_pulse_sequence
 from spectrochempy_nmr.pulsar import simulate_quadrupolar
 from spectrochempy_nmr.pulsar import simulate_rectangular_pulse
 
@@ -580,3 +585,75 @@ def test_rotated_csa_finite_mas_pulse_uses_full_sphere(monkeypatch):
     monkeypatch.setattr(pulsar, "_powder_mesh", independently_reflected_mesh)
     expected = simulate_rectangular_pulse(**settings)
     np.testing.assert_allclose(actual.data, expected.data, atol=1e-12, rtol=0)
+
+
+@pytest.mark.parametrize("spinning", [0, 5000])
+def test_hahn_echo_recovers_the_ideal_profile_with_t2_at_equal_delays(spinning):
+    delay = 200e-6
+    t2 = 1e-3
+    settings = dict(
+        spin=0.5,
+        larmor_hz=100e6,
+        spectral_width_hz=30e3,
+        shift_hz=800,
+        csa_anisotropy_hz=2100,
+        csa_eta=0.6,
+        spinning_hz=spinning,
+        sidebands=bool(spinning),
+        points=4096,
+        accuracy=3,
+    )
+    ideal = simulate_pulse_sequence([IdealPulse(90)], **settings)
+    echo = simulate_pulse_sequence(
+        [IdealPulse(90), Delay(delay), IdealPulse(180), Delay(delay)],
+        t2_s=t2,
+        receiver_phase_deg=180,
+        **settings,
+    )
+    np.testing.assert_allclose(
+        echo.data, ideal.data * np.exp(-2 * delay / t2), atol=1e-12
+    )
+
+
+@pytest.mark.parametrize(("order", "expected"), [(1, 1), (-1, 0)])
+def test_sequence_coherence_selection_uses_spin_projection_difference(order, expected):
+    result = simulate_pulse_sequence(
+        [IdealPulse(90), Coherence(order)],
+        spin=0.5,
+        larmor_hz=100e6,
+        spectral_width_hz=30e3,
+        accuracy=2,
+    )
+    assert result.data.sum() == pytest.approx(expected, abs=1e-12)
+
+
+def test_offset_pulse_returns_coherence_to_the_simulation_carrier():
+    offset, duration = 1250, 100e-6
+    result = simulate_pulse_sequence(
+        [Pulse(duration, 0.25 / duration, offset_hz=offset)],
+        spin=0.5,
+        larmor_hz=100e6,
+        spectral_width_hz=5000,
+        shift_hz=offset,
+        accuracy=2,
+    )
+    expected = np.exp(2j * np.pi * offset * duration)
+    assert result.data.sum() == pytest.approx(expected, abs=1e-12)
+
+
+def test_rf_central_selection_allows_a_narrow_window():
+    settings = dict(
+        cq_hz=500e3,
+        eta=0.6,
+        spin=1.5,
+        larmor_hz=100e6,
+        spectral_width_hz=20e3,
+        accuracy=4,
+    )
+    central = simulate_pulse_sequence(
+        [IdealPulse(90)], transitions="central", **settings
+    )
+    ideal = simulate_central_transition(**settings)
+    np.testing.assert_allclose(central.data, ideal.data, atol=1e-12, rtol=0)
+    with pytest.raises(ValueError, match="spectral window"):
+        simulate_pulse_sequence([IdealPulse(90)], **settings)

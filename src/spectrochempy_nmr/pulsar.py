@@ -11,6 +11,7 @@ validation also requires independent checks of the model and its conventions.
 See the adjacent README.pulsar.md for the equations and implementation notes.
 """
 
+from dataclasses import dataclass
 from functools import lru_cache
 from numbers import Real
 from operator import index
@@ -618,52 +619,185 @@ def _evolve_pulse_step(density, rf, offsets, duration_s):
     return _evolve_density(density, hamiltonian, duration_s)
 
 
-def _mas_pulse_signals(
-    offsets,
-    harmonics,
-    strengths,
-    initial,
-    rf,
-    duration_s,
-    spinning_hz,
-    count,
-    sidebands,
-    nsteps,
-):
-    """Average complex band amplitudes over rotor phase at pulse onset."""
-    gamma = 2 * np.pi * np.arange(count) / count
+@dataclass(frozen=True)
+class Pulse:
+    """Rectangular RF pulse in seconds, Hz and degrees."""
+
+    duration_s: float
+    rf_hz: float
+    phase_deg: float = 0
+    offset_hz: float = 0
+
+
+@dataclass(frozen=True)
+class IdealPulse:
+    """Instantaneous rotation with flip angle and phase in degrees."""
+
+    flip_deg: float
+    phase_deg: float = 0
+
+
+@dataclass(frozen=True)
+class Delay:
+    """Free evolution for a duration in seconds."""
+
+    duration_s: float
+
+
+@dataclass(frozen=True)
+class Coherence:
+    """Keep the matrix elements whose row minus column spin projection is order."""
+
+    order: int
+
+
+def _prepare_events(events, ix, iy, iz, spinning_hz, max_rf_step_s, t2_s):
+    projections = np.diag(iz)
+    coherence_order = projections[:, None] - projections[None, :]
+    off_diagonal = coherence_order != 0
+    prepared = []
+    for event in events:
+        if isinstance(event, Coherence):
+            order = index(event.order)
+            if abs(order) > projections.size - 1:
+                raise ValueError("Coherence order is outside the spin manifold.")
+            prepared.append(("mask", coherence_order == order))
+            continue
+        if isinstance(event, IdealPulse):
+            flip_deg, phase_deg = _real_scalars(event.flip_deg, event.phase_deg)
+            phase = np.deg2rad(phase_deg)
+            axis = np.cos(phase) * ix + np.sin(phase) * iy
+            prepared.append(("ideal", axis, flip_deg / 360))
+            continue
+        if isinstance(event, Delay):
+            (duration,) = _real_scalars(event.duration_s)
+            if duration < 0:
+                raise ValueError("Delay duration must be nonnegative.")
+            prepared.append(("delay", duration))
+        elif isinstance(event, Pulse):
+            duration, power, phase_deg, offset = _real_scalars(
+                event.duration_s, event.rf_hz, event.phase_deg, event.offset_hz
+            )
+            if duration <= 0 or power < 0:
+                raise ValueError("Use positive pulse duration and nonnegative RF.")
+            phase = np.deg2rad(phase_deg)
+            rf = power * (np.cos(phase) * ix + np.sin(phase) * iy)
+            count = 1
+            if spinning_hz:
+                needed = duration / min(max_rf_step_s, 1 / (32 * spinning_hz))
+                if needed > 4096:
+                    raise ValueError(
+                        "A MAS pulse supports up to 4096 propagation steps."
+                    )
+                count = max(1, int(np.ceil(needed)))
+            frame = np.exp(2j * np.pi * offset * duration * coherence_order)
+            prepared.append(("pulse", duration, rf, offset, count, frame))
+        else:
+            raise TypeError(
+                "Sequence events must be Pulse, IdealPulse, Delay or Coherence."
+            )
+        if t2_s is not None:
+            prepared.append(
+                ("mask", np.where(off_diagonal, np.exp(-duration / t2_s), 1))
+            )
+    if not prepared:
+        raise ValueError("Supply at least one sequence event.")
+    return prepared
+
+
+def _phase_integral(terms, gamma, spinning_hz):
     orders = np.arange(1, 5)
-    step = duration_s / nsteps
-    step_phase = 2 * np.pi * spinning_hz * step
-    gamma_end = gamma + nsteps * step_phase
-    final_rotor = np.exp(-1j * orders[:, None] * gamma_end) / (
-        orders[:, None] * spinning_hz
-    )
+    rotor = np.exp(-1j * orders[:, None] * gamma) / (orders[:, None] * spinning_hz)
+    return -(terms @ rotor).imag.swapaxes(-1, -2)
+
+
+def _propagate_sequence(offsets, terms, initial, events, spinning_hz, gamma):
+    density = initial
+    for kind, *args in events:
+        if kind == "mask":
+            density = density * args[0]
+        elif kind == "ideal":
+            axis, duration = args
+            density = _evolve_density(density, axis, duration)
+        elif kind == "delay":
+            (duration,) = args
+            if spinning_hz:
+                next_gamma = gamma + 2 * np.pi * spinning_hz * duration
+                phase = (
+                    2 * np.pi * offsets[:, None, :] * duration
+                    + _phase_integral(terms, next_gamma, spinning_hz)
+                    - _phase_integral(terms, gamma, spinning_hz)
+                )
+                gamma = next_gamma
+            else:
+                phase = 2 * np.pi * offsets * duration
+            level_phase = np.concatenate(
+                (np.zeros_like(phase[..., :1]), phase.cumsum(axis=-1)), axis=-1
+            )
+            evolution = np.exp(-1j * level_phase)
+            density = evolution[..., :, None] * density * evolution[..., None, :].conj()
+        else:
+            duration, rf, offset, count, frame = args
+            step = duration / count
+            if spinning_hz:
+                order = np.arange(1, 5)
+                step_phase = 2 * np.pi * spinning_hz * step
+                for i in range(count):
+                    midpoint = gamma + (i + 0.5) * step_phase
+                    rotor = np.exp(-1j * order[:, None] * midpoint)
+                    instantaneous = offsets[:, None, :] + (terms @ rotor).real.swapaxes(
+                        -1, -2
+                    )
+                    density = _evolve_pulse_step(
+                        density, rf, instantaneous - offset, step
+                    )
+                gamma = gamma + count * step_phase
+            else:
+                density = _evolve_pulse_step(density, rf, offsets - offset, step)
+            density = density * frame
+    return density, gamma
+
+
+def _sequence_signals(
+    offsets, terms, strengths, initial, events, spinning_hz, count, sidebands
+):
+    """Average complex band amplitudes over rotor phase at preparation onset."""
+    size = initial.shape[0]
     band_orders = np.arange(-sidebands, sidebands + 1)
-    band_amplitudes = np.empty((*offsets.shape, band_orders.size), dtype=complex)
-    # Bound the number of batched density/Hamiltonian matrix entries.
-    block_size = min(128, 131072 // (count * rf.size))
+    amplitudes = np.empty((*offsets.shape, band_orders.size), dtype=complex)
+    block_size = min(128, 131072 // (count * size**2))
+    gamma = 2 * np.pi * np.arange(count) / count if spinning_hz else None
     for start in range(0, offsets.shape[0], block_size):
         block = slice(start, start + block_size)
-        terms = harmonics[block]
-        density = initial
-        for i in range(nsteps):
-            midpoint = gamma + (i + 0.5) * step_phase
-            rotor = np.exp(-1j * orders[:, None] * midpoint)
-            instantaneous = offsets[block, None, :] + (terms @ rotor).real.swapaxes(
-                -1, -2
-            )
-            density = _evolve_pulse_step(density, rf, instantaneous, step)
-
-        coherence = np.diagonal(density, offset=1, axis1=-2, axis2=-1).swapaxes(-1, -2)
-        signal = -1j * np.sqrt(strengths)[None, :, None] * coherence
-        wave = np.exp(-1j * (terms @ final_rotor).imag)
-        # One Fourier sum describes detection. The opposite-sign sum
-        # weights preparation by the density matrix at the end of the pulse.
+        block_terms = terms[block] if spinning_hz else None
+        batch = (
+            (offsets[block].shape[0], count)
+            if spinning_hz
+            else (offsets[block].shape[0],)
+        )
+        density, gamma_end = _propagate_sequence(
+            offsets[block],
+            block_terms,
+            np.broadcast_to(initial, (*batch, size, size)),
+            events,
+            spinning_hz,
+            gamma,
+        )
+        coherence = np.diagonal(density, offset=1, axis1=-2, axis2=-1)
+        signal = -1j * np.sqrt(strengths) * coherence
+        if not spinning_hz:
+            amplitudes[block, :, 0] = signal
+            continue
+        wave = np.exp(
+            1j * _phase_integral(block_terms, gamma_end, spinning_hz)
+        ).swapaxes(-1, -2)
+        # Opposite-sign Fourier sums for detection and preparation.
         detection = np.fft.fft(wave, axis=-1)[..., band_orders] / count
-        preparation = np.fft.ifft(signal * wave.conj(), axis=-1)[..., band_orders]
-        band_amplitudes[block] = detection * preparation
-    return band_amplitudes
+        preparation = np.fft.ifft(signal.swapaxes(-1, -2) * wave.conj(), axis=-1)[
+            ..., band_orders
+        ]
+        amplitudes[block] = detection * preparation
+    return amplitudes
 
 
 def simulate_rectangular_pulse(
@@ -695,14 +829,59 @@ def simulate_rectangular_pulse(
     phase are retained. With MAS, midpoint propagation uses time steps
     no longer than max_rf_step_s or 1/32 of a rotor period.
     """
+    return simulate_pulse_sequence(
+        [Pulse(duration_s, rf_hz, phase_deg)],
+        spin=spin,
+        larmor_hz=larmor_hz,
+        spectral_width_hz=spectral_width_hz,
+        cq_hz=cq_hz,
+        eta=eta,
+        csa_anisotropy_hz=csa_anisotropy_hz,
+        csa_eta=csa_eta,
+        csa_rotation=csa_rotation,
+        shift_hz=shift_hz,
+        points=points,
+        accuracy=accuracy,
+        spinning_hz=spinning_hz,
+        sidebands=sidebands,
+        max_rf_step_s=max_rf_step_s,
+    )
+
+
+def simulate_pulse_sequence(
+    events,
+    *,
+    spin,
+    larmor_hz,
+    spectral_width_hz,
+    cq_hz=0.0,
+    eta=0.0,
+    csa_anisotropy_hz=0.0,
+    csa_eta=0.0,
+    csa_rotation=None,
+    shift_hz=0.0,
+    points=8192,
+    accuracy=16,
+    spinning_hz=0.0,
+    sidebands=0,
+    max_rf_step_s=2e-6,
+    t2_s=None,
+    receiver_phase_deg=0.0,
+    transitions="all",
+):
+    """Simulate a sequence of pulses, delays and coherence selections.
+
+    Each event uses the simulation carrier as its phase reference.
+    Optional t2_s damps off-diagonal terms after each timed event.
+    receiver_phase_deg multiplies the complex signal by exp(i*phase).
+    The ideal on-carrier x90 pulse defines unit absorption for the
+    selected transitions. RF always propagates the complete manifold.
+    """
     points, accuracy, sidebands = index(points), index(accuracy), index(sidebands)
     (
         spin,
         larmor_hz,
         spectral_width_hz,
-        rf_hz,
-        duration_s,
-        phase_deg,
         cq_hz,
         eta,
         csa_anisotropy_hz,
@@ -710,13 +889,11 @@ def simulate_rectangular_pulse(
         shift_hz,
         spinning_hz,
         max_rf_step_s,
+        receiver_phase_deg,
     ) = _real_scalars(
         spin,
         larmor_hz,
         spectral_width_hz,
-        rf_hz,
-        duration_s,
-        phase_deg,
         cq_hz,
         eta,
         csa_anisotropy_hz,
@@ -724,15 +901,18 @@ def simulate_rectangular_pulse(
         shift_hz,
         spinning_hz,
         max_rf_step_s,
+        receiver_phase_deg,
     )
     if not 0.5 <= spin <= 16 or spin % 0.5 != 0 or (spin == 0.5 and cq_hz):
         raise ValueError(
             "Use spin from 1/2 to 16 in steps of 1/2 and Cq=0 for spin 1/2."
         )
-    if larmor_hz <= 0 or rf_hz < 0 or duration_s <= 0:
-        raise ValueError(
-            "Use positive Larmor frequency and pulse duration, and nonnegative RF."
-        )
+    if larmor_hz <= 0:
+        raise ValueError("Use a positive Larmor frequency.")
+    if t2_s is not None:
+        (t2_s,) = _real_scalars(t2_s)
+        if t2_s <= 0:
+            raise ValueError("t2_s must be positive.")
     if not 0 <= eta <= 1 or not 0 <= csa_eta <= 1:
         raise ValueError("eta and csa_eta must lie between 0 and 1.")
     if max_rf_step_s <= 0:
@@ -747,7 +927,16 @@ def simulate_rectangular_pulse(
         csa_rotation,
         force_hemisphere=bool(spinning_hz),
     )
+    if transitions not in ("central", "satellites", "all"):
+        raise ValueError("transitions must be 'central', 'satellites', or 'all'.")
+    if transitions != "all" and (spin < 1.5 or spin % 1 != 0.5):
+        raise ValueError("Select all transitions for integer spins and spin 1/2.")
+
     transition_count = int(2 * spin)
+    selected = np.ones(transition_count, dtype=bool)
+    if transitions != "all":
+        central = spin - np.arange(transition_count) == 0.5
+        selected = central if transitions == "central" else ~central
     offsets = np.empty((directions.shape[1], transition_count))
     strengths = np.empty(transition_count)
     if spinning_hz:
@@ -766,10 +955,6 @@ def simulate_rectangular_pulse(
             raise ValueError(
                 "MAS pulse work arrays exceed 64 MiB. Reduce accuracy or sidebands."
             )
-        nsteps = duration_s / min(max_rf_step_s, 1 / (32 * spinning_hz))
-        if nsteps > 4096:
-            raise ValueError("A MAS pulse supports up to 4096 propagation steps.")
-        nsteps = max(1, int(np.ceil(nsteps)))
         harmonics = np.empty((*offsets.shape, 4), dtype=complex)
     for i, (_, strength, terms) in enumerate(
         _transition_harmonics(
@@ -782,44 +967,37 @@ def simulate_rectangular_pulse(
             harmonics[:, i] = terms[1:].T
     axis = np.linspace(-spectral_width_hz / 2, spectral_width_hz / 2, points)
     band_offset = sidebands * spinning_hz
-    if offsets.min() - band_offset < axis[0] or offsets.max() + band_offset > axis[-1]:
+    if (
+        offsets[:, selected].min() - band_offset < axis[0]
+        or offsets[:, selected].max() + band_offset > axis[-1]
+    ):
         raise ValueError("The spectral window must contain the requested transitions.")
 
     ix, iy, iz = _spin_operators(spin)
-    phase = np.deg2rad(phase_deg)
-    rf = rf_hz * (np.cos(phase) * ix + np.sin(phase) * iy)
-    if spinning_hz:
-        signals = _mas_pulse_signals(
-            offsets,
-            harmonics,
-            strengths,
-            iz,
-            rf,
-            duration_s,
-            spinning_hz,
-            count,
-            sidebands,
-            nsteps,
-        )
-    else:
-        coherence = np.empty_like(offsets, dtype=complex)
-        for start in range(0, directions.shape[1], 128):
-            block = slice(start, start + 128)
-            density = _evolve_pulse_step(iz, rf, offsets[block], duration_s)
-            coherence[block] = np.diagonal(density, offset=1, axis1=-2, axis2=-1)
-        signals = (-1j * np.sqrt(strengths) * coherence)[..., None]
+    prepared = _prepare_events(events, ix, iy, iz, spinning_hz, max_rf_step_s, t2_s)
+    signals = _sequence_signals(
+        offsets,
+        harmonics if spinning_hz else None,
+        strengths,
+        iz,
+        prepared,
+        spinning_hz,
+        count if spinning_hz else 1,
+        sidebands,
+    )
+    signals *= np.exp(1j * np.deg2rad(receiver_phase_deg))
 
     profile = np.zeros(points, dtype=complex)
-    for i in range(transition_count):
+    for i in np.flatnonzero(selected):
         for j, order in enumerate(range(-sidebands, sidebands + 1)):
             signal = weights * signals[:, i, j]
             frequency = offsets[:, i] + order * spinning_hz
             profile.real += _deposit_triangles(axis, frequency, signal.real, triangles)
             profile.imag += _deposit_triangles(axis, frequency, signal.imag, triangles)
-    ideal_signal = strengths.sum() / 2
+    ideal_signal = strengths[selected].sum() / 2
     powder_mass = weights[triangles].sum()
     return _as_dataset(
-        axis, profile / (ideal_signal * powder_mass), "PULSAR rectangular pulse"
+        axis, profile / (ideal_signal * powder_mass), "PULSAR pulse sequence"
     )
 
 
