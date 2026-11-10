@@ -1,18 +1,18 @@
 Installation
 ============
 
-This documentation targets ``spectrochempy-nmr`` 0.3.0 and requires
-SpectroChemPy 1.1 or later, below core 2.0.
+For ``spectrochempy-nmr`` 0.3.0, install SpectroChemPy 1.2.0 or later
+to use the 1D and qualified 2D workflows in this guide.
 
 .. code-block:: console
 
    python -m pip install \
-       "spectrochempy>=1.1.0,<2" \
+       "spectrochempy>=1.2.0" \
        "spectrochempy-nmr==0.3.0"
 
-For qualified 2D workflows that use the core FFT prevalidation hook, use
-SpectroChemPy 1.2.0 or later. Install the plugin explicitly with core 1.2.0
-because that release's ``nmr`` extra selects the 0.2 series.
+Install the plugin explicitly as shown above. The ``nmr`` extra in
+SpectroChemPy 1.2.0 selects the plugin's 0.2 series. See
+:doc:`/compatibility` for supported core versions and workflow requirements.
 
 Development checkout
 --------------------
@@ -21,7 +21,5 @@ Development checkout
 
    python -m pip install -e .
 
-The plugin stores associated 2D branches as ordinary complex
-arrays. No Hypercomplex or numpy-quaternion package is required.
-See :doc:`/concepts/hypercomplex` for the new storage contract and
-:doc:`/compatibility` for scope.
+The plugin stores associated 2D branches as
+:doc:`native complex channels </concepts/hypercomplex>`.
