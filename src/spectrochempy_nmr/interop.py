@@ -474,8 +474,9 @@ def _set_ser_fft_presentation(dataset, result):
     dataset.meta.pivot = [0] * dataset.ndim
 
 
-def _from_states_tppi(result, data):
-    """Preserve E1/E2 in the explicitly declared States-TPPI profile."""
+def _from_states(result, data, profile):
+    """Preserve E1/E2 in the explicitly declared States-family profile."""
+    mode = "States-TPPI" if profile == "states-tppi" else "States"
     channel_axis = getattr(result, "channel_axis", None)
     if (
         tuple(result.physical_dimensions) != ("F1", "F2")
@@ -496,8 +497,19 @@ def _from_states_tppi(result, data):
         or not np.isfinite(data).all()
     ):
         raise ValueError(
-            "States-TPPI requires normalized F1/F2 time-domain component planes"
+            f"{mode} requires normalized F1/F2 time-domain component planes"
         )
+
+    if profile == "states":
+        if result.acquisition.get("tppi_alternation") is not None:
+            raise ValueError(
+                "Pure States requires data without declared TPPI alternation"
+            )
+        if result.acquisition.get("fft_presentation") is not None:
+            raise ValueError("States interop does not support SER FFT presentation")
+        from .processing.fft_validation import _require_fft_prevalidation
+
+        _require_fft_prevalidation()
 
     channels = np.empty(
         (2, *data.shape[1:]), dtype=np.result_type(data.dtype, np.complex64)
@@ -505,9 +517,12 @@ def _from_states_tppi(result, data):
     channels.real = data[::2]
     channels.imag = data[1::2]
     dataset = _raw_channel_dataset(result, channels, ("E1", "E2"))
-    dataset.meta.quadrature_mode = "states-tppi"
-    dataset.meta.tppi_alternation_state = "encoded"
-    _set_ser_fft_presentation(dataset, result)
+    dataset.meta.quadrature_mode = profile
+    if profile == "states-tppi":
+        dataset.meta.tppi_alternation_state = "encoded"
+        _set_ser_fft_presentation(dataset, result)
+    else:
+        dataset.meta.encoding = ["CHANNELS", "UNVALIDATED:STATES", "UNVALIDATED:STATES"]
     return dataset
 
 
@@ -564,11 +579,25 @@ def _from_stored_states(result, data):
             "States requires normalized F1/F2 complex time-domain branches"
         )
     _require_fft_prevalidation()
+    selection = result.acquisition.get("quadrature_selection", {})
+    mode = selection.get("mode")
+    if mode is not None and (
+        mode not in ("states", "states-tppi")
+        or result.acquisition.get("states_fft_input_transform")
+        != "conjugate-and-negate-second-branch"
+    ):
+        raise ValueError("Unsupported normalized States quadrature contract")
+    labels = ("E1", "E2") if mode is not None else tuple(result.branch_order)
     dataset = _raw_channel_dataset(
-        result, data.copy(), tuple(result.branch_order), allow_unknown_time=True
+        result, data.copy(), labels, allow_unknown_time=mode is None
     )
     dataset.meta.encoding = ["CHANNELS", "UNVALIDATED:STATES", "DIRECT:QSIM"]
     dataset.meta.iscomplex = [False, True, True]
+    if mode is not None:
+        dataset.meta.quadrature_mode = mode
+        dataset.meta.encoding[-1] = "UNVALIDATED:STATES"
+        if mode == "states-tppi":
+            dataset.meta.tppi_alternation_state = "encoded"
     return dataset
 
 
@@ -770,6 +799,9 @@ def from_interop(result, *, profile=None):
     Raw 2D QF requires explicit provider normalization. For a known
     States-TPPI acquisition, profile="states-tppi" confirms that the
     input channels are adjacent E1/E2 pairs with alternation still encoded.
+    Use profile="states" for the same normalized layout with no TPPI
+    alternation. These profiles assume the provider has established the
+    branch order and signs.
     Explicitly normalized echo/anti-echo input retains both complex branches
     in storage order. Stored States branches retain the indirect FFT guard.
     """
@@ -799,8 +831,8 @@ def from_interop(result, *, profile=None):
     if np.ma.is_masked(result.data):
         raise ValueError("from_interop currently requires unmasked acquisition data")
     data = np.asarray(result.data)
-    if profile == "states-tppi":
-        return _from_states_tppi(result, data)
+    if profile in ("states", "states-tppi"):
+        return _from_states(result, data, profile)
     if profile is not None:
         raise ValueError(f"unsupported interop profile: {profile!r}")
     if result.quadrature_mode in (

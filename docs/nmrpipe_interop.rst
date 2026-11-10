@@ -252,6 +252,37 @@ The real Bruker qualification additionally runs NMRPipe when
 and the centred frequency grids. Keep the imported dataset dimension
 order when processing.
 
+Process a confirmed pure States acquisition
+-------------------------------------------
+
+For a complete NMRPipe time-domain file whose branch order and signs
+are known to follow the NMRPipe States convention, use::
+
+   fid = scp.nmr.read(
+       "states.fid",
+       protocol="interop",
+       normalize_options={"confirm_time_grid": True},
+       conversion_profile="states",
+   )
+   spectrum = Experiment(fid).process()
+
+This FFT-only path uses ``FT -nodf`` in both dimensions, with F2 before F1
+and no alternating sign in F1. It returns the four real component planes
+and centered Hz axes. Use ``Experiment.process()`` to enforce the transform
+order. The pure States profile requires SpectroChemPy 1.2.0 or later.
+
+The Agilent qualification uses the historical ``agilent_2d`` acquisition
+from the nmrglue v0.5 corpus and explicit ``var2pipe`` States conversion.
+That conversion conjugates the direct traces and flips the sign of the
+second branch. Native ``read_agilent()`` returns the stored branches.
+The :doc:`userguide/reading_data` guide explains how to select States
+processing for a native acquisition.
+
+Set ``NMR_AGILENT_STATES_REFERENCE`` to the acquisition directory and put
+``nmrPipe`` and ``var2pipe`` on PATH to run the opt-in comparison::
+
+   python -I -m pytest tests/qualification/test_agilent_states_fft.py
+
 Report reproducible import/processing problems in the
 `spectrochempy_nmr issue tracker
 <https://github.com/spectrochempy/spectrochempy_nmr/issues>`_, including versions,

@@ -23,6 +23,7 @@ no write or low-memory variants are provided.
 __all__ = ["read_agilent"]
 
 from datetime import datetime
+from inspect import signature
 
 import numpy as np
 
@@ -30,7 +31,9 @@ from spectrochempy.core.dataset.coord import Coord
 from spectrochempy.core.readers.importer import Importer
 from spectrochempy.core.readers.importer import _importer_method
 from spectrochempy.core.units import ur
+from spectrochempy.utils._logging import info_
 from spectrochempy.utils._logging import warning_
+from spectrochempy.utils.exceptions import SpectroChemPyError
 from spectrochempy.utils.meta import Meta
 from nmrglue.fileio.varian import read as read_varian
 from spectrochempy_nmr.processing.fft_validation import _require_fft_prevalidation
@@ -298,6 +301,12 @@ def read_agilent(*paths, **kwargs):
         single dataset.
     origin : str, optional
         Override the origin label (default ``'agilent'``).
+    quadrature : {"auto", "states", "states-tppi"}, optional
+        Choose the F1 convention for qualified paired 2D FIDs. Automatic
+        selection requires a recognized pulse program source.
+    pulse_program_source : path-like, optional
+        Source of the pulse program used for this acquisition, for automatic
+        selection. By default the provider checks for a known adjacent source.
 
     See Also
     --------
@@ -310,6 +319,13 @@ def read_agilent(*paths, **kwargs):
     >>> scp.nmr.read('path/to/agilent_1d/')  # doctest: +SKIP
 
     """
+    if kwargs.get("quadrature", "auto") not in ("auto", "states", "states-tppi"):
+        raise ValueError("quadrature must be auto, states or states-tppi")
+    if (
+        kwargs.get("pulse_program_source") is not None
+        and kwargs.get("quadrature", "auto") != "auto"
+    ):
+        raise ValueError("pulse_program_source requires automatic quadrature")
     kwargs["filetypes"] = ["Agilent/Varian files (fid, procpar)"]
     kwargs["protocol"] = ["agilent"]
     importer = Importer()
@@ -414,7 +430,9 @@ def _read_normalized_agilent_fid(directory, path):
     return dataset
 
 
-def _read_normalized_agilent_2d(directory, path, profile):
+def _read_normalized_agilent_2d(
+    directory, path, profile, *, quadrature="auto", pulse_program_source=None
+):
     from nmrglue import interop  # noqa: PLC0415
 
     from ..interop import from_interop  # noqa: PLC0415
@@ -423,33 +441,56 @@ def _read_normalized_agilent_2d(directory, path, profile):
     normalize = getattr(interop, f"normalize_agilent_{name}", None)
     if normalize is None:
         return None
+    requested = quadrature != "auto" or pulse_program_source is not None
+    options = {}
+    if profile == "states":
+        if "quadrature" in signature(normalize).parameters:
+            options = {
+                "quadrature": quadrature,
+                "pulse_program_source": pulse_program_source,
+            }
+        elif requested:
+            raise SpectroChemPyError(
+                "Agilent quadrature selection requires a newer nmrglue-ng provider"
+            )
     try:
         stored = interop.read_agilent_fid_storage(
             directory, **{f"{profile}_only": True}
         )
-        result = normalize(stored, legacy_presentation=True)
+        result = normalize(stored, legacy_presentation=True, **options)
         dataset = from_interop(result)
-    except ValueError:
+    except (OSError, NotImplementedError) as exc:
+        if requested:
+            raise SpectroChemPyError(str(exc)) from exc
+        raise
+    except ValueError as exc:
+        if requested:
+            raise SpectroChemPyError(str(exc)) from exc
         return None
 
     acquisition = dataset.meta.acquisition
+    selection = acquisition.get("quadrature_selection", {})
+    mode = selection.get("mode")
     display = acquisition["legacy_presentation"]
     widths = display["spectral_widths_hz"]
     observation = display["observation_frequencies_mhz"]
     decoupler = display["decoupler_frequencies_mhz"]
+    if mode is not None:
+        widths = acquisition["spectral_width_hz"]
+        observation = acquisition["observation_frequencies_mhz"]
     for index, (dim, width, frequency, fallback) in enumerate(
         zip(("y", "x"), widths, observation, decoupler, strict=True), 1
     ):
         coord = dataset.coordset[dim]
-        if width is not None:
+        if width is not None and mode is None:
             coord = Coord(coord.to("us").data, units="us")
         coord.title = f"F{index} acquisition time"
-        display_frequency = frequency or fallback
+        display_frequency = frequency if mode is not None else frequency or fallback
         if display_frequency is not None:
             coord.meta["acquisition_frequency"] = display_frequency * ur.MHz
         dataset.coordset[dim] = coord
 
-    states = dataset.meta.quadrature_mode == "states-stored-2d"
+    states = profile == "states"
     prefix = [None] if states else []
     dataset.meta.update(
         Meta(
@@ -480,8 +521,12 @@ def _read_normalized_agilent_2d(directory, path, profile):
     if states:
         dataset.meta.update(
             Meta(
-                encoding=["CHANNELS", "UNVALIDATED:AGILENT-STATES", "DIRECT:QSIM"],
-                acquisition_encoding=("STATES", "QSIM"),
+                encoding=(
+                    dataset.meta.encoding
+                    if mode is not None
+                    else ["CHANNELS", "UNVALIDATED:AGILENT-STATES", "DIRECT:QSIM"]
+                ),
+                acquisition_encoding=((mode or "states").upper(), "QSIM"),
                 storage_profile="agilent-phase-1-2-trace-pairs",
                 seqfil=display["sequence"],
                 phase=acquisition["phase"],
@@ -489,6 +534,12 @@ def _read_normalized_agilent_2d(directory, path, profile):
                 arraydim=acquisition["storage_shape"][0],
             )
         )
+        if mode is not None:
+            info_(f"Agilent F1 quadrature: {mode} ({selection['source']})")
+        elif selection:
+            info_(
+                "Agilent F1 quadrature undetermined; specify quadrature to process F1"
+            )
     elif profile == "tppi":
         dataset.meta.encoding = ["UNVALIDATED:AGILENT-TPPI", "QSIM"]
     return dataset
@@ -531,6 +582,22 @@ def _read_agilent(*args, **kwargs):
     if not procpar_path.exists():
         warning_(f"No procpar file found in {data_dir}")
         return None
+
+    quadrature = kwargs.get("quadrature", "auto")
+    pulse_program_source = kwargs.get("pulse_program_source")
+    if quadrature != "auto" or pulse_program_source is not None:
+        candidate = _read_normalized_agilent_2d(
+            data_dir,
+            path,
+            "states",
+            quadrature=quadrature,
+            pulse_program_source=pulse_program_source,
+        )
+        if candidate is None:
+            raise SpectroChemPyError(
+                "Quadrature selection requires a paired Agilent 2D FID"
+            )
+        return _finalize_agilent_dataset(candidate, data_dir, kwargs)
 
     candidate = _read_normalized_agilent_fid(data_dir, path)
     if candidate is not None:

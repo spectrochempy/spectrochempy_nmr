@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import hashlib
 import json
+from importlib import import_module
 from pathlib import Path
 
 import numpy as np
@@ -96,7 +97,10 @@ def test_states_tppi_nmrpipe_checkpoint_preserves_all_components():
         assert np.linalg.norm(final_components[..., component]) > 0
 
 
-def test_experiment_imported_states_tppi_matches_raw_nmrpipe_checkpoints(monkeypatch):
+@pytest.mark.parametrize("profile", ["states-tppi", "states"])
+def test_experiment_imported_states_matches_raw_nmrpipe_checkpoints(
+    monkeypatch, profile
+):
     from types import SimpleNamespace
 
     from spectrochempy_nmr import from_interop
@@ -117,6 +121,12 @@ def test_experiment_imported_states_tppi_matches_raw_nmrpipe_checkpoints(monkeyp
         (raw[::2].real, raw[::2].imag, raw[1::2].real, raw[1::2].imag)
     ):
         padded[index, : plane.shape[0], : plane.shape[1]] = plane
+    if profile == "states":
+        # Undo the acquisition alternation to simulate States with the same peaks.
+        padded[:, 1::2] *= -1
+        f2[2::4] *= -1
+        f2[3::4] *= -1
+        tp[:, 1::2] *= -1
     widths = (3200.0, 10000.0)
     axes = tuple(
         SimpleNamespace(
@@ -129,28 +139,38 @@ def test_experiment_imported_states_tppi_matches_raw_nmrpipe_checkpoints(monkeyp
         )
         for size, width, dim in zip((rows, cols), widths, ("F1", "F2"), strict=True)
     )
-    source = from_interop(
-        SimpleNamespace(
-            data=padded,
-            axes=axes,
-            dimensions=("channels", "F1", "F2"),
-            physical_dimensions=("F1", "F2"),
-            domains=("time", "time"),
-            encoding=("complex", "complex"),
-            quadrature_mode="stored-components-2d",
-            branch_order=("rr", "ri", "ir", "ii"),
-            channel_axis=0,
-            normalization_state="storage-normalized",
-            normalization_profile="oracle",
-            applied_operations=(),
-            provenance={},
-            acquisition={"spectral_width_hz": widths},
-            metadata={},
-            diagnostics=(),
-        ),
-        profile="states-tppi",
+    normalized = SimpleNamespace(
+        data=padded,
+        axes=axes,
+        dimensions=("channels", "F1", "F2"),
+        physical_dimensions=("F1", "F2"),
+        domains=("time", "time"),
+        encoding=("complex", "complex"),
+        quadrature_mode="stored-components-2d",
+        branch_order=("rr", "ri", "ir", "ii"),
+        channel_axis=0,
+        normalization_state="storage-normalized",
+        normalization_profile="oracle",
+        applied_operations=(),
+        provenance={},
+        acquisition={"spectral_width_hz": widths},
+        metadata={},
+        diagnostics=(),
     )
+    core_fft = import_module("spectrochempy.processing.fft.fft")
+    if profile == "states" and getattr(core_fft, "FFT_PREVALIDATION_API", 0) < 1:
+        with pytest.raises(NotImplementedError, match="FFT prevalidation"):
+            from_interop(normalized, profile=profile)
+        return
+    source = from_interop(normalized, profile=profile)
     stages = []
+    if profile == "states":
+        for dim in ("x", "y"):
+            with pytest.raises(NotImplementedError, match="UNVALIDATED:STATES"):
+                source.fft(dim=dim)
+        normalized.acquisition["tppi_alternation"] = "declared_not_applied"
+        with pytest.raises(ValueError, match="declared TPPI alternation"):
+            from_interop(normalized, profile="states")
     cross_pairs = channel_interop._cross_pairs
 
     def record(values):
@@ -172,8 +192,12 @@ def test_experiment_imported_states_tppi_matches_raw_nmrpipe_checkpoints(monkeyp
     np.testing.assert_allclose((rr + 1j * ir).T, final[::2], rtol=5e-6, atol=2e-4)
     np.testing.assert_allclose((ri + 1j * ii).T, final[1::2], rtol=5e-6, atol=2e-4)
     assert tuple(spectrum.c.labels) == ("rr", "ri", "ir", "ii")
-    assert spectrum.meta.tppi_alternation_state == "applied"
-    assert source.meta.tppi_alternation_state == "encoded"
+    assert Experiment(source).encoding[0] == profile.upper()
+    if profile == "states-tppi":
+        assert spectrum.meta.tppi_alternation_state == "applied"
+        assert source.meta.tppi_alternation_state == "encoded"
+    else:
+        assert spectrum.meta.get("tppi_alternation_state") is None
     assert Experiment(spectrum).source_kind == "processed_2d"
     with pytest.raises(NotImplementedError):
         Experiment(spectrum).process()

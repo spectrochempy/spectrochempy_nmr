@@ -148,3 +148,23 @@ jobs:
           PY
           python -I -m pytest -ra tests/qualification/test_agilent_real.py -k "public_reader and FAM013"
           python -I -m pytest -ra tests/qualification/test_agilent_states_public.py -k synthetic
+      - name: Check out the Agilent quadrature provider candidate
+        uses: actions/checkout@v7
+        with:
+          repository: spectrochempy/nmrglue-ng
+          ref: 97d13421ff44176d33bdd7d995d4b73c145dab1f
+          path: agilent-quadrature-provider
+          fetch-depth: 0
+          persist-credentials: false
+      - name: Qualify Agilent quadrature with the candidate provider
+        run: |
+          python -m pip wheel --no-deps --wheel-dir provider-wheels ./agilent-quadrature-provider
+          python -m pip install --no-deps --force-reinstall provider-wheels/*.whl
+          python -m pip check
+          python -I - <<'PY'
+          from inspect import signature
+          from nmrglue.interop import normalize_agilent_states_2d
+
+          assert "quadrature" in signature(normalize_agilent_states_2d).parameters
+          PY
+          python -I -m pytest -ra tests/qualification/test_agilent_states_public.py -k synthetic

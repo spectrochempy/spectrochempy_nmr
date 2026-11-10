@@ -765,6 +765,7 @@ def extract_nmr_metadata(meta, *, ndim=None) -> NMRMetadata:
                 for role, state in zip(roles, display.domains, strict=True)
             )
             return replace(display, domains=domains, source_kind="unknown")
+        states = quadrature == "states" and domain in ("time", "frequency")
         states_tppi = quadrature == "states-tppi" and (
             domain,
             meta.get("tppi_alternation_state"),
@@ -783,7 +784,7 @@ def extract_nmr_metadata(meta, *, ndim=None) -> NMRMetadata:
             and physical == ("F1", "F2")
             and dimensions == ("channels", "F1", "F2")
             and tuple(meta.get("axis_roles", ())) == ("component", "F1", "F2")
-            and (states_tppi or echo_antiecho)
+            and (states or states_tppi or echo_antiecho)
             and meta.get("normalization_state") == "storage-normalized"
             and isinstance(acquisition, Mapping)
         ):
@@ -798,7 +799,7 @@ def extract_nmr_metadata(meta, *, ndim=None) -> NMRMetadata:
                 ndim=3,
                 domains=domains,
                 source_kind=infer_source_kind(2, domains),
-                encoding=("STATES-TPPI" if states_tppi else "ECHO-ANTIECHO", "DQD"),
+                encoding=(quadrature.removesuffix("-stored-2d").upper(), "DQD"),
                 iscomplex=(True, True),
                 spectral_width_hz=tuple(widths)
                 if isinstance(widths, (tuple, list))

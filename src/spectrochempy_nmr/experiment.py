@@ -126,7 +126,7 @@ class Experiment:
     copy, subclass, or mutate the underlying dataset.
 
     Public processing covers validated 1D experiments and FFT-only
-    processing of explicitly normalized raw 2D QF, States-TPPI and echo/anti-echo acquisitions.
+    processing of explicitly normalized raw 2D QF, States, States-TPPI and echo/anti-echo acquisitions.
 
     Parameters
     ----------
@@ -353,12 +353,12 @@ class Experiment:
         )
 
     @property
-    def _supports_states_tppi_fft(self) -> bool:
+    def _supports_states_fft(self) -> bool:
         return (
             self.ndim == 3
             and self._nmr_meta.normalized_interop
             and self.is_time_domain
-            and self.encoding == ("STATES-TPPI", "DQD")
+            and self.encoding in (("STATES", "DQD"), ("STATES-TPPI", "DQD"))
         )
 
     @property
@@ -443,9 +443,9 @@ class Experiment:
             report.add_info("Raw 2D SER detected.")
             if self._supports_qf_fft:
                 report.add_info("Normalized 2D QF FFT processing is available.")
-            elif self._supports_states_tppi_fft:
+            elif self._supports_states_fft:
                 report.add_info(
-                    "Normalized States-TPPI 2D FFT processing is available."
+                    f"Normalized {self.encoding[0]} 2D FFT processing is available."
                 )
             elif self._supports_echo_antiecho_fft:
                 report.add_info(
@@ -529,7 +529,7 @@ class Experiment:
         current data domain.  Never modifies the source dataset.
 
         Processing covers validated 1D experiments and FFT-only processing
-        of explicitly normalized raw 2D QF, States-TPPI and echo/anti-echo acquisitions.
+        of explicitly normalized raw 2D QF, States, States-TPPI and echo/anti-echo acquisitions.
 
         Parameters
         ----------
@@ -640,7 +640,7 @@ class Experiment:
             raise ValueError(
                 "bruker_group_delay requires an imported raw echo/anti-echo FID"
             )
-        if self._supports_qf_fft or self._supports_states_tppi_fft or supports_echo:
+        if self._supports_qf_fft or self._supports_states_fft or supports_echo:
             if (
                 any(
                     value is not None
@@ -650,13 +650,13 @@ class Experiment:
                 or phc1
             ):
                 raise ValueError("normalized 2D processing supports FFT only")
-            if self._supports_states_tppi_fft or supports_echo:
+            if self._supports_states_fft or supports_echo:
                 from .processing.channel_interop import process_echo_antiecho_fft  # noqa: PLC0415
-                from .processing.channel_interop import process_states_tppi_fft  # noqa: PLC0415
+                from .processing.channel_interop import process_states_fft  # noqa: PLC0415
 
                 widths = self._nmr_meta.spectral_width_hz
                 reconstruction = {}
-                direct_fft = "NMRPipe FT -nodf"
+                indirect_fft = direct_fft = "NMRPipe FT -nodf"
                 filter_trace = {}
                 if supports_echo:
                     method = digital_filter
@@ -680,7 +680,13 @@ class Experiment:
                     if method == "phase":
                         direct_fft = "NMRPipe FT -df"
                 else:
-                    result = process_states_tppi_fft(ds, widths)
+                    alternate = self.encoding[0] == "STATES-TPPI"
+                    result = process_states_fft(ds, widths, alternate=alternate)
+                    transform = ds.meta.acquisition.get("states_fft_input_transform")
+                    if transform is not None:
+                        reconstruction["fft_input_transform"] = transform
+                    if alternate:
+                        indirect_fft = "NMRPipe FT -alt"
                 return self._attach_scp_processing_trace(
                     result,
                     requested=reconstruction,
@@ -692,7 +698,7 @@ class Experiment:
                         "fft_convention": (
                             direct_fft,
                             "NMRPipe TP",
-                            "NMRPipe FT -nodf" if supports_echo else "NMRPipe FT -alt",
+                            indirect_fft,
                         ),
                     },
                 )
@@ -1362,8 +1368,10 @@ class Experiment:
         lines.append(f"  processable: {'yes' if self.is_processable else 'no'}")
         if self._supports_qf_fft:
             lines.append("  public processing: normalized 2D QF FFT only")
-        elif self._supports_states_tppi_fft:
-            lines.append("  public processing: normalized States-TPPI 2D FFT only")
+        elif self._supports_states_fft:
+            lines.append(
+                f"  public processing: normalized {self.encoding[0]} 2D FFT only"
+            )
         elif self._supports_echo_antiecho_fft:
             lines.append(
                 "  public processing: echo/anti-echo with explicit reconstruction"

@@ -3,6 +3,7 @@
 import hashlib
 import os
 from importlib import import_module
+from inspect import signature
 from pathlib import Path
 
 import numpy as np
@@ -11,6 +12,7 @@ from nmrglue import interop
 from nmrglue import varian
 
 import spectrochempy as scp
+from spectrochempy.utils.exceptions import SpectroChemPyError
 import spectrochempy_nmr.interop as adapter
 
 
@@ -129,6 +131,60 @@ def test_synthetic_states_public(synthetic_states, monkeypatch):
         if operation["name"] == "normalize-agilent-ns-ne"
     ]
     assert len(scales) == 1 and scales[0]["divisor"] == 6
+
+
+@pytest.mark.skipif(
+    "quadrature" not in signature(interop.normalize_agilent_states_2d).parameters,
+    reason="provider does not support Agilent quadrature selection",
+)
+def test_synthetic_states_quadrature_auto_and_manual(synthetic_states, monkeypatch):
+    path, _ = synthetic_states
+    adapter = import_module("nmrglue.interop.varian")
+    procpar_path = path.with_name("procpar")
+    procpar = varian.read_procpar(procpar_path)
+    procpar["seqfil"] = varian.create_pdic_param("seqfil", ["NOESY"])
+    procpar["seqfil"]["basictype"] = "2"
+    procpar["d2"] = varian.create_pdic_param("d2", ["0"])
+    varian.write_procpar(procpar_path, procpar, overwrite=True)
+    source = path.with_name("NOESY.c")
+    source.write_bytes(b"verified source fixture")
+    fingerprint = hashlib.sha256(source.read_bytes()).hexdigest()
+    monkeypatch.setattr(
+        adapter,
+        "_STATES_PROGRAMS",
+        {("NOESY", fingerprint): ("states-tppi", "reference")},
+    )
+    auto = scp.nmr.read_agilent(path)
+    manual = scp.nmr.read_agilent(path, quadrature="states-tppi")
+    assert auto.meta.acquisition["quadrature_selection"]["source"] == "pulse-program"
+    assert manual.meta.acquisition["quadrature_selection"]["source"] == "manual"
+    np.testing.assert_array_equal(auto.data, manual.data)
+    auto_spectrum = scp.nmr.Experiment(auto).process()
+    manual_spectrum = scp.nmr.Experiment(manual).process()
+    np.testing.assert_array_equal(auto_spectrum.data, manual_spectrum.data)
+    assert auto_spectrum.meta.tppi_alternation_state == "applied"
+    np.testing.assert_allclose(auto.y.data, [0, 0.002])
+    pure = scp.nmr.read_agilent(path, quadrature="states")
+    pure_spectrum = scp.nmr.Experiment(pure).process()
+    np.testing.assert_array_equal(
+        manual_spectrum.data, np.roll(pure_spectrum.data, 1, axis=1)
+    )
+
+    source.write_bytes(b"unverified same-name variant")
+    unresolved = scp.nmr.read_agilent(path)
+    assert unresolved.meta.acquisition["quadrature_selection"]["mode"] is None
+    np.testing.assert_array_equal(unresolved.data, auto.data)
+    with pytest.raises(NotImplementedError, match="UNVALIDATED"):
+        unresolved.fft(dim="y")
+
+    source.write_bytes(bytes(256 * 1024 + 1))
+    unresolved = scp.nmr.read_agilent(path)
+    assert unresolved.meta.quadrature_mode == "states-stored-2d"
+    assert unresolved.meta.acquisition["quadrature_selection"]["mode"] is None
+    core_fft = import_module("spectrochempy.processing.fft.fft")
+    monkeypatch.setattr(core_fft, "FFT_PREVALIDATION_API", 0)
+    with pytest.raises(SpectroChemPyError, match="FFT prevalidation"):
+        scp.nmr.read_agilent(path, quadrature="states")
 
 
 def test_synthetic_states_older_provider(synthetic_states, monkeypatch):
