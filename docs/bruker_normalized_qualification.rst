@@ -247,17 +247,30 @@ with indirect QF magnitude, States-TPPI, or Bruker echo/anti-echo. They
 support no window or a squared sine window, F1 first-point weighting
 with ``FCOR=1`` on F2,
 zero filling, phase, and F2 ``PKNL`` with an integer group delay.
+The F1 status can also request forward linear prediction (``ME_mod=2``,
+TopSpin ``LPfr``). Replay predicts complex traces with the Burg recurrence
+after F2 processing and before the F1 window and first-point weighting.
+An even ``NCOEF``, at most the acquired F1 increment count, specifies
+twice the complex predictor order. ``LPBIN``
+and ``TDeff`` must agree and describe the extended length in F1 scalar words
+(one per QF increment, two per paired increment). The extended length must
+fit within F1 ``SI``. Replay rejects a requested order if the residual energy
+of a nonzero trace falls below floating-point precision during the fit.
 The result uses the processing ppm
 axes and retains the FID scan/gain normalization.
 
 The QF result is a magnitude matrix. The two complex channels of a
 phase-sensitive result use the same component layout as the public
 TopSpin processed reader. The real part of the first channel is
-``2rr``. Replay rejects linear prediction, baseline correction, time-domain
-offsets (``TDoff``), reversed axes, and extracted processing grids.
+``2rr``. Replay rejects F2 prediction, F1 prediction modes other than
+``LPfr``, baseline correction, time-domain offsets (``TDoff``), reversed
+axes, and extracted processing grids.
 
 To run the external comparisons, set ``NMR_TOPSPIN_XFB_REFERENCES`` to
 a directory containing experiment folders ``20``, ``30`` and ``40``
 copied from Menthyl-Anthranilate. Set ``ME_mod=0`` in F1 on each copy
-and run ``xfb`` in TopSpin to populate ``pdata/1``. Run
+and run ``xfb`` in TopSpin to populate ``pdata/1``. For the prediction
+comparisons, set ``NMR_TOPSPIN_XFB_LP_REFERENCES`` to a separate set of the
+same experiment folders processed with the original F1 ``LPfr`` settings.
+Run
 ``pytest tests/qualification/test_topspin_examdata.py -k xfb``.

@@ -52,9 +52,16 @@ def qf_fid():
     return source
 
 
-def test_qf_xfb_replaces_only_the_center_bin(qf_fid):
+@pytest.mark.parametrize("predict", [False, True])
+def test_qf_xfb_replaces_only_the_center_bin(qf_fid, predict):
     before = qf_fid.data.copy()
     f2 = np.fft.fftshift(np.fft.ifft(before, axis=1), axes=1) * before.shape[1]
+    if predict:
+        qf_fid.meta.source_metadata["proc2s"].update(
+            ME_mod=2, LPBIN=3, NCOEF=2, TDeff=3
+        )
+        reflection = 2 * f2[0].conj() * f2[1] / np.sum(np.abs(f2) ** 2, axis=0)
+        f2 = np.vstack((f2, reflection * f2[1]))
     expected = np.abs(np.fft.fftshift(np.fft.fft(f2, n=4, axis=0), axes=0))
     expected[2, 2] = (expected[1, 2] + expected[3, 2]) / 2
 
@@ -77,4 +84,23 @@ def test_qf_xfb_rejects_time_domain_offset(qf_fid, axis):
     qf_fid.meta.source_metadata[axis]["TDoff"] = 2
 
     with pytest.raises(ValueError, match="TDoff=0"):
+        Experiment(qf_fid).process(replay="topspin")
+
+
+@pytest.mark.parametrize(
+    ("axis", "changes", "message"),
+    [
+        ("procs", {"ME_mod": 2}, "only supported on F1"),
+        ("proc2s", {"ME_mod": 4}, "only LPfr"),
+        ("proc2s", {"NCOEF": 3}, "even NCOEF"),
+        ("proc2s", {"LPBIN": 2}, "valid F1 LPBIN"),
+        ("proc2s", {"LPBIN": 5, "TDeff": 5}, "full grid"),
+        ("proc2s", {"TDeff": 2}, "full grid"),
+    ],
+)
+def test_qf_xfb_rejects_unqualified_prediction(qf_fid, axis, changes, message):
+    qf_fid.meta.source_metadata["proc2s"].update(ME_mod=2, LPBIN=3, NCOEF=2, TDeff=3)
+    qf_fid.meta.source_metadata[axis].update(changes)
+
+    with pytest.raises(ValueError, match=message):
         Experiment(qf_fid).process(replay="topspin")

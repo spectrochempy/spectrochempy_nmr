@@ -5,6 +5,7 @@ from __future__ import annotations
 
 import numpy as np
 import pytest
+from spectrochempy_nmr.processing.linear_prediction import _burg_predict_after
 from spectrochempy_nmr.processing.linear_prediction import _linear_predict_after
 
 
@@ -75,3 +76,23 @@ def test_forward_linear_prediction_rejects_non_finite_or_scalar_data(invalid):
 def test_forward_linear_prediction_rejects_integer_data():
     with pytest.raises(TypeError, match="dtype"):
         _linear_predict_after(np.ones(4, dtype=int), final_size=4, order=1)
+
+
+def test_burg_prediction_handles_a_zero_trace_beside_a_complex_trace():
+    samples = np.arange(8)
+    carrier = np.exp(0.3j * samples)
+    traces = np.stack((carrier, np.zeros_like(carrier)))
+
+    result = _burg_predict_after(traces, final_size=12, order=1)
+
+    np.testing.assert_array_equal(result[:, :8], traces)
+    np.testing.assert_allclose(result[0], np.exp(0.3j * np.arange(12)), atol=1e-12)
+    np.testing.assert_array_equal(result[1], 0)
+
+
+def test_burg_prediction_rejects_ill_conditioned_overfit():
+    samples = np.arange(128)
+    trace = 0.995**samples * np.exp(0.25j * samples)
+
+    with pytest.raises(ValueError, match="ill-conditioned"):
+        _burg_predict_after(trace, final_size=256, order=16)
