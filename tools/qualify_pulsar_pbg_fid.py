@@ -60,9 +60,10 @@ def synthesize_fid(axis, profile, width_hz, acqu, proc, dead_time_s):
     return np.pad(analytic.conj(), (delay, 0))
 
 
-def compare(pbg1, accuracy, sidebands):
-    acqu, proc, frequency, published = read_pbg_spectrum(pbg1 / "1")
-    _, fid = ng.bruker.read(str(pbg1 / "1"), read_pulseprogram=False)
+def read_pbg_fid(experiment):
+    """Read and validate the acquired PBG1 points and replay settings."""
+    acqu, proc, frequency, published = read_pbg_spectrum(experiment)
+    _, fid = ng.bruker.read(str(experiment), read_pulseprogram=False)
     if (
         acqu["GRPDLY"] != 68
         or acqu["DIGMOD"] != 1
@@ -76,7 +77,12 @@ def compare(pbg1, accuracy, sidebands):
         or fid.size < acqu["TD"] // 2
     ):
         raise ValueError("Expected the original PBG1 FID and efp parameters.")
-    raw = replay_efp(fid[: acqu["TD"] // 2], acqu, proc).real
+    return acqu, proc, frequency, published, fid[: acqu["TD"] // 2]
+
+
+def compare(pbg1, accuracy, sidebands):
+    acqu, proc, frequency, published, fid = read_pbg_fid(pbg1 / "1")
+    raw = replay_efp(fid, acqu, proc).real
     archived, replayed = ratios(frequency, published), ratios(frequency, raw)
     satellite = np.asarray(ORDERS) != 0
     discrepancy = np.abs(archived[satellite] - replayed[satellite])

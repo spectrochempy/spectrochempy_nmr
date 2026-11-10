@@ -612,7 +612,7 @@ cycle, acquisition parameters and processed spectrum. The `raw data.rar`
 used here has SHA-256
 `9dea155c54c70a3c0ea0ee13ccedda0c36ba286d7962b60795c8e9dbdbcce405`.
 The precompiled `pf_zg` sequence applies one rectangular `p1` pulse before
-direct acquisition. The experiment title specifies a 50 kHz RF field at
+direct acquisition. The experiment title lists a nominal 50 kHz RF field at
 32 W. The acquisition record gives a 0.5 µs pulse, 195.439811 MHz carrier,
 30 kHz MAS, 2.5 MHz acquisition width, 0.1 s recycle delay and nominal 6.5 µs
 receiver dead time. The nominal free-spin flip angle is 9°. For simulations
@@ -664,7 +664,7 @@ OPENBLAS_NUM_THREADS=1 python tools/qualify_pulsar_pbg.py "/path/to/raw data/PBG
 ```
 
 The simulation propagates all five single-quantum transitions of each
-spin-$5/2$ component after the recorded 0.5 µs pulse at 50 kHz. It uses
+spin-$5/2$ component after the recorded 0.5 µs pulse at the nominal 50 kHz. It uses
 the documented carrier and MAS frequency. For each scenario, only the
 1D region $|f|<14$ kHz is used to select a shared Gaussian width and fit
 nonnegative component weights with an additive constant. An ideal 90°
@@ -755,6 +755,102 @@ tested timing offsets explain little of the excess simulated area.
 The in-band amplitude response of the hardware and the digital-filter
 kernel remain unmeasured, so the residual still combines receiver and
 sample-model effects.
+
+### PBG1 distributions constrained by the 3QMAS ridge
+
+```sh
+OPENBLAS_NUM_THREADS=1 python tools/qualify_pulsar_pbg_distribution.py "/path/to/raw data/PBG1_2,5mm"
+```
+
+The [distribution comparison](../../tools/qualify_pulsar_pbg_distribution.py)
+uses the five regions from experiment 13. Within each region it splits
+F1 into equal positive-intensity slices and calculates the F1 and F2
+centroids of each slice. Using F2 centroids avoids interpreting the
+orientation broadening within a slice as a distribution of tensors.
+The centroid equations above map each pair to $(\delta_{iso},P_Q)$.
+If a weak slice implies a positive quadrupolar-induced shift, the
+quadrupolar shifts are contracted about their regional mean until all
+are nonpositive. This preserves regional mean $\delta_{iso}$ and mean
+$P_Q^2$ while moving the individual reconstructed slice coordinates.
+A zero-coupling node created by this contraction marks the constraint
+boundary. The resulting spreads are effective ridge estimates. Selective
+3Q transfer, overlapping regions and the finite F1 resolution limit
+their interpretation as population distributions.
+
+The comparison holds $\eta=0.5$ fixed for both models. It averages the
+complex finite-pulse spectra of the equally weighted slices within each
+region. As in the single-tensor test, only the published central region
+determines the relative region weights and common Gaussian width.
+The experimental and modeled FIDs use the same `efp` and integration
+protocol, with the nominal 6.5 µs delay in the simulation.
+
+The 50 kHz RF value comes from the experiment title. The acquisition
+file records 32 W and 0.5 µs, and the same sample's 3QMAS title lists
+128 W at 100 kHz and 1.28 W at 10 kHz, consistent with a common
+square-root power conversion. The archive gives the chemical shift
+reference name but contains no $^{27}$Al nutation curve or calibration
+standard with which to establish the absolute RF scale. In the isolated
+central-transition limit, the spin-5/2 nutation rate is three times the
+RF coupling $|\gamma|B_1/(2\pi)$ passed to PULSAR. The factor is
+specific to the selective limit. The 3QMAS pulse program labels its
+8.3 µs pulse at the nominal 10 kHz setting as a selective 90° pulse,
+consistent with $360^\circ\times 3\times 10$ kHz $\times 8.3$ µs
+$\approx 90^\circ$. This supports the RF-coupling convention in the
+titles. See [the quadrupolar nutation treatment](https://www.sciencedirect.com/science/article/pii/S1090780719300102).
+As a sensitivity test, `--rf-hz 16666.6666667` treats the nominal 50 kHz
+as an apparent selective nutation rate. This is a hypothetical convention
+check without fitting any satellite area.
+
+The recorded FID gives a summed sideband area of 89.40% of the central
+window. The following sums are on that same normalization. Errors are
+mean absolute differences over the 20 held-out sideband windows, in
+percentage points.
+
+| Distribution | Powder accuracy / sideband orders | RF (kHz) | Sum | Mean absolute error |
+| --- | ---: | ---: | ---: | ---: |
+| Regional centroids | 4 / 20 | 50 | 145.03% | 3.05 pp |
+| Three slices | 4 / 20 | 50 | 180.01% | 4.53 pp |
+| Three slices | 6 / 30 | 50 | 179.91% | 4.53 pp |
+| Five slices | 4 / 20 | 50 | 87.92% | 1.20 pp |
+| Five slices | 6 / 30 | 50 | 87.94% | 1.20 pp |
+| Five slices, QIS floor | 4 / 20 | 50 | 150.50% | 3.06 pp |
+| Regional centroids | 4 / 20 | 16.7 | 144.77% | 3.04 pp |
+| Three slices | 4 / 20 | 16.7 | 179.72% | 4.52 pp |
+
+The five-slice model places one fifth of the dominant region's 3QMAS
+intensity weight at the zero-coupling boundary. Its fitted central RMS
+residual increases from 3.64% to 4.55%, and the dominant region's fitted
+weight falls from 0.689 to 0.558. As a sensitivity test, the QIS floor
+(`--slices 5 --minimum-qis-fraction 0.2`) contracts each region's QIS
+spread further if needed, so every slice has at least 20% of its
+regional mean absolute QIS. The sum returns to 150.50%. The apparent
+improvement therefore depends on how the low-coupling tail is handled.
+The 16.7 kHz scenario changes the sum by less
+than 0.3 points for both the centroid and three-slice models. This
+sensitivity result concerns this 0.5 µs pulse and these normalized
+areas. It provides no absolute RF calibration.
+
+### Czjzek model for disordered EFG tensors
+
+The [standard Czjzek model](https://doi.org/10.1016/j.jmr.2008.03.001)
+draws five independent equal-variance Gaussian coordinates in an
+orthonormal basis of symmetric traceless EFG tensors. Diagonalization
+gives a joint distribution of $C_Q$ and $\eta$. For a site with a
+persistent local tensor, the [extended Czjzek model](https://doi.org/10.1088/0953-8984/22/6/065402)
+adds isotropic tensor noise to that local tensor. In either case a
+separate model supplies the isotropic chemical shift and any correlation
+with the EFG. The 3QMAS ridge comparison above uses an empirical spread
+of $P_Q$ and chemical shift at fixed $\eta$.
+
+A distribution layer can produce normalized weighted tensors for the
+existing simulator, with deterministic nodes reused between fitting
+iterations. Tests can check rotational invariance, the zero-noise limit
+of the extended model, and the five-degree-of-freedom chi law of $P_Q$
+for the standard model before checking spectral convergence and runtime.
+The 3QMAS centroids constrain $P_Q$, which is proportional to the EFG
+norm. Constraining the mean tensor asymmetry and a chemical-shift
+correlation would require additional information about the line shapes
+or an independent tensor constraint.
 
 ## Experimental check of phosphorus CSA bands
 

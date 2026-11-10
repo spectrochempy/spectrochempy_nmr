@@ -36,8 +36,8 @@ def ppm_axis(proc):
     )
 
 
-def mqmas_parameters(experiment):
-    """Estimate chemical shifts and Pq = |Cq| sqrt(1 + eta**2/3)."""
+def mqmas_regions(experiment):
+    """Yield baseline-corrected 3QMAS patches and their ppm grids."""
     metadata, signal = ng.bruker.read_pdata(str(experiment / "pdata" / "1"))
     p1, p2 = metadata["proc2s"], metadata["procs"]
     if (
@@ -47,22 +47,28 @@ def mqmas_parameters(experiment):
     ):
         raise ValueError("Expected the sheared PBG1 3QMAS spectrum, experiment 13.")
     f1, f2 = ppm_axis(p1), ppm_axis(p2)
-    parameters = []
     for f1_min, f1_max, f2_min, f2_max in REGIONS:
         rows = (f1 > f1_min) & (f1 < f1_max)
         columns = (f2 > f2_min) & (f2 < f2_max)
         background = (f2 > f2_max + 7) & (f2 < f2_max + 14)
         baseline = np.median(signal[np.ix_(rows, background)], axis=1)
         patch = np.maximum(signal[np.ix_(rows, columns)] - baseline[:, None], 0)
-        iso_center = patch.sum(axis=1) @ f1[rows] / patch.sum()
-        mas_center = patch.sum(axis=0) @ f2[columns] / patch.sum()
+        yield f1[rows], f2[columns], patch, p2["SF"] * 1e6
+
+
+def mqmas_parameters(experiment):
+    """Estimate chemical shifts and Pq = |Cq| sqrt(1 + eta**2/3)."""
+    parameters = []
+    for f1, f2, patch, larmor_hz in mqmas_regions(experiment):
+        iso_center = patch.sum(axis=1) @ f1 / patch.sum()
+        mas_center = patch.sum(axis=0) @ f2 / patch.sum()
 
         # Spin 5/2: F2 = delta_iso + QIS and scaled F1 = delta_iso - 10/17 QIS.
         # QIS (ppm) = -0.006 (Pq / nu_L)**2 * 1e6.
         qis = (mas_center - iso_center) * 17 / 27
         if not np.isfinite(qis) or qis >= 0:
             raise ValueError("Expected a negative quadrupolar-induced shift.")
-        pq_hz = p2["SF"] * 1e6 * np.sqrt(-qis / 6000)
+        pq_hz = larmor_hz * np.sqrt(-qis / 6000)
         parameters.append((mas_center - qis, pq_hz))
     return parameters
 
