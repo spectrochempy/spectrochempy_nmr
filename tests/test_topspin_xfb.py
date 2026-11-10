@@ -75,13 +75,16 @@ def test_qf_xfb_replaces_only_the_center_bin(qf_fid, predict):
 
 
 @pytest.mark.parametrize(("mode", "lb"), [(1, 100), (1, -100), (3, 0)])
-@pytest.mark.parametrize("axis", ["proc2s", "procs"])
-def test_qf_xfb_windows(qf_fid, mode, lb, axis):
+@pytest.mark.parametrize(
+    ("axis", "group_delay", "origin"),
+    [("proc2s", 1, 1), ("procs", 1, 1), ("procs", 1.25, 2)],
+)
+def test_qf_xfb_windows(qf_fid, mode, lb, axis, group_delay, origin):
     status = qf_fid.meta.source_metadata
     status[axis].update(WDW=mode, LB=lb, SSB=2)
-    status["acqus"]["GRPDLY"] = 1
+    status["acqus"]["GRPDLY"] = group_delay
     f1 = axis == "proc2s"
-    points, delay, width = (2, 0, 1000) if f1 else (4, 1, 2000)
+    points, delay, width = (2, 0, 1000) if f1 else (4, origin, 2000)
     positions = np.arange(points) - delay
     if mode == 1:
         weights = np.exp(-np.pi * lb * positions / width)
@@ -97,6 +100,15 @@ def test_qf_xfb_windows(qf_fid, mode, lb, axis):
     result = Experiment(qf_fid).process(replay="topspin")
 
     np.testing.assert_allclose(result.data, expected)
+    trace = result.meta.nmr_processing["scp_processing"]["applied"]
+    assert trace["group_delay_points"] == group_delay
+    assert trace["f2_time_origin_points"] == origin
+
+
+def test_qf_xfb_fractional_delay_requires_enough_post_delay_samples(qf_fid):
+    qf_fid.meta.source_metadata["acqus"]["GRPDLY"] = 2.25
+    with pytest.raises(ValueError, match="fewer than two direct points"):
+        Experiment(qf_fid).process(replay="topspin")
 
 
 @pytest.mark.parametrize(

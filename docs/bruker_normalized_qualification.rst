@@ -247,8 +247,9 @@ with indirect QF magnitude, States-TPPI, or Bruker echo/anti-echo. They
 support no window, exponential (``WDW=1``), sine (``WDW=3``), and
 squared sine (``WDW=4``) on either axis. Replay uses the recorded
 ``LB`` in hertz for the exponential, including signed values, and
-``SSB`` for both sine windows. In F2, the integer group delay sets
-the window origin with either setting of ``PKNL``. Replay also supports
+``SSB`` for both sine windows. In F2, the group delay rounded up to the
+next sample sets the window origin with either setting of ``PKNL``.
+When enabled, ``PKNL`` uses the full delay for its phase ramp. Replay also supports
 F1 first-point weighting with ``FCOR=1`` on F2, zero filling, phase,
 and F2 ``PKNL``.
 The F1 status can also request forward linear prediction (``ME_mod=2``,
@@ -278,14 +279,14 @@ use TopSpin's interleaved scalar order. The polynomial replay requires
 at least six increments. ``qpol`` supports a finite ``COROFFS`` in hertz,
 while ``spol`` requires zero. On F2, the DQD processing status records
 ``single`` and ``quad`` requests as off, and ``spol`` as ``qpol``.
-F2 ``qpol`` fits and corrects only the points after the integer group delay.
+F2 ``qpol`` fits and corrects the points starting at the rounded-up group delay.
 Corrections precede the window and linear prediction on their axis.
 ``sfil`` (5) and ``qfil`` (6) use a Gaussian convolution with linear
 extrapolation at the trace ends. Both require positive finite ``BCFW``
 in ppm and at least eight increments. F1 ``sfil`` operates on the
 interleaved scalar words with zero ``COROFFS``. F1 and F2 ``qfil``
 support a finite ``COROFFS`` in hertz. DQD records an F2 ``sfil``
-request as ``qfil``, which operates from the integer group delay onward.
+request as ``qfil``, which operates from the same rounded-up origin.
 
 To run the external comparisons, set ``NMR_TOPSPIN_XFB_REFERENCES`` to
 a directory containing experiment folders ``20``, ``30`` and ``40``
@@ -365,3 +366,20 @@ phases and PKNL as the combined baseline recipes.
   200 and 20 ppm to exercise the minimum radius.
 
 Run ``pytest tests/qualification/test_topspin_examdata.py -k xfb_gaussian``.
+
+For the fractional-delay comparisons, set
+``NMR_TOPSPIN_XFB_FRACTIONAL_REFERENCES`` to the directory of processed
+copies. In each case, label ``exam_CMCse_3/16``, ``exam_CMCse_3/19``,
+and ``exam_CMCse_1/3`` as ``20``, ``30``, and ``40``, respectively.
+Use SI 512 × 4096 (F1 × F2), with windows, phase, baseline, prediction and
+PKNL disabled in the ``plain`` case. Use FCOR=1 on both axes.
+Enable just F2 PKNL in ``phase``, just F2 WDW=1 with LB=47 Hz in
+``em``, and just F2 WDW=3 with SSB=2 in ``sine``. In ``qpol``
+and ``qfil``, enable F2 BC_mod=4 or 6, respectively, with COROFFS=−115 Hz
+and BCFW=0.7 ppm for the filter. The ``combined`` case uses F1 LPfr,
+F1 WDW=4 with SSB=2.5 and FCOR=0.5, and F2 WDW=3 with SSB=3,
+qfil with the above settings, and PKNL. Retain the original manual phases
+in the combined case. The int32 reference intensities include the
+recorded acquisition factor ``2**NC``.
+
+Run ``pytest tests/qualification/test_topspin_examdata.py -k xfb_fractional``.
