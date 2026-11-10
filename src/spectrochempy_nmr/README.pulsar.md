@@ -397,6 +397,24 @@ recover the passive limit and check refocusing by a partner π pulse
 or a decoupled delay. Dipolar coupling and nonsecular terms are outside
 this model.
 
+## Density matrix after preparation
+
+`output="density"` on either sequence function returns the
+complex powder-averaged deviation density matrix. This evaluates the
+prepared state without an acquisition window, receiver phase, or
+spectral normalization. In spinning simulations the spectral width
+still controls the number of rotor-phase samples. Sideband selection
+applies only to spectra.
+
+The average uses the same triangle vertex multiplicities and
+solid-angle weights as the spectrum, and averages the rotor phases
+and passive partner states. The product basis has the partner
+index varying fastest, with each spin in descending magnetic order.
+Reshape the two-spin matrix to (observed, partner, observed, partner)
+to obtain the reduced matrices by partial trace. Divide a partial
+trace by the traced spin's dimension to use the same deviation
+scale as the single-spin thermal initialization.
+
 ## Verification and performance
 
 The [tests](../../tests/test_pulsar.py) separate three kinds of checks.

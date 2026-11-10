@@ -924,25 +924,9 @@ def _rf_rotor_count(spectral_width_hz, spinning_hz, accuracy, sidebands, size):
     return count
 
 
-def _sequence_signals(
-    offsets,
-    terms,
-    strengths,
-    initial,
-    events,
-    spinning_hz,
-    count,
-    sidebands,
-    *,
-    readout=None,
-    readout_terms=None,
-):
-    """Average complex band amplitudes over rotor phase at preparation onset."""
+def _sequence_state_blocks(offsets, terms, initial, events, spinning_hz, count):
+    """Yield the final density matrices and rotor angle for each powder block."""
     size = initial.shape[0]
-    band_orders = np.arange(-sidebands, sidebands + 1)
-    amplitudes = np.empty(
-        (offsets.shape[0], strengths.size, band_orders.size), dtype=complex
-    )
     block_size = min(128, 131072 // (count * size**2))
     gamma = 2 * np.pi * np.arange(count) / count if spinning_hz else None
     for start in range(0, offsets.shape[0], block_size):
@@ -961,6 +945,65 @@ def _sequence_signals(
             spinning_hz,
             gamma,
         )
+        yield block, density, gamma_end
+
+
+def _powder_density(
+    offsets,
+    terms,
+    initial,
+    events,
+    spinning_hz,
+    count,
+    weights,
+    triangles,
+    passive_offsets,
+    passive_shift,
+):
+    # Every vertex enters once for each incident triangle, matching the
+    # solid-angle weights used by the spectral integrator.
+    vertex_weights = weights * np.bincount(triangles.ravel(), minlength=weights.size)
+    density = np.zeros_like(initial, dtype=complex)
+    for offset, population in passive_offsets:
+        for block, states, _ in _sequence_state_blocks(
+            offsets + offset * passive_shift, terms, initial, events, spinning_hz, count
+        ):
+            if spinning_hz:
+                states = states.mean(axis=1)
+            density += population * np.einsum(
+                "v,vab->ab", vertex_weights[block], states
+            )
+    return density / vertex_weights.sum()
+
+
+def _validate_output(output, sidebands):
+    if output not in ("spectrum", "density"):
+        raise ValueError("output must be 'spectrum' or 'density'.")
+    if output == "density" and sidebands:
+        raise ValueError("Sideband selection applies only to spectral output.")
+
+
+def _sequence_signals(
+    offsets,
+    terms,
+    strengths,
+    initial,
+    events,
+    spinning_hz,
+    count,
+    sidebands,
+    *,
+    readout=None,
+    readout_terms=None,
+):
+    """Average complex band amplitudes over rotor phase at preparation onset."""
+    band_orders = np.arange(-sidebands, sidebands + 1)
+    amplitudes = np.empty(
+        (offsets.shape[0], strengths.size, band_orders.size), dtype=complex
+    )
+    for block, density, gamma_end in _sequence_state_blocks(
+        offsets, terms, initial, events, spinning_hz, count
+    ):
         if readout is None:
             coherence = np.diagonal(density, offset=1, axis1=-2, axis2=-1)
         else:
@@ -969,7 +1012,7 @@ def _sequence_signals(
         if not spinning_hz:
             amplitudes[block, :, 0] = signal
             continue
-        detected_terms = block_terms if readout_terms is None else readout_terms[block]
+        detected_terms = (terms if readout_terms is None else readout_terms)[block]
         wave = np.exp(
             1j * _phase_integral(detected_terms, gamma_end, spinning_hz)
         ).swapaxes(-1, -2)
@@ -1054,6 +1097,7 @@ def simulate_pulse_sequence(
     receiver_phase_deg=0.0,
     transitions="all",
     j_partners=(),
+    output="spectrum",
 ):
     """Simulate a sequence of pulses, delays and coherence selections.
 
@@ -1062,6 +1106,8 @@ def simulate_pulse_sequence(
     receiver_phase_deg multiplies the complex signal by exp(i*phase).
     The ideal on-carrier x90 pulse defines unit absorption for the
     selected transitions. RF always propagates the complete manifold.
+    output="density" returns the powder-averaged deviation density
+    matrix at the end of preparation, before receiver phase.
     """
     points, accuracy, sidebands = index(points), index(accuracy), index(sidebands)
     (
@@ -1104,6 +1150,7 @@ def simulate_pulse_sequence(
     if max_rf_step_s <= 0:
         raise ValueError("max_rf_step_s must be positive.")
     _validate_grid(spectral_width_hz, spinning_hz, points, accuracy, sidebands)
+    _validate_output(output, sidebands)
     directions, weights, triangles, angle, csa, quadrupolar_eta = _powder_interactions(
         accuracy,
         spinning_hz,
@@ -1130,7 +1177,7 @@ def simulate_pulse_sequence(
         count = _rf_rotor_count(
             spectral_width_hz, spinning_hz, accuracy, sidebands, transition_count + 1
         )
-        order_count = 2 * sidebands + 1
+        order_count = 2 * sidebands + 1 if output == "spectrum" else 0
         # Bound the two persistent complex arrays before allocating either.
         storage = offsets.size * (4 + order_count) * np.dtype(complex).itemsize
         if storage > 64 * 1024**2:
@@ -1147,17 +1194,30 @@ def simulate_pulse_sequence(
         strengths[i] = strength
         if spinning_hz:
             harmonics[:, i] = terms[1:].T
+    ix, iy, iz = _spin_operators(spin)
+    prepared = _prepare_events(events, ix, iy, iz, spinning_hz, max_rf_step_s, t2_s)
+    passive_offsets = _passive_offsets(j_partners)
+    if output == "density":
+        return _powder_density(
+            offsets,
+            harmonics if spinning_hz else None,
+            iz,
+            prepared,
+            spinning_hz,
+            count if spinning_hz else 1,
+            weights,
+            triangles,
+            passive_offsets,
+            1,
+        )
+
     axis = np.linspace(-spectral_width_hz / 2, spectral_width_hz / 2, points)
     band_offset = sidebands * spinning_hz
-    passive_offsets = _passive_offsets(j_partners)
     if (
         offsets[:, selected].min() - band_offset + passive_offsets[0][0] < axis[0]
         or offsets[:, selected].max() + band_offset + passive_offsets[-1][0] > axis[-1]
     ):
         raise ValueError("The spectral window must contain the requested transitions.")
-
-    ix, iy, iz = _spin_operators(spin)
-    prepared = _prepare_events(events, ix, iy, iz, spinning_hz, max_rf_step_s, t2_s)
     receiver = np.exp(1j * np.deg2rad(receiver_phase_deg))
     profile = np.zeros(points, dtype=complex)
     for offset, population in passive_offsets:
@@ -1310,6 +1370,7 @@ def simulate_coupled_sequence(
     receiver_phase_deg=0.0,
     transitions="all",
     j_partners=(),
+    output="spectrum",
 ):
     """Simulate two RF-active spins with a secular isotropic J coupling.
 
@@ -1317,6 +1378,8 @@ def simulate_coupled_sequence(
     Each site's EFG rotation maps its principal axes into the common
     sample frame. The CSA rotation maps into that site's EFG frame.
     Use the partner RF fields on Pulse and IdealPulse to address it.
+    output="density" returns the final averaged product density matrix
+    with partner indices varying fastest.
     """
     points, accuracy, sidebands = index(points), index(accuracy), index(sidebands)
     j_hz, spectral_width_hz, spinning_hz, max_rf_step_s, receiver_phase_deg = (
@@ -1327,6 +1390,7 @@ def simulate_coupled_sequence(
     if max_rf_step_s <= 0:
         raise ValueError("max_rf_step_s must be positive.")
     _validate_grid(spectral_width_hz, spinning_hz, points, accuracy, sidebands)
+    _validate_output(output, sidebands)
     site_a, site_b = _site_parameters(observed), _site_parameters(partner)
     spin_a, spin_b = site_a[0], site_b[0]
     size_a, size_b = int(2 * spin_a + 1), int(2 * spin_b + 1)
@@ -1386,16 +1450,6 @@ def simulate_coupled_sequence(
     level_differences = np.diff(levels, axis=1)
     product_offsets = level_differences[..., 0].real
     product_terms = level_differences[..., 1:] if spinning_hz else None
-    partner_projections = np.arange(spin_b, -spin_b - 1, -1)
-    frequency = (
-        a[:, selected, 0].real[..., None] - j_hz * partner_projections
-    ).reshape(weights.size, -1)
-    detected_terms = (
-        np.repeat(a[:, selected, 1:], size_b, axis=1) if spinning_hz else None
-    )
-    rows = (selected[:, None] * size_b + np.arange(size_b)).ravel()
-    readout = rows, rows + size_b
-    strengths = np.repeat(strengths_a[selected], size_b)
     prepared = _prepare_events(
         events,
         *ops_a,
@@ -1406,8 +1460,33 @@ def simulate_coupled_sequence(
         partner_t2_s=site_b[-1],
         coupling_offsets=np.diff(coupling_levels),
     )
-    axis = np.linspace(-spectral_width_hz / 2, spectral_width_hz / 2, points)
     passive_offsets = _passive_offsets(j_partners)
+    passive_shift = -np.diff(np.diag(ops_a[2]))
+    if output == "density":
+        return _powder_density(
+            product_offsets,
+            product_terms,
+            initial,
+            prepared,
+            spinning_hz,
+            count,
+            weights,
+            triangles,
+            passive_offsets,
+            passive_shift,
+        )
+
+    partner_projections = np.arange(spin_b, -spin_b - 1, -1)
+    frequency = (
+        a[:, selected, 0].real[..., None] - j_hz * partner_projections
+    ).reshape(weights.size, -1)
+    detected_terms = (
+        np.repeat(a[:, selected, 1:], size_b, axis=1) if spinning_hz else None
+    )
+    rows = (selected[:, None] * size_b + np.arange(size_b)).ravel()
+    readout = rows, rows + size_b
+    strengths = np.repeat(strengths_a[selected], size_b)
+    axis = np.linspace(-spectral_width_hz / 2, spectral_width_hz / 2, points)
     band_offset = sidebands * spinning_hz
     if (
         frequency.min() - band_offset + passive_offsets[0][0] < axis[0]
@@ -1417,9 +1496,8 @@ def simulate_coupled_sequence(
     profile = np.zeros(points, dtype=complex)
     receiver = np.exp(1j * np.deg2rad(receiver_phase_deg))
     for offset, population in passive_offsets:
-        passive_shift = -offset * np.diff(np.diag(ops_a[2]))
         signals = _sequence_signals(
-            product_offsets + passive_shift,
+            product_offsets + offset * passive_shift,
             product_terms,
             strengths,
             initial,

@@ -815,3 +815,38 @@ def test_aligned_coupled_mas_half_turn_symmetry_with_odd_requested_grid(monkeypa
     monkeypatch.setattr(pulsar, "_powder_mesh", full_mesh)
     full = simulate_coupled_sequence(events, **settings)
     np.testing.assert_allclose(hemisphere.data, full.data, atol=1e-12, rtol=0)
+
+
+def test_density_output_averages_passive_phases_without_spectral_window():
+    delay, offset, coupling = 0.7e-3, 8000, 400
+    density = simulate_pulse_sequence(
+        [IdealPulse(90), Delay(delay)],
+        spin=0.5,
+        larmor_hz=100e6,
+        spectral_width_hz=100,
+        shift_hz=offset,
+        accuracy=2,
+        j_partners=[PassiveJ(0.5, coupling)],
+        output="density",
+    )
+    coherence = (
+        0.5j * np.exp(2j * np.pi * offset * delay) * np.cos(np.pi * coupling * delay)
+    )
+    expected = [[0, coherence], [coherence.conjugate(), 0]]
+    np.testing.assert_allclose(density, expected, atol=1e-12)
+
+
+def test_coupled_density_preserves_the_order_and_thermal_partner_polarization():
+    density = simulate_coupled_sequence(
+        [IdealPulse(90)],
+        observed=SpinSite(0.5, 100e6),
+        partner=SpinSite(0.5, 80e6),
+        j_hz=500,
+        spectral_width_hz=100,
+        accuracy=2,
+        output="density",
+    )
+    observed = np.array([[0, 0.5j], [-0.5j, 0]])
+    partner = np.diag([0.4, -0.4])
+    expected = np.kron(observed, np.eye(2)) + np.kron(np.eye(2), partner)
+    np.testing.assert_allclose(density, expected, atol=1e-12)
