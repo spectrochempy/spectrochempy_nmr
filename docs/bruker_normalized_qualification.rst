@@ -267,8 +267,20 @@ The QF result is a magnitude matrix. The two complex channels of a
 phase-sensitive result use the same component layout as the public
 TopSpin processed reader. The real part of the first channel is
 ``2rr``. Replay rejects F2 prediction, F1 prediction modes other than
-``LPfr``, baseline correction, time-domain offsets (``TDoff``), reversed
-axes, and extracted processing grids.
+``LPfr``, time-domain offsets (``TDoff``), reversed axes, and extracted
+processing grids.
+
+The ``BC_mod`` status describes correction of the time-domain traces.
+On F1, ``single`` (1) and ``quad`` (2) subtract the mean of the last
+quarter and require a whole number of quarters. ``spol`` (3) and
+``qpol`` (4) subtract a degree-five polynomial. The single-channel modes
+use TopSpin's interleaved scalar order. The polynomial replay requires
+at least six increments. ``qpol`` supports a finite ``COROFFS`` in hertz,
+while ``spol`` requires zero. On F2, the DQD processing status records
+``single`` and ``quad`` requests as off, and ``spol`` as ``qpol``.
+F2 ``qpol`` fits and corrects only the points after the integer group delay.
+Corrections precede the window and linear prediction on their axis.
+Replay rejects the Gaussian filter modes ``sfil`` and ``qfil``.
 
 To run the external comparisons, set ``NMR_TOPSPIN_XFB_REFERENCES`` to
 a directory containing experiment folders ``20``, ``30`` and ``40``
@@ -316,3 +328,20 @@ zero the manual phases and use ``FCOR=1`` on both axes. For the combined
 cases, retain the original prediction lengths, orders and phases, and
 use ``FCOR=0.5`` in F1 and ``FCOR=1`` in F2. Run
 ``pytest tests/qualification/test_topspin_examdata.py -k xfb_windows``.
+
+For the baseline comparisons, set ``NMR_TOPSPIN_XFB_BASELINE_REFERENCES``
+to the root containing the following reference groups. Each case
+subdirectory contains processed experiment copies ``20``, ``30`` and
+``40``. Use ``SI=256`` in F1 and ``SI=1024`` in F2.
+
+- ``bc-modes/bc{1,2,3,4}-f{1,2}`` sets the indicated mode on the
+  selected axis. Set all other baseline, window, prediction, phase and
+  PKNL settings to zero, and both FCOR values to one.
+- ``bc-offset/bc4-f{1,2}-offset`` repeats the isolated mode 4 cases
+  with ``COROFFS=314`` Hz in F1 or ``COROFFS=-217`` Hz in F2.
+- ``bc-combined/bc{1,2,3,4}-combined`` combines the indicated mode
+  in F1 with mode 4 in F2 and zero offsets. Use squared sine in F1,
+  an exponential with ``LB=47`` Hz in F2, and ``FCOR=0.5`` in F1.
+  Retain the original F1 prediction settings and phases and enable F2 PKNL.
+
+Run ``pytest tests/qualification/test_topspin_examdata.py -k xfb_baseline``.

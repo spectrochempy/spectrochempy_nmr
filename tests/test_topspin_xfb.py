@@ -5,6 +5,7 @@ import pytest
 import spectrochempy as scp
 
 from spectrochempy_nmr.experiment import Experiment
+from spectrochempy_nmr.processing.topspin_xfb import _subtract_baseline
 
 
 @pytest.fixture
@@ -113,6 +114,61 @@ def test_qf_xfb_rejects_unqualified_windows(qf_fid, settings, message):
 
     with pytest.raises(ValueError, match=message):
         Experiment(qf_fid).process(replay="topspin")
+
+
+@pytest.mark.parametrize("baseline", [1, 2])
+def test_qf_xfb_f1_tail_baseline(qf_fid, baseline):
+    data = np.vstack((qf_fid.data, 2 * qf_fid.data))
+    qf_fid.delete_coordset()
+    qf_fid.data = data
+    qf_fid.set_coordset(
+        y=scp.Coord(np.arange(4) / 1000, units="s"),
+        x=scp.Coord(np.arange(4) / 2000, units="s"),
+    )
+    qf_fid.meta.source_metadata["proc2s"].update(TDeff=4, BC_mod=baseline)
+    f2 = 4 * np.fft.fftshift(np.fft.ifft(data, axis=1), axes=1)
+    tail = f2[-1]
+    if baseline == 1:
+        tail = (tail.real - tail.imag) * (1 - 1j) / 2
+    expected = np.abs(np.fft.fftshift(np.fft.fft(f2 - tail, axis=0), axes=0))
+    expected[2, 2] = (expected[1, 2] + expected[3, 2]) / 2
+
+    result = Experiment(qf_fid).process(replay="topspin")
+
+    np.testing.assert_allclose(result.data, expected)
+    np.testing.assert_array_equal(qf_fid.data, data)
+    assert result.meta.nmr_processing["scp_processing"]["applied"]["baseline"] == (
+        baseline,
+        0,
+    )
+
+
+@pytest.mark.parametrize(
+    ("axis", "settings", "message"),
+    [
+        ("procs", {"BC_mod": 1}, "not supported on this axis"),
+        ("proc2s", {"BC_mod": 6}, "not supported on this axis"),
+        ("proc2s", {"BC_mod": 2}, "requires full quarters"),
+        ("procs", {"BC_mod": 4, "COROFFS": 0}, "at least six points"),
+    ],
+)
+def test_qf_xfb_rejects_unqualified_baselines(qf_fid, axis, settings, message):
+    qf_fid.meta.source_metadata[axis].update(settings)
+
+    with pytest.raises(ValueError, match=message):
+        Experiment(qf_fid).process(replay="topspin")
+
+
+def test_xfb_shifted_polynomial_baseline_from_endpoint_impulse():
+    data = np.zeros(9, dtype=complex)
+    data[-1] = 1
+    cycles = 1 / 8
+    expected_at_first = -(1 - 3 + 5 - 7 + 9 - 121 / 63) / 9
+    expected_at_last = 1 - (1 + 3 + 5 + 7 + 9 + 121 / 63) / 9
+
+    result = _subtract_baseline(data, 4, cycles)
+
+    np.testing.assert_allclose(result[[0, -1]], [expected_at_first, expected_at_last])
 
 
 def test_qf_xfb_rejects_missing_f1_center_neighbor(qf_fid):

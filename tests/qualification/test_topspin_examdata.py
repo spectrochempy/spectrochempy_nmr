@@ -339,6 +339,39 @@ def test_topspin_xfb_windows(experiment, case, windows, combined):
     assert trace["pknl"] is combined
 
 
+@pytest.mark.parametrize("experiment", ["20", "30", "40"])
+@pytest.mark.parametrize(
+    ("folder", "case", "modes"),
+    [
+        ("bc-modes", "bc1-f1", (1, 0)),
+        ("bc-modes", "bc2-f1", (2, 0)),
+        ("bc-modes", "bc3-f1", (3, 0)),
+        ("bc-modes", "bc4-f1", (4, 0)),
+        ("bc-modes", "bc1-f2", (0, 0)),
+        ("bc-modes", "bc2-f2", (0, 0)),
+        ("bc-modes", "bc3-f2", (0, 4)),
+        ("bc-modes", "bc4-f2", (0, 4)),
+        ("bc-offset", "bc4-f1-offset", (4, 0)),
+        ("bc-offset", "bc4-f2-offset", (0, 4)),
+        ("bc-combined", "bc1-combined", (1, 4)),
+        ("bc-combined", "bc2-combined", (2, 4)),
+        ("bc-combined", "bc3-combined", (3, 4)),
+        ("bc-combined", "bc4-combined", (4, 4)),
+    ],
+)
+def test_topspin_xfb_baseline(experiment, folder, case, modes):
+    root = os.environ.get("NMR_TOPSPIN_XFB_BASELINE_REFERENCES")
+    if root is None:
+        pytest.skip("set NMR_TOPSPIN_XFB_BASELINE_REFERENCES to the baseline copies")
+    path = Path(root).resolve(strict=True) / folder / case / experiment
+    combined = folder == "bc-combined"
+    trace = _assert_topspin_xfb(path, combined)
+    assert trace.get("baseline", (0, 0)) == modes
+    assert trace["pknl"] is combined
+    if combined:
+        assert trace["window"] == (4, 1)
+
+
 def _assert_topspin_xfb(path, with_prediction):
     experiment = path.name
     raw = _local_read(path / "ser")

@@ -1,6 +1,7 @@
 """Replay the qualified uniform Bruker XFB profiles."""
 
 import numpy as np
+from numpy.polynomial.legendre import legvander
 
 from spectrochempy.core.dataset.coord import Coord
 from spectrochempy.core.units import ur
@@ -30,7 +31,6 @@ def _check_axis(params, points, words_per_point, ft_mode, phase_mode):
         or params.get("FT_mod") != ft_mode
         or params.get("PH_mod") != phase_mode
         or params.get("REVERSE") is not False
-        or params.get("BC_mod") != 0
         or params.get("WDW") not in (0, 1, 3, 4)
     ):
         raise ValueError(
@@ -98,6 +98,67 @@ def _prepare_f1(data, window, points, order):
         data = _burg_predict_after(data.swapaxes(-2, -1), points, order)
         data = data.swapaxes(-2, -1)
     return data * window
+
+
+def _check_baseline(params, supported, points):
+    mode = params.get("BC_mod")
+    if mode not in supported:
+        raise ValueError(
+            "TopSpin XFB baseline correction mode is not supported on this axis"
+        )
+    if mode in (1, 2) and (points < 4 or points % 4):
+        raise ValueError("TopSpin XFB tail-mean baseline requires full quarters")
+    if mode in (3, 4):
+        offset = params.get("COROFFS")
+        if points < 6:
+            raise ValueError(
+                "TopSpin XFB polynomial baseline requires at least six points"
+            )
+        if (
+            not isinstance(offset, (int, float))
+            or not np.isfinite(offset)
+            or (mode == 3 and offset != 0)
+        ):
+            raise ValueError(
+                "TopSpin XFB requires a valid COROFFS for the baseline mode"
+            )
+
+
+def _subtract_baseline(data, mode, cycles_per_point=0):
+    """Subtract the measured XFB tail mean or weighted Legendre moments."""
+    points = data.shape[-1]
+    if mode in (1, 2):
+        return data - data[..., 3 * points // 4 :].mean(axis=-1, keepdims=True)
+    basis = legvander(np.linspace(-1, 1, points), 5)
+    factors = np.array([1, 3, 5, 7, 9, 121 / 63]) / points
+    if not cycles_per_point:
+        return data - ((data @ basis) * factors) @ basis.T
+    ramp = np.exp(2j * np.pi * (cycles_per_point % 1) * np.arange(points))
+    return data - (((data * ramp) @ basis) * factors) @ basis.T * ramp.conj()
+
+
+def _correct_f1_baseline(data, params, profile, width):
+    """Use TopSpin's scalar word order for the single-channel F1 modes."""
+    baseline = params["BC_mod"]
+    if not baseline:
+        return data
+    traces = data.swapaxes(-2, -1)
+    if baseline in (1, 3):
+        if profile == "qf":
+            traces = traces.conj()
+        elif profile == "echo-antiecho":
+            traces = 1j * traces
+        words = np.ascontiguousarray(traces).view(traces.real.dtype)
+        corrected = _subtract_baseline(words, baseline).view(traces.dtype)
+        if profile == "qf":
+            corrected = corrected.conj()
+        elif profile == "echo-antiecho":
+            corrected = -1j * corrected
+    else:
+        sign = 1 if profile == "qf" else -1
+        cycles_per_point = sign * params["COROFFS"] / width if baseline == 4 else 0
+        corrected = _subtract_baseline(traces, baseline, cycles_per_point)
+    return corrected.swapaxes(-2, -1)
 
 
 def _positive_fft(data, size, axis):
@@ -180,7 +241,15 @@ def replay_xfb(source):
     ):
         raise ValueError("TopSpin XFB requires a known integer direct group delay")
 
-    f2_input = data * _window(x, nx, widths[1], int(delay))
+    delay = int(delay)
+    _check_baseline(y, (0, 1, 2, 3, 4), ny)
+    _check_baseline(x, (0, 4), nx - delay)
+    f2_input = data.copy() if x["BC_mod"] else data
+    if x["BC_mod"]:
+        f2_input[..., delay:] = _subtract_baseline(
+            data[..., delay:], x["BC_mod"], -x["COROFFS"] / widths[1]
+        )
+    f2_input = f2_input * _window(x, nx, widths[1], delay)
     if mode == "echo-antiecho":
         f2_input = _rance_kay(f2_input)
     sx, sy = x["SI"], y["SI"]
@@ -189,12 +258,13 @@ def replay_xfb(source):
     f2 *= np.exp(-1j * np.deg2rad(phase_x))
     f1_window = _window(y, f1_points, widths[0])[:, None]
     if qf:
-        f1_input = _prepare_f1(f2, f1_window, f1_points, lp_order)
+        f1_input = _correct_f1_baseline(f2, y, mode, widths[0])
+        f1_input = _prepare_f1(f1_input, f1_window, f1_points, lp_order)
         f1 = np.fft.fftshift(np.fft.fft(f1_input, n=sy, axis=-2), axes=-2)
         spectrum = np.abs(f1)
         rr = spectrum
     else:
-        cross = _cross_pairs(f2)
+        cross = _correct_f1_baseline(_cross_pairs(f2), y, mode, widths[0])
         if mode == "states-tppi":
             cross[:, 1::2] *= -1
         cross = _prepare_f1(cross, f1_window, f1_points, lp_order)
@@ -267,4 +337,6 @@ def replay_xfb(source):
             "order": lp_order,
             "size": f1_points,
         }
+    if y["BC_mod"] or x["BC_mod"]:
+        applied["baseline"] = (y["BC_mod"], x["BC_mod"])
     return result, applied
