@@ -21,7 +21,9 @@ mixed-domain result after F2 before transforming F1.
 Here ``x`` and ``y`` are the direct and indirect dimensions of the
 imported FID. Keep both quadrature branches through the indirect FFT.
 Select the desired spectral component before plotting or extracting a
-1D slice. Use :doc:`analysis` to find and integrate cross-peaks.
+1D slice. The :doc:`JEOL COSY example </examples/gallery/nmr/plot_processing_nmr_2d>`
+shows a mixed-domain result for an acquisition that supports the F2 FFT.
+Use :doc:`analysis` to find and integrate cross-peaks in a processed spectrum.
 
 When a TopSpin read includes a ``procs`` file, the dataset can expose its
 processing parameters in ``dataset.meta.nmr_processing["vendor_profile"]``.

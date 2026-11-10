@@ -1,24 +1,12 @@
 Normalized processed 1D spectra
 ===============================
 
-This is an **experimental** extension of the normalized workflow.
-The same converter and Experiment accept already-frequency-domain spectra::
-
-   import nmrglue as ng
-   from spectrochempy_nmr import from_interop
-   from spectrochempy_nmr.experiment import Experiment
-
-   raw = ng.interop.read_bruker_pdata("/path/to/pdata/1", all_components=True)
-   normalized = ng.interop.normalize_bruker_pdata(raw)
-   spectrum = Experiment(from_interop(normalized)).process()
-   ppm_axis = spectrum.coord(0).to("ppm")
-
-The qualification requirements pin the nmrglue-ng version used for these tests.
-``read_topspin()`` delegates qualified Bruker 1D ``pdata`` to nmrglue-ng
-and preserves the public reader's real or complex data, receiver gain,
-metadata and coordinate conventions. The ``proc_axis=True`` option retains
-its existing behavior. Profiles outside the calibrated contract continue
-through the historical reader.
+This note describes the interop contract for spectra already in the
+frequency domain. For ordinary TopSpin imports, use
+:doc:`the reader guide <userguide/reading_data>`. For supported Bruker 1D
+``pdata`` profiles, ``read_topspin()`` delegates reading and normalization
+to nmrglue-ng while preserving the reader's real or complex presentation,
+receiver gain, metadata and coordinates.
 
 For qualified Bruker 1D spectra, the public reader returns the dataset built
 by ``from_interop()`` using the nmrglue-ng 1.2.1 axis and receiver-gain contract. It keeps the acquisition frequency (``SFO1``) in

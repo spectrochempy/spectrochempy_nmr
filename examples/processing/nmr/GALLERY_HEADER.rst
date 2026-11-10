@@ -1,5 +1,4 @@
 NMR processing examples
 =======================
 
-Public examples limited to the validated 1D workflow. General 2D processing
-examples are intentionally excluded from this gallery.
+Transform a Bruker 1D FID or the direct dimension of a JEOL 2D acquisition.

@@ -8,6 +8,21 @@ section = "Import / Export"
 section_ref = "examples-importer-index"
 
 [[examples]]
+path = "core/c_importer/plot_read_jeol_1d.py"
+section = "Import / Export"
+section_ref = "examples-importer-index"
+
+[[examples]]
+path = "core/c_importer/plot_read_jeol_2d.py"
+section = "Import / Export"
+section_ref = "examples-importer-index"
+
+[[examples]]
+path = "core/c_importer/plot_read_nmrpipe_2d.py"
+section = "Import / Export"
+section_ref = "examples-importer-index"
+
+[[examples]]
 path = "processing/apodization/plot_proc_em.py"
 section = "Processing / apodization"
 section_ref = "examples-processing-apodization-index"
@@ -18,16 +33,26 @@ section = "Processing / apodization"
 section_ref = "examples-processing-apodization-index"
 
 [[examples]]
-path = "processing/nmr/plot_read_nmr_topspin.py"
+path = "processing/nmr/plot_compare_topspin_1d.py"
 section = "NMR processing"
 section_ref = "examples-processing-nmr-index"
 
 [[examples]]
-path = "processing/nmr/plot_processing_nmr.py"
+path = "processing/nmr/plot_processing_nmr_2d.py"
 section = "NMR processing"
 section_ref = "examples-processing-nmr-index"
 
 [[examples]]
-path = "processing/nmr/plot_processing_nmr_relax.py"
-section = "NMR processing"
-section_ref = "examples-processing-nmr-index"
+path = "analysis/nmr/plot_processing_nmr.py"
+section = "Analysis"
+section_ref = "examples-analysis-index"
+
+[[examples]]
+path = "analysis/nmr/plot_processing_nmr_relax.py"
+section = "Analysis"
+section_ref = "examples-analysis-index"
+
+[[examples]]
+path = "analysis/nmr/plot_analyze_cosy_2d.py"
+section = "Analysis"
+section_ref = "examples-analysis-index"

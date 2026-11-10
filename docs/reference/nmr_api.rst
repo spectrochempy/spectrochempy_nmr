@@ -47,7 +47,8 @@ use each operation on an acquisition or spectrum.
        :external+core:py:func:`~spectrochempy.plot_map`
      - Display a 1D spectrum or a 2D map. For paired 2D data, select the
        spectral component before plotting.
-   * - :external+core:py:func:`~spectrochempy.trapezoid`
+   * - :external+core:py:func:`~spectrochempy.trapezoid`,
+       :external+core:py:func:`~spectrochempy.simpson`
      - Integrate a selected 1D peak region on the calibrated axis after
        phasing and baseline correction.
 
@@ -70,7 +71,8 @@ parameters from an array-based workflow.
      - Choose a baseline model with ``scp.Baseline`` or apply
        ``spectrum.snip()`` for a suitable 1D spectrum.
    * - ``peakpick``, ``integration`` and ``linesh``
-     - Use ``find_peaks()``, ``trapezoid()`` and ``scp.Optimize``.
+     - Use ``find_peaks()`` for detection, ``trapezoid()`` or ``simpson()``
+       for numerical integration, and ``scp.Optimize`` for fitting.
        See :doc:`/userguide/analysis` for 1D and 2D examples.
 
 See :ref:`topspin-xfb-replay` for applying a recorded TopSpin recipe with

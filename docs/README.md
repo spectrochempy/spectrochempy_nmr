@@ -39,8 +39,7 @@ NMR_DOCS_EXECUTE=1 python -m sphinx -W --keep-going -b html docs docs/_build/htm
 ```
 
 RTD sets `READTHEDOCS=True`; the configuration then executes the gallery after
-the pre-build fixture fetch. The excluded CP and 2D examples are never
-selected. See `docs/fixtures.md` for provenance and licensing.
+the pre-build fixture fetch. See `docs/fixtures.md` for provenance and licensing.
 
 Record the tested environment with:
 

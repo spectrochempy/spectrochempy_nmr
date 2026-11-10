@@ -24,11 +24,12 @@ integration limits are specific to this example.
 
 The slice uses chemical shifts in ppm. ``use_coord=False`` makes peak width
 and spacing options work in samples. The integral uses the region's
-calibrated axis. Choose integration limits that contain the full peak
+calibrated axis. You can also use ``region.simpson()`` for Simpson's rule,
+as in the relaxation example below. Choose integration limits that contain the full peak
 and avoid nearby signals when comparing peak areas.
 
 For peak assignment on a plot and fitting overlapped 1D peaks with
-``scp.Optimize``, see :doc:`/examples/gallery/nmr/plot_processing_nmr`.
+``scp.Optimize``, see :doc:`/examples/gallery/analysis/plot_processing_nmr`.
 
 Find cross-peaks and integrate a 2D region
 ------------------------------------------
@@ -44,7 +45,9 @@ a rectangular region in Hz using the core's trapezoid rule along each axis.
    region = plane[2250.0:2450.0, 880.0:1010.0]
    area = region.trapezoid(dim="x").trapezoid(dim="y")
 
-Adjust the bounds to the cross-peak of interest. For negative peaks, apply
+Adjust the bounds to the cross-peak of interest. See the executable
+:doc:`COSY analysis example </examples/gallery/analysis/plot_analyze_cosy_2d>`
+for the contour plots and peak table. For negative peaks, apply
 peak finding to the negated map. Select the same quadrature component and
 sign convention when comparing spectra. Core versions that expose
 ``integrate_region()`` also support physical bounds and an optional
@@ -53,4 +56,4 @@ uncertainty estimate from a noise region.
 For segmentation, peak simulation, and multidimensional fitting,
 see the :external+core:doc:`core analysis guide <userguide/analysis/index>`.
 For an example of fitting relaxation curves across a series, see
-:doc:`/examples/gallery/nmr/plot_processing_nmr_relax`.
+:doc:`/examples/gallery/analysis/plot_processing_nmr_relax`.

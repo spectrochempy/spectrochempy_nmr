@@ -52,6 +52,21 @@ processing steps depend on the acquisition and file layout. See the
 See :ref:`reading-exchange-formats-through-interop` for the profile and
 convention options for exchange formats.
 
+Read an already processed TopSpin spectrum
+------------------------------------------
+
+Pass ``procno`` to select the processed spectrum in an experiment. The
+returned dataset already has a frequency axis and can be plotted or
+analyzed directly.
+
+.. code-block:: python
+
+   spectrum = scp.nmr.read_topspin("path/to/experiment", expno=1, procno=1)
+   _ = spectrum.real.plot()
+
+See :doc:`../processed_1d_interop` for details on the ppm reference, stored
+components, and qualification coverage.
+
 Agilent/Varian States quadrature
 --------------------------------
 

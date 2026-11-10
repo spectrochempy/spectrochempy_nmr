@@ -77,9 +77,8 @@ fitter = scp.Optimize(log_level="INFO", method="leastsq")
 # Define the model to fit
 def T1_model(t, I0, T1):  # no underscore in parameters names.
     # Simple saturation-recovery model.
-    import numpy as np
 
-    I = I0 * (1 - np.exp(-t / T1))
+    I = I0 * (1 - scp.exp(-t / T1))
     return I
 
 

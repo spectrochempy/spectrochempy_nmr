@@ -138,14 +138,15 @@ sphinx_gallery_conf = {
         str(_examples / "core" / "c_importer"),
         str(_examples / "processing" / "apodization"),
         str(_examples / "processing" / "nmr"),
+        str(_examples / "analysis" / "nmr"),
     ],
     "gallery_dirs": [
         "examples/gallery/importer",
         "examples/gallery/apodization",
         "examples/gallery/nmr",
+        "examples/gallery/analysis",
     ],
     "filename_pattern": r"plot_",
-    "ignore_pattern": r"(^|/)(plot_processing_cp_nmr|plot_processing_nmr_2d)\.py$",
     "plot_gallery": os.environ.get("NMR_DOCS_EXECUTE") == "1"
     or os.environ.get("READTHEDOCS", "").lower() == "true",
     "abort_on_example_error": True,

@@ -11,16 +11,17 @@
   ],
   'API': [
     ('reference/index.html', 'SpectroChemPy Core API')
-  ],
-  'Examples': [
-    ('gettingstarted/examples/gallery/auto_examples_processing/index.html', 'Core processing examples'),
-    ('gettingstarted/examples/gallery/auto_examples_analysis/index.html', 'Core analysis examples')
   ]
 } %}
 {% set active_group = section_title %}
 <nav class="nmr-navbar" aria-label="{{ _('Main navigation') }}">
   <ul class="bd-navbar-elements navbar-nav">
     {% for label, pages in menus %}
+      {% if label == 'Examples' %}
+      <li class="nav-item{% if active_group == label %} current active{% endif %}">
+        <a class="nav-link" href="{{ pathto('examples_overview') }}"{% if pagename == 'examples_overview' %} aria-current="page"{% endif %}>{{ label }}</a>
+      </li>
+      {% else %}
       {% set menu_id = unique_html_id('nmr-nav-menu') %}
       <li class="nav-item dropdown{% if active_group == label %} current active{% endif %}">
         <button class="btn dropdown-toggle nav-item" type="button"
@@ -41,6 +42,7 @@
           {% endif %}
         </ul>
       </li>
+      {% endif %}
     {% endfor %}
   </ul>
 </nav>

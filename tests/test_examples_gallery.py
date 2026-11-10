@@ -22,44 +22,49 @@ import spectrochempy as scp
 PLUGIN_ROOT = Path(__file__).resolve().parents[1]
 MANIFEST = PLUGIN_ROOT / "examples" / "gallery.toml"
 VISIBLE_EXAMPLES = [
-    "core/c_importer/plot_read_nmr_from_bruker.py",
-    "processing/apodization/plot_proc_em.py",
-    "processing/apodization/plot_proc_sp.py",
-    "processing/nmr/plot_read_nmr_topspin.py",
-    "processing/nmr/plot_processing_nmr.py",
-    "processing/nmr/plot_processing_nmr_relax.py",
+    entry["path"]
+    for entry in tomllib.loads(MANIFEST.read_text(encoding="utf-8"))["examples"]
 ]
+JEOL_DATA = {
+    "plot_read_jeol_1d": "epicatechin_1h.jdf",
+    "plot_read_jeol_2d": "epicatechin_cosy.jdf",
+    "plot_processing_nmr_2d": "epicatechin_cosy.jdf",
+}
 
 
-def _has_nmr_example_data() -> bool:
-    root = Path(scp.preferences.datadir) / "nmrdata" / "bruker" / "tests" / "nmr"
-    required = [
-        root / "topspin_1d" / "1" / "fid",
-        root / "relax" / "100" / "ser",
-    ]
-    return all(path.exists() for path in required)
+def _has_nmr_example_data(example: Path) -> bool:
+    root = Path(scp.preferences.datadir) / "nmrdata"
+    if example.stem in JEOL_DATA:
+        return (root / "jeol" / JEOL_DATA[example.stem]).is_file()
+    if example.stem in {"plot_read_nmrpipe_2d", "plot_analyze_cosy_2d"}:
+        return (root / "nmrpipe" / "nmrpipe_2d_cosy_example.ft2").is_file()
+    bruker = root / "bruker" / "tests" / "nmr"
+    if example.stem == "plot_processing_nmr_relax":
+        return (bruker / "relax" / "100" / "ser").is_file()
+    if example.stem == "plot_compare_topspin_1d":
+        if not (bruker / "topspin_1d" / "1" / "pdata" / "1" / "1r").is_file():
+            return False
+    return (bruker / "topspin_1d" / "1" / "fid").is_file()
 
 
-def test_nmr_gallery_manifest_focuses_on_public_1d_examples():
-    manifest = tomllib.loads(MANIFEST.read_text(encoding="utf-8"))
-    example_paths = [entry["path"] for entry in manifest["examples"]]
-
-    assert example_paths == VISIBLE_EXAMPLES
-    assert "processing/nmr/plot_processing_cp_nmr.py" not in example_paths
-    assert "processing/nmr/plot_processing_nmr_2d.py" not in example_paths
+def test_nmr_gallery_manifest_covers_all_public_examples():
+    scripts = {
+        str(path.relative_to(PLUGIN_ROOT / "examples"))
+        for path in (PLUGIN_ROOT / "examples").rglob("plot_*.py")
+    }
+    assert len(VISIBLE_EXAMPLES) == len(scripts)
+    assert set(VISIBLE_EXAMPLES) == scripts
 
 
 @pytest.mark.parametrize("relative_path", VISIBLE_EXAMPLES, ids=VISIBLE_EXAMPLES)
 def test_public_nmr_gallery_examples_execute(relative_path, tmp_path):
-    if not _has_nmr_example_data():
-        pytest.skip("Bundled NMR example data not available in this environment")
-
     example = PLUGIN_ROOT / "examples" / relative_path
+    if not _has_nmr_example_data(example):
+        pytest.skip("NMR example data not available in this environment")
 
     env = os.environ.copy()
     env["MPLBACKEND"] = "Agg"
     env["MPLCONFIGDIR"] = str(tmp_path / "mpl")
-    env["SCP_CONFIG_HOME"] = str(tmp_path / "scp-config")
 
     result = subprocess.run(
         [sys.executable, str(example)],
