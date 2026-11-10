@@ -656,7 +656,7 @@ def test_real_bruker_states_tppi_import(provider, tmp_path, monkeypatch, run_fft
 
 
 def _check_real_states_tppi_fft(provider, dataset, path, tmp_path, monkeypatch):
-    from spectrochempy_nmr.processing import states_tppi_interop
+    from spectrochempy_nmr.processing import channel_interop
 
     executable = os.environ.get("NMR_PIPE_EXECUTABLE") or shutil.which("nmrPipe")
     if not executable:
@@ -664,14 +664,14 @@ def _check_real_states_tppi_fft(provider, dataset, path, tmp_path, monkeypatch):
             "configure the NMRPipe executable for States-TPPI FFT qualification"
         )
     stages = []
-    cross_pairs = states_tppi_interop._cross_pairs
+    cross_pairs = channel_interop._cross_pairs
 
     def record(values):
         cross = cross_pairs(values)
         stages.extend((values.copy(), cross.copy()))
         return cross
 
-    monkeypatch.setattr(states_tppi_interop, "_cross_pairs", record)
+    monkeypatch.setattr(channel_interop, "_cross_pairs", record)
     spectrum = Experiment(dataset).process()
     rr, ri, ir, ii = spectrum.data
     final = np.stack(((rr + 1j * ir).T, (ri + 1j * ii).T), axis=1)

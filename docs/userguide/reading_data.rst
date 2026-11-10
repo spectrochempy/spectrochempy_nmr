@@ -25,6 +25,39 @@ The separate experimental ``read_agilent_interop`` facade is characterized on
 real acquisitions with a pinned external provider. See
 :doc:`../agilent_qualification` for reproducible checks, observed-nucleus handling and remaining limitations.
 
+Agilent/Varian States quadrature
+--------------------------------
+
+For a paired 2D acquisition with ``phase=[1,2]``, choose the F1 convention
+explicitly when it is known::
+
+   fid = scp.nmr.read_agilent("sample.fid", quadrature="states")
+   spectrum = scp.nmr.Experiment(fid).process()
+
+Use ``quadrature="states-tppi"`` if the acquisition encodes sign alternation
+in F1. Both choices retain the two stored branches at import and use the
+physical time grids. Processing applies the declared NMRPipe input
+convention and performs F2 before F1. Only States-TPPI applies F1
+alternation.
+
+The default ``quadrature="auto"`` recognizes versioned pulse-program
+sources. Pass the exact source used for acquisition with
+``pulse_program_source="path/to/NOESY.c"`` or include the source next to
+``fid`` and ``procpar``, named after ``seqfil`` with a ``.c`` suffix.
+The initial catalogue recognizes the audited OpenVnmrJ `NOESY.c
+<https://github.com/OpenVnmrJ/OpenVnmrJ/blob/0f6b0a4664def0cdf2ee9eb37cb2df7369f38ca3/src/psglib/NOESY.c>`_
+as States-TPPI when the name and SHA-256 match and ``d2=0`` establishes
+the first increment. The source must correspond
+to the acquisition. A sequence name or a two-branch phase array alone
+cannot distinguish States from States-TPPI.
+
+The reader logs the choice at INFO level and records the mode and its
+source in ``fid.meta.acquisition["quadrature_selection"]``. For an unknown
+program or absent source, automatic selection leaves the mode unset and
+F1 processing guarded. Reading the stored traces and the historical F2
+operation remain available. Quadrature selection requires an nmrglue-ng
+provider that supports it.
+
 Reading exchange formats through interop
 ----------------------------------------
 

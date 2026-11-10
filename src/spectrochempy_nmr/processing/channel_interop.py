@@ -20,8 +20,25 @@ def _rance_kay(data):
     return np.stack((first - second, 1j * (first + second)))
 
 
-def process_states_tppi_fft(dataset, widths):
-    return _process_channel_fft(dataset, widths, ("E1", "E2"), "States-TPPI")
+def process_states_fft(dataset, widths, *, alternate):
+    mode = "States-TPPI" if alternate else "States"
+    transform = dataset.meta.acquisition.get("states_fft_input_transform")
+    if transform not in (None, "conjugate-and-negate-second-branch"):
+        raise ValueError("Unsupported States FFT input transform")
+    return _process_channel_fft(
+        dataset,
+        widths,
+        ("E1", "E2"),
+        mode,
+        reconstruct=_conjugate_and_negate_second if transform else None,
+        alternate=alternate,
+    )
+
+
+def _conjugate_and_negate_second(data):
+    branches = data.conj()
+    branches[1] *= -1
+    return branches
 
 
 def _bruker_delay(dataset, override):
@@ -107,6 +124,7 @@ def _process_channel_fft(
     mode,
     *,
     reconstruct=None,
+    alternate=False,
     digital_filter=None,
     group_delay=None,
 ):
@@ -165,7 +183,7 @@ def _process_channel_fft(
         bins = np.arange(f2.shape[-1]) / f2.shape[-1]
         f2 *= np.exp(-2j * np.pi * group_delay * bins)
     cross = _cross_pairs(f2)
-    if reconstruct is None:
+    if alternate:
         cross[:, 1::2] *= -1  # States-TPPI uses NMRPipe FT -alt.
     f1 = _fft_stage(cross, -2, direct=True)
     planes = np.stack((f1[0].real, f1[1].real, f1[0].imag, f1[1].imag))
@@ -178,6 +196,6 @@ def _process_channel_fft(
     result.meta.component_labels = labels
     result.meta.isfreq = [False, True, True]
     result.meta.td = list(planes.shape)
-    if reconstruct is None:
+    if alternate:
         result.meta.tppi_alternation_state = "applied"
     return result

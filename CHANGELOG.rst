@@ -12,6 +12,11 @@ Unreleased
 Added
 ~~~~~
 
+* Process explicitly confirmed NMRPipe States 2D acquisitions with
+  ``Experiment.process()``, without applying TPPI alternation.
+* Select Agilent 2D States or States-TPPI quadrature manually or from a
+  verified pulse-program source with a compatible nmrglue-ng provider.
+
 * Read qualified NMRPipe, nmrML and NMR JCAMP-DX profiles via
   ``scp.nmr.read(path, protocol="interop")``.
 
