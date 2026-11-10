@@ -128,7 +128,7 @@ def _deposit_triangles(axis, frequencies, weights, triangles):
             bins, weights=(cdf - previous) * masses[owners], minlength=axis.size
         )
         start = end
-    return spectrum / spectrum.sum()
+    return spectrum
 
 
 def _central_transition_profile(
@@ -141,8 +141,9 @@ def _central_transition_profile(
     shift_hz=0.0,
     spinning_hz=0.0,
     accuracy=16,
+    sidebands=0,
 ):
-    points, accuracy = index(points), index(accuracy)
+    points, accuracy, sidebands = index(points), index(accuracy), index(sidebands)
     values = (cq_hz, eta, larmor_hz, spectral_width_hz, shift_hz, spinning_hz)
     if not all(isinstance(value, Real) for value in values):
         raise TypeError("PULSAR parameters must be real scalars.")
@@ -159,32 +160,62 @@ def _central_transition_profile(
     if points < 2 or not 1 <= accuracy <= 64:
         raise ValueError("Use at least two points and a powder accuracy from 1 to 64.")
 
+    if sidebands < 0 or (sidebands and not spinning_hz):
+        raise ValueError(
+            "Use a nonnegative sideband count, with a positive MAS rate for sidebands."
+        )
+
     directions, weights, triangles = _powder_mesh(accuracy)
     angle = np.deg2rad(54.736) if spinning_hz else 0
     harmonics = _quadrupolar_harmonics(directions, eta, angle)
     harmonics *= cq_hz**2 / (16 * larmor_hz)
     frequencies = shift_hz + harmonics[0].real
     axis = np.linspace(-spectral_width_hz / 2, spectral_width_hz / 2, points)
-    if frequencies.min() < axis[0] or frequencies.max() > axis[-1]:
-        raise ValueError("The spectral window must contain the central transition.")
-    if spinning_hz:
-        # Ideal pulse and zero delay give the squared magnitude of the
-        # zero-order rotor Fourier coefficient in PULSAR's p and q sums.
-        rotor_samples = spectral_width_hz / spinning_hz
-        if rotor_samples >= 4095.5:
-            raise ValueError("This PULSAR prototype supports up to 4096 rotor samples.")
-        count = max(5 * accuracy, int(rotor_samples + 0.5) + 1)
-        orders = np.arange(1, 5)
-        phase = 2 * np.pi * orders[:, None] * np.arange(count) / count
-        rotor = np.exp(1j * phase) / (orders[:, None] * spinning_hz)
-        rotor = rotor.conj()
-        band_intensity = np.empty(frequencies.size)
-        for start in range(0, frequencies.size, 128):
-            block = slice(start, start + 128)
-            modulation = (harmonics[1:, block].T @ rotor).imag
-            band_intensity[block] = abs(np.exp(-1j * modulation).mean(axis=1)) ** 2
-        weights = weights * band_intensity
-    return axis, _deposit_triangles(axis, frequencies, weights, triangles)
+    band_offset = sidebands * spinning_hz
+    if (
+        frequencies.min() - band_offset < axis[0]
+        or frequencies.max() + band_offset > axis[-1]
+    ):
+        raise ValueError("The spectral window must contain the requested bands.")
+    if not spinning_hz:
+        spectrum = _deposit_triangles(axis, frequencies, weights, triangles)
+        return axis, spectrum / spectrum.sum()
+
+    rotor_samples = spectral_width_hz / spinning_hz
+    if rotor_samples >= 4095.5:
+        raise ValueError("This PULSAR prototype supports up to 4096 rotor samples.")
+    count = max(5 * accuracy, int(rotor_samples + 0.5) + 1, 2 * sidebands + 1)
+    orders = np.arange(1, 5)
+    phase = 2 * np.pi * orders[:, None] * np.arange(count) / count
+    rotor = np.exp(-1j * phase) / (orders[:, None] * spinning_hz)
+    band_count = 2 * sidebands + 1
+    intensity_bytes = frequencies.size * band_count * np.dtype(np.float64).itemsize
+    if intensity_bytes > 64 * 1024**2:
+        raise ValueError(
+            "MAS band intensities exceed the 64 MiB limit. "
+            "Reduce accuracy or sidebands."
+        )
+    band_orders = np.arange(-sidebands, sidebands + 1)
+    band_intensity = np.empty((frequencies.size, band_count), dtype=np.float64)
+    for start in range(0, frequencies.size, 128):
+        block = slice(start, start + 128)
+        modulation = (harmonics[1:, block].T @ rotor).imag
+        signal = np.exp(-1j * modulation)
+        # Ideal pulse and zero delay make the two PULSAR rotor sums
+        # conjugates. Each band takes the squared magnitude of its Fourier
+        # coefficient. The central-only path needs just the mean.
+        if sidebands:
+            coefficients = np.fft.fft(signal, axis=1)[:, band_orders] / count
+        else:
+            coefficients = signal.mean(axis=1, keepdims=True)
+        band_intensity[block] = np.abs(coefficients) ** 2
+
+    spectrum = np.zeros_like(axis)
+    for band_order, intensity in zip(band_orders, band_intensity.T, strict=True):
+        spectrum += _deposit_triangles(
+            axis, frequencies + band_order * spinning_hz, weights * intensity, triangles
+        )
+    return axis, spectrum / spectrum.sum()
 
 
 def simulate_central_transition(
@@ -197,16 +228,19 @@ def simulate_central_transition(
     shift_hz=0.0,
     spinning_hz=0.0,
     accuracy=16,
+    sidebands=0,
 ):
     """Simulate the central transition of one spin 3/2 as an NDDataset.
 
     The model uses second-order quadrupolar shifts and an ideal pulse with
     zero delay. Set `spinning_hz` to zero for a static powder or to a positive
-    rate for the central MAS band at 54.736 degrees. Intensities sum to one
-    and the increasing frequency coordinate labels the left edges of the
-    PULSAR bins. The spectral window must contain the complete profile.
+    rate for MAS at 54.736 degrees. `sidebands` adds that many orders
+    on each side of the central band. Intensities sum to one across all
+    requested bands. The frequency coordinate labels the left edges of the
+    PULSAR bins. The spectral window must contain all requested bands.
     Powder accuracy ranges from 1 to 64, and MAS quadrature is limited
-    to 4096 rotor samples.
+    to 4096 rotor samples. The table of intensities across powder vertices
+    and requested bands is limited to 64 MiB.
     """
     from spectrochempy.core.dataset.coord import Coord
     from spectrochempy.core.dataset.nddataset import NDDataset
@@ -220,6 +254,7 @@ def simulate_central_transition(
         shift_hz=shift_hz,
         spinning_hz=spinning_hz,
         accuracy=accuracy,
+        sidebands=sidebands,
     )
     dataset = NDDataset(profile, name="PULSAR central transition")
     dataset.set_coordset(x=Coord(axis, units="Hz", title="frequency offset"))

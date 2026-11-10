@@ -84,6 +84,55 @@ def test_triangle_batches_preserve_flat_sides_and_endpoint_mass():
     frequencies = np.array([axis[0], axis[-1]])
     triangles = np.array([[0, 0, 1], [0, 1, 1]] * 33 + [[1, 1, 1]])
     result = _deposit_triangles(axis, frequencies, np.ones(2), triangles)
-    expected = np.full(axis.size, 66 / (67 * (axis.size - 1)))
-    expected[-1] = 1 / 67
+    expected = np.full(axis.size, 198 / (axis.size - 1))
+    expected[-1] = 3
     np.testing.assert_allclose(result, expected, rtol=1e-11)
+
+
+def test_mas_rejects_band_intensity_table_above_memory_limit():
+    with pytest.raises(
+        ValueError, match="MAS band intensities exceed the 64 MiB limit"
+    ):
+        simulate_central_transition(
+            cq_hz=1e5,
+            eta=0,
+            larmor_hz=100e6,
+            spectral_width_hz=41e3,
+            spinning_hz=10.1,
+            accuracy=64,
+            sidebands=2000,
+        )
+
+
+def test_mas_zero_coupling_has_no_sidebands():
+    dataset = simulate_central_transition(
+        cq_hz=0,
+        eta=0,
+        larmor_hz=100e6,
+        spectral_width_hz=60e3,
+        spinning_hz=10e3,
+        sidebands=2,
+    )
+    assert np.count_nonzero(dataset.data > 1e-14) == 1
+    assert dataset.data.max() == pytest.approx(1)
+
+
+def test_mas_sidebands_match_asymmetric_fortran_reference():
+    dataset = simulate_central_transition(
+        cq_hz=np.sqrt(12 * 15000 * 100e6),
+        eta=0.7,
+        larmor_hz=100e6,
+        spectral_width_hz=100e3,
+        shift_hz=4500,
+        spinning_hz=10e3,
+        sidebands=2,
+    )
+    # Fixed windows across the historical Fortran profile, normalized together.
+    windows = [-np.inf, -15000, -5000, 5000, 15000, np.inf]
+    areas, _ = np.histogram(dataset.x.data, bins=windows, weights=dataset.data)
+    np.testing.assert_allclose(
+        areas,
+        [0.02150456, 0.19630213, 0.63106285, 0.10237457, 0.04875589],
+        atol=3e-6,
+        rtol=0,
+    )
