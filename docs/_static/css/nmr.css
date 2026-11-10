@@ -79,6 +79,19 @@ body,
   font-weight: 650;
 }
 
+.nmr-navbar .dropdown-menu a.dropdown-item {
+  color: var(--pst-color-text-base);
+}
+
+.nmr-navbar .dropdown-menu a.dropdown-item:is(:hover, :focus, :active, .active) {
+  color: var(--pst-color-text-base);
+  background-color: var(--pst-color-surface);
+}
+
+.nmr-navbar .dropdown-menu a.dropdown-item[aria-current="page"] {
+  font-weight: 700;
+}
+
 .bd-sidebar-primary {
   background: var(--scp-sidebar);
   border-right: 1px solid rgba(255, 255, 255, 0.1);

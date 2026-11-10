@@ -6,6 +6,7 @@
   ('Guides', [
     ('userguide/reading_data', 'Reading NMR data'),
     ('userguide/processing_1d', 'Validated 1D processing'),
+    ('userguide/processing_2d', 'Processing 2D NMR data'),
     ('concepts/quadrature', 'Quadrature'),
     ('concepts/hypercomplex', 'Complex channels')
   ]),
@@ -21,8 +22,21 @@
     ('compatibility', 'Compatibility')
   ])
 ] %}
+{% set core_pages = {
+  'Guides': [
+    ('userguide/processing/index.html', 'Core processing guide'),
+    ('userguide/analysis/index.html', 'Core analysis guide')
+  ],
+  'API': [
+    ('reference/index.html', 'SpectroChemPy Core API')
+  ],
+  'Examples': [
+    ('gettingstarted/examples/gallery/auto_examples_processing/index.html', 'Core processing examples'),
+    ('gettingstarted/examples/gallery/auto_examples_analysis/index.html', 'Core analysis examples')
+  ]
+} %}
 {% set active_group = section_title %}
-<nav aria-label="{{ _('Main navigation') }}">
+<nav class="nmr-navbar" aria-label="{{ _('Main navigation') }}">
   <ul class="bd-navbar-elements navbar-nav">
     {% for label, pages in menus %}
       {% set menu_id = unique_html_id('nmr-nav-menu') %}
@@ -37,6 +51,12 @@
                      href="{{ pathto(target) }}"{% if pagename == target %} aria-current="page"{% endif %}>{{ title }}</a></li>
             {% endif %}
           {% endfor %}
+          {% if core_pages.get(label) %}
+            <li><hr class="dropdown-divider"></li>
+            {% for target, title in core_pages[label] %}
+              <li><a class="dropdown-item" href="{{ core_docs_url }}/{{ target }}">{{ title }}</a></li>
+            {% endfor %}
+          {% endif %}
         </ul>
       </li>
     {% endfor %}

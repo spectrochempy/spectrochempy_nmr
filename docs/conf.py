@@ -109,6 +109,7 @@ html_theme_options = {
     ],
 }
 html_context = {
+    "core_docs_url": core_docs_url,
     "default_mode": "light",
     "display_github": True,
     "github_user": "spectrochempy",
