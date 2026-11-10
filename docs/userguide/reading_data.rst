@@ -59,7 +59,9 @@ Reading exchange formats through interop
 ----------------------------------------
 
 Use ``scp.nmr.read(path, protocol="interop")`` to read and normalize one file
-with nmrglue-ng, then convert the result to an ``NDDataset``. NMRPipe profiles
+with
+`nmrglue-ng <https://nmrglue-ng.readthedocs.io/latest/tutorials/interop.html>`_,
+then convert the result to an ``NDDataset``. NMRPipe profiles
 can be detected from the header. Supply an explicit provider profile for
 nmrML and NMR JCAMP-DX.
 
