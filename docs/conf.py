@@ -18,24 +18,35 @@ copyright = "2014-2026, Laboratoire Catalyse et Spectrochimie (LCS)"
 import spectrochempy  # noqa: E402
 import spectrochempy_nmr  # noqa: E402
 
-version = (
-    spectrochempy_nmr.NMRPlugin.version
-    if os.environ.get("NMR_DOCS_RELEASE")
-    else "Unreleased"
+_rtd_tag = os.environ.get("READTHEDOCS_GIT_IDENTIFIER", "")
+_release_tag = f"spectrochempy-nmr-v{spectrochempy_nmr.NMRPlugin.version}"
+_tagged_release = _rtd_tag == _release_tag
+_release_build = bool(os.environ.get("NMR_DOCS_RELEASE")) or _tagged_release
+github_ref = os.environ.get("NMR_DOCS_GITHUB_REF", "").strip() or (
+    _rtd_tag if _tagged_release else "master"
 )
+version = spectrochempy_nmr.NMRPlugin.version if _release_build else "Unreleased"
 release = version
 language = "en"
 master_doc = "index"
 source_suffix = ".rst"
-exclude_patterns = ["_build", "_static", "**.ipynb_checkpoints"]
+exclude_patterns = [
+    "_build",
+    "_static",
+    "**.ipynb_checkpoints",
+    "examples/gallery/**/*.ipynb",  # Sphinx-Gallery renders the paired RST.
+]
 templates_path = ["_templates"]
 
 core_docs_url = os.environ.get(
-    "NMR_CORE_DOCS_URL", "https://www.spectrochempy.fr/latest/"
+    "NMR_CORE_DOCS_URL",
+    (
+        "https://www.spectrochempy.fr/spectrochempy-v1.2.0/"
+        if _tagged_release
+        else "https://www.spectrochempy.fr/latest/"
+    ),
 ).rstrip("/")
-_release_build = os.environ.get("NMR_DOCS_RELEASE")
 if _release_build:
-    github_ref = os.environ.get("NMR_DOCS_GITHUB_REF", "").strip()
     core_docs_version = core_docs_url.rsplit("/", maxsplit=1)[-1]
     immutable_ref = re.fullmatch(r"[0-9a-f]{40}", github_ref) or re.fullmatch(
         r"spectrochempy-nmr-v\d+\.\d+\.\d+(?:[-+][0-9A-Za-z.-]+)?", github_ref
@@ -44,17 +55,24 @@ if _release_build:
         raise RuntimeError(
             "release builds require a commit SHA or spectrochempy-nmr-vX.Y.Z tag"
         )
-    if not os.environ.get("NMR_CORE_DOCS_URL") or core_docs_version == "latest":
+    if not re.fullmatch(
+        r"(?:spectrochempy-v)?\d+\.\d+(?:\.\d+)?(?:[-+][0-9A-Za-z.-]+)?",
+        core_docs_version,
+    ):
         raise RuntimeError("release builds require a fixed NMR_CORE_DOCS_URL")
 
 extensions = [
     "sphinx.ext.autodoc",
+    "sphinx.ext.autosummary",
     "sphinx.ext.intersphinx",
     "sphinx.ext.napoleon",
     "sphinx.ext.viewcode",
     "sphinx.ext.githubpages",
     "sphinx_gallery.gen_gallery",
+    "nbsphinx",
 ]
+
+autosummary_generate = True
 
 autodoc_default_options = {
     "members": True,
@@ -74,12 +92,15 @@ intersphinx_mapping = {
     "numpy": ("https://numpy.org/doc/stable/", None),
 }
 
+nbsphinx_execute = "always"
+
 html_theme = "pydata_sphinx_theme"
 html_title = f"{project} {release}"
 html_logo = "_static/scpy.png"
 html_favicon = "_static/scpy.ico"
 html_static_path = ["_static"]
 html_css_files = ["css/nmr.css"]
+html_sidebars = {"index": ["sidebar-home.html"]}
 html_theme_options = {
     "navbar_align": "left",
     "logo": {"text": "SpectroChemPy NMR"},
@@ -107,17 +128,18 @@ html_theme_options = {
     ],
 }
 html_context = {
+    "core_docs_url": core_docs_url,
     "default_mode": "light",
     "display_github": True,
     "github_user": "spectrochempy",
     "github_repo": "spectrochempy_nmr",
     # Set NMR_DOCS_GITHUB_REF to a release tag for historical builds. Release
     # builds reject the moving default unless this is set explicitly.
-    "github_version": os.environ.get("NMR_DOCS_GITHUB_REF", "master"),
-    "conf_py_path": "/docs/",
+    "github_version": github_ref,
+    "doc_path": "docs",
 }
 
-# The six public examples are sourced from this checkout. They are rendered
+# The public gallery examples are sourced from this checkout. They are rendered
 # without execution by default; ``-D plot_gallery=True`` opts into execution.
 _examples = PROJECT / "examples"
 sphinx_gallery_conf = {
@@ -125,14 +147,15 @@ sphinx_gallery_conf = {
         str(_examples / "core" / "c_importer"),
         str(_examples / "processing" / "apodization"),
         str(_examples / "processing" / "nmr"),
+        str(_examples / "analysis" / "nmr"),
     ],
     "gallery_dirs": [
         "examples/gallery/importer",
         "examples/gallery/apodization",
         "examples/gallery/nmr",
+        "examples/gallery/analysis",
     ],
     "filename_pattern": r"plot_",
-    "ignore_pattern": r"(^|/)(plot_processing_cp_nmr|plot_processing_nmr_2d)\.py$",
     "plot_gallery": os.environ.get("NMR_DOCS_EXECUTE") == "1"
     or os.environ.get("READTHEDOCS", "").lower() == "true",
     "abort_on_example_error": True,
@@ -144,3 +167,27 @@ sphinx_gallery_conf = {
 
 if os.environ.get("NMR_DOCS_EXECUTE") == "1":
     sphinx_gallery_conf["plot_gallery"] = True
+
+
+def _set_section_title(app, pagename, templatename, context, doctree):
+    """Label the sidebar and menu with the page's top-level toctree title."""
+    env = app.env
+
+    def contains(docname, seen):
+        if docname == pagename:
+            return True
+        if docname in seen:
+            return False
+        seen.add(docname)
+        return any(
+            contains(child, seen) for child in env.toctree_includes.get(docname, ())
+        )
+
+    for section in env.toctree_includes.get(env.config.root_doc, ()):
+        if contains(section, set()):
+            context["section_title"] = env.titles[section].astext()
+            break
+
+
+def setup(app):
+    app.connect("html-page-context", _set_section_title)

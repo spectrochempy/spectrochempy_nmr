@@ -1,5 +1,5 @@
 # RTD preproduction resolution for the current development documentation.
 # The NMR checkout is installed separately by .readthedocs.yaml.
 -r requirements-docs.txt
-spectrochempy==1.1.4
+spectrochempy==1.2.0
 nmrglue-ng @ https://files.pythonhosted.org/packages/69/5e/a7068d1a7b85881130d7f04cb86e87364521e9e6cc5faa7b8ac86e329613/nmrglue_ng-1.2.4-py3-none-any.whl#sha256=fc5b00d42afc1d4fc2c09b1848bd588166e14c24a0c31927b8416ecc294f821d

@@ -1,5 +1,30 @@
-Validated 1D processing
-=======================
+.. _validated-1d-processing:
+
+Processing 1D NMR data
+======================
+
+.. _nmr-processing-validation:
+
+Processing, validation, and qualification
+-----------------------------------------
+
+* **Processing** means applying operations to the data. For example, apply
+  exponential apodization and then an FFT to a time-domain ``NDDataset``.
+  When working step by step, you choose the operations and their order.
+* **Validation** is the set of checks made when you call
+  ``Experiment.process()``. The plugin checks whether it can run the
+  requested workflow on that dataset, using properties such as its domain,
+  dimensions and acquisition encoding. Individual core operations also
+  have their own input checks.
+* **Qualification** is evidence from testing a specific acquisition and
+  processing configuration. For example, the TopSpin EFP replay below was
+  compared with a TopSpin reference for the documented Bruker DQD profile.
+  That comparison applies to the settings covered by the reference tests.
+  A successful call to ``Experiment.process()`` tells you the input passed
+  the runtime checks.
+
+Processing a FID
+----------------
 
 Wrap a dataset in :class:`~spectrochempy_nmr.Experiment` and select explicit
 processing parameters:
@@ -10,21 +35,44 @@ processing parameters:
    result = experiment.process(apodization="em", lb=5.0, phase=None)
 
 The supported apodization modes are ``em``, ``gm`` and ``sp``. The result
-records the SpectroChemPy-owned call in
+records the workflow in
 ``result.meta.nmr_processing["scp_processing"]``. ``requested`` contains
 explicit user arguments and ``applied`` records operations actually executed.
 
-``Experiment.process()`` is validated for 1D experiments only and raises for
-general multidimensional datasets. A pseudo-2D series is a collection of
-ordinary 1D spectra and may be processed one spectrum at a time; it is not a
-general 2D Fourier-processing chain.
+To inspect intermediate results, apply the core operations to the
+``NDDataset`` exposed by ``experiment.dataset``. You can call them as
+dataset methods or as functions such as ``scp.em(experiment.dataset, lb=5.0)``.
 
-Generic operations such as :external+core:py:func:`spectrochempy.fft`,
-apodization methods, :external+core:py:class:`spectrochempy.NDDataset`,
-:external+core:py:class:`spectrochempy.Coord`,
-:external+core:py:class:`spectrochempy.CoordSet`, and units belong to the
-core documentation.
-This site documents their NMR use without duplicating their technical API.
+.. code-block:: python
+
+   windowed = experiment.dataset.em(lb=5.0)
+   padded = windowed.zf_size(size=max(32768, windowed.shape[-1]))
+   spectrum = padded.fft()
+
+Both approaches preserve the original FID by default. A supported complex
+JEOL 1D FID read with ``scp.nmr.read_jeol()`` can use either approach.
+For example, on the epicatechin JDF reference, ``Experiment.process()``
+produces a spectrum referenced in ppm, and the stepwise core workflow above
+produce a frequency axis in Hz.
+
+For a 1D acquisition outside the scope of ``Experiment.process()``, you
+can still apply individual operations when the data meet their input
+requirements. For example, use a suitable time-domain axis for apodization
+and FFT.
+
+An exponential window trades some resolution for sensitivity. Zero filling
+sets the spacing of the frequency bins. Once the spectrum is in the
+frequency domain, use ``spectrum.pk(phc0=..., phc1=...)`` to apply explicit
+phase angles in degrees. Plot the result with ``spectrum.plot()``, then use
+:doc:`analysis` for baseline correction, peak picking, integration and
+fitting. For Bruker digital-filter correction, check the import options
+before applying any separate preparation or requesting TopSpin replay.
+
+A pseudo-2D series contains ordinary 1D spectra that can be processed one
+spectrum at a time. For acquisitions with two Fourier dimensions, see
+:doc:`processing_2d`.
+
+See :ref:`nmr-core-operations` for the core functions used in NMR.
 
 Replay TopSpin EFP on a Bruker DQD FID
 --------------------------------------
@@ -46,3 +94,26 @@ overall amplitude factor.
 The supported profile is a full-spectrum DQD 1D ``efp`` run with
 ``PKNL`` enabled, ``FCOR=1``, and baseline correction, linear prediction and
 axis reversal disabled.
+
+Fractional PKNL correction for a Bruker QSIM FID
+------------------------------------------------
+
+Read the original FID with digital-filter and DC correction disabled.
+The plugin obtains the group delay from the acquisition and applies its
+fractional phase ramp on the final FFT grid. It rejects a FID whose
+digital filter was already corrected at import.
+
+.. code-block:: python
+
+   fid = scp.nmr.read_topspin(
+       "experiment/80/fid", remove_digital_filter=False, remove_dc_offset=False
+   )
+   spectrum = scp.nmr.Experiment(fid).process(
+       apodization="em", lb=50.0, size=8192, digital_filter="pknl"
+   )
+
+The result uses the processing ppm reference. To apply measured phase
+angles at the first frequency bin, pass ``phase="manual"`` with ``phc0``
+and ``phc1`` in degrees. The
+:doc:`cross-polarization example </examples/gallery/analysis/plot_processing_cp_nmr>`
+uses one pair of angles from a representative FID for the entire series.

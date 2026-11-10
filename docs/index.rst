@@ -1,76 +1,55 @@
-.. SpectroChemPy NMR documentation master file.
-
 SpectroChemPy NMR documentation
 ================================
 
 .. warning::
 
-   **Experimental plugin.** The public API is still evolving. Function
-   signatures, options, and behavior may change between releases, including
-   in workflows that have already been validated. Check the :doc:`changelog`
-   before upgrading.
+   **Experimental plugin** for :external+core:doc:`SpectroChemPy <index>`.
+   The public API is still evolving. Function signatures, options, and
+   behavior may change between releases, including in supported workflows.
+   Check the :doc:`changelog` before upgrading.
 
-This is the development documentation for the independent
-``spectrochempy-nmr`` plugin. Changes marked **Unreleased** are not included
-in the published 0.2.0 package.
+SpectroChemPy NMR is developed and released independently, alongside
+SpectroChemPy. This gives NMR-specific features such as acquisition
+quadrature, chemical-shift referencing, and the processing of complex signals
+their own development cycle.
 
-The plugin provides validated **1D** reading and processing. Its experimental
-2D paths store associated branches as two ordinary complex channels. General
-2D processing remains under characterization.
+Working with SpectroChemPy
+--------------------------
 
-Start with one of the following paths:
+Import a free induction decay (FID) or a processed spectrum with
+``scp.nmr.read()``. The plugin returns a SpectroChemPy
+:external+core:py:class:`~spectrochempy.NDDataset` with coordinates, units, and
+acquisition metadata. You can slice and plot the dataset and apply the
+core's general-purpose processing and analysis tools directly. For
+NMR-specific processing, ``scp.nmr.Experiment(dataset)`` uses the acquisition
+metadata to select and validate the workflow.
 
-* :doc:`getting_started/installation` and :doc:`getting_started/quickstart`;
-* :doc:`userguide/reading_data` and :doc:`userguide/processing_1d`;
-* :doc:`concepts/hypercomplex` for native complex channels;
-* :doc:`examples/gallery/nmr/index` for executable NMR examples;
-* :doc:`reference/nmr_api` for APIs.
+See :external+core:ref:`the NMR plugin overview in SpectroChemPy <nmr-plugin>`
+for installation and API integration.
 
-.. toctree::
-   :maxdepth: 2
-   :caption: Getting started
+Formats and reference workflows
+-------------------------------
 
-   getting_started/installation
-   getting_started/quickstart
+The plugin reads Bruker TopSpin, Agilent/Varian, JEOL, and SIMPSON data. It
+also reads supported profiles of the NMRPipe, nmrML, and NMR JCAMP-DX exchange
+formats. See :doc:`userguide/reading_data` for supported inputs and options.
 
-.. toctree::
-   :maxdepth: 2
-   :caption: User guide
+Reference comparisons for documented processing profiles use primarily
+`Bruker TopSpin <https://www.bruker.com/protected/en/services/software-downloads/nmr.html>`_
+and `NMRPipe <https://www.ibbr.umd.edu/nmrpipe/install>`_. The plugin supports
+1D processing and workflows for supported 2D acquisition profiles. The
+:doc:`userguide/processing_2d` guide covers direct processing and TopSpin
+replay. The :doc:`userguide/analysis` guide covers peak picking, integration
+and fitting on processed spectra.
 
-   userguide/reading_data
-   userguide/processing_1d
-
-.. toctree::
-   :maxdepth: 2
-   :caption: Concepts
-
-   concepts/quadrature
-   concepts/hypercomplex
-
-.. toctree::
-   :maxdepth: 2
-   :caption: Reference
-
-   reference/nmr_api
-   reference/hypercomplex_api
+Contents
+--------
 
 .. toctree::
    :maxdepth: 2
-   :caption: Examples and compatibility
 
-   agilent_qualification
-   processed_1d_interop
-   nmrpipe_interop
-   nmrml_interop
-   bruker_normalized_qualification
-   bruker_pdata_2d_interop
-   agilent_frequency_reference
-
-   examples/gallery/importer/index
-   examples/gallery/apodization/index
-   examples/gallery/nmr/index
-   compatibility
-   changelog
-
-* `Main SpectroChemPy documentation <https://www.spectrochempy.fr/>`_
-* `NMR plugin source <https://github.com/spectrochempy/spectrochempy_nmr>`_
+   getting_started/index
+   userguide/index
+   reference/index
+   examples_overview
+   about

@@ -1,4 +1,4 @@
-# Targeted, immutable fixtures for the six public NMR gallery examples.
+# Targeted, immutable fixtures for the public NMR gallery examples.
 # The source revision is covered by spectrochempy_data/testdata/PROVENANCE.md.
 source_repository = "https://github.com/spectrochempy/spectrochempy_data"
 source_commit = "08bb9b0cbff8f4363c48b6bff7ccb743f8140e0a"
@@ -70,3 +70,204 @@ size = 147456
 path = "nmrdata/bruker/tests/nmr/relax/100/vdlist"
 sha256 = "21dc9da5fdcfb6189f201510afc8b63fff55362406ff61e9bfea8d8d5215764b"
 size = 25
+
+# CC0 1.0, nmrXiv project P33. See docs/fixtures.md.
+[[files]]
+path = "nmrdata/jeol/epicatechin_1h.jdf"
+url = "https://raw.githubusercontent.com/spectrochempy/nmrglue-ng/4c18843dc5ce620d63cb35a81bc0b2f862b54346/tests/fixtures/fileio/data/jeol/epicatechin_1h.jdf"
+sha256 = "6ab899b72d314f05d187e07c69389efae30572bae9b0c74fb0249cfa468ae7e0"
+size = 1081024
+
+[[files]]
+path = "nmrdata/jeol/epicatechin_cosy.jdf"
+url = "https://raw.githubusercontent.com/spectrochempy/nmrglue-ng/4c18843dc5ce620d63cb35a81bc0b2f862b54346/tests/fixtures/fileio/data/jeol/epicatechin_cosy.jdf"
+sha256 = "f109351f2102435faa7d302659e073b77ecc1184f1c3ef8817087ca91b9df3aa"
+size = 5271680
+
+[[files]]
+path = "nmrdata/nmrpipe/nmrpipe_2d_cosy_example.ft2"
+url = "https://raw.githubusercontent.com/spectrochempy/nmrglue-ng/14f5ee8b06592060a987cbd12f79c6e9a36c8a20/tests/fixtures/fileio/data/nmrpipe_2d_cosy_example.ft2"
+sha256 = "d13dc13c928394d2f8c7c57c0f65bdeab510d935093793406f53d7609ee70cb5"
+size = 4196352
+
+# CP contact-time series, Christian Fernandez, LCS (CC BY 4.0).
+[[files]]
+path = "nmrdata/bruker/tests/nmr/CP/80/acqus"
+sha256 = "852e03bc81a8ab083582e79a858acc5091462b42f33b4a5b1581f2e30225840f"
+size = 8167
+[[files]]
+path = "nmrdata/bruker/tests/nmr/CP/80/fid"
+sha256 = "3b3d1497b88cc3f40ca5d7fd66e6e1908b771b3fa452d2bb74a08a2f3923af77"
+size = 16384
+[[files]]
+path = "nmrdata/bruker/tests/nmr/CP/80/pdata/1/procs"
+sha256 = "2cbde119d22f269316c5226fd2e24a9ab54ccccd51e052b60c3e63d9cd51aa24"
+size = 2077
+[[files]]
+path = "nmrdata/bruker/tests/nmr/CP/81/acqus"
+sha256 = "4f0abd36324c37c1c911027d778646687f4ad33a123b337c9685f97d74a063fb"
+size = 8167
+[[files]]
+path = "nmrdata/bruker/tests/nmr/CP/81/fid"
+sha256 = "754246f73a3d3aa8baa2e30cfcf33eb8ec90dfaea6daba2064f184380ac3d3f8"
+size = 16384
+[[files]]
+path = "nmrdata/bruker/tests/nmr/CP/81/pdata/1/procs"
+sha256 = "25356d691eae09c8eefcd62eaa26d5664922010af548502b2223dcc994623ffa"
+size = 1798
+[[files]]
+path = "nmrdata/bruker/tests/nmr/CP/82/acqus"
+sha256 = "7ecad4431feeabbb77147c55872183349b1f7becf1c2d6c49938fda31c06e02a"
+size = 8167
+[[files]]
+path = "nmrdata/bruker/tests/nmr/CP/82/fid"
+sha256 = "ca097dc90cff277595110ed2a8e211dce8ccaad2e9fd9bccf13d83e1935b5cd5"
+size = 16384
+[[files]]
+path = "nmrdata/bruker/tests/nmr/CP/82/pdata/1/procs"
+sha256 = "06b64aa887757cc5b298ccc6c144114f455c68e62d898d22bc3e2c8c430eed45"
+size = 1810
+[[files]]
+path = "nmrdata/bruker/tests/nmr/CP/83/acqus"
+sha256 = "0566f82d9ce1230d5c126cfe7f78839d1627ca2c3925c332bfbc51ff641369e7"
+size = 8167
+[[files]]
+path = "nmrdata/bruker/tests/nmr/CP/83/fid"
+sha256 = "12d3ed04e3ef089437b275bdcb43aaae9a679ba4737cf9376886dc18365db5f5"
+size = 16384
+[[files]]
+path = "nmrdata/bruker/tests/nmr/CP/83/pdata/1/procs"
+sha256 = "c56db2eec8ffc0f0b420f291cdaca6af8050846b05f7296ac362a4e0d8f02df4"
+size = 1799
+[[files]]
+path = "nmrdata/bruker/tests/nmr/CP/84/acqus"
+sha256 = "a501f4363496e09bc642b4753cf8649b416523a4c89cac5c283997fd941615bd"
+size = 8167
+[[files]]
+path = "nmrdata/bruker/tests/nmr/CP/84/fid"
+sha256 = "66cd50344a03abf86215733617e51f99d20e8ca9ac99b26c3315f49d01ecc408"
+size = 16384
+[[files]]
+path = "nmrdata/bruker/tests/nmr/CP/84/pdata/1/procs"
+sha256 = "3d825a63dea2557580d4e382f1864d766b85e397e5a9da08981e3a19690db468"
+size = 1799
+[[files]]
+path = "nmrdata/bruker/tests/nmr/CP/85/acqus"
+sha256 = "cddcf7ca8f5ad2066572a898f25063f6d6ec9ae2bcea5921b4c35008108c07cd"
+size = 8168
+[[files]]
+path = "nmrdata/bruker/tests/nmr/CP/85/fid"
+sha256 = "0c6c0d3ffc00b32d6fbf13aa904b85b20ed1db89b1485f383a9a47eafacc089d"
+size = 16384
+[[files]]
+path = "nmrdata/bruker/tests/nmr/CP/85/pdata/1/procs"
+sha256 = "eb8360061e6a5003298e71f8cd29fc336451dce63d40aeb433bda454d9aa1258"
+size = 1799
+[[files]]
+path = "nmrdata/bruker/tests/nmr/CP/86/acqus"
+sha256 = "35a79972c5dc9c4c2f4a861e75c1f2a48b5bf969478d68e2549daf4910b247dc"
+size = 8168
+[[files]]
+path = "nmrdata/bruker/tests/nmr/CP/86/fid"
+sha256 = "96ab043e08c7ea26479ccf9586843f00f3e08d24738771faacbff0b58ac769b8"
+size = 16384
+[[files]]
+path = "nmrdata/bruker/tests/nmr/CP/86/pdata/1/procs"
+sha256 = "38c8331146eb955f940ea32260e435738eb7867521378f58fdb9564818877568"
+size = 1796
+[[files]]
+path = "nmrdata/bruker/tests/nmr/CP/87/acqus"
+sha256 = "24731584d163006c918172a13d7f92d4c35ff16550df57ba0169e80a925a6f5d"
+size = 8168
+[[files]]
+path = "nmrdata/bruker/tests/nmr/CP/87/fid"
+sha256 = "b442b83ddd074ca0234eff0a815be8d0225370973df308ee40881f2352e7ecd4"
+size = 16384
+[[files]]
+path = "nmrdata/bruker/tests/nmr/CP/87/pdata/1/procs"
+sha256 = "02f33987d150c8fe6f5deeede64896fff3a26118a84b5bc956b3c43f51ec04d5"
+size = 1796
+[[files]]
+path = "nmrdata/bruker/tests/nmr/CP/88/acqus"
+sha256 = "41dc67b5091542bd7e545e8473d435a6b58caa634995d7be51f7ca34e5c09db6"
+size = 8168
+[[files]]
+path = "nmrdata/bruker/tests/nmr/CP/88/fid"
+sha256 = "709507a49413f14d0956f8ba6f130b02ff8e80e2b3c9fbaa2be9729265538978"
+size = 16384
+[[files]]
+path = "nmrdata/bruker/tests/nmr/CP/88/pdata/1/procs"
+sha256 = "7aede7df02624d34af71fd325327dcc9c98d2f4cb937217bbcd0125f7ff45e03"
+size = 1796
+[[files]]
+path = "nmrdata/bruker/tests/nmr/CP/89/acqus"
+sha256 = "0a57bc1ee7a512473ba2181b16b97623f93125abefe191a528454679c4e67206"
+size = 8168
+[[files]]
+path = "nmrdata/bruker/tests/nmr/CP/89/fid"
+sha256 = "a0262410c18e76fa61c85a139ced5cf8ac33cd6ed046248ef0fc63fa913a82e5"
+size = 16384
+[[files]]
+path = "nmrdata/bruker/tests/nmr/CP/89/pdata/1/procs"
+sha256 = "5f44278759722b878efbb6cbf128f0b19123eb1b4518a4712b26f29e34ad90dc"
+size = 1796
+[[files]]
+path = "nmrdata/bruker/tests/nmr/CP/90/acqus"
+sha256 = "6389670c2424c09b15d38be0036e655f0304aa0e91714da14144f1e6af5debf0"
+size = 8168
+[[files]]
+path = "nmrdata/bruker/tests/nmr/CP/90/fid"
+sha256 = "4082c1d5256b9ea91b64ee24b26a08bbdad7ad6ef5ae16b04de29e915de757e0"
+size = 16384
+[[files]]
+path = "nmrdata/bruker/tests/nmr/CP/90/pdata/1/procs"
+sha256 = "bca50c7ad041870082b3a97b9d684921e79b94b2d1ab642b49cae1150f73f534"
+size = 1799
+[[files]]
+path = "nmrdata/bruker/tests/nmr/CP/91/acqus"
+sha256 = "4c448990c83987d579d99b62b42eda71a847c725dbb57a602536e7df7ce6db67"
+size = 8168
+[[files]]
+path = "nmrdata/bruker/tests/nmr/CP/91/fid"
+sha256 = "c873f9c93fd6a2c787c136d79d9c31963bccc65ab117d24660330f2168f87aa1"
+size = 16384
+[[files]]
+path = "nmrdata/bruker/tests/nmr/CP/91/pdata/1/procs"
+sha256 = "fbaecaa659b0b8d407dc7e720d329835b76f6f633d89c5ec5a98bc572931c6a2"
+size = 1798
+[[files]]
+path = "nmrdata/bruker/tests/nmr/CP/92/acqus"
+sha256 = "fc830e9339a68ec2abacee17a013434b1157f46fbf5f8f513f254b4bc61cb937"
+size = 8167
+[[files]]
+path = "nmrdata/bruker/tests/nmr/CP/92/fid"
+sha256 = "17f04f542c2bf85929a95e000061ab3f9bafd08ac979344557040a5f28d36b4d"
+size = 16384
+[[files]]
+path = "nmrdata/bruker/tests/nmr/CP/92/pdata/1/procs"
+sha256 = "be0da17b70be795fb0baba7c7831d840dde22ed647a24d2dec1ba5009caf662b"
+size = 1798
+[[files]]
+path = "nmrdata/bruker/tests/nmr/CP/93/acqus"
+sha256 = "ea332eb0e8273347a7f6734ba5c8b496c565af11df19aebd2436ba34d8aa9901"
+size = 8167
+[[files]]
+path = "nmrdata/bruker/tests/nmr/CP/93/fid"
+sha256 = "b806942c3507d7a14f4d18931107c7eb0bd27ea54053e44c3596f7dc126e85f0"
+size = 16384
+[[files]]
+path = "nmrdata/bruker/tests/nmr/CP/93/pdata/1/procs"
+sha256 = "6049727df7f7caf1f9e580cd34f1286aa7ea6f57819fbc5f3a227e3633c115e8"
+size = 1796
+[[files]]
+path = "nmrdata/bruker/tests/nmr/CP/94/acqus"
+sha256 = "0bec9496e372abc13fa302fbcb20f653f08565855d1a7830428d349d47b536a8"
+size = 8167
+[[files]]
+path = "nmrdata/bruker/tests/nmr/CP/94/fid"
+sha256 = "2aaf646edbe4a15e5240256ca4eb0f20df09cec8eb381c55d49733bb2ee44a51"
+size = 16384
+[[files]]
+path = "nmrdata/bruker/tests/nmr/CP/94/pdata/1/procs"
+sha256 = "90d6db3f20cf7662dd421412837b260fe2609bcea713dd0b207d3cbfff9fc96a"
+size = 1796

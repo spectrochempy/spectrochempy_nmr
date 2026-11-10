@@ -79,6 +79,19 @@ body,
   font-weight: 650;
 }
 
+.nmr-navbar .dropdown-menu a.dropdown-item {
+  color: var(--pst-color-text-base);
+}
+
+.nmr-navbar .dropdown-menu a.dropdown-item:is(:hover, :focus, :active, .active) {
+  color: var(--pst-color-text-base);
+  background-color: var(--pst-color-surface);
+}
+
+.nmr-navbar .dropdown-menu a.dropdown-item[aria-current="page"] {
+  font-weight: 700;
+}
+
 .bd-sidebar-primary {
   background: var(--scp-sidebar);
   border-right: 1px solid rgba(255, 255, 255, 0.1);
@@ -147,4 +160,29 @@ html[data-theme="dark"] {
   --pst-color-primary-highlight: #a1f0cc;
   --pst-color-link: #8be8c0;
   --pst-color-link-hover: #b3f3d7;
+}
+
+
+.bd-sidebar-primary .bd-links__title {
+  color: var(--scp-sidebar-heading);
+}
+
+.bd-sidebar-primary .toctree-toggle,
+.bd-sidebar-primary .sidebar-primary-items__start {
+  border-color: rgba(255, 255, 255, 0.14);
+  color: #c6c4c0;
+}
+
+.bd-sidebar-primary #pst-collapse-sidebar-button {
+  color: #eceae7;
+}
+
+.bd-sidebar-primary #pst-collapse-sidebar-button:is(:hover, :focus-visible) {
+  background: var(--scp-sidebar-hover);
+  color: #ffffff;
+}
+
+.bd-sidebar-primary #pst-collapse-sidebar-button .pst-icon,
+.bd-sidebar-primary #pst-collapse-sidebar-button .pst-collapse-sidebar-label {
+  color: inherit;
 }

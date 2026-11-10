@@ -24,8 +24,6 @@ modest public scope:
 It does not claim replay of vendor processing, nor exact equivalence with the
 TopSpin fitting tools bundled alongside the dataset.
 
-Requires the official ``spectrochempy-nmr`` plugin.
-Install with: ``pip install "spectrochempy>=1.1.0,<2" "spectrochempy-nmr==0.2.0"``.
 """
 
 # %%
@@ -53,17 +51,20 @@ dataset
 # The ``vdlist`` delays become the secondary coordinate of the pseudo-2D series.
 ds = dataset.em(lb=15 * U.Hz)
 ds = ds.fft()
-ds = ds.pk(phc0=-145 * U.deg, phc1=0 * U.deg)
-_ = ds.plot(xlim=(100, -50))
+ds = ds.pk(phc0=35 * U.deg, phc1=0 * U.deg)
+
+# The dominant silicon resonance is near -103 ppm. Zoom in on it and
+# color the spectra by recovery delay to see how the peak grows.
+resonance = ds[:, -120.0:-90.0].real
+_ = resonance.plot(method="lines", palette="viridis", colorbar=True)
 
 # %%
 # Build a signal trace from the dominant resonance
 # ------------------------------------------------
-# The strongest processed peak in this series sits around 20–22 ppm.
-# We integrate a narrow ppm window around that resonance for each delay.
-signal = ds[:, 20.0:45.0].simpson()
+# Integrate the real signal in the displayed window for each delay.
+signal = resonance.simpson()
 _ = signal.plot(marker="^", ls=":")
-signal.real
+signal
 
 # %%
 # Fit a model
@@ -76,9 +77,8 @@ fitter = scp.Optimize(log_level="INFO", method="leastsq")
 # Define the model to fit
 def T1_model(t, I0, T1):  # no underscore in parameters names.
     # Simple saturation-recovery model.
-    import numpy as np
 
-    I = I0 * (1 - np.exp(-t / T1))
+    I = I0 * (1 - scp.exp(-t / T1))
     return I
 
 
@@ -93,7 +93,7 @@ fitter.usermodels = {"T1_model": T1_model}
 fitter.script = """
 MODEL: T1
 shape: T1_model
-  $ I0:  1000.0, 1, none
+  $ I0:  4000.0, 1, none
   $ T1:  2.0,    0.1, none
 """
 

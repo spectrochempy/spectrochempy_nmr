@@ -28,10 +28,12 @@ python -m sphinx -W --keep-going -b html docs docs/_build/html
 
 Replace ``<compatible-core-version>`` with the deployed core documentation
 version selected for that release; release mode intentionally refuses to use
-the moving ``latest`` default.
+moving documentation aliases. Read the Docs builds for the matching NMR
+release tag default to the versioned core 1.2.0 documentation. Activate and
+build that core tag on Read the Docs before publishing the tagged NMR docs.
 
 The gallery is non-executing by default for quick local documentation checks.
-To execute the six public examples with the approved immutable fixtures:
+To execute the public gallery examples with the approved immutable fixtures:
 
 ```console
 python docs/fetch_gallery_data.py
@@ -39,8 +41,7 @@ NMR_DOCS_EXECUTE=1 python -m sphinx -W --keep-going -b html docs docs/_build/htm
 ```
 
 RTD sets `READTHEDOCS=True`; the configuration then executes the gallery after
-the pre-build fixture fetch. The excluded CP and 2D examples are never
-selected. See `docs/fixtures.md` for provenance and licensing.
+the pre-build fixture fetch. See `docs/fixtures.md` for provenance and licensing.
 
 Record the tested environment with:
 

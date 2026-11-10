@@ -13,17 +13,59 @@ when automatic detection is not appropriate.
    processed = scp.nmr.read("path/to/experiment", expno=1, procno=1)
    agilent = scp.nmr.read("path/to/fid", protocol="agilent")
 
-TopSpin acquisition and ``procs`` values are exposed as metadata where
-available. ``vendor_profile`` describes the vendor file; it does not claim to
-be a replayable historical processing recipe. Compatibility aliases
-``scp.nmr.read_topspin`` and ``scp.read_topspin`` remain available.
+Reader catalogue
+----------------
 
-The readers cover 1D and 2D raw and processed data. The available processing
-steps depend on the acquisition profile.
+Use the calls below with your file or experiment directory. The available
+processing steps depend on the acquisition and file layout. See the
+:doc:`../reference/readers` for reader options.
 
-The separate experimental ``read_agilent_interop`` facade is characterized on
-real acquisitions with a pinned external provider. See
-:doc:`../agilent_qualification` for reproducible checks, observed-nucleus handling and remaining limitations.
+.. list-table::
+   :header-rows: 1
+   :widths: 27 34 39
+
+   * - Format
+     - Recommended call
+     - Typical inputs
+   * - Bruker TopSpin
+     - ``scp.nmr.read_topspin(path)``
+     - FID, SER, or processed ``pdata`` in an experiment directory
+   * - Agilent/Varian
+     - ``scp.nmr.read_agilent(path)``
+     - Acquisition directory containing ``fid`` and ``procpar``
+   * - JEOL
+     - ``scp.nmr.read_jeol(path)``
+     - JDF files
+   * - SIMPSON
+     - ``scp.nmr.read_simpson(path)``
+     - Simulated FIDs and spectra, or a simulation input with a sibling output
+   * - NMRPipe
+     - ``scp.nmr.read(path, protocol="interop")``
+     - Supported time- and frequency-domain files
+   * - nmrML
+     - ``scp.nmr.read(path, protocol="interop", profile=...)``
+     - Supported acquisition and spectrum profiles
+   * - NMR JCAMP-DX
+     - ``scp.nmr.read(path, protocol="interop", profile=...)``
+     - Supported NMR profiles, such as ``"jcampdx-spectrum-1d"``
+
+See :ref:`reading-exchange-formats-through-interop` for the profile and
+convention options for exchange formats.
+
+Read an already processed TopSpin spectrum
+------------------------------------------
+
+Pass ``procno`` to select the processed spectrum in an experiment. The
+returned dataset already has a frequency axis and can be plotted or
+analyzed directly.
+
+.. code-block:: python
+
+   spectrum = scp.nmr.read_topspin("path/to/experiment", expno=1, procno=1)
+   _ = spectrum.real.plot()
+
+See :doc:`../processed_1d_interop` for details on the ppm reference, stored
+components, and qualification coverage.
 
 Agilent/Varian States quadrature
 --------------------------------
@@ -59,11 +101,15 @@ operation remain available. Quadrature selection requires an nmrglue-ng
 provider that supports it and a SpectroChemPy core with FFT
 prevalidation (1.2.0 or later).
 
+.. _reading-exchange-formats-through-interop:
+
 Reading exchange formats through interop
 ----------------------------------------
 
 Use ``scp.nmr.read(path, protocol="interop")`` to read and normalize one file
-with nmrglue-ng, then convert the result to an ``NDDataset``. NMRPipe profiles
+with
+`nmrglue-ng <https://nmrglue-ng.readthedocs.io/latest/tutorials/interop.html>`_,
+then convert the result to an ``NDDataset``. NMRPipe profiles
 can be detected from the header. Supply an explicit provider profile for
 nmrML and NMR JCAMP-DX.
 
@@ -97,16 +143,38 @@ SIMPSON
 -------
 
 Use ``scp.nmr.read_simpson(...)`` for SIMPSON data files or a simulation
-input file with a sibling output. Qualified standalone FIDs use calibrated
-time coordinates. Qualified standalone spectra use frequency coordinates
-in Hz. The direct FFT is available for qualified 2D FIDs. Their indirect
-quadrature remains unqualified. Files with simulation metadata from an
+input file with a sibling output. Supported standalone FIDs use calibrated
+time coordinates. Supported standalone spectra use frequency coordinates
+in Hz. The direct FFT is available for supported 2D FIDs. The indirect quadrature convention
+has yet to be established. Files with simulation metadata from an
 ``.in`` file and other legacy layouts use the compatibility presentation.
 nmrglue-ng decodes these data files. For indexed XYREIM, the plugin keeps
 the historical ascending order on both axes.
 
-Tecmag
-------
+Additional formats available in nmrglue-ng
+------------------------------------------
 
-Tecmag TNT acquisition files are no longer read by the plugin. Previously
-saved Tecmag datasets retain their metadata interpretation.
+The following readers can be called directly with ``import nmrglue as ng``.
+Their results use the nmrglue-ng API. If you need one of these formats in
+``scp.nmr.read()``, open a request in the
+`NMR plugin issue tracker <https://github.com/spectrochempy/spectrochempy_nmr/issues>`_
+and describe the acquisition and the workflow you need.
+
+.. list-table::
+   :header-rows: 1
+
+   * - Format
+     - Direct reader
+   * - Tecmag TNMR
+     - ``ng.tecmag.read(path)``
+   * - Magritek Spinsolve
+     - ``ng.spinsolve.read(path)``
+   * - RS2D
+     - ``ng.rs2d.read(path)``
+   * - Sparky UCSF
+     - ``ng.sparky.read(path)``
+   * - Rowland NMR Toolkit
+     - ``ng.rnmrtk.read(path)``
+
+Previously saved SpectroChemPy datasets from Tecmag retain their metadata
+interpretation.

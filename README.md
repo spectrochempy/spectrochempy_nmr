@@ -8,25 +8,11 @@ NMR plugin for SpectroChemPy.
 > workflows that have already been validated. Check the changelog before
 > upgrading. [Changelog](CHANGELOG.rst)
 
-The first standalone release is **0.2.0**. See [EXTRACTION.md](EXTRACTION.md)
-for the historical extraction baseline and validation scope. Development
-features described below may postdate that release.
-
-This package is the home for NMR-specific readers and tools that are useful in
-SpectroChemPy but should not live in the core package. It currently provides a
-validated public 1D workflow for reading data and processing raw 1D FIDs
-through `scp.nmr.read(...)` and `scp.nmr.Experiment(...)`. The readers also
-load raw 2D time-domain data and vendor-processed 2D spectra and can represent
-associated branches as two ordinary complex channels (Unreleased); this reading/representation scope is separate from
-processing, which remains limited to validated 1D experiments.
-
-Future NMR readers or processing helpers can be added here without creating a
-new plugin package for each vendor format. Multi-dimensional NMR processing
-remains under active characterization and is not currently part of the public
-supported processing workflow. A pseudo-2D series (a list of ordinary 1D
-spectra sharing a secondary coordinate, such as a relaxation series) must be
-distinguished from a genuine 2D experiment with two Fourier dimensions: the
-former follows the validated 1D processing path per spectrum.
+The plugin provides NMR-specific readers for vendor and exchange formats,
+validated 1D workflows, and processing for qualified 2D acquisitions.
+The 0.3 series stores paired 2D data as two ordinary complex channels.
+See the [standalone NMR documentation](https://spectrochempy-nmr.readthedocs.io/latest/)
+for installation, readers, processing and supported acquisition profiles.
 
 ## Installation
 
@@ -36,7 +22,7 @@ SpectroChemPy 1.0.0 should keep an earlier compatible version of this plugin.
 
 
 ```bash
-pip install "spectrochempy>=1.1.0,<2" "spectrochempy-nmr==0.2.0"
+pip install "spectrochempy>=1.1.0,<2" "spectrochempy-nmr==0.3.0"
 ```
 
 For an editable development install from this repository, see
@@ -55,9 +41,9 @@ experiment = scp.nmr.Experiment(dataset)
 spectrum = experiment.process(apodization="em", lb=2.0, size=32768)
 ```
 
-This explicit processing example does not imply that vendor processing
-parameters are automatically imported and replayed from metadata. That contract
-remains under active characterization.
+Use `Experiment.process(replay="topspin")` to replay supported TopSpin
+recipes explicitly. The [2D processing guide](https://spectrochempy-nmr.readthedocs.io/latest/userguide/processing_2d.html)
+describes the qualified XFB workflow.
 
 The current explicit apodization contract covers the public modes already
 exposed by `Experiment.process()`: `em(lb=...)`, `gm(lb=..., gb=...)`, and

@@ -200,3 +200,59 @@ def test_qf_display_rejects_repeated_coordinates_after_fft_resize():
         _apply_interop_fft_presentation(
             dataset, "x", ppm=False, physical=False, acquisition=descriptor
         )
+
+
+@pytest.mark.parametrize("delay", [2.25, 3.625])
+@pytest.mark.parametrize("size", [32, 64])
+def test_qsim_pknl_uses_the_fractional_delay_on_the_final_fft_grid(delay, size):
+    source = _fid()
+    source.meta.normalization_profile = "bruker-fid-1d-complex-v1"
+    source.meta.aq_mod = [1]
+    source.meta.nmr_processing = {
+        "vendor_profile": {
+            "parameters": {"SI": 64, "SW_p": 2000, "SF": 125, "OFFSET": 10}
+        }
+    }
+    acquisition = source.meta.acquisition
+    acquisition["storage_points"] = source.size
+    acquisition["acquired_points"] = 30
+    acquisition["digital_filter"] = {"applied": False}
+    acquisition["fid_preparation"] = {
+        "schema": "fid-preparation-v1",
+        "complex_convention": "centered-negative-exponent-dft",
+        "sample_count": source.size,
+        "digital_filter": {"state": "available", "group_delay_points": delay},
+    }
+    original = source.data.copy()
+    spectrum = Experiment(source).process(
+        digital_filter="pknl", size=size if size == 32 else None
+    )
+
+    bins = np.arange(size) / size
+    expected = np.fft.fftshift(np.fft.fft(original[:30], n=size))
+    expected *= (-1) ** (1 - round(delay)) * np.exp(2j * np.pi * delay * bins)
+    np.testing.assert_allclose(spectrum.data, expected, atol=1e-12)
+    np.testing.assert_allclose(spectrum.x.data, 10 - 16 * bins, atol=1e-12)
+    assert spectrum.x.units == scp.ur.ppm
+    trace = spectrum.meta.nmr_processing["scp_processing"]
+    assert trace["requested"]["digital_filter"] == "pknl"
+    assert trace["applied"]["digital_filter"] == {
+        "method": "pknl",
+        "requested": True,
+        "applied": True,
+        "group_delay_points": delay,
+        "fft_size": size,
+    }
+    np.testing.assert_array_equal(source.data, original)
+    assert not source.meta.acquisition["digital_filter"]["applied"]
+    source.meta.nmr_processing["vendor_profile"]["parameters"]["SW_p"] = 1000
+    with pytest.raises(
+        ValueError, match="SW_p to match the acquisition spectral width"
+    ):
+        Experiment(source).process(digital_filter="pknl", size=size)
+    with pytest.raises(ValueError, match="raw Bruker QSIM"):
+        Experiment(spectrum).process(digital_filter="pknl")
+
+    source.meta.acquisition["digital_filter"] = {"applied": True}
+    with pytest.raises(ValueError, match="already applied"):
+        Experiment(source).process(digital_filter="pknl")

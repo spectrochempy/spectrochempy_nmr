@@ -134,7 +134,7 @@ Agilent States 2D public reader
 
 With a provider that supports States storage normalization,
 ``read_agilent()`` uses the dataset returned by ``from_interop()`` for
-the validated ``phase=[1, 2]`` layout. The provider pairs adjacent
+the supported ``phase=[1, 2]`` layout. The provider pairs adjacent
 complex FIDs and applies the historical NS/NE divisor once. The plugin
 preserves the public branch labels, display coordinates and direct FFT.
 The indirect FFT remains guarded until the States processing convention

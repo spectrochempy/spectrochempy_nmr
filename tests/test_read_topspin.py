@@ -1101,10 +1101,11 @@ def test_no_download_attempt_for_local_component_files():
     """Reading a local component file must not trigger a download attempt."""
     import unittest.mock
 
+    component = _require_path(nmrdir / "topspin_2d" / "1" / "pdata" / "1" / "2ri")
     with unittest.mock.patch(
         "spectrochempy.core.readers.importer._download_from_github"
     ) as mock_download:
-        nd = scp.read_topspin(nmrdir / "topspin_2d" / "1" / "pdata" / "1" / "2ri")
+        nd = scp.read_topspin(component)
         mock_download.assert_not_called()
         assert nd is not None
 
