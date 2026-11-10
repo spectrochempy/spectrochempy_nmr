@@ -8,6 +8,7 @@
 
 The historical Fortran provides numerical regression references. Scientific
 validation also requires independent checks of the model and its conventions.
+See the adjacent README.pulsar.md for the equations and implementation notes.
 """
 
 from functools import lru_cache
@@ -23,6 +24,8 @@ def _powder_mesh(accuracy):
     size = 5 * accuracy
     i, j = np.indices((size + 1, size + 1))
     inside = i + j <= size
+    # Radially project the plane x + y + z = size onto the unit octant.
+    # Its solid-angle Jacobian is proportional to radius**-3.
     points = np.array([size - i[inside] - j[inside], i[inside], j[inside]]).T
     radius = np.linalg.norm(points, axis=1)
     vertices = np.zeros_like(i)
@@ -41,6 +44,8 @@ def _quadrupolar_harmonics(directions, eta, angle):
     """Return the rank-two tensor products for the central transition."""
     x, y, z = directions
     sine = np.sqrt(np.maximum(0.0, 1 - z**2))
+    # Compute twice the azimuth from Cartesian coordinates. At the pole,
+    # choose azimuth zero to fix the phase convention for the tensor.
     cos2alpha = np.divide(x * x - y * y, sine**2, out=np.ones_like(z), where=sine > 0)
     sin2alpha = np.divide(2 * x * y, sine**2, out=np.zeros_like(z), where=sine > 0)
     minus_two = sine**2 / 2 - eta * (1 + z**2) * cos2alpha / 6
@@ -52,6 +57,8 @@ def _quadrupolar_harmonics(directions, eta, angle):
 
     c, s = np.cos(angle), np.sin(angle)
     root = np.sqrt(3 / 8)
+    # Columns +1 and +2 of the rank-two Wigner matrix in PULSAR's convention.
+    # The matching negative columns follow from the rank-two symmetry.
     columns = (
         [
             (1 - c) * s / 2,
@@ -74,6 +81,7 @@ def _quadrupolar_harmonics(directions, eta, angle):
         negative = positive[::-1] * (-1.0) ** (np.arange(-2, 3) + order)
         for harmonic in range(5):
             for m in range(harmonic - 2, 3):
+                # Multiplying tensor components adds their rotor harmonics.
                 other = harmonic - m
                 result[harmonic] += (
                     factor
@@ -82,6 +90,7 @@ def _quadrupolar_harmonics(directions, eta, angle):
                     * tensor[m + 2]
                     * tensor[other + 2]
                 )
+    # Combine the conjugate harmonics into a real part, leaving DC unchanged.
     result[1:] *= 2
     return result
 
@@ -107,7 +116,8 @@ def _deposit_triangles(axis, frequencies, weights, triangles):
         at_end = bins == last[owners]
         cdf = np.ones(bins.size)
 
-        # Evaluate the CDF only at interior bin edges. The ascending and
+        # Linear interpolation of frequency over a triangle gives a piecewise
+        # quadratic CDF. Evaluate it only at interior bin edges. The ascending and
         # descending masks exclude the zero-width half of a flat-sided triangle.
         edges = bins + 1
         rising = ~at_end & (edges <= mid[owners])
@@ -168,6 +178,7 @@ def _central_transition_profile(
     directions, weights, triangles = _powder_mesh(accuracy)
     angle = np.deg2rad(54.736) if spinning_hz else 0
     harmonics = _quadrupolar_harmonics(directions, eta, angle)
+    # The spin-3/2 second-order scale is separate from the angular terms.
     harmonics *= cq_hz**2 / (16 * larmor_hz)
     frequencies = shift_hz + harmonics[0].real
     axis = np.linspace(-spectral_width_hz / 2, spectral_width_hz / 2, points)
@@ -187,6 +198,8 @@ def _central_transition_profile(
     count = max(5 * accuracy, int(rotor_samples + 0.5) + 1, 2 * sidebands + 1)
     orders = np.arange(1, 5)
     phase = 2 * np.pi * orders[:, None] * np.arange(count) / count
+    # Integrating a frequency harmonic divides by its angular order times
+    # the MAS rate. The 2*pi factors cancel when converting Hz to phase.
     rotor = np.exp(-1j * phase) / (orders[:, None] * spinning_hz)
     band_count = 2 * sidebands + 1
     intensity_bytes = frequencies.size * band_count * np.dtype(np.float64).itemsize
@@ -210,6 +223,7 @@ def _central_transition_profile(
             coefficients = signal.mean(axis=1, keepdims=True)
         band_intensity[block] = np.abs(coefficients) ** 2
 
+    # Deposit raw band masses on the same grid to preserve relative areas.
     spectrum = np.zeros_like(axis)
     for band_order, intensity in zip(band_orders, band_intensity.T, strict=True):
         spectrum += _deposit_triangles(
