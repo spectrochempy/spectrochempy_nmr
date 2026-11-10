@@ -603,3 +603,31 @@ accuracy to 16 and the order count to 120 yields a correlation of
 more closely than the intensities. This comparison does not isolate
 which effects of excitation, processing or model assumptions explain
 the residual intensity differences.
+
+## Experimental check of phosphorus CSA bands
+
+The [MRSimulator phosphorus example](https://mrsimulator.readthedocs.io/en/v1.0/fitting/1D_fitting/plot_1_31P_Na2PO4_MAS.html)
+uses a DMFIT $^{31}$P MAS spectrum labeled sodium phenylphosphate in
+the file metadata. Download the
+[CSDF](https://ssnmr.org/sites/default/files/mrsimulator/31P%20Phosphate%206kHz.csdf)
+locally. Its SHA-256 is
+`78dcf44f103f48e63ffa79af674dbce072cc5ca6890dc5279a7504e4440024c8`.
+
+```sh
+OPENBLAS_NUM_THREADS=1 python tools/qualify_pulsar_phosphate.py "/path/to/phosphate.csdf"
+```
+
+The [script](../../tools/qualify_pulsar_phosphate.py) uses the published
+isotropic shift, shielding anisotropy, asymmetry and rotor rate from
+the MRSimulator fit to this same spectrum. It changes the sign of the
+shielding anisotropy to obtain the PULSAR chemical-shift anisotropy.
+It subtracts the baseline estimated below −100 ppm and integrates
+the measured spectrum and simulation over seven windows of half-width
+1.4 kHz around the corresponding band positions. Each set of areas
+is normalized over those windows. No intensities are fitted.
+
+The maximum absolute difference in the resulting area fractions is
+0.98 percentage point, with a sum of absolute differences of 2.22
+percentage points. With the sign reversed these become 11.89 and
+34.00 percentage points. This is a check of the CSA sign convention
+and the area distribution for one experimental spectrum.

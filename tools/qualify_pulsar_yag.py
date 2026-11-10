@@ -1,7 +1,5 @@
 """Compare PULSAR satellite bands with the experimental DMFIT YAG spectrum."""
 
-import base64
-import json
 from argparse import ArgumentParser
 from pathlib import Path
 from time import perf_counter
@@ -11,36 +9,12 @@ from scipy.ndimage import gaussian_filter1d
 
 from spectrochempy_nmr.pulsar import _central_transition_profile
 
+from _pulsar_csdf import read_real_csdf
+
 ROTOR_HZ = 15247.0679
 FWHM_HZ = 316.008934
 # Published MRSimulator fit: Cq in Hz, asymmetry and isotropic shift in ppm.
 SITES = ((6066825.17, 1.668e-5, 77.4544449), (679126.785, 0.55123104, 0.91916103))
-
-
-def read_yag(path):
-    """Read the real, linear frequency data in the original YAG CSDF."""
-    data = json.loads(path.read_text(encoding="utf-8"))["csdm"]
-    dimension = data["dimensions"][0]
-    variable = data["dependent_variables"][0]
-    if (
-        dimension["type"] != "linear"
-        or variable["numeric_type"] != "float32"
-        or variable["encoding"] != "base64"
-    ):
-        raise ValueError(
-            "Expected the original YAG spectrum with a linear frequency axis."
-        )
-    increment, unit = dimension["increment"].split()
-    offset, offset_unit = dimension["coordinates_offset"].split()
-    larmor, larmor_unit = dimension["origin_offset"].split()
-    if (unit, offset_unit, larmor_unit) != ("Hz", "Hz", "MHz"):
-        raise ValueError("Expected Hz for the axis and MHz for the Larmor frequency.")
-    values = np.frombuffer(base64.b64decode(variable["components"][0]), dtype="<f4")
-    count = dimension["count"]
-    if values.size != count or float(increment) >= 0:
-        raise ValueError("Expected the complete YAG spectrum with a decreasing axis.")
-    frequency = float(offset) + np.arange(count) * float(increment)
-    return frequency[::-1], values[::-1].astype(float), float(larmor) * 1e6
 
 
 def model_components(frequency, larmor_hz, accuracy, sidebands):
@@ -77,7 +51,7 @@ def main():
         parser.error(
             "--sidebands must be at least 8 for the measured comparison windows."
         )
-    frequency, observed, larmor_hz = read_yag(args.csdf)
+    frequency, observed, larmor_hz = read_real_csdf(args.csdf)
     ppm = frequency * 1e6 / larmor_hz
     noise = (ppm > -570) & (ppm < -510)
     observed -= observed[noise].mean()
