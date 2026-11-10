@@ -15,6 +15,8 @@ _PROFILES = {
 
 
 def _check_axis(params, points, words_per_point, ft_mode, phase_mode):
+    if params.get("TDoff") != 0:
+        raise ValueError("TopSpin XFB requires TDoff=0 on both axes")
     size = params.get("SI")
     if (
         not isinstance(size, int)
@@ -94,8 +96,15 @@ def replay_xfb(source):
     data = np.asarray(source.data)
     if not np.iscomplexobj(data) or np.any(source.mask) or not np.isfinite(data).all():
         raise ValueError("TopSpin XFB requires finite unmasked complex samples")
-    if not qf and data.shape[0] != 2:
-        raise ValueError("TopSpin XFB requires both acquired branches")
+    if not qf:
+        labels = ("E1", "E2") if mode == "states-tppi" else ("first", "second")
+        if (
+            data.shape[0] != 2
+            or source.c is None
+            or source.c.labels is None
+            or tuple(source.c.labels) != labels
+        ):
+            raise ValueError("TopSpin XFB requires both branches in acquired order")
     ny, nx = data.shape[-2:]
     widths = acquisition["spectral_width_hz"]
     for axis, size, width in zip((source.y, source.x), (ny, nx), widths, strict=True):
@@ -112,6 +121,10 @@ def replay_xfb(source):
         y, ny, 1 if qf else 2, 4 if mode == "states-tppi" else 6, 2 if qf else 1
     )
     _check_axis(x, nx, 2, 6, 0 if qf else 1)
+    if y["SI"] < 4:
+        raise ValueError("TopSpin XFB requires both neighbors of the F1 center bin")
+    if x["FCOR"] != 1:
+        raise ValueError("TopSpin XFB requires FCOR=1 on F2")
     if y.get("PKNL") is not False or not isinstance(x.get("PKNL"), bool):
         raise ValueError("TopSpin XFB supports PKNL only on F2")
     delay = status.get("acqus", {}).get("GRPDLY")
@@ -174,9 +187,17 @@ def replay_xfb(source):
     result.meta.td = list(result.shape)
     result.meta.fft_presentation = None
     result.meta.phased = result.meta.isfreq.copy()
+    if result.meta.get("encoding"):
+        result.meta.encoding = [
+            encoding.removeprefix("PENDING-F2:") for encoding in result.meta.encoding
+        ]
     if not qf:
         result.meta.component_labels = ("S_R", "S_I")
         result.meta.quadrature_mode = "complex-channel-pair-2d"
+        if mode == "states-tppi":
+            result.meta.tppi_alternation_state = "applied"
+        else:
+            result.meta.echo_antiecho_reconstruction = "bruker-rance-kay"
     result.meta.readonly = readonly
     return result, {
         "replay": "topspin",

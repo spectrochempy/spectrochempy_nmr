@@ -244,7 +244,8 @@ Read the uniform Bruker SER with ``remove_digital_filter=False`` and
 ``Experiment(dataset).process(replay="topspin")``. Replay uses the recorded
 processing status of both axes. The supported profiles cover direct DQD
 with indirect QF magnitude, States-TPPI, or Bruker echo/anti-echo. They
-support no window or a squared sine window, first-point weighting,
+support no window or a squared sine window, F1 first-point weighting
+with ``FCOR=1`` on F2,
 zero filling, phase, and F2 ``PKNL`` with an integer group delay.
 The result uses the processing ppm
 axes and retains the FID scan/gain normalization.
@@ -252,8 +253,8 @@ axes and retains the FID scan/gain normalization.
 The QF result is a magnitude matrix. The two complex channels of a
 phase-sensitive result use the same component layout as the public
 TopSpin processed reader. The real part of the first channel is
-``2rr``. Replay rejects linear prediction, baseline correction,
-reversed axes, and extracted processing grids.
+``2rr``. Replay rejects linear prediction, baseline correction, time-domain
+offsets (``TDoff``), reversed axes, and extracted processing grids.
 
 To run the external comparisons, set ``NMR_TOPSPIN_XFB_REFERENCES`` to
 a directory containing experiment folders ``20``, ``30`` and ``40``

@@ -320,6 +320,8 @@ def test_topspin_xfb_replay_without_prediction(experiment):
         expected = planes[None]
     else:
         assert tuple(result.c.labels) == ("S_R", "S_I")
+        with pytest.raises(ValueError, match="branches in acquired order"):
+            Experiment(raw[::-1, :, :]).process(replay="topspin")
         first, second = result.data
         actual = np.stack((first.real, second.real, first.imag, second.imag))
         expected = np.asarray(planes)
