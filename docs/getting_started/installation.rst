@@ -2,7 +2,7 @@ Installation
 ============
 
 For ``spectrochempy-nmr`` 0.3.0, install SpectroChemPy 1.2.0 or later
-to use the 1D and qualified 2D workflows in this guide.
+to use the 1D and supported 2D workflows in this guide.
 
 .. code-block:: console
 

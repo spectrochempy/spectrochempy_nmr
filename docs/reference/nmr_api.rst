@@ -28,7 +28,7 @@ use each operation on an acquisition or spectrum.
    * - :external+core:py:func:`~spectrochempy.fft`,
        :external+core:py:func:`~spectrochempy.ifft`
      - Transform along a selected dimension. For paired 2D acquisitions,
-       use the :doc:`qualified processing paths </userguide/processing_2d>`
+       use the :doc:`supported processing paths </userguide/processing_2d>`
        to respect the indirect quadrature and dimension order.
    * - :external+core:py:func:`~spectrochempy.pk`
      - Apply zero- or first-order phase correction to a complex spectrum.
@@ -50,6 +50,28 @@ use each operation on an acquisition or spectrum.
    * - :external+core:py:func:`~spectrochempy.trapezoid`
      - Integrate a selected 1D peak region on the calibrated axis after
        phasing and baseline correction.
+
+For users familiar with nmrglue-ng, the corresponding tasks are grouped
+below. Compare phase and Fourier conventions before reusing numerical
+parameters from an array-based workflow.
+
+.. list-table::
+   :header-rows: 1
+
+   * - Task in nmrglue-ng
+     - SpectroChemPy workflow
+   * - ``proc_base`` apodization, zero filling, FFT, phase
+     - Dataset methods ``em()``, ``gm()``, ``sp()``, ``zf_size()``, ``fft()``
+       and ``pk()``. See :doc:`/userguide/processing_1d`.
+   * - ``pipe_proc`` processing with metadata
+     - Process a dataset with calibrated coordinates and history. See
+       :doc:`/userguide/processing_2d` for quadrature and transform order.
+   * - ``proc_bl`` baseline correction
+     - Choose a baseline model with ``scp.Baseline`` or apply
+       ``spectrum.snip()`` for a suitable 1D spectrum.
+   * - ``peakpick``, ``integration`` and ``linesh``
+     - Use ``find_peaks()``, ``trapezoid()`` and ``scp.Optimize``.
+       See :doc:`/userguide/analysis` for 1D and 2D examples.
 
 See :ref:`topspin-xfb-replay` for applying a recorded TopSpin recipe with
 its window, phase and acquisition conventions.

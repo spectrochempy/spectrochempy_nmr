@@ -65,8 +65,8 @@ For the local external cases, set ``NMR_PIPE_AGILENT_SOURCE`` and
 ``NMR_PIPE_BRUKER_SOURCE`` to the corresponding reference FIDs, and
 ``NMR_PIPE_EXECUTABLE`` to the installed nmrPipe executable. Then run the whole
 test file. Each source is hashed before/after; tools write only under pytest's
-temporary directory. Missing external configuration produces explicit skips,
-which must not be reported as validated coverage.
+temporary directory. The external reference comparison runs only when
+the sources and executable are configured.
 
 Import a processed real 2D plane
 --------------------------------

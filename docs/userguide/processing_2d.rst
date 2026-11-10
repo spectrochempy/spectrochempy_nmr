@@ -7,6 +7,22 @@ See :doc:`/concepts/quadrature` for the supported conventions and
 :ref:`nmr-processing-validation` for the distinction between runtime checks
 and qualification against reference data.
 
+Process the direct dimension (F2) before the indirect dimension (F1) for
+supported paired acquisitions. The plugin uses the acquisition metadata to
+select the quadrature convention and check the transform order. When
+processing explicitly on a supported dataset, you can inspect the
+mixed-domain result after F2 before transforming F1.
+
+.. code-block:: python
+
+   f2 = fid.fft(dim="x")
+   spectrum = f2.fft(dim="y")
+
+Here ``x`` and ``y`` are the direct and indirect dimensions of the
+imported FID. Keep both quadrature branches through the indirect FFT.
+Select the desired spectral component before plotting or extracting a
+1D slice. Use :doc:`analysis` to find and integrate cross-peaks.
+
 When a TopSpin read includes a ``procs`` file, the dataset can expose its
 processing parameters in ``dataset.meta.nmr_processing["vendor_profile"]``.
 The profile records the vendor, the source file, and the parameter values.

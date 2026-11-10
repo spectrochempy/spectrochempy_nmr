@@ -46,18 +46,27 @@ dataset methods or as functions such as ``scp.em(experiment.dataset, lb=5.0)``.
 .. code-block:: python
 
    windowed = experiment.dataset.em(lb=5.0)
-   spectrum = windowed.fft()
+   padded = windowed.zf_size(size=max(32768, windowed.shape[-1]))
+   spectrum = padded.fft()
 
 Both approaches preserve the original FID by default. A supported complex
 JEOL 1D FID read with ``scp.nmr.read_jeol()`` can use either approach.
 For example, on the epicatechin JDF reference, ``Experiment.process()``
-produces a spectrum referenced in ppm, and the two core calls above
+produces a spectrum referenced in ppm, and the stepwise core workflow above
 produce a frequency axis in Hz.
 
 For a 1D acquisition outside the scope of ``Experiment.process()``, you
 can still apply individual operations when the data meet their input
 requirements. For example, use a suitable time-domain axis for apodization
 and FFT.
+
+An exponential window trades some resolution for sensitivity. Zero filling
+sets the spacing of the frequency bins. Once the spectrum is in the
+frequency domain, use ``spectrum.pk(phc0=..., phc1=...)`` to apply explicit
+phase angles in degrees. Plot the result with ``spectrum.plot()``, then use
+:doc:`analysis` for baseline correction, peak picking, integration and
+fitting. For Bruker digital-filter correction, check the import options
+before applying any separate preparation or requesting TopSpin replay.
 
 A pseudo-2D series contains ordinary 1D spectra that can be processed one
 spectrum at a time. For acquisitions with two Fourier dimensions, see

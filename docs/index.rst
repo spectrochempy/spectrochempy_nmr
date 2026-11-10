@@ -5,7 +5,7 @@ SpectroChemPy NMR documentation
 
    **Experimental plugin** for :external+core:doc:`SpectroChemPy <index>`.
    The public API is still evolving. Function signatures, options, and
-   behavior may change between releases, including in validated workflows.
+   behavior may change between releases, including in supported workflows.
    Check the :doc:`changelog` before upgrading.
 
 SpectroChemPy NMR is developed and released independently, alongside
@@ -34,12 +34,13 @@ The plugin reads Bruker TopSpin, Agilent/Varian, JEOL, and SIMPSON data. It
 also reads supported profiles of the NMRPipe, nmrML, and NMR JCAMP-DX exchange
 formats. See :doc:`userguide/reading_data` for supported inputs and options.
 
-Processing has been qualified primarily against
+Reference comparisons for documented processing profiles use primarily
 `Bruker TopSpin <https://www.bruker.com/protected/en/services/software-downloads/nmr.html>`_
 and `NMRPipe <https://www.ibbr.umd.edu/nmrpipe/install>`_. The plugin supports
-validated 1D workflows and processing of qualified 2D acquisitions. The
-:doc:`2D processing guide <userguide/processing_2d>` explains when to process
-the FID directly and when to replay a recorded TopSpin recipe.
+1D processing and workflows for supported 2D acquisition profiles. The
+:doc:`userguide/processing_2d` guide covers direct processing and TopSpin
+replay. The :doc:`userguide/analysis` guide covers peak picking, integration
+and fitting on processed spectra.
 
 Contents
 --------

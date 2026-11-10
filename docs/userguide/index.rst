@@ -7,5 +7,6 @@ Guides
    reading_data
    processing_1d
    processing_2d
+   analysis
    ../concepts/quadrature
    ../concepts/hypercomplex

@@ -128,10 +128,10 @@ SIMPSON
 -------
 
 Use ``scp.nmr.read_simpson(...)`` for SIMPSON data files or a simulation
-input file with a sibling output. Qualified standalone FIDs use calibrated
-time coordinates. Qualified standalone spectra use frequency coordinates
-in Hz. The direct FFT is available for qualified 2D FIDs. Their indirect
-quadrature remains unqualified. Files with simulation metadata from an
+input file with a sibling output. Supported standalone FIDs use calibrated
+time coordinates. Supported standalone spectra use frequency coordinates
+in Hz. The direct FFT is available for supported 2D FIDs. The indirect quadrature convention
+has yet to be established. Files with simulation metadata from an
 ``.in`` file and other legacy layouts use the compatibility presentation.
 nmrglue-ng decodes these data files. For indexed XYREIM, the plugin keeps
 the historical ascending order on both axes.
