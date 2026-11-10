@@ -245,6 +245,11 @@ def test_qsim_pknl_uses_the_fractional_delay_on_the_final_fft_grid(delay, size):
     }
     np.testing.assert_array_equal(source.data, original)
     assert not source.meta.acquisition["digital_filter"]["applied"]
+    source.meta.nmr_processing["vendor_profile"]["parameters"]["SW_p"] = 1000
+    with pytest.raises(
+        ValueError, match="SW_p to match the acquisition spectral width"
+    ):
+        Experiment(source).process(digital_filter="pknl", size=size)
     with pytest.raises(ValueError, match="raw Bruker QSIM"):
         Experiment(spectrum).process(digital_filter="pknl")
 

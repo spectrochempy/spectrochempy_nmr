@@ -28,7 +28,9 @@ python -m sphinx -W --keep-going -b html docs docs/_build/html
 
 Replace ``<compatible-core-version>`` with the deployed core documentation
 version selected for that release; release mode intentionally refuses to use
-the moving ``latest`` default.
+moving documentation aliases. Read the Docs builds for the matching NMR
+release tag default to the versioned core 1.2.0 documentation. Activate and
+build that core tag on Read the Docs before publishing the tagged NMR docs.
 
 The gallery is non-executing by default for quick local documentation checks.
 To execute the public gallery examples with the approved immutable fixtures:

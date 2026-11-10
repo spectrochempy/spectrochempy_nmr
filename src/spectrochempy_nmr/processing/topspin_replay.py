@@ -211,9 +211,14 @@ def process_qsim_pknl(source, *, size, lb_hz, phase_zero, phase_first):
             "PKNL requires valid SW_p, SF and OFFSET processing parameters"
         )
 
+    width = acquisition["spectral_width_hz"]
+    if not np.isclose(calibration[0], width, rtol=1e-6, atol=0.0):
+        raise ValueError("PKNL requires SW_p to match the acquisition spectral width")
+    calibration = (width, *calibration[1:])
+
     windowed = samples[:points]
     if lb_hz is not None:
-        time = np.arange(points) / acquisition["spectral_width_hz"]
+        time = np.arange(points) / width
         windowed = windowed * np.exp(-np.pi * lb_hz * time)
     bins = np.arange(size) / size
     # The QSIM storage convention introduces a sign relative to the DQD

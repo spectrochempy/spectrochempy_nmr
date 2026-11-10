@@ -18,14 +18,14 @@ copyright = "2014-2026, Laboratoire Catalyse et Spectrochimie (LCS)"
 import spectrochempy  # noqa: E402
 import spectrochempy_nmr  # noqa: E402
 
-_release_build = os.environ.get("NMR_DOCS_RELEASE")
 _rtd_tag = os.environ.get("READTHEDOCS_GIT_IDENTIFIER", "")
 _release_tag = f"spectrochempy-nmr-v{spectrochempy_nmr.NMRPlugin.version}"
-version = (
-    spectrochempy_nmr.NMRPlugin.version
-    if _release_build or _rtd_tag == _release_tag
-    else "Unreleased"
+_tagged_release = _rtd_tag == _release_tag
+_release_build = bool(os.environ.get("NMR_DOCS_RELEASE")) or _tagged_release
+github_ref = os.environ.get("NMR_DOCS_GITHUB_REF", "").strip() or (
+    _rtd_tag if _tagged_release else "master"
 )
+version = spectrochempy_nmr.NMRPlugin.version if _release_build else "Unreleased"
 release = version
 language = "en"
 master_doc = "index"
@@ -39,10 +39,14 @@ exclude_patterns = [
 templates_path = ["_templates"]
 
 core_docs_url = os.environ.get(
-    "NMR_CORE_DOCS_URL", "https://www.spectrochempy.fr/latest/"
+    "NMR_CORE_DOCS_URL",
+    (
+        "https://www.spectrochempy.fr/spectrochempy-v1.2.0/"
+        if _tagged_release
+        else "https://www.spectrochempy.fr/latest/"
+    ),
 ).rstrip("/")
 if _release_build:
-    github_ref = os.environ.get("NMR_DOCS_GITHUB_REF", "").strip()
     core_docs_version = core_docs_url.rsplit("/", maxsplit=1)[-1]
     immutable_ref = re.fullmatch(r"[0-9a-f]{40}", github_ref) or re.fullmatch(
         r"spectrochempy-nmr-v\d+\.\d+\.\d+(?:[-+][0-9A-Za-z.-]+)?", github_ref
@@ -51,7 +55,10 @@ if _release_build:
         raise RuntimeError(
             "release builds require a commit SHA or spectrochempy-nmr-vX.Y.Z tag"
         )
-    if not os.environ.get("NMR_CORE_DOCS_URL") or core_docs_version == "latest":
+    if not re.fullmatch(
+        r"(?:spectrochempy-v)?\d+\.\d+(?:\.\d+)?(?:[-+][0-9A-Za-z.-]+)?",
+        core_docs_version,
+    ):
         raise RuntimeError("release builds require a fixed NMR_CORE_DOCS_URL")
 
 extensions = [
@@ -128,8 +135,7 @@ html_context = {
     "github_repo": "spectrochempy_nmr",
     # Set NMR_DOCS_GITHUB_REF to a release tag for historical builds. Release
     # builds reject the moving default unless this is set explicitly.
-    "github_version": os.environ.get("NMR_DOCS_GITHUB_REF")
-    or (_rtd_tag if _rtd_tag == _release_tag else "master"),
+    "github_version": github_ref,
     "doc_path": "docs",
 }
 

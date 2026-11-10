@@ -78,20 +78,17 @@ phased = [
 ]
 
 # %%
-# Correct the baseline and integrate
-# ----------------------------------
-# Fit a straight line to the same off-peak windows and axis endpoints in each real
-# spectrum. This uses SpectroChemPy's baseline correction.
+# Plot the phased spectra
+# -----------------------
+# Use the real absorption spectra with the common phase and retain the
+# measured baseline for both the display and integration.
 spectra = contact_series([spectrum.real for spectrum in phased])
-corrected = spectra.basc(
-    (220.0, 245.0), (-110.0, -60.0), model="polynomial", order=1, include_limits=True
-)
-_ = corrected.plot(method="lines", xlim=(205.0, 35.0), colorbar=True, show=False)
+_ = spectra.plot(method="lines", xlim=(205.0, 35.0), colorbar=True, show=False)
 
 # %%
 # Integrate the same three ppm windows at each contact time.
 windows = [(165.0, 183.0), (91.0, 107.0), (62.0, 79.0)]
-curves = [corrected[:, low:high].simpson(dim="x") for low, high in windows]
+curves = [spectra[:, low:high].simpson(dim="x") for low, high in windows]
 _ = scp.plot_multiple(
     curves,
     method="scatter",
@@ -126,6 +123,34 @@ _ = fitter.fit(signal)
 print(fitter.script)
 
 # %%
+# Compare with two buildup contributions
+# --------------------------------------
+# Fit the same integrated areas with the sum of two CP buildup–decay laws.
+# The components describe the kinetics of the whole band. Their time
+# constants are effective parameters, and the fit does not assign them
+# to individual resonances or chemical species. The fast rise time is about
+# 0.074 ms, shorter than the first measured contact time (0.1 ms). Its
+# estimate depends on extrapolating the assumed buildup law.
+two_laws = scp.Optimize(method="leastsq")
+two_laws.usermodels = {"cp_buildup": cp_buildup}
+two_laws.script = """
+MODEL: FAST
+shape: cp_buildup
+  $ amplitude: 40.0, 0.0, none
+  $ buildup: 0.1, 0.01, none
+  $ decay: 6.0, 0.01, none
+
+MODEL: SLOW
+shape: cp_buildup
+  $ amplitude: 40.0, 0.0, none
+  $ buildup: 1.0, 0.01, none
+  $ decay: 7.0, 0.01, none
+"""
+_ = two_laws.fit(signal)
+print(two_laws.script)
+
+# %%
 ax = signal.plot_scatter(marker="o", label="Measured area", show=False)
-_ = fitter.predict().plot(ax=ax, clear=False, label="Buildup–decay fit", show=False)
+_ = fitter.predict().plot(ax=ax, clear=False, label="One CP law", ls="--", show=False)
+_ = two_laws.predict().plot(ax=ax, clear=False, label="Two CP laws", show=False)
 _ = ax.legend()
