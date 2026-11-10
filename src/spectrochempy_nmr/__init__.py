@@ -67,6 +67,23 @@ def _ensure_simpson_filetype_registered() -> None:
         )
 
 
+def _read_interop(
+    path,
+    *,
+    profile=None,
+    read_options=None,
+    normalize_options=None,
+    conversion_profile=None,
+):
+    from nmrglue import interop
+
+    from .interop import from_interop
+
+    stored = interop.read(path, profile=profile, **(read_options or {}))
+    normalized = interop.normalize(stored, **(normalize_options or {}))
+    return from_interop(normalized, profile=conversion_profile)
+
+
 def _resolve_read():
     """Lazily import and return a generic NMR reader dispatching by file type."""
     from .readers.read_agilent import read_agilent  # noqa: PLC0415
@@ -75,8 +92,19 @@ def _resolve_read():
     from .readers.read_topspin import read_topspin  # noqa: PLC0415
 
     def read(*paths, **kwargs):
-        """Read NMR data, auto-detecting TopSpin vs Agilent/Varian vs JEOL vs SIMPSON format."""
+        """Read NMR data with a native reader or explicit interop routing.
+
+        With ``protocol="interop"``, pass one path and an optional provider
+        ``profile``. Use ``read_options`` and ``normalize_options`` for the
+        respective provider stages and ``conversion_profile`` for an explicit
+        interpretation supported by ``from_interop()``.
+        """
         protocol = kwargs.get("protocol")
+        if protocol == "interop":
+            if len(paths) != 1:
+                raise TypeError("interop reading requires exactly one path")
+            kwargs.pop("protocol")
+            return _read_interop(paths[0], **kwargs)
         if protocol == "agilent":
             return read_agilent(*paths, **kwargs)
         if protocol == "topspin":

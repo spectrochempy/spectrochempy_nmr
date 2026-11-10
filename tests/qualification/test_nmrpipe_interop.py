@@ -25,8 +25,7 @@ def check_experiment(
 ):
     source_bytes = path.read_bytes()
     raw = provider.interop.read_nmrpipe_1d(path)
-    normalized = provider.interop.normalize_nmrpipe_1d(raw)
-    source = from_interop(normalized)
+    source = scp.nmr.read(path, protocol="interop")
     before = deepcopy(dict(source.meta))
 
     def forbidden_fft(*args, **kwargs):
@@ -188,8 +187,7 @@ def test_real_nmrpipe_cosy_plane(provider, tmp_path):
     )
     words = np.frombuffer(payload, dtype="<f4")
     expected = words[512:].reshape(512, 2048)
-    raw = provider.interop.read_nmrpipe_2d(path)
-    dataset = from_interop(provider.interop.normalize_nmrpipe_2d(raw))
+    dataset = scp.nmr.read(path, protocol="interop")
     assert dataset.meta.axis_roles == ("F1", "F2")
     assert dataset.dtype == expected.dtype
     np.testing.assert_array_equal(dataset.data, expected)
@@ -215,11 +213,9 @@ def test_real_nmrpipe_cosy_plane(provider, tmp_path):
 
 
 def _check_complex_nmrpipe(
-    provider, path, expected_real, expected_imag, order, complex_dim, tmp_path
+    path, expected_real, expected_imag, order, complex_dim, tmp_path
 ):
-    raw = provider.interop.read_nmrpipe_2d_storage(path)
-    normalized = provider.interop.normalize_nmrpipe_2d(raw)
-    dataset = from_interop(normalized)
+    dataset = scp.nmr.read(path, protocol="interop")
     assert dataset.meta.axis_roles == order
     assert dataset.meta.interop_complex_axis == complex_dim
     assert dataset.dtype == np.dtype("complex64")
@@ -296,7 +292,7 @@ def test_synthetic_nmrpipe_singly_complex_2d(
         provider.pipe.dic2fdata(header).astype("<f4").tobytes()
         + payload.astype("<f4").tobytes()
     )
-    _check_complex_nmrpipe(provider, path, real, imag, order, complex_dim, tmp_path)
+    _check_complex_nmrpipe(path, real, imag, order, complex_dim, tmp_path)
 
 
 def test_nmrpipe_singly_complex_cosy_reference(provider, tmp_path):
@@ -327,12 +323,12 @@ def test_nmrpipe_singly_complex_cosy_reference(provider, tmp_path):
     )
     words = np.frombuffer(path.read_bytes(), dtype="<f4")[512:].reshape(512, 4096)
     _check_complex_nmrpipe(
-        provider, path, words[:, :2048], words[:, 2048:], ("F1", "F2"), "F2", tmp_path
+        path, words[:, :2048], words[:, 2048:], ("F1", "F2"), "F2", tmp_path
     )
     assert source.read_bytes() == original
 
 
-def _check_four_component_nmrpipe(provider, path, order, rows, cols, tmp_path):
+def _check_four_component_nmrpipe(path, order, rows, cols, tmp_path):
     words = np.frombuffer(path.read_bytes(), dtype="<f4")
     binary = words[512:].reshape(2 * rows, 2 * cols)
     expected = np.stack(
@@ -343,8 +339,7 @@ def _check_four_component_nmrpipe(provider, path, order, rows, cols, tmp_path):
             binary[1::2, cols:],
         )
     )
-    raw = provider.interop.read_nmrpipe_2d_storage(path)
-    dataset = from_interop(provider.interop.normalize_nmrpipe_2d(raw))
+    dataset = scp.nmr.read(path, protocol="interop")
     labels = ("rr", "ri", "ir", "ii")
     assert dataset.dims == ["c", "y", "x"]
     assert dataset.meta.axis_roles == ("component", *order)
@@ -412,7 +407,7 @@ def test_synthetic_nmrpipe_four_component_2d(provider, transposed, tmp_path):
     path.write_bytes(
         provider.pipe.dic2fdata(header).astype("<f4").tobytes() + payload.tobytes()
     )
-    _check_four_component_nmrpipe(provider, path, order, rows, cols, tmp_path)
+    _check_four_component_nmrpipe(path, order, rows, cols, tmp_path)
 
 
 def test_nmrpipe_four_component_reference(provider, tmp_path):
@@ -449,9 +444,9 @@ def test_nmrpipe_four_component_reference(provider, tmp_path):
         )
         current = target
     _check_four_component_nmrpipe(
-        provider, tmp_path / "indirect-ft.ft2", ("F2", "F1"), 8, 2, tmp_path
+        tmp_path / "indirect-ft.ft2", ("F2", "F1"), 8, 2, tmp_path
     )
-    _check_four_component_nmrpipe(provider, current, ("F1", "F2"), 2, 8, tmp_path)
+    _check_four_component_nmrpipe(current, ("F1", "F2"), 2, 8, tmp_path)
     assert source.read_bytes() == original
 
 
@@ -470,9 +465,9 @@ def test_nmrpipe_raw_qf_2d_reference(provider, tmp_path):
     # FDSPECNUM and FDSIZE count real rows and complex direct samples.
     rows, cols = (int(words[index]) for index in (219, 99))
     binary = words[512:].reshape(rows, 2 * cols)
-    stored = provider.interop.read(path)
-    normalized = provider.interop.normalize(stored, confirm_time_grid=True)
-    dataset = from_interop(normalized)
+    dataset = scp.nmr.read(
+        path, protocol="interop", normalize_options={"confirm_time_grid": True}
+    )
     assert dataset.meta.axis_roles == ("F1", "F2")
     assert dataset.meta.interop_complex_axis == "F2"
     assert dataset.meta.data_domain == "time"
@@ -583,11 +578,15 @@ def _check_states_tppi_import(provider, traces, widths, tmp_path):
     )
     path = tmp_path / "states-tppi.fid"
     provider.pipe.write(str(path), header, traces)
-    read = provider.interop.read(path)
-    normalized = provider.interop.normalize(read, confirm_time_grid=True)
+    options = {"confirm_time_grid": True}
     with pytest.raises(ValueError):
-        from_interop(normalized)
-    result = from_interop(normalized, profile="states-tppi")
+        scp.nmr.read(path, protocol="interop", normalize_options=options)
+    result = scp.nmr.read(
+        path,
+        protocol="interop",
+        normalize_options=options,
+        conversion_profile="states-tppi",
+    )
     expected = np.stack((traces[::2], traces[1::2]))
     np.testing.assert_array_equal(result.data, expected)
     assert result.dtype == np.complex64

@@ -25,11 +25,39 @@ The separate experimental ``read_agilent_interop`` facade is characterized on
 real acquisitions with a pinned external provider. See
 :doc:`../agilent_qualification` for reproducible checks, observed-nucleus handling and remaining limitations.
 
-For the explicit, optional NMRPipe processed 1D interop path, see
-:doc:`../nmrpipe_interop`. This does not change automatic reader dispatch.
+Reading exchange formats through interop
+----------------------------------------
 
-See :doc:`../nmrml_interop` for explicit 1D nmrML exchange-format profiles,
-writer round trips and the required convention choices.
+Use ``scp.nmr.read(path, protocol="interop")`` to read and normalize one file
+with nmrglue-ng, then convert the result to an ``NDDataset``. NMRPipe profiles
+can be detected from the header. Supply an explicit provider profile for
+nmrML and NMR JCAMP-DX.
+
+.. code-block:: python
+
+   pipe_spectrum = scp.nmr.read("spectrum.ft2", protocol="interop")
+   jcamp_spectrum = scp.nmr.read(
+       "epicatechin.jdx", protocol="interop", profile="jcampdx-spectrum-1d"
+   )
+   xml_spectrum = scp.nmr.read(
+       "spectrum.nmrML",
+       protocol="interop",
+       profile="nmrml-1d",
+       read_options={"read_processed": True, "axis_endpoint": "last-point"},
+   )
+
+Use ``read_options`` for file decoding and ``normalize_options`` for
+convention choices, such as the sign of an FID. The optional
+``conversion_profile`` confirms an interpretation in ``from_interop()``,
+such as ``"states-tppi"`` for adjacent NMRPipe branches with alternation
+still encoded. The reader does not run an FFT. Unsupported profiles or
+missing convention choices raise the corresponding provider or converter
+error. The nmrML reader requires ``xmltodict``.
+
+The usual TopSpin, Agilent, JEOL and SIMPSON dispatch continues to apply
+outside this mode. Use the core's ``scp.read_jcamp()`` for infrared JCAMP-DX.
+See :doc:`../nmrpipe_interop` and :doc:`../nmrml_interop` for the underlying
+profiles and their required convention choices.
 
 SIMPSON
 -------
