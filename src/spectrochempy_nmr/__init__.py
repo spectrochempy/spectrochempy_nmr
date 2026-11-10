@@ -586,6 +586,10 @@ class NMRPlugin(SpectroChemPyPlugin):
 
 
 def __getattr__(name: str):
+    if name == "fit_central_transition":
+        from .pulsar_fit import fit_central_transition
+
+        return fit_central_transition
     if name == "read_topspin":
         from .readers.read_topspin import read_topspin  # noqa: PLC0415
 
@@ -648,6 +652,7 @@ def __dir__() -> list[str]:
     return [
         "NMRPlugin",
         "Experiment",
+        "fit_central_transition",
         "process_agilent_noesy_states_tppi",
         "extract_noesy_components",
         "from_interop",

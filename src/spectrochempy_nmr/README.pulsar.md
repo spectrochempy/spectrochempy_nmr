@@ -493,6 +493,43 @@ Accuracy 16 took 1.34 s (36 evaluations) and recovered it to within 3 Hz.
 This benchmark measures fit cost and sensitivity to the powder mesh.
 Experimental spectra are still needed to assess model accuracy.
 
+## Fitting an NDDataset
+
+The plugin exposes `fit_central_transition` for a real, phased 1D
+spectrum. For an axis in frequency units, pass the reference as
+`origin_hz` if the coordinates are absolute or use another origin.
+A ppm coordinate already defines chemical zero. PULSAR converts
+ppm to offsets using the positive Larmor frequency and preserves
+the original axis and mask on the fitted spectrum and residuals.
+
+```python
+from spectrochempy_nmr import fit_central_transition
+from spectrochempy_nmr.pulsar_fit import CentralParameters
+
+result = fit_central_transition(
+    experimental_dataset,
+    initial=CentralParameters(3.0e6, 0.3, 500, 80),
+    bounds=(
+        CentralParameters(2.0e6, 0.0, 0, 20),
+        CentralParameters(4.0e6, 1.0, 1500, 250),
+    ),
+    larmor_hz=104.38e6,
+    spectral_width_hz=12500,
+    spinning_hz=12500,
+    spin=2.5,
+    window_hz=(-1300, 1100),
+)
+```
+
+The optimizer fits `Cq`, asymmetry, shift and Gaussian FWHM. Any
+specified CSA is fixed. For each candidate, it projects a nonnegative
+scale and linear baseline by least squares. The fit excludes masked
+or nonfinite observations and reports the RMS in the dataset's
+intensity units and the number of residual evaluations. The model
+window must cover every selected band over the parameter bounds.
+Use separate starts and mesh refinements when judging parameter
+stability.
+
 ## Experimental check with aluminum acetylacetonate
 
 The [MRSimulator fitting tutorial](https://mrsimulator.readthedocs.io/en/stable/introduction/fitting_example.html)
