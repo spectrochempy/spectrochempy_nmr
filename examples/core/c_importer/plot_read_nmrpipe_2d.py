@@ -18,4 +18,4 @@ spectrum
 
 # %%
 # Display the spectrum as a contour map.
-_ = spectrum.plot_map()
+_ = spectrum.plot(method="contour")

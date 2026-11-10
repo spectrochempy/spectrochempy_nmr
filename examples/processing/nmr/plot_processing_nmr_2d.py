@@ -22,4 +22,4 @@ mixed
 
 # %%
 # Overlay the real F2 spectra for the first five F1 increments.
-_ = mixed[:5, :].real.plot_stack()
+_ = mixed[:5, :].real.plot(method="lines")

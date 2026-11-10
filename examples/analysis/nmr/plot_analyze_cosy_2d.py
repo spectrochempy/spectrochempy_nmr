@@ -14,7 +14,7 @@ import spectrochempy as scp
 
 path = scp.preferences.datadir / "nmrdata/nmrpipe/nmrpipe_2d_cosy_example.ft2"
 spectrum = scp.nmr.read(path, protocol="interop")
-_ = spectrum.plot_map()
+_ = spectrum.plot(method="contour")
 
 # %%
 # Select F1 and F2 explicitly. The threshold is specific to the intensities
@@ -26,7 +26,7 @@ peaks
 # Zoom in on one positive cross-peak. The region limits are given in Hz,
 # so they remain meaningful if the point spacing changes.
 region = spectrum[2250.0:2450.0, 880.0:1010.0]
-_ = region.plot_map()
+_ = region.plot(method="contour")
 
 # %%
 # Integrate along F2 and then F1. The area includes both axis units.

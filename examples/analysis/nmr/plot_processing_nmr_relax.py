@@ -56,7 +56,7 @@ ds = ds.pk(phc0=35 * U.deg, phc1=0 * U.deg)
 # The dominant silicon resonance is near -103 ppm. Zoom in on it and
 # color the spectra by recovery delay to see how the peak grows.
 resonance = ds[:, -120.0:-90.0].real
-_ = resonance.plot_stack(palette="viridis", colorbar=True)
+_ = resonance.plot(method="lines", palette="viridis", colorbar=True)
 
 # %%
 # Build a signal trace from the dominant resonance
