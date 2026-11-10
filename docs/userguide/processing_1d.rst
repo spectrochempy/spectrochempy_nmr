@@ -116,4 +116,4 @@ The result uses the processing ppm reference. To apply measured phase
 angles at the first frequency bin, pass ``phase="manual"`` with ``phc0``
 and ``phc1`` in degrees. The
 :doc:`cross-polarization example </examples/gallery/analysis/plot_processing_cp_nmr>`
-uses angles recorded separately for each FID after TopSpin ``apk``.
+uses one pair of angles from a representative FID for the entire series.

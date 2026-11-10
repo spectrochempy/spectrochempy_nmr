@@ -57,30 +57,13 @@ series
 # %%
 # Transform and phase each spectrum
 # ---------------------------------
-# TopSpin 4.5.0 ran em, ft and apk on each FID. These phase angles are
-# the recorded PHC0 and PHC1 in degrees, indexed by experiment number.
-topspin_phase = {
-    80: (34.220954, -191.407329),
-    81: (22.005597, -168.488440),
-    82: (27.384450, -185.311872),
-    83: (31.468902, -194.061317),
-    84: (44.378617, -218.808930),
-    85: (33.129208, -195.222656),
-    86: (37.365900, -205.449468),
-    87: (44.279733, -220.074474),
-    88: (-39.429728, -46.215869),
-    89: (-32.312972, -62.206944),
-    90: (43.968901, -219.560617),
-    91: (35.500365, -199.617042),
-    92: (-40.401538, -43.167721),
-    93: (63.161308, -256.668820),
-    94: (61.879869, -254.838595),
-}
-
-# %%
-# PKNL reads the fractional delay from each acquisition and applies it
-# once on the final FFT grid. The manual angles reproduce the recorded
-# TopSpin phase at the first frequency bin.
+# All FIDs in this series use the same acquisition conditions apart from
+# the contact pulse duration. Use a common phase so the processing is
+# consistent across contact times. The angles are from TopSpin 4.5.0
+# ``apk`` on experiment 86 (1.4 ms), where all three regions are visible.
+# They are specified in degrees at the first frequency bin. PKNL reads
+# the fractional delay and applies it once on the final FFT grid.
+phc0, phc1 = 37.365900, -205.449468
 phased = [
     scp.nmr.Experiment(fid).process(
         apodization="em",
@@ -88,25 +71,11 @@ phased = [
         size=8192,
         digital_filter="pknl",
         phase="manual",
-        phc0=topspin_phase[expno][0],
-        phc1=topspin_phase[expno][1],
+        phc0=phc0,
+        phc1=phc1,
     )
-    for expno, fid in acquisitions
+    for fid in fids
 ]
-
-# %%
-# Check the phase away from the main peak
-# ----------------------------------------
-# On experiments 88, 89 and 92, the recorded first-order angles leave
-# dispersion around 175 ppm. Use the first-order angle of experiment 86
-# as a reference for these three spectra, while preserving their phase
-# at the main peak near 71 ppm.
-for index, (expno, _) in enumerate(acquisitions):
-    if expno in (88, 89, 92):
-        spectrum = phased[index]
-        pivot = int(spectrum.x.loc2index(71.0))
-        phase_change = topspin_phase[86][1] - topspin_phase[expno][1]
-        phased[index] = spectrum.pk(phc1=phase_change, pivot=pivot, rel=True)
 
 # %%
 # Correct the baseline and integrate
