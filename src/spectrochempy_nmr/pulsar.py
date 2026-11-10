@@ -19,7 +19,7 @@ import numpy as np
 
 
 @lru_cache(maxsize=8)
-def _powder_mesh(accuracy):
+def _powder_mesh(accuracy, hemisphere=False):
     """Build the PULSAR octant mesh and its inverse-cube vertex weights."""
     size = 5 * accuracy
     i, j = np.indices((size + 1, size + 1))
@@ -37,7 +37,17 @@ def _powder_mesh(accuracy):
     upper = np.column_stack(
         (vertices[i + 1, j], vertices[i, j + 1], vertices[i + 1, j + 1])
     )
-    return points.T / radius, radius**-3, np.concatenate((lower, upper))
+    directions = points.T / radius
+    weights = radius**-3
+    triangles = np.concatenate((lower, upper))
+    if hemisphere:
+        signs = np.array([[1, 1, 1], [-1, 1, 1], [1, -1, 1], [-1, -1, 1]])
+        directions = (signs[:, :, None] * directions).transpose(1, 0, 2).reshape(3, -1)
+        triangles = (triangles + np.arange(4)[:, None, None] * weights.size).reshape(
+            -1, 3
+        )
+        weights = np.tile(weights, 4)
+    return directions, weights, triangles
 
 
 def _rank_two_tensor(directions, eta):
@@ -69,6 +79,43 @@ def _csa_harmonics(directions, anisotropy_hz, eta, angle):
     result = np.zeros((5, directions.shape[1]), dtype=complex)
     result[:3] = (np.sqrt(6) * anisotropy_hz / 2) * wigner[:, None] * tensor[2:]
     return result
+
+
+def _rotated_csa_harmonics(directions, anisotropy_hz, eta, angle, rotation):
+    """Project the CSA tensor in the common quadrupolar rotor frame."""
+    eigenvalues = anisotropy_hz * np.array([-(1 + eta) / 2, -(1 - eta) / 2, 1])
+    tensor = (rotation * eigenvalues) @ rotation.T
+    x, y, z = directions
+    sine = np.hypot(x, y)
+    cos_phi = np.divide(x, sine, out=np.ones_like(x), where=sine > 0)
+    sin_phi = np.divide(y, sine, out=np.zeros_like(y), where=sine > 0)
+    polar = np.array([z * cos_phi, z * sin_phi, -sine])
+    azimuthal = np.array([-sin_phi, cos_phi, np.zeros_like(z)])
+    c, s = np.cos(angle), np.sin(angle)
+    radial_t = tensor @ directions
+    polar_t = tensor @ polar
+    azimuthal_t = tensor @ azimuthal
+    pp = (polar * polar_t).sum(axis=0)
+    aa = (azimuthal * azimuthal_t).sum(axis=0)
+    result = np.zeros((5, z.size), dtype=complex)
+    # Expand n(t).T D n(t) for the field moving on its rotor cone.
+    result[0] = c**2 * (directions * radial_t).sum(axis=0) + s**2 * (pp + aa) / 2
+    result[1] = 2 * c * s * ((polar + 1j * azimuthal) * radial_t).sum(axis=0)
+    result[2] = s**2 * ((pp - aa) / 2 + 1j * (polar * azimuthal_t).sum(axis=0))
+    return result
+
+
+def _validate_rotation(rotation):
+    matrix = np.asarray(rotation)
+    if matrix.shape != (3, 3) or matrix.dtype.kind not in "fiu":
+        raise ValueError("csa_rotation must be a real 3 by 3 rotation matrix.")
+    matrix = matrix.astype(float)
+    if not np.isfinite(matrix).all() or not (
+        np.allclose(matrix.T @ matrix, np.eye(3), rtol=0, atol=1e-8)
+        and np.linalg.det(matrix) > 0
+    ):
+        raise ValueError("csa_rotation must be a proper orthogonal matrix.")
+    return matrix
 
 
 def _quadrupolar_harmonics(directions, eta, angle):
@@ -183,30 +230,66 @@ def _central_transition_profile(
     accuracy=16,
     sidebands=0,
     spin=1.5,
+    csa_anisotropy_hz=0.0,
+    csa_eta=0.0,
+    csa_rotation=None,
 ):
     points, accuracy, sidebands = index(points), index(accuracy), index(sidebands)
-    values = (cq_hz, eta, larmor_hz, spectral_width_hz, shift_hz, spinning_hz, spin)
+    values = (
+        cq_hz,
+        eta,
+        larmor_hz,
+        spectral_width_hz,
+        shift_hz,
+        spinning_hz,
+        spin,
+        csa_anisotropy_hz,
+        csa_eta,
+    )
     if not all(isinstance(value, Real) for value in values):
         raise TypeError("PULSAR parameters must be real scalars.")
     values = tuple(map(float, values))
     if not np.isfinite(values).all():
         raise ValueError("PULSAR parameters must be finite.")
-    cq_hz, eta, larmor_hz, spectral_width_hz, shift_hz, spinning_hz, spin = values
+    (
+        cq_hz,
+        eta,
+        larmor_hz,
+        spectral_width_hz,
+        shift_hz,
+        spinning_hz,
+        spin,
+        csa_anisotropy_hz,
+        csa_eta,
+    ) = values
     if spin < 1.5 or spin % 1 != 0.5:
         raise ValueError("spin must be a half-integer greater than or equal to 3/2.")
-    if not 0 <= eta <= 1:
-        raise ValueError("eta must lie between 0 and 1.")
+    if not 0 <= eta <= 1 or not 0 <= csa_eta <= 1:
+        raise ValueError("eta and csa_eta must lie between 0 and 1.")
     if larmor_hz <= 0:
         raise ValueError("Use a positive Larmor frequency.")
     _validate_grid(spectral_width_hz, spinning_hz, points, accuracy, sidebands)
 
-    directions, weights, triangles = _powder_mesh(accuracy)
+    rotation = None if csa_rotation is None else _validate_rotation(csa_rotation)
+    # Misaligned tensors break octant reflection symmetry, but their
+    # even-in-field shifts retain the powder average under axis inversion.
+    hemisphere = bool(csa_anisotropy_hz and rotation is not None)
+    directions, weights, triangles = _powder_mesh(accuracy, hemisphere)
     angle = np.deg2rad(54.736) if spinning_hz else 0
-    harmonics = _quadrupolar_harmonics(directions, eta, angle)
+    # The historical quadrupolar tensor interchanges the transverse axes.
+    # Use the physical EFG frame when the CSA orientation makes them observable.
+    quadrupolar_eta = -eta if csa_anisotropy_hz else eta
+    harmonics = _quadrupolar_harmonics(directions, quadrupolar_eta, angle)
     # For the central pair, both second-order spin factors scale together
     # relative to I=3/2. The Wigner products themselves are independent of I.
     spin_scale = 3 * (spin + 1.5) / (4 * spin**2 * (spin - 0.5))
     harmonics *= spin_scale * cq_hz**2 / (16 * larmor_hz)
+    if hemisphere:
+        harmonics += _rotated_csa_harmonics(
+            directions, csa_anisotropy_hz, csa_eta, angle, rotation
+        )
+    elif csa_anisotropy_hz:
+        harmonics += _csa_harmonics(directions, csa_anisotropy_hz, csa_eta, angle)
     return _powder_profile(
         harmonics,
         weights,
@@ -296,12 +379,17 @@ def simulate_central_transition(
     accuracy=16,
     sidebands=0,
     spin=1.5,
+    csa_anisotropy_hz=0.0,
+    csa_eta=0.0,
+    csa_rotation=None,
 ):
     """Simulate the central transition of an isolated spin as an NDDataset.
 
     Set the dimensionless spin quantum number with `spin` (3/2, 5/2, ...).
     The model uses second-order quadrupolar shifts and an ideal pulse with
-    zero delay. Set `spinning_hz` to zero for a static powder or to a positive
+    zero delay. Optional first-order CSA uses a signed reduced anisotropy
+    in Hz and a separate asymmetry. A proper rotation matrix maps vectors
+    from the CSA principal axes to the quadrupolar principal axes. Set `spinning_hz` to zero for a static powder or to a positive
     rate for MAS at 54.736 degrees. `sidebands` adds that many orders
     on each side of the central band. Intensities sum to one across all
     requested bands. The frequency coordinate labels the left edges of the
@@ -321,6 +409,9 @@ def simulate_central_transition(
         accuracy=accuracy,
         sidebands=sidebands,
         spin=spin,
+        csa_anisotropy_hz=csa_anisotropy_hz,
+        csa_eta=csa_eta,
+        csa_rotation=csa_rotation,
     )
     return _as_dataset(axis, profile, "PULSAR central transition")
 

@@ -12,7 +12,7 @@ The simulation models the $+1/2 \leftrightarrow -1/2$ transition of an
 isolated half-integer spin $I\geq 3/2$, with second-order quadrupolar shifts, an ideal
 pulse, zero evolution delay and a powder distribution. The model supports
 a static powder or magic-angle spinning at the historical rotor angle
-of $54.736^\circ$. The quadrupolar entry point excludes spin couplings, satellite transitions,
+of $54.736^\circ$. The model excludes spin couplings, satellite transitions,
 relaxation and line broadening. MAS
 sidebands here are sidebands of the central transition.
 
@@ -136,6 +136,34 @@ is $\Delta(3+\eta)/2$ for this convention. The tests check the static
 tensor extrema and variance for both signs of $\Delta$, and compare
 the MAS band areas with a Cartesian projection of the tensor along a
 rotor trajectory and direct Fourier sums.
+
+To combine CSA with the quadrupolar transition, pass `csa_anisotropy_hz`,
+`csa_eta` and optionally `csa_rotation` to the central-transition
+simulator. The matrix $R$ is a proper rotation. Its columns are the
+CSA principal axes expressed in the electric-field-gradient (EFG)
+principal frame. With no matrix, the principal frames coincide.
+
+The code projects $D=R\,\mathrm{diag}(\delta_{ii}-\delta_\mathrm{iso})R^T$
+onto the field direction along the rotor cone. Expanding the quadratic
+form $\mathbf b(t)^T D\mathbf b(t)$ gives harmonics through order two.
+The CSA and quadrupolar frequencies are added at each orientation
+**before** integrating the rotor phase. The model uses the first-order
+CSA and second-order quadrupolar secular contributions. Higher-order
+mixed terms are outside this approximation.
+
+With relative rotation, octant reflections are no longer symmetries.
+Four octants cover one hemisphere. Inverting the rotor axis maps the
+field trajectory to its negative with a reversal of the rotor phase
+(up to a phase origin). Both frequency contributions are even in the
+field direction, and the squared Fourier coefficients are unchanged
+under this mapping. The test of a rotated tensor compares the combined
+five-band spectrum with a whole-sphere time-domain calculation.
+
+The relative rotation uses the physical EFG frame defined by the
+Hamiltonian term $\eta_Q(I_x^2-I_y^2)$. In the legacy spherical tensor
+the two transverse EFG axes are interchanged relative to this convention.
+The port accounts for that interchange when CSA is present. A
+quadrupolar-only powder profile is insensitive to this relabeling.
 
 ## Rotor phase and sidebands
 

@@ -197,9 +197,20 @@ def test_nonaxial_static_powder_matches_spin_hamiltonian_moments(spin):
     assert std == pytest.approx(reference_std, abs=6)
 
 
-@pytest.mark.parametrize("spin", [1.5, 2.5])
-def test_mas_sideband_areas_match_time_domain_spin_hamiltonian(spin):
+@pytest.mark.parametrize(
+    ("spin", "with_csa"), [(1.5, False), (2.5, False), (1.5, True)]
+)
+def test_mas_sideband_areas_match_time_domain_spin_hamiltonian(spin, with_csa):
     cq_hz, larmor_hz, eta, spinning_hz = 2.8e6, 100e6, 0.7, 10e3
+    # Two successive rotations give a CSA tensor with three off-diagonals.
+    rotation = np.array([[0.8, -0.6, 0], [0.6, 0.8, 0], [0, 0, 1]]) @ np.array(
+        [[0.6, 0, 0.8], [0, 1, 0], [-0.8, 0, 0.6]]
+    )
+    csa = (
+        dict(csa_anisotropy_hz=1200, csa_eta=0.4, csa_rotation=rotation)
+        if with_csa
+        else {}
+    )
     dataset = simulate_central_transition(
         cq_hz=cq_hz,
         eta=eta,
@@ -208,6 +219,7 @@ def test_mas_sideband_areas_match_time_domain_spin_hamiltonian(spin):
         spinning_hz=spinning_hz,
         sidebands=2,
         spin=spin,
+        **csa,
     )
 
     # Sample rotor axes over the whole sphere in the tensor frame. The
@@ -228,6 +240,9 @@ def test_mas_sideband_areas_match_time_domain_spin_hamiltonian(spin):
         + np.sin(angles)[:, None] * tangential[..., None, :]
     )
     shifts = _second_order_offsets(directions, cq_hz, eta, larmor_hz, spin)
+    if with_csa:
+        field_in_csa_axes = directions @ rotation
+        shifts += field_in_csa_axes**2 @ np.array([-840, -360, 1200])
     modulation = shifts - shifts.mean(axis=-1, keepdims=True)
 
     # Integrate the cyclic modulation by trapezoids and project the
@@ -309,3 +324,31 @@ def test_mas_csa_areas_match_cartesian_time_domain_reference():
     boundaries = [-np.inf, -3000, -1000, 1000, 3000, np.inf]
     actual, _ = np.histogram(dataset.x.data, bins=boundaries, weights=dataset.data)
     np.testing.assert_allclose(actual, expected, atol=2e-4, rtol=0)
+
+
+def test_rotated_csa_rejects_reflection():
+    with pytest.raises(ValueError, match="proper orthogonal matrix"):
+        simulate_central_transition(
+            cq_hz=1e6,
+            eta=0,
+            larmor_hz=100e6,
+            spectral_width_hz=20e3,
+            csa_anisotropy_hz=1000,
+            csa_rotation=np.diag([-1, 1, 1]),
+        )
+
+
+def test_aligned_csa_matches_explicit_identity_rotation():
+    settings = dict(
+        cq_hz=2e6,
+        eta=0.8,
+        larmor_hz=100e6,
+        spectral_width_hz=30e3,
+        csa_anisotropy_hz=-3000,
+        csa_eta=0.6,
+        spinning_hz=5e3,
+        sidebands=2,
+    )
+    implicit = simulate_central_transition(**settings)
+    explicit = simulate_central_transition(**settings, csa_rotation=np.eye(3))
+    np.testing.assert_allclose(implicit.data, explicit.data, atol=1e-12, rtol=0)
