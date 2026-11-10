@@ -49,7 +49,7 @@ series
 # metadata through the FFT. Use magnitude spectra for this comparison
 # of peak heights across contact times.
 spectra = contact_series([abs(fid.em(lb=50.0).fft(size=4096)) for fid in fids])
-_ = spectra.plot(method="lines", xlim=(190.0, 50.0), colorbar=True)
+_ = spectra.plot(method="lines", xlim=(190.0, 50.0), colorbar=True, show=False)
 
 # %%
 # Follow the maximum in each selected ppm window. These curves illustrate
@@ -64,3 +64,36 @@ _ = scp.plot_multiple(
     legend="upper right",
     show=False,
 )
+
+
+# %%
+# Fit the buildup and decay
+# -------------------------
+# Use the relatively isolated resonance around 174 ppm. A simple model
+# multiplies a rising exponential by a decaying exponential. Both time
+# constants are in milliseconds. They describe this peak-height curve
+# under the acquisition conditions used here.
+def cp_buildup(t, amplitude, buildup, decay):
+    return amplitude * (1 - scp.exp(-t / buildup)) * scp.exp(-t / decay)
+
+
+signal = curves[0]
+fitter = scp.Optimize(method="leastsq")
+fitter.usermodels = {"cp_buildup": cp_buildup}
+fitter.script = """
+MODEL: CP
+shape: cp_buildup
+  $ amplitude: 2.0, 0.0, none
+  $ buildup: 1.0, 0.01, none
+  $ decay: 10.0, 0.01, none
+"""
+_ = fitter.fit(signal)
+print(fitter.script)
+
+# %%
+# Compare the fitted profile with all 15 measurements. The time constants
+# are effective estimates from magnitude peak heights. Overlapping peaks
+# or a more detailed relaxation model would require a separate analysis.
+ax = signal.plot_scatter(marker="o", label="Measured peak height", show=False)
+_ = fitter.predict().plot(ax=ax, clear=False, label="Buildup–decay fit", show=False)
+_ = ax.legend()
