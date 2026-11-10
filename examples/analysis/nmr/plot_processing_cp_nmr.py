@@ -10,23 +10,30 @@ each of the 15 FIDs in a separate experiment directory.
 # %%
 # sphinx_gallery_thumbnail_number = 2
 
-from cmath import phase
-from math import degrees
 
 import spectrochempy as scp
 
 root = scp.preferences.datadir / "nmrdata/bruker/tests/nmr/CP"
-fids = [scp.nmr.read_topspin(root / str(expno) / "fid") for expno in range(80, 95)]
 
 
-# %%
-# Read P15 from each acquisition. In this series, P15 is the contact
-# pulse duration. Sort the FIDs by that duration before stacking them.
+# P15 is the contact pulse duration stored in each acquisition.
 def contact_ms(fid):
     return fid.meta.p[0][15].to("ms").magnitude
 
 
-fids.sort(key=contact_ms)
+acquisitions = [
+    (
+        expno,
+        scp.nmr.read_topspin(
+            root / str(expno) / "fid",
+            remove_digital_filter=False,
+            remove_dc_offset=False,
+        ),
+    )
+    for expno in range(80, 95)
+]
+acquisitions.sort(key=lambda entry: contact_ms(entry[1]))
+fids = [fid for _, fid in acquisitions]
 contact_time = scp.Coord(
     [contact_ms(fid) for fid in fids], units="ms", title="CP contact time"
 )
@@ -48,18 +55,77 @@ series = contact_series(fids)
 series
 
 # %%
-# Process each FID on its own direct axis so it keeps its acquisition
-# metadata through the FFT. Use magnitude spectra for this comparison
-# of peak heights across contact times.
-complex_spectra = [fid.em(lb=50.0).fft(size=4096) for fid in fids]
-spectra = contact_series([abs(spectrum) for spectrum in complex_spectra])
-_ = spectra.plot(method="lines", xlim=(190.0, 50.0), colorbar=True, show=False)
+# Transform and phase each spectrum
+# ---------------------------------
+# TopSpin 4.5.0 ran em, ft and apk on each FID. These phase angles are
+# the recorded PHC0 and PHC1 in degrees, indexed by experiment number.
+topspin_phase = {
+    80: (34.220954, -191.407329),
+    81: (22.005597, -168.488440),
+    82: (27.384450, -185.311872),
+    83: (31.468902, -194.061317),
+    84: (44.378617, -218.808930),
+    85: (33.129208, -195.222656),
+    86: (37.365900, -205.449468),
+    87: (44.279733, -220.074474),
+    88: (-39.429728, -46.215869),
+    89: (-32.312972, -62.206944),
+    90: (43.968901, -219.560617),
+    91: (35.500365, -199.617042),
+    92: (-40.401538, -43.167721),
+    93: (63.161308, -256.668820),
+    94: (61.879869, -254.838595),
+}
 
 # %%
-# Follow the maximum in each selected ppm window. These curves illustrate
-# the buildup and subsequent decay of the signal in different regions.
+# Use the stored complex samples for the forward FFT in this Bruker
+# QSIM profile. Apply the fractional PKNL delay on the final FFT grid
+# together with the recorded phase. The constant term accounts for
+# centering the FFT and the sign convention of this profile.
+size = 8192
+
+
+def process_qsim(fid, phase_zero, phase_first):
+    acquisition = fid.meta.acquisition
+    delay = acquisition["fid_preparation"]["digital_filter"]["group_delay_points"]
+    acquired = fid[: acquisition["acquired_points"]]
+    work = scp.NDDataset(acquired.data, coordset=[acquired.x], units=fid.units)
+    work.meta.td = [acquired.size]
+    transformed = work.em(lb=50.0).fft(size=size)
+    phased = transformed.pk(
+        phc0=phase_zero + 180 * (1 - round(delay)),
+        phc1=phase_first + 360 * delay,
+        pivot=0,
+        rel=True,
+    )
+    params = fid.meta.nmr_processing["vendor_profile"]["parameters"]
+    bins = scp.Coord.arange(size)
+    phased.x = scp.Coord(
+        params["OFFSET"] - bins.data * (params["SW_p"] / params["SF"] / size),
+        units="ppm",
+        title="carbon-13 chemical shift",
+        rounding=False,
+    )
+    return phased
+
+
+phased = [process_qsim(fid, *topspin_phase[expno]) for expno, fid in acquisitions]
+
+# %%
+# Correct the baseline and integrate
+# ----------------------------------
+# Fit a straight line to the same off-peak windows and axis endpoints in each real
+# spectrum. This uses SpectroChemPy's baseline correction.
+spectra = contact_series([spectrum.real for spectrum in phased])
+corrected = spectra.basc(
+    (220.0, 245.0), (-110.0, -60.0), model="polynomial", order=1, include_limits=True
+)
+_ = corrected.plot(method="lines", xlim=(205.0, 35.0), colorbar=True, show=False)
+
+# %%
+# Integrate the same three ppm windows at each contact time.
 windows = [(165.0, 183.0), (91.0, 107.0), (62.0, 79.0)]
-curves = [spectra[:, low:high].max(dim="x") for low, high in windows]
+curves = [corrected[:, low:high].simpson(dim="x") for low, high in windows]
 _ = scp.plot_multiple(
     curves,
     method="scatter",
@@ -73,94 +139,27 @@ _ = scp.plot_multiple(
 # %%
 # Fit the buildup and decay
 # -------------------------
-# Use the relatively isolated resonance around 174 ppm. A simple model
-# multiplies a rising exponential by a decaying exponential. Both time
-# constants are in milliseconds. They describe this peak-height curve
-# under the acquisition conditions used here.
+# Fit the strongest spectral region, 62–79 ppm. A simple model
+# multiplies a rising exponential by a decaying exponential. Both
+# constants are effective time scales in milliseconds for this series.
 def cp_buildup(t, amplitude, buildup, decay):
     return amplitude * (1 - scp.exp(-t / buildup)) * scp.exp(-t / decay)
 
 
-def fit_buildup(signal, amplitude):
-    model = scp.Optimize(method="leastsq")
-    model.usermodels = {"cp_buildup": cp_buildup}
-    model.script = f"""
+signal = curves[-1]
+fitter = scp.Optimize(method="leastsq")
+fitter.usermodels = {"cp_buildup": cp_buildup}
+fitter.script = """
 MODEL: CP
 shape: cp_buildup
-  $ amplitude: {amplitude}, 0.0, none
+  $ amplitude: 75.0, 0.0, none
   $ buildup: 1.0, 0.01, none
   $ decay: 10.0, 0.01, none
 """
-    return model.fit(signal)
-
-
-signal = curves[0]
-fitter = fit_buildup(signal, amplitude=2.0)
+_ = fitter.fit(signal)
 print(fitter.script)
 
 # %%
-# Compare the fitted profile with all 15 measurements. The time constants
-# are effective estimates from magnitude peak heights. Overlapping peaks
-# or a more detailed relaxation model would require a separate analysis.
-ax = signal.plot_scatter(marker="o", label="Measured peak height", show=False)
+ax = signal.plot_scatter(marker="o", label="Measured area", show=False)
 _ = fitter.predict().plot(ax=ax, clear=False, label="Buildup–decay fit", show=False)
 _ = ax.legend()
-
-# %%
-# Compare with areas after individual phasing
-# -------------------------------------------
-# The direct FFT uses the phase metadata from each acquisition. Estimate
-# only the residual zero-order phase from the complex signal between
-# 172 and 177 ppm. Apply it relative to the FFT phase, then integrate the
-# real signal over the wider 169–181 ppm interval. This is a local phase
-# estimate for one resonance.
-phased = []
-for spectrum in complex_spectra:
-    reference = spectrum[172.0:177.0].trapezoid().data.item()
-    correction = -degrees(phase(reference))
-    phased.append(spectrum.pk(phc0=correction, rel=True))
-
-local_spectra = contact_series([spectrum[169.0:181.0] for spectrum in phased])
-areas = local_spectra.real.trapezoid(dim="x")
-dispersion = local_spectra.imag.trapezoid(dim="x")
-_ = scp.plot_multiple(
-    [areas, dispersion],
-    method="scatter",
-    labels=["Real area", "Imaginary area"],
-    legend="upper right",
-    title="Local phasing check around 174 ppm",
-    show=False,
-)
-
-# %%
-# The four shortest contact times give unstable phase estimates. For the
-# comparison, use the same 0.8–15 ms interval for both observables and
-# scale each to its own maximum. With the early buildup excluded, the
-# fitted constants are sensitive to the selected time window.
-traces = [signal[0.8:].normalize(dim="y"), areas[0.8:].normalize(dim="y")]
-labels = ["Magnitude height", "Phased real area"]
-fits = [fit_buildup(trace, amplitude=1.5).predict() for trace in traces]
-
-# The area fit drives the buildup constant far beyond the measured contact
-# times. The curves show the comparison, but this fit cannot establish a
-# reliable buildup time for the phased area.
-ax = scp.plot_multiple(
-    traces,
-    method="scatter",
-    pen=False,
-    labels=labels,
-    legend="upper right",
-    color=["C0", "C1"],
-    title="CP kinetics on a common contact-time interval",
-    ylabel="Response / maximum",
-    show=False,
-)
-_ = scp.plot_multiple(
-    fits,
-    method="pen",
-    color=["C0", "C1"],
-    ax=ax,
-    clear=False,
-    ylabel="Response / maximum",
-    show=False,
-)
