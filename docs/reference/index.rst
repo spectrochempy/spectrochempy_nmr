@@ -5,4 +5,3 @@ API
    :maxdepth: 2
 
    nmr_api
-   hypercomplex_api

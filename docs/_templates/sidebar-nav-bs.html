@@ -6,6 +6,7 @@
   <div class="bd-toc-item navbar-nav">
     {{- generate_toctree_html(
       "sidebar",
+      startdepth=sidebar_startdepth | default(1),
       show_nav_level=show_nav_level | int,
       maxdepth=theme_navigation_depth | int,
       collapse=theme_collapse_navigation | tobool,

@@ -1,12 +1,6 @@
 Native complex channels in multidimensional NMR
 ================================================
 
-.. important::
-
-   This representation is available in NMR 0.3.0. Published 0.2.0 used quaternion
-   storage. The development plugin no longer uses that storage or requires
-   the Hypercomplex plugin.
-
 A phase-sensitive 2D acquisition has two associated complex branches. They
 are stored in an ordinary complex ``NDDataset`` with shape ``(2, nF1, nF2)``
 and dimensions ``("c", "y", "x")``. The component axis ``c`` is not a Fourier

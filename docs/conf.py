@@ -82,6 +82,7 @@ html_logo = "_static/scpy.png"
 html_favicon = "_static/scpy.ico"
 html_static_path = ["_static"]
 html_css_files = ["css/nmr.css"]
+html_sidebars = {"index": ["sidebar-home.html"]}
 html_theme_options = {
     "navbar_align": "left",
     "logo": {"text": "SpectroChemPy NMR"},
