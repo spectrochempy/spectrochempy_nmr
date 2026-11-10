@@ -40,8 +40,8 @@ def _powder_mesh(accuracy):
     return points.T / radius, radius**-3, np.concatenate((lower, upper))
 
 
-def _quadrupolar_harmonics(directions, eta, angle):
-    """Return the rank-two tensor products for the central transition."""
+def _rank_two_tensor(directions, eta):
+    """Return the five spherical tensor components in PULSAR convention."""
     x, y, z = directions
     sine = np.sqrt(np.maximum(0.0, 1 - z**2))
     # Compute twice the azimuth from Cartesian coordinates. At the pole,
@@ -53,8 +53,27 @@ def _quadrupolar_harmonics(directions, eta, angle):
     minus_one = -sine * z * (1 + eta * cos2alpha / 3)
     minus_one = minus_one - 1j * eta * sine * sin2alpha / 3
     zero = (3 * z**2 - 1 - eta * sine**2 * cos2alpha) / np.sqrt(6)
-    tensor = np.array([minus_two, minus_one, zero, -minus_one.conj(), minus_two.conj()])
+    return np.array([minus_two, minus_one, zero, -minus_one.conj(), minus_two.conj()])
 
+
+def _csa_harmonics(directions, anisotropy_hz, eta, angle):
+    """Project the first-order shift tensor onto rotor harmonics."""
+    tensor = _rank_two_tensor(directions, eta)
+    c, s = np.cos(angle), np.sin(angle)
+    # Use the m >= 0 elements of the Wigner column k=0. The factors
+    # for m > 0 include the conjugate negative harmonics.
+    wigner = np.array(
+        [(3 * c**2 - 1) / 2, -np.sqrt(3 / 2) * c * s, np.sqrt(3 / 8) * s**2]
+    )
+    wigner[1:] *= 2
+    result = np.zeros((5, directions.shape[1]), dtype=complex)
+    result[:3] = (np.sqrt(6) * anisotropy_hz / 2) * wigner[:, None] * tensor[2:]
+    return result
+
+
+def _quadrupolar_harmonics(directions, eta, angle):
+    """Return the rank-two tensor products for the central transition."""
+    tensor = _rank_two_tensor(directions, eta)
     c, s = np.cos(angle), np.sin(angle)
     root = np.sqrt(3 / 8)
     # Columns +1 and +2 of the rank-two Wigner matrix in PULSAR's convention.
@@ -75,7 +94,7 @@ def _quadrupolar_harmonics(directions, eta, angle):
             (1 + c) ** 2 / 4,
         ],
     )
-    result = np.zeros((5, z.size), dtype=complex)
+    result = np.zeros_like(tensor)
     for order, (factor, column) in enumerate(zip((6, 3), columns), start=1):
         positive = np.asarray(column)
         negative = positive[::-1] * (-1.0) ** (np.arange(-2, 3) + order)
@@ -141,6 +160,17 @@ def _deposit_triangles(axis, frequencies, weights, triangles):
     return spectrum
 
 
+def _validate_grid(spectral_width_hz, spinning_hz, points, accuracy, sidebands):
+    if spectral_width_hz <= 0 or spinning_hz < 0:
+        raise ValueError("Use a positive spectral width and a nonnegative MAS rate.")
+    if points < 2 or not 1 <= accuracy <= 64:
+        raise ValueError("Use at least two points and a powder accuracy from 1 to 64.")
+    if sidebands < 0 or (sidebands and not spinning_hz):
+        raise ValueError(
+            "Use a nonnegative sideband count, with a positive MAS rate for sidebands."
+        )
+
+
 def _central_transition_profile(
     *,
     cq_hz,
@@ -166,17 +196,9 @@ def _central_transition_profile(
         raise ValueError("spin must be a half-integer greater than or equal to 3/2.")
     if not 0 <= eta <= 1:
         raise ValueError("eta must lie between 0 and 1.")
-    if larmor_hz <= 0 or spectral_width_hz <= 0 or spinning_hz < 0:
-        raise ValueError(
-            "Use positive Larmor and spectral widths and a nonnegative MAS rate."
-        )
-    if points < 2 or not 1 <= accuracy <= 64:
-        raise ValueError("Use at least two points and a powder accuracy from 1 to 64.")
-
-    if sidebands < 0 or (sidebands and not spinning_hz):
-        raise ValueError(
-            "Use a nonnegative sideband count, with a positive MAS rate for sidebands."
-        )
+    if larmor_hz <= 0:
+        raise ValueError("Use a positive Larmor frequency.")
+    _validate_grid(spectral_width_hz, spinning_hz, points, accuracy, sidebands)
 
     directions, weights, triangles = _powder_mesh(accuracy)
     angle = np.deg2rad(54.736) if spinning_hz else 0
@@ -185,6 +207,31 @@ def _central_transition_profile(
     # relative to I=3/2. The Wigner products themselves are independent of I.
     spin_scale = 3 * (spin + 1.5) / (4 * spin**2 * (spin - 0.5))
     harmonics *= spin_scale * cq_hz**2 / (16 * larmor_hz)
+    return _powder_profile(
+        harmonics,
+        weights,
+        triangles,
+        shift_hz,
+        spectral_width_hz,
+        points,
+        spinning_hz,
+        accuracy,
+        sidebands,
+    )
+
+
+def _powder_profile(
+    harmonics,
+    weights,
+    triangles,
+    shift_hz,
+    spectral_width_hz,
+    points,
+    spinning_hz,
+    accuracy,
+    sidebands,
+):
+    """Integrate the selected orders for a set of vertex harmonics."""
     frequencies = shift_hz + harmonics[0].real
     axis = np.linspace(-spectral_width_hz / 2, spectral_width_hz / 2, points)
     band_offset = sidebands * spinning_hz
@@ -263,9 +310,6 @@ def simulate_central_transition(
     to 4096 rotor samples. The table of intensities across powder vertices
     and requested bands is limited to 64 MiB.
     """
-    from spectrochempy.core.dataset.coord import Coord
-    from spectrochempy.core.dataset.nddataset import NDDataset
-
     axis, profile = _central_transition_profile(
         cq_hz=cq_hz,
         eta=eta,
@@ -278,6 +322,61 @@ def simulate_central_transition(
         sidebands=sidebands,
         spin=spin,
     )
-    dataset = NDDataset(profile, name="PULSAR central transition")
+    return _as_dataset(axis, profile, "PULSAR central transition")
+
+
+def simulate_csa(
+    *,
+    anisotropy_hz,
+    eta,
+    spectral_width_hz,
+    points=8192,
+    shift_hz=0.0,
+    spinning_hz=0.0,
+    accuracy=16,
+    sidebands=0,
+):
+    """Simulate first-order chemical shift anisotropy for an isolated spin.
+
+    The signed reduced anisotropy is delta_zz - delta_iso in Hz.
+    The asymmetry is (delta_yy - delta_xx) / anisotropy, in [0, 1].
+    A zero MAS rate gives a static powder pattern. Otherwise, the rotor
+    angle is 54.736 degrees and sidebands selects the orders on each side.
+    The spectrum is normalized over the requested bands.
+    """
+    points, accuracy, sidebands = index(points), index(accuracy), index(sidebands)
+    values = (anisotropy_hz, eta, spectral_width_hz, shift_hz, spinning_hz)
+    if not all(isinstance(value, Real) for value in values):
+        raise TypeError("PULSAR parameters must be real scalars.")
+    values = tuple(map(float, values))
+    if not np.isfinite(values).all():
+        raise ValueError("PULSAR parameters must be finite.")
+    anisotropy_hz, eta, spectral_width_hz, shift_hz, spinning_hz = values
+    if not 0 <= eta <= 1:
+        raise ValueError("eta must lie between 0 and 1.")
+    _validate_grid(spectral_width_hz, spinning_hz, points, accuracy, sidebands)
+
+    directions, weights, triangles = _powder_mesh(accuracy)
+    angle = np.deg2rad(54.736) if spinning_hz else 0
+    harmonics = _csa_harmonics(directions, anisotropy_hz, eta, angle)
+    axis, profile = _powder_profile(
+        harmonics,
+        weights,
+        triangles,
+        shift_hz,
+        spectral_width_hz,
+        points,
+        spinning_hz,
+        accuracy,
+        sidebands,
+    )
+    return _as_dataset(axis, profile, "PULSAR chemical shift anisotropy")
+
+
+def _as_dataset(axis, profile, name):
+    from spectrochempy.core.dataset.coord import Coord
+    from spectrochempy.core.dataset.nddataset import NDDataset
+
+    dataset = NDDataset(profile, name=name)
     dataset.set_coordset(x=Coord(axis, units="Hz", title="frequency offset"))
     return dataset

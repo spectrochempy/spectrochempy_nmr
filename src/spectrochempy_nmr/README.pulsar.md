@@ -12,8 +12,8 @@ The simulation models the $+1/2 \leftrightarrow -1/2$ transition of an
 isolated half-integer spin $I\geq 3/2$, with second-order quadrupolar shifts, an ideal
 pulse, zero evolution delay and a powder distribution. The model supports
 a static powder or magic-angle spinning at the historical rotor angle
-of $54.736^\circ$. It excludes chemical shift anisotropy, spin
-couplings, satellite transitions, relaxation and line broadening. MAS
+of $54.736^\circ$. The quadrupolar entry point excludes spin couplings, satellite transitions,
+relaxation and line broadening. MAS
 sidebands here are sidebands of the central transition.
 
 ```python
@@ -111,6 +111,31 @@ include the conjugate negative harmonics. The resulting coefficients
 $H_l$ are in Hz. The mean transition frequency for a vertex is
 $f_0=\text{shift}+\operatorname{Re}H_0$. For a static powder,
 $\theta_r=0$ and only $f_0$ is used.
+
+## Chemical shift anisotropy
+
+Use `simulate_csa` for first-order CSA alone, including a spin-1/2
+nucleus. This frequency model has no spin-dependent shape factor. Its
+signed reduced anisotropy is $\Delta=\delta_{zz}-\delta_{\mathrm{iso}}$
+in Hz, and $\eta=(\delta_{yy}-\delta_{xx})/\Delta$ lies in $[0,1]$.
+The traceless principal values are
+$\Delta[-(1+\eta)/2,-(1-\eta)/2,1]$. Convert a signed anisotropy in ppm
+to Hz by multiplying by the positive Larmor frequency in MHz.
+
+In the principal axes, the first-order harmonics use the same $T_l$
+as above and the Wigner column $d_{l0}$,
+
+$$
+H_l = \frac{\sqrt{6}\Delta}{2} d_{l0}(\theta_r) T_l
+      \begin{cases}1 & l=0\\2 & l=1,2.\end{cases}
+$$
+
+The rotor phase, bin integration and normalization are shared with
+the quadrupolar calculation. The legacy CSA amplitude in `chemicalshift`
+is $\Delta(3+\eta)/2$ for this convention. The tests check the static
+tensor extrema and variance for both signs of $\Delta$, and compare
+the MAS band areas with a Cartesian projection of the tensor along a
+rotor trajectory and direct Fourier sums.
 
 ## Rotor phase and sidebands
 

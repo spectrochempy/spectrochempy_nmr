@@ -5,6 +5,7 @@ import pytest
 
 from spectrochempy.core.units import ur
 from spectrochempy_nmr.pulsar import simulate_central_transition
+from spectrochempy_nmr.pulsar import simulate_csa
 
 
 @pytest.mark.parametrize(
@@ -252,3 +253,59 @@ def test_central_transition_rejects_unsupported_spin(spin):
         simulate_central_transition(
             cq_hz=1e6, eta=0, larmor_hz=100e6, spectral_width_hz=60e3, spin=spin
         )
+
+
+@pytest.mark.parametrize("anisotropy", [-5000, 5000])
+def test_static_csa_matches_tensor_moments(anisotropy):
+    eta = 0.6
+    dataset = simulate_csa(anisotropy_hz=anisotropy, eta=eta, spectral_width_hz=16000)
+    axis = dataset.x.data
+    centers = axis + (axis[-1] - axis[0]) / (2 * (axis.size - 1))
+    mean = dataset.data @ centers
+    variance = dataset.data @ ((centers - mean) ** 2)
+    # For an isotropic unit vector, E[n_i**4]=1/5 and E[n_i**2*n_j**2]=1/15.
+    expected_std = abs(anisotropy) * np.sqrt((1 + eta**2 / 3) / 5)
+    assert mean == pytest.approx(0, abs=1)
+    assert np.sqrt(variance) == pytest.approx(expected_std, abs=2)
+    positive = dataset.data > 0
+    eigenvalues = anisotropy * np.array([-(1 + eta) / 2, -(1 - eta) / 2, 1])
+    assert centers[positive].min() == pytest.approx(eigenvalues.min(), abs=2)
+    assert centers[positive].max() == pytest.approx(eigenvalues.max(), abs=2)
+
+
+def test_mas_csa_areas_match_cartesian_time_domain_reference():
+    anisotropy, eta, spinning = 5000, 0.6, 2000
+    dataset = simulate_csa(
+        anisotropy_hz=anisotropy,
+        eta=eta,
+        spectral_width_hz=16000,
+        spinning_hz=spinning,
+        sidebands=2,
+    )
+
+    cosine, weights = np.polynomial.legendre.leggauss(24)
+    z, phi = np.meshgrid(cosine, np.arange(48) * 2 * np.pi / 48, indexing="ij")
+    sine = np.sqrt(1 - z**2)
+    cos_phi, sin_phi = np.cos(phi), np.sin(phi)
+    rotor = np.stack((sine * cos_phi, sine * sin_phi, z), axis=-1)
+    polar = np.stack((z * cos_phi, z * sin_phi, -sine), axis=-1)
+    azimuthal = np.stack((-sin_phi, cos_phi, np.zeros_like(z)), axis=-1)
+    angles = np.arange(256) * 2 * np.pi / 256
+    tilt = np.deg2rad(54.736)
+    field = np.cos(tilt) * rotor[..., None, :] + np.sin(tilt) * (
+        np.cos(angles)[:, None] * polar[..., None, :]
+        + np.sin(angles)[:, None] * azimuthal[..., None, :]
+    )
+    eigenvalues = anisotropy * np.array([-(1 + eta) / 2, -(1 - eta) / 2, 1])
+    shift = field**2 @ eigenvalues
+    modulation = shift - shift.mean(axis=-1, keepdims=True)
+    steps = (modulation + np.roll(modulation, 1, axis=-1)) / 2
+    phase = 2 * np.pi * steps.cumsum(axis=-1) / (angles.size * spinning)
+    orders = np.arange(-2, 3)
+    coefficients = np.exp(1j * phase) @ np.exp(-1j * angles[:, None] * orders)
+    areas = weights @ (np.abs(coefficients) ** 2).mean(axis=1)
+    expected = areas / areas.sum()
+
+    boundaries = [-np.inf, -3000, -1000, 1000, 3000, np.inf]
+    actual, _ = np.histogram(dataset.x.data, bins=boundaries, weights=dataset.data)
+    np.testing.assert_allclose(actual, expected, atol=2e-4, rtol=0)
