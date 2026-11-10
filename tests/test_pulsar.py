@@ -448,3 +448,135 @@ def test_hard_rectangular_pulse_approaches_ideal_quadrupolar_powder():
     ideal = simulate_quadrupolar(**settings)
     assert np.abs(finite.data.real - ideal.data).sum() < 1e-6
     assert np.abs(finite.data.imag).sum() < 2e-4
+
+
+def test_hard_rectangular_mas_pulse_approaches_ideal_csa_bands():
+    settings = dict(
+        spectral_width_hz=20e3,
+        spinning_hz=2000,
+        sidebands=2,
+        points=4096,
+        accuracy=4,
+    )
+    rf_hz = 1e9
+    finite = simulate_rectangular_pulse(
+        spin=0.5,
+        larmor_hz=100e6,
+        csa_anisotropy_hz=5000,
+        csa_eta=0.6,
+        rf_hz=rf_hz,
+        duration_s=0.25 / rf_hz,
+        **settings,
+    )
+    ideal = simulate_csa(anisotropy_hz=5000, eta=0.6, **settings)
+    # The ideal profile is normalized over retained bands. The RF result
+    # instead keeps the intensity lost into omitted orders.
+    real = finite.data.real
+    assert 0 < real.sum() < 1
+    np.testing.assert_allclose(real / real.sum(), ideal.data, rtol=0, atol=2e-8)
+    assert np.abs(finite.data.imag).sum() < 1e-5
+
+
+def test_finite_mas_pulse_converges_when_time_step_is_halved():
+    settings = dict(
+        spin=0.5,
+        larmor_hz=100e6,
+        csa_anisotropy_hz=5000,
+        csa_eta=0.6,
+        spectral_width_hz=20e3,
+        spinning_hz=5000,
+        sidebands=1,
+        points=4096,
+        accuracy=2,
+        rf_hz=2000,
+        duration_s=100e-6,
+    )
+    coarse, fine, reference = (
+        simulate_rectangular_pulse(**settings, max_rf_step_s=step).data
+        for step in (4e-6, 2e-6, 0.5e-6)
+    )
+    assert np.abs(fine - reference).sum() < np.abs(coarse - reference).sum() / 3
+    assert np.abs(fine - reference).sum() < 5e-4
+
+
+def test_finite_mas_pulse_uses_hemisphere_for_aligned_tensors(monkeypatch):
+    from spectrochempy_nmr import pulsar
+
+    settings = dict(
+        spin=0.5,
+        csa_anisotropy_hz=11000,
+        csa_eta=0.45,
+        rf_hz=4800,
+        duration_s=61e-6,
+        shift_hz=641,
+        spinning_hz=6500,
+        spectral_width_hz=50e3,
+        larmor_hz=100e6,
+        sidebands=3,
+        accuracy=2,
+    )
+    hemisphere = simulate_rectangular_pulse(**settings)
+    original_mesh = pulsar._powder_mesh
+
+    def full_sphere(accuracy, hemisphere=False, full_sphere=False):
+        directions, weights, triangles = original_mesh(accuracy, True)
+        return (
+            np.concatenate((directions, -directions), axis=1),
+            np.tile(weights, 2),
+            np.concatenate((triangles, triangles + weights.size)),
+        )
+
+    monkeypatch.setattr(pulsar, "_powder_mesh", full_sphere)
+    full = simulate_rectangular_pulse(**settings)
+    np.testing.assert_allclose(hemisphere.data, full.data, atol=1e-12, rtol=0)
+
+
+def test_finite_mas_pulse_rejects_oversized_single_vertex_matrix_batch():
+    with pytest.raises(ValueError, match="matrix batch limit"):
+        simulate_rectangular_pulse(
+            spin=16,
+            larmor_hz=100e6,
+            spectral_width_hz=1e6,
+            spinning_hz=1000,
+            rf_hz=2000,
+            duration_s=50e-6,
+            accuracy=2,
+        )
+
+
+def test_rotated_csa_finite_mas_pulse_uses_full_sphere(monkeypatch):
+    from scipy.spatial.transform import Rotation
+
+    from spectrochempy_nmr import pulsar
+
+    rotation = Rotation.from_euler("zyx", [42, 31, 19], degrees=True).as_matrix()
+    settings = dict(
+        spin=1.5,
+        cq_hz=21000,
+        eta=0.7,
+        csa_anisotropy_hz=11000,
+        csa_eta=0.45,
+        csa_rotation=rotation,
+        rf_hz=4800,
+        duration_s=133e-6,
+        shift_hz=641,
+        spinning_hz=6500,
+        spectral_width_hz=100e3,
+        larmor_hz=100e6,
+        sidebands=3,
+        accuracy=2,
+    )
+    actual = simulate_rectangular_pulse(**settings)
+    original_mesh = pulsar._powder_mesh
+
+    def independently_reflected_mesh(accuracy, hemisphere=False, full_sphere=False):
+        directions, weights, triangles = original_mesh(accuracy, True)
+        return (
+            np.concatenate((directions, -directions), axis=1),
+            np.tile(weights, 2),
+            np.concatenate((triangles, triangles + weights.size)),
+        )
+
+    monkeypatch.setattr(pulsar, "_powder_mesh", independently_reflected_mesh)
+    expected = simulate_rectangular_pulse(**settings)
+    np.testing.assert_allclose(actual.data, expected.data, atol=1e-12, rtol=0)

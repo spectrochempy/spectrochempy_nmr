@@ -19,7 +19,7 @@ import numpy as np
 
 
 @lru_cache(maxsize=8)
-def _powder_mesh(accuracy, hemisphere=False):
+def _powder_mesh(accuracy, hemisphere=False, full_sphere=False):
     """Build the PULSAR octant mesh and its inverse-cube vertex weights."""
     size = 5 * accuracy
     i, j = np.indices((size + 1, size + 1))
@@ -42,11 +42,12 @@ def _powder_mesh(accuracy, hemisphere=False):
     triangles = np.concatenate((lower, upper))
     if hemisphere:
         signs = np.array([[1, 1, 1], [-1, 1, 1], [1, -1, 1], [-1, -1, 1]])
+        if full_sphere:
+            signs = np.concatenate((signs, -signs))
         directions = (signs[:, :, None] * directions).transpose(1, 0, 2).reshape(3, -1)
-        triangles = (triangles + np.arange(4)[:, None, None] * weights.size).reshape(
-            -1, 3
-        )
-        weights = np.tile(weights, 4)
+        offsets = np.arange(signs.shape[0])[:, None, None] * weights.size
+        triangles = (triangles + offsets).reshape(-1, 3)
+        weights = np.tile(weights, signs.shape[0])
     return directions, weights, triangles
 
 
@@ -324,15 +325,27 @@ def _central_transition_profile(
 
 
 def _powder_interactions(
-    accuracy, spinning_hz, eta, csa_anisotropy_hz, csa_eta, csa_rotation
+    accuracy,
+    spinning_hz,
+    eta,
+    csa_anisotropy_hz,
+    csa_eta,
+    csa_rotation,
+    *,
+    force_hemisphere=False,
 ):
     rotation = None if csa_rotation is None else _validate_rotation(csa_rotation)
     # Misaligned tensors break octant reflection symmetry, but their
     # even-in-field shifts retain the powder average under axis inversion.
-    hemisphere = bool(csa_anisotropy_hz and rotation is not None)
-    directions, weights, triangles = _powder_mesh(accuracy, hemisphere)
+    rotated = bool(csa_anisotropy_hz and rotation is not None)
+    hemisphere = force_hemisphere or rotated
+    # A finite spinning pulse probes a time-ordered trajectory. With
+    # rotated tensors the inverted rotor axis need not prepare the same state.
+    directions, weights, triangles = _powder_mesh(
+        accuracy, hemisphere, full_sphere=force_hemisphere and rotated
+    )
     angle = np.deg2rad(54.736) if spinning_hz else 0
-    if hemisphere:
+    if rotated:
         csa = _rotated_csa_harmonics(
             directions, csa_anisotropy_hz, csa_eta, angle, rotation
         )
@@ -593,6 +606,66 @@ def _evolve_density(density, hamiltonian_hz, duration_s):
     return propagator @ density @ propagator.conj().swapaxes(-1, -2)
 
 
+def _evolve_pulse_step(density, rf, offsets, duration_s):
+    # Adjacent differences of the diagonal must equal the offsets.
+    levels = np.concatenate(
+        (np.zeros_like(offsets[..., :1]), offsets.cumsum(axis=-1)), axis=-1
+    )
+    size = rf.shape[0]
+    rows = np.arange(size)
+    hamiltonian = np.broadcast_to(rf, (*levels.shape, size)).copy()
+    hamiltonian[..., rows, rows] += levels
+    return _evolve_density(density, hamiltonian, duration_s)
+
+
+def _mas_pulse_signals(
+    offsets,
+    harmonics,
+    strengths,
+    initial,
+    rf,
+    duration_s,
+    spinning_hz,
+    count,
+    sidebands,
+    nsteps,
+):
+    """Average complex band amplitudes over rotor phase at pulse onset."""
+    gamma = 2 * np.pi * np.arange(count) / count
+    orders = np.arange(1, 5)
+    step = duration_s / nsteps
+    step_phase = 2 * np.pi * spinning_hz * step
+    gamma_end = gamma + nsteps * step_phase
+    final_rotor = np.exp(-1j * orders[:, None] * gamma_end) / (
+        orders[:, None] * spinning_hz
+    )
+    band_orders = np.arange(-sidebands, sidebands + 1)
+    band_amplitudes = np.empty((*offsets.shape, band_orders.size), dtype=complex)
+    # Bound the number of batched density/Hamiltonian matrix entries.
+    block_size = min(128, 131072 // (count * rf.size))
+    for start in range(0, offsets.shape[0], block_size):
+        block = slice(start, start + block_size)
+        terms = harmonics[block]
+        density = initial
+        for i in range(nsteps):
+            midpoint = gamma + (i + 0.5) * step_phase
+            rotor = np.exp(-1j * orders[:, None] * midpoint)
+            instantaneous = offsets[block, None, :] + (terms @ rotor).real.swapaxes(
+                -1, -2
+            )
+            density = _evolve_pulse_step(density, rf, instantaneous, step)
+
+        coherence = np.diagonal(density, offset=1, axis1=-2, axis2=-1).swapaxes(-1, -2)
+        signal = -1j * np.sqrt(strengths)[None, :, None] * coherence
+        wave = np.exp(-1j * (terms @ final_rotor).imag)
+        # One Fourier sum describes detection. The opposite-sign sum
+        # weights preparation by the density matrix at the end of the pulse.
+        detection = np.fft.fft(wave, axis=-1)[..., band_orders] / count
+        preparation = np.fft.ifft(signal * wave.conj(), axis=-1)[..., band_orders]
+        band_amplitudes[block] = detection * preparation
+    return band_amplitudes
+
+
 def simulate_rectangular_pulse(
     *,
     spin,
@@ -609,16 +682,20 @@ def simulate_rectangular_pulse(
     shift_hz=0.0,
     points=8192,
     accuracy=16,
+    spinning_hz=0.0,
+    sidebands=0,
+    max_rf_step_s=2e-6,
 ):
-    """Simulate a static powder after one finite rectangular RF pulse.
+    """Simulate a powder after one finite rectangular RF pulse.
 
     The pulse is on the simulation carrier. Frequencies are in Hz and
     duration_s is in seconds. Thermal Iz is the initial density matrix.
     The returned complex spectrum is scaled to unit total absorption for
     an ideal on-carrier 90 degree x pulse. Actual excitation losses and
-    phase are retained. Only the secular Hamiltonian is propagated.
+    phase are retained. With MAS, midpoint propagation uses time steps
+    no longer than max_rf_step_s or 1/32 of a rotor period.
     """
-    points, accuracy = index(points), index(accuracy)
+    points, accuracy, sidebands = index(points), index(accuracy), index(sidebands)
     (
         spin,
         larmor_hz,
@@ -631,6 +708,8 @@ def simulate_rectangular_pulse(
         csa_anisotropy_hz,
         csa_eta,
         shift_hz,
+        spinning_hz,
+        max_rf_step_s,
     ) = _real_scalars(
         spin,
         larmor_hz,
@@ -643,6 +722,8 @@ def simulate_rectangular_pulse(
         csa_anisotropy_hz,
         csa_eta,
         shift_hz,
+        spinning_hz,
+        max_rf_step_s,
     )
     if not 0.5 <= spin <= 16 or spin % 0.5 != 0 or (spin == 0.5 and cq_hz):
         raise ValueError(
@@ -654,13 +735,42 @@ def simulate_rectangular_pulse(
         )
     if not 0 <= eta <= 1 or not 0 <= csa_eta <= 1:
         raise ValueError("eta and csa_eta must lie between 0 and 1.")
-    _validate_grid(spectral_width_hz, 0, points, accuracy, 0)
+    if max_rf_step_s <= 0:
+        raise ValueError("max_rf_step_s must be positive.")
+    _validate_grid(spectral_width_hz, spinning_hz, points, accuracy, sidebands)
     directions, weights, triangles, angle, csa, quadrupolar_eta = _powder_interactions(
-        accuracy, 0, eta, csa_anisotropy_hz, csa_eta, csa_rotation
+        accuracy,
+        spinning_hz,
+        eta,
+        csa_anisotropy_hz,
+        csa_eta,
+        csa_rotation,
+        force_hemisphere=bool(spinning_hz),
     )
     transition_count = int(2 * spin)
     offsets = np.empty((directions.shape[1], transition_count))
     strengths = np.empty(transition_count)
+    if spinning_hz:
+        rotor_samples = spectral_width_hz / spinning_hz
+        if rotor_samples >= 4095.5:
+            raise ValueError("This PULSAR prototype supports up to 4096 rotor samples.")
+        count = max(5 * accuracy, int(rotor_samples + 0.5) + 1, 2 * sidebands + 1)
+        if count * (transition_count + 1) ** 2 > 131072:
+            raise ValueError(
+                "MAS rotor phases and spin dimension exceed the matrix batch limit."
+            )
+        order_count = 2 * sidebands + 1
+        # Bound the two persistent complex arrays before allocating either.
+        storage = offsets.size * (4 + order_count) * np.dtype(complex).itemsize
+        if storage > 64 * 1024**2:
+            raise ValueError(
+                "MAS pulse work arrays exceed 64 MiB. Reduce accuracy or sidebands."
+            )
+        nsteps = duration_s / min(max_rf_step_s, 1 / (32 * spinning_hz))
+        if nsteps > 4096:
+            raise ValueError("A MAS pulse supports up to 4096 propagation steps.")
+        nsteps = max(1, int(np.ceil(nsteps)))
+        harmonics = np.empty((*offsets.shape, 4), dtype=complex)
     for i, (_, strength, terms) in enumerate(
         _transition_harmonics(
             directions, cq_hz, quadrupolar_eta, angle, spin, larmor_hz, csa
@@ -668,34 +778,44 @@ def simulate_rectangular_pulse(
     ):
         offsets[:, i] = shift_hz + terms[0].real
         strengths[i] = strength
+        if spinning_hz:
+            harmonics[:, i] = terms[1:].T
     axis = np.linspace(-spectral_width_hz / 2, spectral_width_hz / 2, points)
-    if offsets.min() < axis[0] or offsets.max() > axis[-1]:
+    band_offset = sidebands * spinning_hz
+    if offsets.min() - band_offset < axis[0] or offsets.max() + band_offset > axis[-1]:
         raise ValueError("The spectral window must contain the requested transitions.")
 
     ix, iy, iz = _spin_operators(spin)
     phase = np.deg2rad(phase_deg)
     rf = rf_hz * (np.cos(phase) * ix + np.sin(phase) * iy)
-    size = ix.shape[0]
-    rows = np.arange(size)
-    coherence = np.empty_like(offsets, dtype=complex)
-    for start in range(0, directions.shape[1], 128):
-        block = slice(start, start + 128)
-        # Adjacent differences of the diagonal must equal the offsets.
-        levels = np.pad(offsets[block].cumsum(axis=-1), ((0, 0), (1, 0)))
-        hamiltonian = np.broadcast_to(rf, (*levels.shape, size)).copy()
-        hamiltonian[:, rows, rows] += levels
-        density = _evolve_density(iz, hamiltonian, duration_s)
-        coherence[block] = density[:, rows[:-1], rows[1:]]
+    if spinning_hz:
+        signals = _mas_pulse_signals(
+            offsets,
+            harmonics,
+            strengths,
+            iz,
+            rf,
+            duration_s,
+            spinning_hz,
+            count,
+            sidebands,
+            nsteps,
+        )
+    else:
+        coherence = np.empty_like(offsets, dtype=complex)
+        for start in range(0, directions.shape[1], 128):
+            block = slice(start, start + 128)
+            density = _evolve_pulse_step(iz, rf, offsets[block], duration_s)
+            coherence[block] = np.diagonal(density, offset=1, axis1=-2, axis2=-1)
+        signals = (-1j * np.sqrt(strengths) * coherence)[..., None]
 
     profile = np.zeros(points, dtype=complex)
-    for i, strength in enumerate(strengths):
-        signal = -1j * np.sqrt(strength) * coherence[:, i]
-        profile.real += _deposit_triangles(
-            axis, offsets[:, i], weights * signal.real, triangles
-        )
-        profile.imag += _deposit_triangles(
-            axis, offsets[:, i], weights * signal.imag, triangles
-        )
+    for i in range(transition_count):
+        for j, order in enumerate(range(-sidebands, sidebands + 1)):
+            signal = weights * signals[:, i, j]
+            frequency = offsets[:, i] + order * spinning_hz
+            profile.real += _deposit_triangles(axis, frequency, signal.real, triangles)
+            profile.imag += _deposit_triangles(axis, frequency, signal.imag, triangles)
     ideal_signal = strengths.sum() / 2
     powder_mass = weights[triangles].sum()
     return _as_dataset(
