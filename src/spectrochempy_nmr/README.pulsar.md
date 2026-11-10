@@ -11,8 +11,8 @@ sources in `masai/masai/core/fit/pulsar/f90/` use CeCILL-B.
 The simulation models the $+1/2 \leftrightarrow -1/2$ transition of an
 isolated half-integer spin $I\geq 3/2$, with second-order quadrupolar shifts, an ideal
 pulse, zero evolution delay and a powder distribution. The model supports
-a static powder or magic-angle spinning at the historical rotor angle
-of $54.736^\circ$. The ideal-pulse model includes optional passive isotropic J couplings. It excludes relaxation and line broadening. MAS
+a static powder or spinning at a specified rotor angle. The default
+is the historical magic-angle setting of $54.736^\circ$. The ideal-pulse model includes optional passive isotropic J couplings. It excludes relaxation and line broadening. MAS
 sidebands here are sidebands of the central transition.
 
 ```python
@@ -220,6 +220,11 @@ in `ll.f90` conjugates apart from common detection factors. The NumPy
 code uses the mean for order zero and the FFT for multiple orders.
 Changing the sign in the Fourier kernel or in the band shift can
 interchange intensities on opposite sides of the central band.
+
+Pass `rotor_angle_deg` to use a different rotor tilt. The angle is
+measured between the rotor axis and the field. Both the zero-frequency
+term and the phase modulation use the specified tilt. At zero tilt
+the field direction is fixed during rotation and the sidebands vanish.
 
 The sample count is the maximum of $q$, the rounded ratio
 $SW/\nu_r$ plus one, and $2N+1$. The latter leaves distinct FFT

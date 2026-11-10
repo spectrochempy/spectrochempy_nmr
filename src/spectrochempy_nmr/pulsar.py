@@ -220,6 +220,13 @@ def _real_scalars(*values):
     return scalars
 
 
+def _rotor_angle(rotor_angle_deg, spinning_hz):
+    (angle,) = _real_scalars(rotor_angle_deg)
+    if not 0 <= angle <= 180:
+        raise ValueError("rotor_angle_deg must be between 0 and 180.")
+    return np.deg2rad(angle) if spinning_hz else 0.0
+
+
 def _validate_grid(spectral_width_hz, spinning_hz, points, accuracy, sidebands):
     if spectral_width_hz <= 0 or spinning_hz < 0:
         raise ValueError("Use a positive spectral width and a nonnegative MAS rate.")
@@ -269,6 +276,7 @@ def _central_transition_profile(
     points=8192,
     shift_hz=0.0,
     spinning_hz=0.0,
+    rotor_angle_deg=54.736,
     accuracy=16,
     sidebands=0,
     spin=1.5,
@@ -324,7 +332,13 @@ def _central_transition_profile(
     _validate_grid(spectral_width_hz, spinning_hz, points, accuracy, sidebands)
 
     directions, weights, triangles, angle, csa, quadrupolar_eta = _powder_interactions(
-        accuracy, spinning_hz, eta, csa_anisotropy_hz, csa_eta, csa_rotation
+        accuracy,
+        spinning_hz,
+        eta,
+        csa_anisotropy_hz,
+        csa_eta,
+        csa_rotation,
+        rotor_angle_deg=rotor_angle_deg,
     )
     grid = (
         weights,
@@ -365,6 +379,7 @@ def _powder_interactions(
     csa_rotation,
     *,
     force_hemisphere=False,
+    rotor_angle_deg=54.736,
 ):
     rotation = None if csa_rotation is None else _validate_rotation(csa_rotation)
     # Misaligned tensors break octant reflection symmetry, but their
@@ -376,7 +391,7 @@ def _powder_interactions(
     directions, weights, triangles = _powder_mesh(
         accuracy, hemisphere, full_sphere=force_hemisphere and rotated
     )
-    angle = np.deg2rad(54.736) if spinning_hz else 0
+    angle = _rotor_angle(rotor_angle_deg, spinning_hz)
     if rotated:
         csa = _rotated_csa_harmonics(
             directions, csa_anisotropy_hz, csa_eta, angle, rotation
@@ -498,6 +513,7 @@ def simulate_central_transition(
     points=8192,
     shift_hz=0.0,
     spinning_hz=0.0,
+    rotor_angle_deg=54.736,
     accuracy=16,
     sidebands=0,
     spin=1.5,
@@ -512,8 +528,9 @@ def simulate_central_transition(
     The model uses second-order quadrupolar shifts and an ideal pulse with
     zero delay. Optional first-order CSA uses a signed reduced anisotropy
     in Hz and a separate asymmetry. A proper rotation matrix maps vectors
-    from the CSA principal axes to the quadrupolar principal axes. Set `spinning_hz` to zero for a static powder or to a positive
-    rate for MAS at 54.736 degrees. `sidebands` adds that many orders
+    from the CSA principal axes to the quadrupolar principal axes.
+    A positive spinning rate uses rotor_angle_deg (54.736 degrees by
+    default). sidebands adds that many orders
     on each side of the central band. Intensities sum to one across all
     requested bands. The frequency coordinate labels the left edges of the
     PULSAR bins. The spectral window must contain all requested bands.
@@ -529,6 +546,7 @@ def simulate_central_transition(
         points=points,
         shift_hz=shift_hz,
         spinning_hz=spinning_hz,
+        rotor_angle_deg=rotor_angle_deg,
         accuracy=accuracy,
         sidebands=sidebands,
         spin=spin,
@@ -551,6 +569,7 @@ def simulate_quadrupolar(
     points=8192,
     shift_hz=0.0,
     spinning_hz=0.0,
+    rotor_angle_deg=54.736,
     accuracy=16,
     sidebands=0,
     csa_anisotropy_hz=0.0,
@@ -577,6 +596,7 @@ def simulate_quadrupolar(
         points=points,
         shift_hz=shift_hz,
         spinning_hz=spinning_hz,
+        rotor_angle_deg=rotor_angle_deg,
         accuracy=accuracy,
         sidebands=sidebands,
         csa_anisotropy_hz=csa_anisotropy_hz,
@@ -595,6 +615,7 @@ def simulate_csa(
     points=8192,
     shift_hz=0.0,
     spinning_hz=0.0,
+    rotor_angle_deg=54.736,
     accuracy=16,
     sidebands=0,
     j_partners=(),
@@ -604,7 +625,7 @@ def simulate_csa(
     The signed reduced anisotropy is delta_zz - delta_iso in Hz.
     The asymmetry is (delta_yy - delta_xx) / anisotropy, in [0, 1].
     A zero MAS rate gives a static powder pattern. Otherwise, the rotor
-    angle is 54.736 degrees and sidebands selects the orders on each side.
+    angle defaults to 54.736 degrees and sidebands selects the orders on each side.
     The spectrum is normalized over the requested bands.
     """
     points, accuracy, sidebands = index(points), index(accuracy), index(sidebands)
@@ -616,7 +637,7 @@ def simulate_csa(
     _validate_grid(spectral_width_hz, spinning_hz, points, accuracy, sidebands)
 
     directions, weights, triangles = _powder_mesh(accuracy)
-    angle = np.deg2rad(54.736) if spinning_hz else 0
+    angle = _rotor_angle(rotor_angle_deg, spinning_hz)
     harmonics = _csa_harmonics(directions, anisotropy_hz, eta, angle)
     axis, profile = _powder_profile(
         harmonics,
@@ -978,6 +999,7 @@ def simulate_rectangular_pulse(
     points=8192,
     accuracy=16,
     spinning_hz=0.0,
+    rotor_angle_deg=54.736,
     sidebands=0,
     max_rf_step_s=2e-6,
 ):
@@ -1004,6 +1026,7 @@ def simulate_rectangular_pulse(
         points=points,
         accuracy=accuracy,
         spinning_hz=spinning_hz,
+        rotor_angle_deg=rotor_angle_deg,
         sidebands=sidebands,
         max_rf_step_s=max_rf_step_s,
     )
@@ -1024,6 +1047,7 @@ def simulate_pulse_sequence(
     points=8192,
     accuracy=16,
     spinning_hz=0.0,
+    rotor_angle_deg=54.736,
     sidebands=0,
     max_rf_step_s=2e-6,
     t2_s=None,
@@ -1088,6 +1112,7 @@ def simulate_pulse_sequence(
         csa_eta,
         csa_rotation,
         force_hemisphere=bool(spinning_hz),
+        rotor_angle_deg=rotor_angle_deg,
     )
     if transitions not in ("central", "satellites", "all"):
         raise ValueError("transitions must be 'central', 'satellites', or 'all'.")
@@ -1279,6 +1304,7 @@ def simulate_coupled_sequence(
     points=8192,
     accuracy=8,
     spinning_hz=0.0,
+    rotor_angle_deg=54.736,
     sidebands=0,
     max_rf_step_s=2e-6,
     receiver_phase_deg=0.0,
@@ -1322,7 +1348,7 @@ def simulate_coupled_sequence(
         bool(spinning_hz or rotated),
         full_sphere=bool(spinning_hz and rotated),
     )
-    angle = np.deg2rad(54.736) if spinning_hz else 0
+    angle = _rotor_angle(rotor_angle_deg, spinning_hz)
     harmonic_count = 5 if spinning_hz else 1
     count = 1
     if spinning_hz:

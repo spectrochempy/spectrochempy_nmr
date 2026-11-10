@@ -303,13 +303,15 @@ def test_static_csa_matches_tensor_moments(anisotropy):
     assert centers[positive].max() == pytest.approx(eigenvalues.max(), abs=2)
 
 
-def test_mas_csa_areas_match_cartesian_time_domain_reference():
-    anisotropy, eta, spinning = 5000, 0.6, 2000
+@pytest.mark.parametrize(("tilt_deg", "spinning"), [(54.736, 2000), (30, 10000)])
+def test_mas_csa_areas_match_cartesian_time_domain_reference(tilt_deg, spinning):
+    anisotropy, eta = 5000, 0.6
     dataset = simulate_csa(
         anisotropy_hz=anisotropy,
         eta=eta,
-        spectral_width_hz=16000,
+        spectral_width_hz=8 * spinning,
         spinning_hz=spinning,
+        rotor_angle_deg=tilt_deg,
         sidebands=2,
     )
 
@@ -321,7 +323,7 @@ def test_mas_csa_areas_match_cartesian_time_domain_reference():
     polar = np.stack((z * cos_phi, z * sin_phi, -sine), axis=-1)
     azimuthal = np.stack((-sin_phi, cos_phi, np.zeros_like(z)), axis=-1)
     angles = np.arange(256) * 2 * np.pi / 256
-    tilt = np.deg2rad(54.736)
+    tilt = np.deg2rad(tilt_deg)
     field = np.cos(tilt) * rotor[..., None, :] + np.sin(tilt) * (
         np.cos(angles)[:, None] * polar[..., None, :]
         + np.sin(angles)[:, None] * azimuthal[..., None, :]
@@ -336,7 +338,7 @@ def test_mas_csa_areas_match_cartesian_time_domain_reference():
     areas = weights @ (np.abs(coefficients) ** 2).mean(axis=1)
     expected = areas / areas.sum()
 
-    boundaries = [-np.inf, -3000, -1000, 1000, 3000, np.inf]
+    boundaries = np.r_[-np.inf, np.arange(-1.5, 2) * spinning, np.inf]
     actual, _ = np.histogram(dataset.x.data, bins=boundaries, weights=dataset.data)
     np.testing.assert_allclose(actual, expected, atol=2e-4, rtol=0)
 
