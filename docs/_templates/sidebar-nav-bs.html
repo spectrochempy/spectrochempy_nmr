@@ -1,27 +1,17 @@
-{% from "nmr-navigation.html" import menus %}
-{% set current = namespace(label=none, pages=[]) %}
-{% for label, pages in menus %}
-  {% if pagename in (pages | map(attribute=0) | list) %}
-    {% set current.label = label %}
-    {% set current.pages = pages %}
-  {% endif %}
-{% endfor %}
-{% set page_toc = generate_toc_html() %}
-<nav class="bd-docs-nav bd-links nmr-sidebar-nav" aria-label="{{ _('Documentation navigation') }}">
-  <p class="bd-links__title" role="heading" aria-level="2">{{ title | striptags }}</p>
-  {% if page_toc %}
-    <div class="nmr-sidebar-toc">{{ page_toc }}</div>
-  {% endif %}
-  {% if current.pages | length > 1 %}
-    <p class="bd-links__title" role="heading" aria-level="2">{{ current.label }}</p>
-    <ul class="nav bd-sidenav">
-      {% for target, label in current.pages %}
-        {% if hasdoc(target) %}
-          <li{% if pagename == target %} class="current active"{% endif %}>
-            <a href="{{ pathto(target) }}"{% if pagename == target %} aria-current="page"{% endif %}>{{ label }}</a>
-          </li>
-        {% endif %}
-      {% endfor %}
-    </ul>
-  {% endif %}
+{# Displays the TOC subtree for the current top-level documentation section. #}
+{% set show_nav_level = meta['html_theme.show_nav_level'] if (meta is defined and meta is not none and 'html_theme.show_nav_level' in meta) else theme_show_nav_level %}
+<nav class="bd-docs-nav bd-links"
+     aria-label="{{ section_title or _('Section Navigation') }}">
+  <p class="bd-links__title" role="heading" aria-level="1">{{ section_title or _('Section Navigation') }}</p>
+  <div class="bd-toc-item navbar-nav">
+    {{- generate_toctree_html(
+      "sidebar",
+      show_nav_level=show_nav_level | int,
+      maxdepth=theme_navigation_depth | int,
+      collapse=theme_collapse_navigation | tobool,
+      includehidden=theme_sidebar_includehidden | tobool,
+      titles_only=True
+      )
+    -}}
+  </div>
 </nav>

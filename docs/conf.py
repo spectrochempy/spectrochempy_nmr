@@ -90,7 +90,6 @@ html_theme_options = {
     "navbar_persistent": ["search-button-field"],
     "header_links_before_dropdown": 6,
     "navigation_depth": 4,
-    "secondary_sidebar_items": ["edit-this-page", "sourcelink"],
     "show_nav_level": 1,
     "show_toc_level": 2,
     "collapse_navigation": False,
@@ -149,3 +148,27 @@ sphinx_gallery_conf = {
 
 if os.environ.get("NMR_DOCS_EXECUTE") == "1":
     sphinx_gallery_conf["plot_gallery"] = True
+
+
+def _set_section_title(app, pagename, templatename, context, doctree):
+    """Label the sidebar and menu with the page's top-level toctree title."""
+    env = app.env
+
+    def contains(docname, seen):
+        if docname == pagename:
+            return True
+        if docname in seen:
+            return False
+        seen.add(docname)
+        return any(
+            contains(child, seen) for child in env.toctree_includes.get(docname, ())
+        )
+
+    for section in env.toctree_includes.get(env.config.root_doc, ()):
+        if contains(section, set()):
+            context["section_title"] = env.titles[section].astext()
+            break
+
+
+def setup(app):
+    app.connect("html-page-context", _set_section_title)

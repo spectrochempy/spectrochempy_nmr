@@ -25,50 +25,12 @@ Start with one of the following paths:
 
 .. toctree::
    :maxdepth: 2
-   :caption: Getting started
 
-   getting_started/installation
-   getting_started/quickstart
-
-.. toctree::
-   :maxdepth: 2
-   :caption: User guide
-
-   userguide/reading_data
-   userguide/processing_1d
-   userguide/processing_2d
-
-.. toctree::
-   :maxdepth: 2
-   :caption: Concepts
-
-   concepts/quadrature
-   concepts/hypercomplex
-
-.. toctree::
-   :maxdepth: 2
-   :caption: Reference
-
-   reference/nmr_api
-   reference/hypercomplex_api
-
-.. toctree::
-   :maxdepth: 2
-   :caption: Examples and compatibility
-
-   agilent_qualification
-   processed_1d_interop
-   nmrpipe_interop
-   nmrml_interop
-   bruker_normalized_qualification
-   bruker_pdata_2d_interop
-   agilent_frequency_reference
-
-   examples/gallery/importer/index
-   examples/gallery/apodization/index
-   examples/gallery/nmr/index
-   compatibility
-   changelog
+   getting_started/index
+   userguide/index
+   reference/index
+   examples_overview
+   about
 
 * `Main SpectroChemPy documentation <https://www.spectrochempy.fr/>`_
 * `NMR plugin source <https://github.com/spectrochempy/spectrochempy_nmr>`_
