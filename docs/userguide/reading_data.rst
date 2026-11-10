@@ -13,13 +13,44 @@ when automatic detection is not appropriate.
    processed = scp.nmr.read("path/to/experiment", expno=1, procno=1)
    agilent = scp.nmr.read("path/to/fid", protocol="agilent")
 
-To select a reader directly, use ``scp.nmr.read_topspin()`` for Bruker,
-``scp.nmr.read_agilent()`` for Agilent/Varian, ``scp.nmr.read_jeol()`` for
-JEOL, or ``scp.nmr.read_simpson()`` for SIMPSON. The :doc:`../reference/nmr_api`
-lists each reader's options.
+Reader catalogue
+----------------
 
-The readers cover 1D and 2D raw and processed data. The available processing
-steps depend on the acquisition profile.
+Use the calls below with your file or experiment directory. The available
+processing steps depend on the acquisition and file layout. See the
+:doc:`../reference/nmr_api` for reader options.
+
+.. list-table::
+   :header-rows: 1
+   :widths: 27 34 39
+
+   * - Format
+     - Recommended call
+     - Typical inputs
+   * - Bruker TopSpin
+     - ``scp.nmr.read_topspin(path)``
+     - FID, SER, or processed ``pdata`` in an experiment directory
+   * - Agilent/Varian
+     - ``scp.nmr.read_agilent(path)``
+     - Acquisition directory containing ``fid`` and ``procpar``
+   * - JEOL
+     - ``scp.nmr.read_jeol(path)``
+     - JDF files
+   * - SIMPSON
+     - ``scp.nmr.read_simpson(path)``
+     - Simulated FIDs and spectra, or a simulation input with a sibling output
+   * - NMRPipe
+     - ``scp.nmr.read(path, protocol="interop")``
+     - Supported time- and frequency-domain files
+   * - nmrML
+     - ``scp.nmr.read(path, protocol="interop", profile=...)``
+     - Supported acquisition and spectrum profiles
+   * - NMR JCAMP-DX
+     - ``scp.nmr.read(path, protocol="interop", profile=...)``
+     - Supported NMR profiles, such as ``"jcampdx-spectrum-1d"``
+
+See :ref:`reading-exchange-formats-through-interop` for the profile and
+convention options for exchange formats.
 
 Agilent/Varian States quadrature
 --------------------------------
@@ -54,6 +85,8 @@ F1 processing guarded. Reading the stored traces and the historical F2
 operation remain available. Quadrature selection requires an nmrglue-ng
 provider that supports it and a SpectroChemPy core with FFT
 prevalidation (1.2.0 or later).
+
+.. _reading-exchange-formats-through-interop:
 
 Reading exchange formats through interop
 ----------------------------------------
@@ -103,8 +136,30 @@ quadrature remains unqualified. Files with simulation metadata from an
 nmrglue-ng decodes these data files. For indexed XYREIM, the plugin keeps
 the historical ascending order on both axes.
 
-Tecmag
-------
+Additional formats available in nmrglue-ng
+------------------------------------------
 
-Tecmag TNT acquisition files are no longer read by the plugin. Previously
-saved Tecmag datasets retain their metadata interpretation.
+The following readers can be called directly with ``import nmrglue as ng``.
+Their results use the nmrglue-ng API. If you need one of these formats in
+``scp.nmr.read()``, open a request in the
+`NMR plugin issue tracker <https://github.com/spectrochempy/spectrochempy_nmr/issues>`_
+and describe the acquisition and the workflow you need.
+
+.. list-table::
+   :header-rows: 1
+
+   * - Format
+     - Direct reader
+   * - Tecmag TNMR
+     - ``ng.tecmag.read(path)``
+   * - Magritek Spinsolve
+     - ``ng.spinsolve.read(path)``
+   * - RS2D
+     - ``ng.rs2d.read(path)``
+   * - Sparky UCSF
+     - ``ng.sparky.read(path)``
+   * - Rowland NMR Toolkit
+     - ``ng.rnmrtk.read(path)``
+
+Previously saved SpectroChemPy datasets from Tecmag retain their metadata
+interpretation.
