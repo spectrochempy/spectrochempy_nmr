@@ -16,6 +16,6 @@ fid = scp.nmr.read_jeol(path)
 fid
 
 # %%
-# Inspect the first F1 increment as a direct-dimension FID. This slice
-# illustrates the stored signal before any Fourier transform.
-_ = fid[0, :].real.plot()
+# Display the magnitude of the complex signal across all F1 increments
+# and F2 time samples. The color scale shows the signal amplitude.
+_ = abs(fid).plot(method="image", colorbar=True)
