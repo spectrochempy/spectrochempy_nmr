@@ -13,17 +13,13 @@ when automatic detection is not appropriate.
    processed = scp.nmr.read("path/to/experiment", expno=1, procno=1)
    agilent = scp.nmr.read("path/to/fid", protocol="agilent")
 
-TopSpin acquisition and ``procs`` values are exposed as metadata where
-available. ``vendor_profile`` describes the vendor file; it does not claim to
-be a replayable historical processing recipe. Compatibility aliases
-``scp.nmr.read_topspin`` and ``scp.read_topspin`` remain available.
+To select a reader directly, use ``scp.nmr.read_topspin()`` for Bruker,
+``scp.nmr.read_agilent()`` for Agilent/Varian, ``scp.nmr.read_jeol()`` for
+JEOL, or ``scp.nmr.read_simpson()`` for SIMPSON. The :doc:`../reference/nmr_api`
+lists each reader's options.
 
 The readers cover 1D and 2D raw and processed data. The available processing
 steps depend on the acquisition profile.
-
-The separate experimental ``read_agilent_interop`` facade is characterized on
-real acquisitions with a pinned external provider. See
-:doc:`../agilent_qualification` for reproducible checks, observed-nucleus handling and remaining limitations.
 
 Agilent/Varian States quadrature
 --------------------------------

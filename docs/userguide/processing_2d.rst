@@ -5,6 +5,12 @@ Use the plugin's :doc:`reader <reading_data>` to load a qualified 2D dataset.
 The acquisition and quadrature determine which operations are available.
 See :doc:`/concepts/quadrature` for the supported conventions.
 
+When a TopSpin read includes a ``procs`` file, the dataset can expose its
+processing parameters in ``dataset.meta.nmr_processing["vendor_profile"]``.
+The profile records the vendor, the source file, and the parameter values.
+Replay requires a supported combination of acquisition and processing
+settings, as described in :ref:`topspin-xfb-replay`.
+
 For a qualified uniform Bruker SER acquisition, use the recorded TopSpin
 processing parameters explicitly:
 
