@@ -138,12 +138,7 @@ def test_mas_sidebands_match_asymmetric_fortran_reference():
     )
 
 
-def test_nonaxial_static_powder_matches_spin_hamiltonian_moments():
-    cq_hz, larmor_hz, eta = 4e6, 100e6, 0.7
-    dataset = simulate_central_transition(
-        cq_hz=cq_hz, eta=eta, larmor_hz=larmor_hz, spectral_width_hz=60e3
-    )
-
+def _second_order_offsets(directions, cq_hz, eta, larmor_hz):
     # Work directly in the quadrupolar principal axes. Diagonalize the
     # Zeeman term for each field direction and apply second-order
     # perturbation theory to the central pair of Zeeman levels.
@@ -159,23 +154,33 @@ def test_nonaxial_static_powder_matches_spin_hamiltonian_moments():
         * (3 * (iz @ iz) - spin_squared * np.eye(4) + eta * (ix @ ix - iy @ iy))
     )
 
-    # Independent powder average with Gauss-Legendre weights in cos(theta)
-    # and uniform azimuth samples, over the whole sphere.
-    cosine, weights = np.polynomial.legendre.leggauss(48)
-    azimuth = 2 * np.pi * np.arange(96) / 96
-    sine = np.sqrt(1 - cosine**2)
-    transverse = (
-        np.cos(azimuth)[:, None, None] * ix + np.sin(azimuth)[:, None, None] * iy
+    spin = np.stack((ix, iy, iz))
+    field_operator = (directions @ spin.reshape(3, 16)).reshape(
+        *directions.shape[:-1], 4, 4
     )
-    zeeman = -larmor_hz * (
-        sine[:, None, None, None] * transverse + cosine[:, None, None, None] * iz
-    )
+    zeeman = -larmor_hz * field_operator
     energies, basis = np.linalg.eigh(zeeman)
     matrix_elements = basis.conj().swapaxes(-1, -2) @ quadrupolar @ basis
     gaps = energies[..., :, None] - energies[..., None, :]
     gaps[..., np.arange(4), np.arange(4)] = np.inf
     corrections = (np.abs(matrix_elements) ** 2 / gaps).sum(axis=-1)
-    shifts = corrections[..., 2] - corrections[..., 1]
+    return corrections[..., 2] - corrections[..., 1]
+
+
+def test_nonaxial_static_powder_matches_spin_hamiltonian_moments():
+    cq_hz, larmor_hz, eta = 4e6, 100e6, 0.7
+    dataset = simulate_central_transition(
+        cq_hz=cq_hz, eta=eta, larmor_hz=larmor_hz, spectral_width_hz=60e3
+    )
+
+    # Independent powder average with Gauss-Legendre weights in cos(theta)
+    # and uniform azimuth samples, over the whole sphere.
+    cosine, weights = np.polynomial.legendre.leggauss(48)
+    azimuth = 2 * np.pi * np.arange(96) / 96
+    z, phi = np.meshgrid(cosine, azimuth, indexing="ij")
+    sine = np.sqrt(1 - z**2)
+    directions = np.stack((sine * np.cos(phi), sine * np.sin(phi), z), axis=-1)
+    shifts = _second_order_offsets(directions, cq_hz, eta, larmor_hz)
     reference_mean = weights @ shifts.mean(axis=1) / 2
     reference_std = np.sqrt(weights @ ((shifts - reference_mean) ** 2).mean(axis=1) / 2)
 
@@ -186,3 +191,51 @@ def test_nonaxial_static_powder_matches_spin_hamiltonian_moments():
     std = np.sqrt(dataset.data @ ((centers - mean) ** 2))
     assert mean == pytest.approx(reference_mean, abs=3)
     assert std == pytest.approx(reference_std, abs=6)
+
+
+def test_mas_sideband_areas_match_time_domain_spin_hamiltonian():
+    cq_hz, larmor_hz, eta, spinning_hz = 2.8e6, 100e6, 0.7, 10e3
+    dataset = simulate_central_transition(
+        cq_hz=cq_hz,
+        eta=eta,
+        larmor_hz=larmor_hz,
+        spectral_width_hz=80e3,
+        spinning_hz=spinning_hz,
+        sidebands=2,
+    )
+
+    # Sample rotor axes over the whole sphere in the tensor frame. The
+    # field sweeps a cone around each rotor axis, parametrized by two
+    # orthogonal tangent vectors in the right-handed rotor frame.
+    cosine, weights = np.polynomial.legendre.leggauss(24)
+    z, azimuth = np.meshgrid(cosine, 2 * np.pi * np.arange(48) / 48, indexing="ij")
+    sine = np.sqrt(1 - z**2)
+    cos_phi, sin_phi = np.cos(azimuth), np.sin(azimuth)
+    rotor_axis = np.stack((sine * cos_phi, sine * sin_phi, z), axis=-1)
+    polar = np.stack((z * cos_phi, z * sin_phi, -sine), axis=-1)
+    tangential = np.stack((-sin_phi, cos_phi, np.zeros_like(z)), axis=-1)
+    rotor_points = 128
+    angles = 2 * np.pi * np.arange(rotor_points) / rotor_points
+    tilt = np.deg2rad(54.736)
+    directions = np.cos(tilt) * rotor_axis[..., None, :] + np.sin(tilt) * (
+        np.cos(angles)[:, None] * polar[..., None, :]
+        + np.sin(angles)[:, None] * tangential[..., None, :]
+    )
+    shifts = _second_order_offsets(directions, cq_hz, eta, larmor_hz)
+    modulation = shifts - shifts.mean(axis=-1, keepdims=True)
+
+    # Integrate the cyclic modulation by trapezoids and project the
+    # complex signal onto each rotor order by direct summation.
+    steps = (modulation + np.roll(modulation, 1, axis=-1)) / 2
+    phase = 2 * np.pi * steps.cumsum(axis=-1) / (rotor_points * spinning_hz)
+    orders = np.arange(-2, 3)
+    basis = np.exp(-1j * angles[:, None] * orders)
+    coefficients = np.exp(1j * phase) @ basis / rotor_points
+    areas = weights @ (np.abs(coefficients) ** 2).mean(axis=1) / 2
+    expected = areas / areas.sum()
+
+    # The mean offsets span about -5.2 to -0.1 kHz, so these
+    # boundaries separate the five bands without cutting their support.
+    windows = [-np.inf, -17.5e3, -7.5e3, 2.5e3, 12.5e3, np.inf]
+    actual, _ = np.histogram(dataset.x.data, bins=windows, weights=dataset.data)
+    np.testing.assert_allclose(actual, expected, rtol=0, atol=8e-5)

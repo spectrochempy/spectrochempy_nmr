@@ -186,9 +186,15 @@ The [tests](../../tests/test_pulsar.py) separate three kinds of checks.
   matrix elements in the Zeeman eigenbasis, then averages over the
   whole sphere using Gauss–Legendre quadrature in the polar cosine and
   a uniform azimuth grid. The test compares the centroid and standard
-  deviation with the binned spectrum. The zero-coupling case checks
-  that MAS sidebands vanish. Broader physical validation requires
-  additional independent results and experimental spectra.
+  deviation with the binned spectrum. For the MAS check, the field
+  sweeps a cone around each sampled rotor axis. The same spin matrices
+  give the instantaneous shift. Trapezoidal integration of the shift
+  after subtracting its cycle average gives a time-domain phase.
+  Direct Fourier sums and a whole-sphere average give the relative
+  areas for five resolved bands, independently of the port's Wigner
+  harmonics, FFT and triangular mesh. The zero-coupling case checks
+  that MAS sidebands vanish. Experimental spectra are still needed
+  to assess the model against measurements.
 - **Numerical edge cases.** Tests cover degenerate triangle frequencies,
   the upper bin edge, integer scalar types and the memory limit.
 
