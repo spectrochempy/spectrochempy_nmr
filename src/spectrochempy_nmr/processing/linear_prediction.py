@@ -60,3 +60,38 @@ def _forward_coefficients(trace, order):
     if np.isrealobj(trace):
         coefficients = np.real_if_close(coefficients)
     return coefficients
+
+
+def _burg_predict_after(data, final_size, order):
+    """Extend complex traces along the last axis using Burg reflection coefficients."""
+    size = data.shape[-1]
+    scale = np.max(np.abs(data), axis=-1, keepdims=True)
+    normalized = np.divide(data, scale, out=np.zeros_like(data), where=scale > 0)
+    forward, backward = normalized[..., 1:], normalized[..., :-1]
+    coefficients = np.ones((*data.shape[:-1], 1), dtype=data.dtype)
+    for _ in range(order):
+        energy = np.sum(np.abs(forward) ** 2 + np.abs(backward) ** 2, axis=-1)
+        cross = -2 * np.sum(backward.conj() * forward, axis=-1)
+        reflection = np.divide(
+            cross, energy, out=np.zeros_like(cross), where=energy > 0
+        )[..., None]
+        updated = np.empty((*data.shape[:-1], coefficients.shape[-1] + 1), data.dtype)
+        updated[..., 0] = 1
+        updated[..., -1] = reflection[..., 0]
+        updated[..., 1:-1] = (
+            coefficients[..., 1:] + reflection * coefficients[..., :0:-1].conj()
+        )
+        coefficients = updated
+        forward, backward = (
+            (forward + reflection * backward)[..., 1:],
+            (backward + reflection.conj() * forward)[..., :-1],
+        )
+
+    output = np.empty((*data.shape[:-1], final_size), dtype=data.dtype)
+    output[..., :size] = data
+    predictor = -coefficients[..., :0:-1]
+    for index in range(size, final_size):
+        output[..., index] = np.sum(
+            output[..., index - order : index] * predictor, axis=-1
+        )
+    return output

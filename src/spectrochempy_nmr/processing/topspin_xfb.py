@@ -1,4 +1,4 @@
-"""Replay the qualified uniform Bruker XFB profiles without prediction."""
+"""Replay the qualified uniform Bruker XFB profiles."""
 
 import numpy as np
 
@@ -6,6 +6,7 @@ from spectrochempy.core.dataset.coord import Coord
 from spectrochempy.core.units import ur
 from spectrochempy_nmr.processing.channel_interop import _cross_pairs
 from spectrochempy_nmr.processing.channel_interop import _rance_kay
+from spectrochempy_nmr.processing.linear_prediction import _burg_predict_after
 
 _PROFILES = {
     "bruker-ser-qf-2d-v1": "qf",
@@ -56,6 +57,33 @@ def _window(params, points, delay=0):
         weights = np.sin(phase + (np.pi - phase) * position) ** 2
     weights[0] *= params["FCOR"]
     return weights
+
+
+def _f1_prediction(params, points, words_per_point):
+    mode = params.get("ME_mod")
+    if mode == 0:
+        return points, 0
+    if mode != 2:
+        raise ValueError("TopSpin XFB supports only LPfr linear prediction on F1")
+    words = params.get("LPBIN")
+    coefficients = params.get("NCOEF")
+    if (
+        not isinstance(words, int)
+        or words % words_per_point
+        or words <= points * words_per_point
+        or not isinstance(coefficients, int)
+        or coefficients % 2
+        or not 2 <= coefficients <= points
+    ):
+        raise ValueError("TopSpin XFB requires valid F1 LPBIN and even NCOEF for LPfr")
+    return words // words_per_point, coefficients // 2
+
+
+def _prepare_f1(data, window, points, order):
+    if order:
+        data = _burg_predict_after(data.swapaxes(-2, -1), points, order)
+        data = data.swapaxes(-2, -1)
+    return data * window
 
 
 def _positive_fft(data, size, axis):
@@ -115,10 +143,12 @@ def replay_xfb(source):
 
     status = meta.get("source_metadata", {})
     y, x = status.get("proc2s", {}), status.get("procs", {})
-    if y.get("ME_mod") != 0 or x.get("ME_mod") != 0:
-        raise ValueError("TopSpin XFB linear prediction is not supported")
+    if x.get("ME_mod") != 0:
+        raise ValueError("TopSpin XFB linear prediction is only supported on F1")
+    words_per_point = 1 if qf else 2
+    f1_points, lp_order = _f1_prediction(y, ny, words_per_point)
     _check_axis(
-        y, ny, 1 if qf else 2, 4 if mode == "states-tppi" else 6, 2 if qf else 1
+        y, f1_points, words_per_point, 4 if mode == "states-tppi" else 6, 2 if qf else 1
     )
     _check_axis(x, nx, 2, 6, 0 if qf else 1)
     if y["SI"] < 4:
@@ -143,15 +173,17 @@ def replay_xfb(source):
     f2 = _positive_fft(f2_input, sx, -1)
     phase_x = x["PHC0"] + (x["PHC1"] + 360 * delay * x["PKNL"]) * np.arange(sx) / sx
     f2 *= np.exp(-1j * np.deg2rad(phase_x))
-    f1_window = _window(y, ny)[:, None]
+    f1_window = _window(y, f1_points)[:, None]
     if qf:
-        f1 = np.fft.fftshift(np.fft.fft(f2 * f1_window, n=sy, axis=-2), axes=-2)
+        f1_input = _prepare_f1(f2, f1_window, f1_points, lp_order)
+        f1 = np.fft.fftshift(np.fft.fft(f1_input, n=sy, axis=-2), axes=-2)
         spectrum = np.abs(f1)
         rr = spectrum
     else:
-        cross = _cross_pairs(f2) * f1_window
+        cross = _cross_pairs(f2)
         if mode == "states-tppi":
             cross[:, 1::2] *= -1
+        cross = _prepare_f1(cross, f1_window, f1_points, lp_order)
         a, b = _positive_fft(cross, sy, -2)
         if mode == "states-tppi":
             rr_ir, ri_ii = a.real - 1j * b.real, -a.imag + 1j * b.imag
@@ -167,6 +199,8 @@ def replay_xfb(source):
 
     cy, cx = sy // 2, sx // 2
     rr[cy, cx] = (rr[cy - 1, cx] + rr[cy + 1, cx]) / 2
+    if not np.isfinite(spectrum).all():
+        raise ValueError("TopSpin XFB replay produced nonfinite spectral values")
     result = source.copy()
     result.delete_coordset()
     result.data = spectrum
@@ -199,7 +233,7 @@ def replay_xfb(source):
         else:
             result.meta.echo_antiecho_reconstruction = "bruker-rance-kay"
     result.meta.readonly = readonly
-    return result, {
+    applied = {
         "replay": "topspin",
         "command": "xfb",
         "size": (sy, sx),
@@ -212,3 +246,11 @@ def replay_xfb(source):
         },
         "axis_calibration": "procs",
     }
+    if lp_order:
+        applied["linear_prediction"] = {
+            "axis": "F1",
+            "mode": "LPfr",
+            "order": lp_order,
+            "size": f1_points,
+        }
+    return result, applied

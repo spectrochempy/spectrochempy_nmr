@@ -302,10 +302,17 @@ def test_dqd_topspin_efp_replay(experiment, delay, reference_scale):
 
 
 @pytest.mark.parametrize("experiment", ["20", "30", "40"])
-def test_topspin_xfb_replay_without_prediction(experiment):
-    root = os.environ.get("NMR_TOPSPIN_XFB_REFERENCES")
+@pytest.mark.parametrize(
+    ("variable", "with_prediction"),
+    [
+        ("NMR_TOPSPIN_XFB_REFERENCES", False),
+        ("NMR_TOPSPIN_XFB_LP_REFERENCES", True),
+    ],
+)
+def test_topspin_xfb_replay(experiment, variable, with_prediction):
+    root = os.environ.get(variable)
     if root is None:
-        pytest.skip("set NMR_TOPSPIN_XFB_REFERENCES to the no-prediction XFB copies")
+        pytest.skip(f"set {variable} to the corresponding TopSpin XFB copies")
     path = Path(root).resolve(strict=True) / experiment
     raw = _local_read(path / "ser")
     before = raw.data.copy()
@@ -332,6 +339,19 @@ def test_topspin_xfb_replay_without_prediction(experiment):
         expected, axis=(1, 2)
     )
     assert np.max(relative) < 2e-6
+    trace = result.meta.nmr_processing["scp_processing"]["applied"]
+    if with_prediction:
+        pars = meta["proc2s"]
+        assert pars["ME_mod"] == 2
+        assert trace["linear_prediction"] == {
+            "axis": "F1",
+            "mode": "LPfr",
+            "order": pars["NCOEF"] // 2,
+            "size": pars["LPBIN"] // (1 if experiment == "20" else 2),
+        }
+    else:
+        assert meta["proc2s"]["ME_mod"] == 0
+        assert "linear_prediction" not in trace
     for axis, key in ((result.y, "proc2s"), (result.x, "procs")):
         pars = meta[key]
         grid = pars["OFFSET"] - np.arange(pars["SI"]) * pars["SW_p"] / (
@@ -344,9 +364,3 @@ def test_topspin_xfb_replay_without_prediction(experiment):
 
     with pytest.raises(ValueError, match="uncorrected SER"):
         Experiment(_local_read(path / "ser", filtered=True)).process(replay="topspin")
-
-
-def test_topspin_xfb_refuses_unqualified_linear_prediction(examdata):
-    path = examdata / "Menthyl-Anthranilate" / "30" / "ser"
-    with pytest.raises(ValueError, match="linear prediction"):
-        Experiment(_local_read(path)).process(replay="topspin")
