@@ -26,6 +26,12 @@ Added
 * Prepare normalized complex 1D FIDs explicitly with
   ``Experiment.prepare_fid()`` before FFT, using provider-declared corrections.
 
+Fixed
+~~~~~
+
+* Resolve TopSpin experiment folders to their binary data instead of
+  scanning auxiliary files.
+
 Changed
 ~~~~~~~
 

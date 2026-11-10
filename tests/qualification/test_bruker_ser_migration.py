@@ -147,3 +147,15 @@ def test_synthetic_public_fid_ignores_stale_indirect_status(tmp_path):
     expected = (words[::2] + 1j * words[1::2]) / 8
     np.testing.assert_array_equal(dataset.data, expected)
     assert dataset.dims == ["x"]
+
+
+@pytest.mark.parametrize("paired_ser", [5], indirect=True)
+def test_synthetic_experiment_folder_with_auxiliary_files(paired_ser, monkeypatch):
+    """A complete experiment folder selects SER instead of its text files."""
+    (paired_ser / "audita.txt").write_text("Bruker acquisition audit")
+    monkeypatch.chdir(paired_ser.parent.parent)
+    options = {"local_only": True, "remove_digital_filter": False}
+    expected = scp.read_topspin(paired_ser / "ser", **options)
+    for path in (paired_ser, paired_ser.relative_to(Path.cwd())):
+        actual = scp.read_topspin(path, **options)
+        np.testing.assert_array_equal(actual.data, expected.data)
