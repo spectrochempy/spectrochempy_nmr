@@ -313,6 +313,7 @@ def _central_transition_profile(
     transitions="central",
     j_partners=(),
     probe_bandwidth_hz=None,
+    _normalize=True,
 ):
     points, accuracy, sidebands = index(points), index(accuracy), index(sidebands)
     values = (
@@ -386,7 +387,7 @@ def _central_transition_profile(
         spin_scale = 3 * (spin + 1.5) / (4 * spin**2 * (spin - 0.5))
         harmonics *= spin_scale * cq_hz**2 / (16 * larmor_hz)
         axis, mass = _powder_profile(harmonics + csa, *grid)
-        return axis, _normalize_profile(mass)
+        return axis, _normalize_profile(mass) if _normalize else mass
 
     spectrum = np.zeros(points)
     for m, strength, harmonics in _transition_harmonics(
@@ -396,7 +397,7 @@ def _central_transition_profile(
             continue
         axis, mass = _powder_profile(harmonics, *grid)
         spectrum += strength * mass
-    return axis, _normalize_profile(spectrum)
+    return axis, _normalize_profile(spectrum) if _normalize else spectrum
 
 
 def _powder_interactions(

@@ -8,3 +8,11 @@ See :doc:`../userguide/pulsar` for the coordinate and intensity conventions.
 
 .. automodule:: spectrochempy_nmr.pulsar_fit
    :members: fit_central_transition, CentralParameters, PulsarFitResult
+
+Czjzek distributions
+~~~~~~~~~~~~~~~~~~~~
+
+See :doc:`../userguide/czjzek` for the tensor noise scale and examples.
+
+.. automodule:: spectrochempy_nmr.czjzek
+   :members: CzjzekDistribution, CzjzekSamples, simulate_czjzek

@@ -586,6 +586,10 @@ class NMRPlugin(SpectroChemPyPlugin):
 
 
 def __getattr__(name: str):
+    if name in {"CzjzekDistribution", "CzjzekSamples", "simulate_czjzek"}:
+        from . import czjzek
+
+        return getattr(czjzek, name)
     if name == "fit_central_transition":
         from .pulsar_fit import fit_central_transition
 
@@ -653,6 +657,9 @@ def __dir__() -> list[str]:
         "NMRPlugin",
         "Experiment",
         "fit_central_transition",
+        "CzjzekDistribution",
+        "CzjzekSamples",
+        "simulate_czjzek",
         "process_agilent_noesy_states_tppi",
         "extract_noesy_components",
         "from_interop",
