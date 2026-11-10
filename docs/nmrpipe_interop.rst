@@ -1,4 +1,4 @@
-NMRPipe interop qualification (Unreleased)
+NMRPipe interop qualification
 ==========================================
 
 The nmrglue-ng provider can import complete, already transformed

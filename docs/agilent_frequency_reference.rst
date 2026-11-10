@@ -1,7 +1,7 @@
 Agilent 1D frequency referencing
 ================================
 
-This **Unreleased, experimental** qualification covers the two original
+This **experimental** qualification covers the two original
 acquisitions described in :doc:`agilent_qualification`. It does not change
 public reader dispatch or establish which reference is chemically correct
 when a file contains contradictory parameters.
@@ -134,7 +134,7 @@ reference, not the validity of the chemical standard or a vendor processing
 recipe. Originals are hash-checked before/after; no binaries or spectra are
 redistributed. NMRPipe remains optional and is not required by CI.
 
-Normalized Experiment workflow (Unreleased)
+Normalized Experiment workflow
 -------------------------------------------
 
 The reader is format-specific; the normalized processing workflow is not::

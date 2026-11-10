@@ -3,7 +3,7 @@ Native complex channels in multidimensional NMR
 
 .. important::
 
-   This representation is **Unreleased**. Published 0.2.0 used quaternion
+   This representation is available in NMR 0.3.0. Published 0.2.0 used quaternion
    storage. The development plugin no longer uses that storage or requires
    the Hypercomplex plugin.
 

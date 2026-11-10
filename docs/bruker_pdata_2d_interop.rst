@@ -1,4 +1,4 @@
-Bruker processed 2D interop (Unreleased)
+Bruker processed 2D interop
 ========================================
 
 For a complete Bruker ``pdata`` directory containing ``2rr``, ``2ri``, ``2ir``

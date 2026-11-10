@@ -1,7 +1,7 @@
 Normalized Bruker 1D qualification
 ==================================
 
-This workflow is **Unreleased and experimental**. It demonstrates that a second
+This workflow is **experimental**. It demonstrates that a second
 real producer feeds the same normalized ``from_interop`` and ``Experiment``
 processing path without modifying the core or adding Bruker processing logic
 to the plugin::
@@ -235,6 +235,8 @@ The NUS cases characterize storage and the current refusal to run a
 uniform FFT. The Ubiquitin case checks the provider's native 3D storage
 layout; public TopSpin processing is currently qualified for 1D and
 supported 2D profiles.
+
+.. _topspin-xfb-replay:
 
 TopSpin XFB replay
 ------------------

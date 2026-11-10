@@ -10,13 +10,10 @@ SpectroChemPy NMR documentation
    in workflows that have already been validated. Check the :doc:`changelog`
    before upgrading.
 
-This is the development documentation for the independent
-``spectrochempy-nmr`` plugin. Changes marked **Unreleased** are not included
-in the published 0.2.0 package.
-
-The plugin provides validated **1D** reading and processing. Its experimental
-2D paths store associated branches as two ordinary complex channels. General
-2D processing remains under characterization.
+SpectroChemPy NMR is an independently released plugin. It reads vendor and
+exchange formats and provides processing for 1D and qualified 2D acquisitions.
+Use the :doc:`2D processing guide <userguide/processing_2d>` to choose between
+processing the samples directly and replaying a recorded TopSpin recipe.
 
 Start with one of the following paths:
 
@@ -39,6 +36,7 @@ Start with one of the following paths:
 
    userguide/reading_data
    userguide/processing_1d
+   userguide/processing_2d
 
 .. toctree::
    :maxdepth: 2

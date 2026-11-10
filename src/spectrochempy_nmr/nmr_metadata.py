@@ -887,7 +887,10 @@ def extract_nmr_metadata(meta, *, ndim=None) -> NMRMetadata:
                     "reported_nucleus", acquisition.get("nucleus")
                 ),
             ),
-            encoding=tuple(meta.get("encoding") or ()) or None,
+            encoding=_resolve_encoding(
+                meta.get("encoding") or meta.get("interop_encoding") or ()
+            )
+            or None,
             pulse_program=meta.get("pulprog")
             or acquisition.get("legacy_presentation", {}).get("pulse_program"),
             datatype=meta.get("datatype"),

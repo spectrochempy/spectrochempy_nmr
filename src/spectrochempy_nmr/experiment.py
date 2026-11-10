@@ -1371,7 +1371,7 @@ class Experiment:
 
             from spectrochempy.core.dataset.coord import Coord  # noqa: PLC0415
 
-            newcoord = Coord(ppm_axis, units="ppm")
+            newcoord = Coord(ppm_axis, units="ppm", rounding=False, sigdigits=15)
             newcoord.meta["acquisition_frequency"] = float(sfo[0]) * ur.MHz
             work.set_coordset(newcoord)
             coord = newcoord

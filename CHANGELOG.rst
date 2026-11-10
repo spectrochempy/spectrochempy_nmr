@@ -2,27 +2,20 @@ Changelog
 =========
 
 This changelog covers the independently versioned ``spectrochempy-nmr``
-distribution. Entries under Unreleased describe development after the latest
-release, not capabilities available in the published 0.2.0 package.
+distribution. The sections below describe changes in each plugin release.
 
 
-Unreleased
-----------
+0.3.0
+-----
 
 Added
 ~~~~~
 
-* Replay qualified Bruker 2D XFB processing with recorded window, phase,
-  digital delay and ppm calibration. Replay also supports qualified forward
-  linear prediction in F1.
-* Replay TopSpin XFB exponential and sine-bell windows in F1 and F2,
-  including recipes with forward F1 prediction and F2 digital delay.
-* Replay qualified TopSpin XFB time-domain tail-mean and polynomial baseline
-  corrections in F1 and DQD polynomial correction in F2.
-* Replay TopSpin XFB Gaussian solvent filters, with the recorded width,
-  offset and treatment of both trace ends.
-* Replay TopSpin XFB fractional digital-filter delays, preserving the
-  fractional phase ramp and using the rounded-up origin for F2 preprocessing.
+* Replay recorded TopSpin processing explicitly with
+  ``Experiment.process(replay="topspin")``: DQD 1D EFP and qualified 2D XFB
+  for QF, States-TPPI and echo/anti-echo. XFB supports exponential and sine
+  windows, forward F1 linear prediction, baseline and Gaussian solvent
+  correction, manual phase, and integer or fractional F2 digital delay.
 
 * Read and process qualified Bruker States SER acquisitions through
   ``read_topspin()`` and interop without TPPI alternation.
@@ -43,6 +36,8 @@ Fixed
 
 * Resolve TopSpin experiment folders to their binary data instead of
   scanning auxiliary files.
+* Report canonical encoding for normalized 1D reads and preserve the
+  precision of the legacy 1D FFT display grid.
 
 Changed
 ~~~~~~~

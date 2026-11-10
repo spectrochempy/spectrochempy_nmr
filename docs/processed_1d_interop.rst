@@ -1,7 +1,7 @@
 Normalized processed 1D spectra
 ===============================
 
-This is an **Unreleased, experimental** extension of the normalized workflow.
+This is an **experimental** extension of the normalized workflow.
 The same converter and Experiment accept already-frequency-domain spectra::
 
    import nmrglue as ng
