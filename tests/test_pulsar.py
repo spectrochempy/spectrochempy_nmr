@@ -9,7 +9,9 @@ from spectrochempy_nmr.pulsar import Delay
 from spectrochempy_nmr.pulsar import IdealPulse
 from spectrochempy_nmr.pulsar import PassiveJ
 from spectrochempy_nmr.pulsar import Pulse
+from spectrochempy_nmr.pulsar import SpinSite
 from spectrochempy_nmr.pulsar import simulate_central_transition
+from spectrochempy_nmr.pulsar import simulate_coupled_sequence
 from spectrochempy_nmr.pulsar import simulate_csa
 from spectrochempy_nmr.pulsar import simulate_pulse_sequence
 from spectrochempy_nmr.pulsar import simulate_quadrupolar
@@ -692,3 +694,122 @@ def test_passive_j_offset_also_acts_during_preparation():
     np.testing.assert_array_equal(result.x.data[peaks], [-j_hz / 2, j_hz / 2])
     expected = np.exp(2j * np.pi * result.x.data[peaks] * delay) / 2
     np.testing.assert_allclose(result.data[peaks], expected, atol=1e-12, rtol=0)
+
+
+@pytest.mark.parametrize("spinning", [0, 6500])
+def test_coupled_sequence_matches_passive_limit_for_an_unpulsed_partner(spinning):
+    events = [Pulse(25e-6, 7500, phase_deg=15), Delay(62e-6)]
+    settings = dict(
+        spectral_width_hz=50e3,
+        points=4096,
+        accuracy=2,
+        spinning_hz=spinning,
+        sidebands=bool(spinning),
+    )
+    site = dict(spin=1.5, cq_hz=12000, eta=0.5, larmor_hz=100e6)
+    coupled = simulate_coupled_sequence(
+        events,
+        observed=SpinSite(**site),
+        partner=SpinSite(0.5, 80e6),
+        j_hz=300,
+        **settings,
+    )
+    passive = simulate_pulse_sequence(
+        events,
+        j_partners=(PassiveJ(0.5, 300),),
+        **site,
+        **settings,
+    )
+    np.testing.assert_allclose(coupled.data, passive.data, atol=1e-12, rtol=0)
+
+
+@pytest.mark.parametrize("refocus", ["partner_pi", "decoupled_delay"])
+def test_active_partner_refocuses_scalar_coupling(refocus):
+    settings = dict(
+        observed=SpinSite(0.5, 100e6),
+        partner=SpinSite(0.5, 80e6),
+        j_hz=500,
+        spectral_width_hz=2000,
+        points=2001,
+        accuracy=2,
+    )
+    reference = simulate_coupled_sequence([IdealPulse(90)], **settings)
+    if refocus == "partner_pi":
+        events = [
+            IdealPulse(90),
+            Delay(0.001),
+            IdealPulse(0, partner_flip_deg=180),
+            Delay(0.001),
+        ]
+    else:
+        events = [IdealPulse(90), Delay(0.002, decouple_j=True)]
+    actual = simulate_coupled_sequence(events, **settings)
+    np.testing.assert_allclose(actual.data, reference.data, atol=1e-12, rtol=0)
+
+
+def test_rotated_site_harmonics_use_the_common_rotor_phase():
+    from scipy.spatial.transform import Rotation
+
+    from spectrochempy_nmr.pulsar import _site_parameters, _site_transitions
+
+    rotation = Rotation.from_euler("zyx", [42, 31, 19], degrees=True).as_matrix()
+    n = np.array([0.36, 0.48, 0.8])
+    polar = np.array([0.48, 0.64, -0.6])
+    azimuthal = np.array([-0.8, 0.6, 0])
+    tilt = np.deg2rad(54.736)
+    phase = np.arange(64) * 2 * np.pi / 64
+    trajectory = np.cos(tilt) * n + np.sin(tilt) * (
+        np.cos(phase)[:, None] * polar + np.sin(phase)[:, None] * azimuthal
+    )
+    site = SpinSite(1.5, 100e6, cq_hz=500e3, eta=0.7, efg_rotation=rotation)
+    terms, _ = _site_transitions(n[:, None], tilt, _site_parameters(site), 5)
+    reconstructed = (terms[0] @ np.exp(-1j * np.arange(5)[:, None] * phase)).real
+    first, second = _perturbative_level_offsets(
+        trajectory @ rotation, 500e3, 0.7, 100e6, 1.5
+    )
+    np.testing.assert_allclose(
+        reconstructed, np.diff(first + second, axis=-1).T, atol=1e-8, rtol=0
+    )
+
+
+def test_active_coupling_workspace_counts_both_site_tables():
+    with pytest.raises(ValueError, match="Coupled-spin work arrays exceed"):
+        simulate_coupled_sequence(
+            [IdealPulse(90)],
+            observed=SpinSite(0.5, 100e6, efg_rotation=np.eye(3)),
+            partner=SpinSite(0.5, 80e6),
+            j_hz=200,
+            spectral_width_hz=20e3,
+            spinning_hz=10e3,
+            accuracy=28,
+        )
+
+
+def test_aligned_coupled_mas_half_turn_symmetry_with_odd_requested_grid(monkeypatch):
+    from spectrochempy_nmr import pulsar
+
+    events = [
+        Pulse(77e-6, 4800, 17, 1000, 3600, 42, 620),
+        Delay(62e-6),
+        Pulse(33e-6, 7000, -40, -940, 2200, 56, -700),
+    ]
+    settings = dict(
+        observed=SpinSite(
+            1.5, 100e6, cq_hz=2000, eta=0.7, csa_anisotropy_hz=11000, csa_eta=0.43
+        ),
+        partner=SpinSite(0.5, 80e6, csa_anisotropy_hz=14000, csa_eta=0.5),
+        j_hz=850,
+        spectral_width_hz=39000,
+        spinning_hz=6500,
+        sidebands=1,
+        accuracy=1,
+    )
+    hemisphere = simulate_coupled_sequence(events, **settings)
+    original_mesh = pulsar._powder_mesh
+
+    def full_mesh(accuracy, hemisphere=False, full_sphere=False):
+        return original_mesh(accuracy, True, True)
+
+    monkeypatch.setattr(pulsar, "_powder_mesh", full_mesh)
+    full = simulate_coupled_sequence(events, **settings)
+    np.testing.assert_allclose(hemisphere.data, full.data, atol=1e-12, rtol=0)

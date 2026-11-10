@@ -291,7 +291,9 @@ Under MAS the simulator samples starting rotor phases uniformly.
 Finite preparation can distinguish octant reflections even for aligned
 tensors, so it uses at least four octants. It uses all eight for a
 rotated CSA tensor because a time-ordered RF pulse can distinguish
-the trajectories of antipodal rotor axes. Each
+the trajectories of antipodal rotor axes. The RF rotor grid is rounded
+up to an even count so a half-turn maps sampled phases onto themselves.
+Each
 pulse step evaluates the offset harmonics at its midpoint, then applies
 the constant-Hamiltonian propagator. The step is at most
 `max_rf_step_s` or 1/32 of a rotor period, whichever is smaller.
@@ -360,6 +362,35 @@ also act during pulses and delays. The simulator therefore averages
 the complex responses after propagating each distinct offset. Tests
 check the 1:2:1 triplet for two equivalent spin-1/2 partners and the
 opposite phase evolution of an isotropic doublet.
+
+## Two RF-active spins with isotropic J coupling
+
+`simulate_coupled_sequence` propagates the product density matrix of
+two `SpinSite` instances. Each site has its own spin, Larmor
+frequency, shift, quadrupolar and CSA tensors, and optional transverse
+relaxation time. An EFG rotation maps the site into the common sample
+frame. Its CSA rotation maps its CSA axes into that site's EFG frame.
+When rotating into the common rotor frame, the code transforms the
+phase origin of each nonzero harmonic as well as the rotor direction.
+
+The product Hamiltonian includes the diagonal term $J I_z S_z$.
+The initial thermal deviation matrix is proportional to
+$I_z+(\nu_S/\nu_I)S_z$. A `Pulse` can apply both RF channels
+simultaneously using the `partner_rf_hz`, `partner_phase_deg`
+and `partner_offset_hz` fields. `IdealPulse` accepts an
+independent partner flip and phase. `Delay(decouple_j=True)`
+removes the active coupling for that delay. Coherence selection acts
+on the observed spin and retains the unaffected partner marginal.
+
+Acquisition detects observed-spin coherences at fixed partner
+projection. With this Hamiltonian and the descending magnetic
+basis, the observed offset is $\nu_{m\rightarrow m-1}-Jm_S$.
+The result averages the partner states and can include additional
+passive partners coupled to the observed spin. The manifold limit is
+64 product levels, with further work-array limits in MAS. Tests
+recover the passive limit and check refocusing by a partner π pulse
+or a decoupled delay. Dipolar coupling and nonsecular terms are outside
+this model.
 
 ## Verification and performance
 

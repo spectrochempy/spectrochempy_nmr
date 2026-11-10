@@ -107,16 +107,16 @@ def _rotated_csa_harmonics(directions, anisotropy_hz, eta, angle, rotation):
     return result
 
 
-def _validate_rotation(rotation):
+def _validate_rotation(rotation, label="csa_rotation"):
     matrix = np.asarray(rotation)
     if matrix.shape != (3, 3) or matrix.dtype.kind not in "fiu":
-        raise ValueError("csa_rotation must be a real 3 by 3 rotation matrix.")
+        raise ValueError(f"{label} must be a real 3 by 3 rotation matrix.")
     matrix = matrix.astype(float)
     if not np.isfinite(matrix).all() or not (
         np.allclose(matrix.T @ matrix, np.eye(3), rtol=0, atol=1e-8)
         and np.linalg.det(matrix) > 0
     ):
-        raise ValueError("csa_rotation must be a proper orthogonal matrix.")
+        raise ValueError(f"{label} must be a proper orthogonal matrix.")
     return matrix
 
 
@@ -671,6 +671,9 @@ class Pulse:
     rf_hz: float
     phase_deg: float = 0
     offset_hz: float = 0
+    partner_rf_hz: float = 0
+    partner_phase_deg: float = 0
+    partner_offset_hz: float = 0
 
 
 @dataclass(frozen=True)
@@ -679,13 +682,16 @@ class IdealPulse:
 
     flip_deg: float
     phase_deg: float = 0
+    partner_flip_deg: float = 0
+    partner_phase_deg: float = 0
 
 
 @dataclass(frozen=True)
 class Delay:
-    """Free evolution for a duration in seconds."""
+    """Free evolution in seconds, optionally with J decoupling."""
 
     duration_s: float
+    decouple_j: bool = False
 
 
 @dataclass(frozen=True)
@@ -695,37 +701,95 @@ class Coherence:
     order: int
 
 
-def _prepare_events(events, ix, iy, iz, spinning_hz, max_rf_step_s, t2_s):
+def _rf_axis(ix, iy, phase_deg):
+    phase = np.deg2rad(phase_deg)
+    return np.cos(phase) * ix + np.sin(phase) * iy
+
+
+def _prepare_events(
+    events,
+    ix,
+    iy,
+    iz,
+    spinning_hz,
+    max_rf_step_s,
+    t2_s,
+    *,
+    partner=None,
+    partner_t2_s=None,
+    coupling_offsets=None,
+):
     projections = np.diag(iz)
     coherence_order = projections[:, None] - projections[None, :]
-    off_diagonal = coherence_order != 0
+    if partner is None:
+        partner_order = 0
+    else:
+        px, py, pz = partner
+        partner_projections = np.diag(pz)
+        partner_order = partner_projections[:, None] - partner_projections[None, :]
     prepared = []
     for event in events:
         if isinstance(event, Coherence):
             order = index(event.order)
-            if abs(order) > projections.size - 1:
+            if abs(order) > projections.max() - projections.min():
                 raise ValueError("Coherence order is outside the spin manifold.")
-            prepared.append(("mask", coherence_order == order))
+            mask = (coherence_order == order) & (partner_order == 0)
+            if partner is None:
+                prepared.append(("mask", mask))
+            else:
+                n_observed = int(projections.max() - projections.min() + 1)
+                prepared.append(("partner_coherence", mask, n_observed))
             continue
         if isinstance(event, IdealPulse):
-            flip_deg, phase_deg = _real_scalars(event.flip_deg, event.phase_deg)
-            phase = np.deg2rad(phase_deg)
-            axis = np.cos(phase) * ix + np.sin(phase) * iy
-            prepared.append(("ideal", axis, flip_deg / 360))
+            flip, phase, partner_flip, partner_phase = _real_scalars(
+                event.flip_deg,
+                event.phase_deg,
+                event.partner_flip_deg,
+                event.partner_phase_deg,
+            )
+            axis = flip * _rf_axis(ix, iy, phase)
+            if partner is not None:
+                axis += partner_flip * _rf_axis(px, py, partner_phase)
+            elif partner_flip:
+                raise ValueError("A partner pulse requires a coupled spin.")
+            prepared.append(("ideal", axis, 1 / 360))
             continue
         if isinstance(event, Delay):
             (duration,) = _real_scalars(event.duration_s)
             if duration < 0:
                 raise ValueError("Delay duration must be nonnegative.")
-            prepared.append(("delay", duration))
-        elif isinstance(event, Pulse):
-            duration, power, phase_deg, offset = _real_scalars(
-                event.duration_s, event.rf_hz, event.phase_deg, event.offset_hz
+            if event.decouple_j and coupling_offsets is None:
+                raise ValueError("J decoupling requires an active coupled spin.")
+            prepared.append(
+                ("delay", duration, coupling_offsets if event.decouple_j else 0)
             )
-            if duration <= 0 or power < 0:
+        elif isinstance(event, Pulse):
+            (
+                duration,
+                power,
+                phase,
+                offset,
+                partner_power,
+                partner_phase,
+                partner_offset,
+            ) = _real_scalars(
+                event.duration_s,
+                event.rf_hz,
+                event.phase_deg,
+                event.offset_hz,
+                event.partner_rf_hz,
+                event.partner_phase_deg,
+                event.partner_offset_hz,
+            )
+            if duration <= 0 or power < 0 or partner_power < 0:
                 raise ValueError("Use positive pulse duration and nonnegative RF.")
-            phase = np.deg2rad(phase_deg)
-            rf = power * (np.cos(phase) * ix + np.sin(phase) * iy)
+            rf = power * _rf_axis(ix, iy, phase)
+            frequency_shift = offset * projections
+            if partner is not None:
+                rf += partner_power * _rf_axis(px, py, partner_phase)
+                frequency_shift += partner_offset * partner_projections
+            elif partner_power or partner_offset:
+                raise ValueError("A partner pulse requires a coupled spin.")
             count = 1
             if spinning_hz:
                 needed = duration / min(max_rf_step_s, 1 / (32 * spinning_hz))
@@ -734,16 +798,28 @@ def _prepare_events(events, ix, iy, iz, spinning_hz, max_rf_step_s, t2_s):
                         "A MAS pulse supports up to 4096 propagation steps."
                     )
                 count = max(1, int(np.ceil(needed)))
-            frame = np.exp(2j * np.pi * offset * duration * coherence_order)
-            prepared.append(("pulse", duration, rf, offset, count, frame))
+            frame = np.exp(2j * np.pi * duration * frequency_shift)
+            frame = frame[:, None] * frame[None, :].conj()
+            prepared.append(
+                ("pulse", duration, rf, -np.diff(frequency_shift), count, frame)
+            )
         else:
             raise TypeError(
                 "Sequence events must be Pulse, IdealPulse, Delay or Coherence."
             )
-        if t2_s is not None:
-            prepared.append(
-                ("mask", np.where(off_diagonal, np.exp(-duration / t2_s), 1))
+        if t2_s is not None or partner_t2_s is not None:
+            decay_a = 1.0 if t2_s is None else np.exp(-duration / t2_s)
+            decay_b = 1.0 if partner_t2_s is None else np.exp(-duration / partner_t2_s)
+            decay = np.where(
+                coherence_order != 0, decay_a, np.where(partner_order != 0, decay_b, 1)
             )
+            if partner is not None:
+                decay = np.where(
+                    (coherence_order != 0) & (partner_order != 0),
+                    (decay_a + decay_b) / 2,
+                    decay,
+                )
+            prepared.append(("mask", decay))
     if not prepared:
         raise ValueError("Supply at least one sequence event.")
     return prepared
@@ -760,21 +836,31 @@ def _propagate_sequence(offsets, terms, initial, events, spinning_hz, gamma):
     for kind, *args in events:
         if kind == "mask":
             density = density * args[0]
+        elif kind == "partner_coherence":
+            mask, n_observed = args
+            n_partner = density.shape[-1] // n_observed
+            blocks = density.reshape(
+                *density.shape[:-2], n_observed, n_partner, n_observed, n_partner
+            )
+            marginal = np.trace(blocks, axis1=-4, axis2=-2) / n_observed
+            preserved = np.einsum("ac,...bd->...abcd", np.eye(n_observed), marginal)
+            density = np.where(mask, density, preserved.reshape(density.shape))
         elif kind == "ideal":
             axis, duration = args
             density = _evolve_density(density, axis, duration)
         elif kind == "delay":
-            (duration,) = args
+            duration, decoupled = args
+            free_offsets = offsets - decoupled
             if spinning_hz:
                 next_gamma = gamma + 2 * np.pi * spinning_hz * duration
                 phase = (
-                    2 * np.pi * offsets[:, None, :] * duration
+                    2 * np.pi * free_offsets[:, None, :] * duration
                     + _phase_integral(terms, next_gamma, spinning_hz)
                     - _phase_integral(terms, gamma, spinning_hz)
                 )
                 gamma = next_gamma
             else:
-                phase = 2 * np.pi * offsets * duration
+                phase = 2 * np.pi * free_offsets * duration
             level_phase = np.concatenate(
                 (np.zeros_like(phase[..., :1]), phase.cumsum(axis=-1)), axis=-1
             )
@@ -802,13 +888,40 @@ def _propagate_sequence(offsets, terms, initial, events, spinning_hz, gamma):
     return density, gamma
 
 
+def _rf_rotor_count(spectral_width_hz, spinning_hz, accuracy, sidebands, size):
+    samples = spectral_width_hz / spinning_hz
+    if samples >= 4095.5:
+        raise ValueError("This PULSAR prototype supports up to 4096 rotor samples.")
+    count = max(5 * accuracy, int(samples + 0.5) + 1, 2 * sidebands + 1)
+    # The aligned-tensor hemisphere reduction maps antipodal trajectories
+    # onto the sampled rotor grid using a half-cycle phase shift.
+    count += count % 2
+    if count * size**2 > 131072:
+        raise ValueError(
+            "MAS rotor phases and spin dimension exceed the matrix batch limit."
+        )
+    return count
+
+
 def _sequence_signals(
-    offsets, terms, strengths, initial, events, spinning_hz, count, sidebands
+    offsets,
+    terms,
+    strengths,
+    initial,
+    events,
+    spinning_hz,
+    count,
+    sidebands,
+    *,
+    readout=None,
+    readout_terms=None,
 ):
     """Average complex band amplitudes over rotor phase at preparation onset."""
     size = initial.shape[0]
     band_orders = np.arange(-sidebands, sidebands + 1)
-    amplitudes = np.empty((*offsets.shape, band_orders.size), dtype=complex)
+    amplitudes = np.empty(
+        (offsets.shape[0], strengths.size, band_orders.size), dtype=complex
+    )
     block_size = min(128, 131072 // (count * size**2))
     gamma = 2 * np.pi * np.arange(count) / count if spinning_hz else None
     for start in range(0, offsets.shape[0], block_size):
@@ -827,13 +940,17 @@ def _sequence_signals(
             spinning_hz,
             gamma,
         )
-        coherence = np.diagonal(density, offset=1, axis1=-2, axis2=-1)
+        if readout is None:
+            coherence = np.diagonal(density, offset=1, axis1=-2, axis2=-1)
+        else:
+            coherence = density[..., readout[0], readout[1]]
         signal = -1j * np.sqrt(strengths) * coherence
         if not spinning_hz:
             amplitudes[block, :, 0] = signal
             continue
+        detected_terms = block_terms if readout_terms is None else readout_terms[block]
         wave = np.exp(
-            1j * _phase_integral(block_terms, gamma_end, spinning_hz)
+            1j * _phase_integral(detected_terms, gamma_end, spinning_hz)
         ).swapaxes(-1, -2)
         # Opposite-sign Fourier sums for detection and preparation.
         detection = np.fft.fft(wave, axis=-1)[..., band_orders] / count
@@ -985,14 +1102,9 @@ def simulate_pulse_sequence(
     offsets = np.empty((directions.shape[1], transition_count))
     strengths = np.empty(transition_count)
     if spinning_hz:
-        rotor_samples = spectral_width_hz / spinning_hz
-        if rotor_samples >= 4095.5:
-            raise ValueError("This PULSAR prototype supports up to 4096 rotor samples.")
-        count = max(5 * accuracy, int(rotor_samples + 0.5) + 1, 2 * sidebands + 1)
-        if count * (transition_count + 1) ** 2 > 131072:
-            raise ValueError(
-                "MAS rotor phases and spin dimension exceed the matrix batch limit."
-            )
+        count = _rf_rotor_count(
+            spectral_width_hz, spinning_hz, accuracy, sidebands, transition_count + 1
+        )
         order_count = 2 * sidebands + 1
         # Bound the two persistent complex arrays before allocating either.
         storage = offsets.size * (4 + order_count) * np.dtype(complex).itemsize
@@ -1051,6 +1163,260 @@ def simulate_pulse_sequence(
     return _as_dataset(
         axis, profile / (ideal_signal * powder_mass), "PULSAR pulse sequence"
     )
+
+
+@dataclass(frozen=True)
+class SpinSite:
+    """Secular single-spin parameters in Hz and principal-frame rotations."""
+
+    spin: float
+    larmor_hz: float
+    shift_hz: float = 0
+    cq_hz: float = 0
+    eta: float = 0
+    csa_anisotropy_hz: float = 0
+    csa_eta: float = 0
+    csa_rotation: object = None
+    efg_rotation: object = None
+    t2_s: float | None = None
+
+
+def _site_parameters(site):
+    if not isinstance(site, SpinSite):
+        raise TypeError("observed and partner must be SpinSite instances.")
+    spin, larmor, shift, cq, eta, csa, csa_eta = _real_scalars(
+        site.spin,
+        site.larmor_hz,
+        site.shift_hz,
+        site.cq_hz,
+        site.eta,
+        site.csa_anisotropy_hz,
+        site.csa_eta,
+    )
+    if not 0.5 <= spin <= 16 or spin % 0.5 != 0 or (spin == 0.5 and cq):
+        raise ValueError(
+            "Use spin from 1/2 to 16 in steps of 1/2 and Cq=0 for spin 1/2."
+        )
+    if larmor <= 0 or not 0 <= eta <= 1 or not 0 <= csa_eta <= 1:
+        raise ValueError(
+            "Use positive Larmor frequency and asymmetries between 0 and 1."
+        )
+    t2 = None
+    if site.t2_s is not None:
+        (t2,) = _real_scalars(site.t2_s)
+        if t2 <= 0:
+            raise ValueError("Site t2_s must be positive.")
+    efg_rotation = (
+        None
+        if site.efg_rotation is None
+        else _validate_rotation(site.efg_rotation, "efg_rotation")
+    )
+    csa_rotation = (
+        None if site.csa_rotation is None else _validate_rotation(site.csa_rotation)
+    )
+    return spin, larmor, shift, cq, eta, csa, csa_eta, efg_rotation, csa_rotation, t2
+
+
+def _polar_frame(directions):
+    x, y, z = directions
+    sine = np.hypot(x, y)
+    cos_phi = np.divide(x, sine, out=np.ones_like(x), where=sine > 0)
+    sin_phi = np.divide(y, sine, out=np.zeros_like(y), where=sine > 0)
+    return np.array([z * cos_phi, z * sin_phi, -sine]), np.array(
+        [-sin_phi, cos_phi, np.zeros_like(z)]
+    )
+
+
+def _site_transitions(directions, angle, parameters, harmonic_count):
+    spin, larmor, shift, cq, eta, csa, csa_eta, efg_rotation, csa_rotation, _ = (
+        parameters
+    )
+    if efg_rotation is None:
+        local = directions
+    else:
+        local = efg_rotation.T @ directions
+    if csa and csa_rotation is not None:
+        shielding = _rotated_csa_harmonics(local, csa, csa_eta, angle, csa_rotation)
+    elif csa:
+        shielding = _csa_harmonics(local, csa, csa_eta, angle)
+    else:
+        shielding = 0.0
+    count = int(2 * spin)
+    result = np.empty((directions.shape[1], count, harmonic_count), dtype=complex)
+    strengths = np.empty(count)
+    # Every site uses the physical EFG frame when relative rotations are meaningful.
+    for i, (_, strength, terms) in enumerate(
+        _transition_harmonics(local, cq, -eta, angle, spin, larmor, shielding)
+    ):
+        result[:, i] = terms[:harmonic_count].T
+        strengths[i] = strength
+    result[..., 0] += shift
+    if efg_rotation is not None and harmonic_count > 1:
+        # Express the local rotor phase origin in the common frame.
+        polar, _ = _polar_frame(directions)
+        local_polar, local_azimuthal = _polar_frame(local)
+        rotated_polar = efg_rotation.T @ polar
+        gauge = (rotated_polar * local_polar).sum(axis=0) - 1j * (
+            rotated_polar * local_azimuthal
+        ).sum(axis=0)
+        result *= (gauge[:, None] ** np.arange(harmonic_count))[:, None, :]
+    return result, strengths
+
+
+def _level_harmonics(transitions):
+    return np.concatenate(
+        (np.zeros_like(transitions[:, :1]), transitions.cumsum(axis=1)), axis=1
+    )
+
+
+def simulate_coupled_sequence(
+    events,
+    *,
+    observed,
+    partner,
+    j_hz,
+    spectral_width_hz,
+    points=8192,
+    accuracy=8,
+    spinning_hz=0.0,
+    sidebands=0,
+    max_rf_step_s=2e-6,
+    receiver_phase_deg=0.0,
+    transitions="all",
+    j_partners=(),
+):
+    """Simulate two RF-active spins with a secular isotropic J coupling.
+
+    The observed spin is detected with the partner projection unchanged.
+    Each site's EFG rotation maps its principal axes into the common
+    sample frame. The CSA rotation maps into that site's EFG frame.
+    Use the partner RF fields on Pulse and IdealPulse to address it.
+    """
+    points, accuracy, sidebands = index(points), index(accuracy), index(sidebands)
+    j_hz, spectral_width_hz, spinning_hz, max_rf_step_s, receiver_phase_deg = (
+        _real_scalars(
+            j_hz, spectral_width_hz, spinning_hz, max_rf_step_s, receiver_phase_deg
+        )
+    )
+    if max_rf_step_s <= 0:
+        raise ValueError("max_rf_step_s must be positive.")
+    _validate_grid(spectral_width_hz, spinning_hz, points, accuracy, sidebands)
+    site_a, site_b = _site_parameters(observed), _site_parameters(partner)
+    spin_a, spin_b = site_a[0], site_b[0]
+    size_a, size_b = int(2 * spin_a + 1), int(2 * spin_b + 1)
+    size = size_a * size_b
+    if size > 64:
+        raise ValueError("The two-spin manifold supports at most 64 levels.")
+    if transitions not in ("central", "satellites", "all"):
+        raise ValueError("transitions must be 'central', 'satellites', or 'all'.")
+    if transitions != "all" and (spin_a < 1.5 or spin_a % 1 != 0.5):
+        raise ValueError("Select all transitions for integer spins and spin 1/2.")
+    selected = np.arange(size_a - 1)
+    if transitions != "all":
+        central = spin_a - selected == 0.5
+        selected = selected[central if transitions == "central" else ~central]
+
+    rotated = any(value is not None for value in (*site_a[7:9], *site_b[7:9]))
+    directions, weights, triangles = _powder_mesh(
+        accuracy,
+        bool(spinning_hz or rotated),
+        full_sphere=bool(spinning_hz and rotated),
+    )
+    angle = np.deg2rad(54.736) if spinning_hz else 0
+    harmonic_count = 5 if spinning_hz else 1
+    count = 1
+    if spinning_hz:
+        count = _rf_rotor_count(
+            spectral_width_hz, spinning_hz, accuracy, sidebands, size
+        )
+    # Account for both site transition/level tables, both product tables,
+    # and the readout and output arrays. Count real offsets as complex for
+    # a conservative estimate of these persistent and assembly tables.
+    storage = (
+        weights.size
+        * (
+            (2 * (size + size_a + size_b) - 2) * harmonic_count
+            + selected.size * size_b * (2 * sidebands + harmonic_count + 1)
+            + size
+        )
+        * 16
+    )
+    if storage > 64 * 1024**2:
+        raise ValueError(
+            "Coupled-spin work arrays exceed 64 MiB. Reduce accuracy or sidebands."
+        )
+    a, strengths_a = _site_transitions(directions, angle, site_a, harmonic_count)
+    b, _ = _site_transitions(directions, angle, site_b, harmonic_count)
+
+    ops_a = tuple(np.kron(op, np.eye(size_b)) for op in _spin_operators(spin_a))
+    ops_b = tuple(np.kron(np.eye(size_a), op) for op in _spin_operators(spin_b))
+    initial = ops_a[2] + (site_b[1] / site_a[1]) * ops_b[2]
+    coupling_levels = j_hz * np.diag(ops_a[2]) * np.diag(ops_b[2])
+    level_a, level_b = _level_harmonics(a), _level_harmonics(b)
+    levels = (level_a[:, :, None, :] + level_b[:, None, :, :]).reshape(
+        weights.size, size, harmonic_count
+    )
+    levels[..., 0] += coupling_levels
+    level_differences = np.diff(levels, axis=1)
+    product_offsets = level_differences[..., 0].real
+    product_terms = level_differences[..., 1:] if spinning_hz else None
+    partner_projections = np.arange(spin_b, -spin_b - 1, -1)
+    frequency = (
+        a[:, selected, 0].real[..., None] - j_hz * partner_projections
+    ).reshape(weights.size, -1)
+    detected_terms = (
+        np.repeat(a[:, selected, 1:], size_b, axis=1) if spinning_hz else None
+    )
+    rows = (selected[:, None] * size_b + np.arange(size_b)).ravel()
+    readout = rows, rows + size_b
+    strengths = np.repeat(strengths_a[selected], size_b)
+    prepared = _prepare_events(
+        events,
+        *ops_a,
+        spinning_hz,
+        max_rf_step_s,
+        site_a[-1],
+        partner=ops_b,
+        partner_t2_s=site_b[-1],
+        coupling_offsets=np.diff(coupling_levels),
+    )
+    axis = np.linspace(-spectral_width_hz / 2, spectral_width_hz / 2, points)
+    passive_offsets = _passive_offsets(j_partners)
+    band_offset = sidebands * spinning_hz
+    if (
+        frequency.min() - band_offset + passive_offsets[0][0] < axis[0]
+        or frequency.max() + band_offset + passive_offsets[-1][0] > axis[-1]
+    ):
+        raise ValueError("The spectral window must contain the requested transitions.")
+    profile = np.zeros(points, dtype=complex)
+    receiver = np.exp(1j * np.deg2rad(receiver_phase_deg))
+    for offset, population in passive_offsets:
+        passive_shift = -offset * np.diff(np.diag(ops_a[2]))
+        signals = _sequence_signals(
+            product_offsets + passive_shift,
+            product_terms,
+            strengths,
+            initial,
+            prepared,
+            spinning_hz,
+            count,
+            sidebands,
+            readout=readout,
+            readout_terms=detected_terms,
+        )
+        signals *= receiver * population
+        for i in range(strengths.size):
+            for j, order in enumerate(range(-sidebands, sidebands + 1)):
+                shifted = frequency[:, i] + offset + order * spinning_hz
+                weighted = weights * signals[:, i, j]
+                profile.real += _deposit_triangles(
+                    axis, shifted, weighted.real, triangles
+                )
+                profile.imag += _deposit_triangles(
+                    axis, shifted, weighted.imag, triangles
+                )
+    norm = strengths.sum() / 2 * weights[triangles].sum()
+    return _as_dataset(axis, profile / norm, "PULSAR coupled sequence")
 
 
 def _as_dataset(axis, profile, name):
