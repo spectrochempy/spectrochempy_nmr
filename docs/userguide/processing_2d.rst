@@ -26,4 +26,5 @@ and reference comparisons. The ordinary ``Experiment.process()`` path
 processes qualified data without requesting vendor replay.
 
 For the underlying dataset, plotting, and general processing API, see
-the `SpectroChemPy core documentation <https://www.spectrochempy.fr/>`_.
+the `NMR plugin overview in the SpectroChemPy core documentation
+<https://www.spectrochempy.fr/latest/userguide/plugins/nmr.html>`_.

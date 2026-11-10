@@ -117,7 +117,7 @@ html_context = {
     # builds reject the moving default unless this is set explicitly.
     "github_version": os.environ.get("NMR_DOCS_GITHUB_REF")
     or (_rtd_tag if _rtd_tag == _release_tag else "master"),
-    "conf_py_path": "/docs/",
+    "doc_path": "docs",
 }
 
 # The six public examples are sourced from this checkout. They are rendered
