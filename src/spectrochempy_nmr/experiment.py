@@ -521,6 +521,7 @@ class Experiment:
         echo_antiecho: str | None = None,
         digital_filter: str | None = None,
         bruker_group_delay: float | None = None,
+        replay: str | None = None,
     ) -> NDDataset:
         """
         State-aware NMR processing.
@@ -580,6 +581,11 @@ class Experiment:
             Override the group delay in complex F2 samples. With a method
             selected, the default is to resolve it from acquisition metadata.
             Supplying a delay alone selects "phase".
+        replay : str, optional
+            Select "topspin" to replay the recorded DQD 1D EFP parameters.
+            Import with remove_digital_filter=False. Replay uses the
+            processing ppm grid and retains the FID's scan/gain normalization.
+            Other processing options cannot be combined with replay.
 
         Returns
         -------
@@ -610,6 +616,30 @@ class Experiment:
             "phc0": phc0 is not _UNSET_ZERO,
             "phc1": phc1 is not _UNSET_ZERO,
         }
+
+        if replay is not None:
+            if replay != "topspin":
+                raise ValueError('replay must be "topspin"')
+            if any(explicit_arguments.values()) or any(
+                value is not None
+                for value in (
+                    reference,
+                    echo_antiecho,
+                    digital_filter,
+                    bruker_group_delay,
+                )
+            ):
+                raise ValueError(
+                    "TopSpin replay uses only the recorded processing parameters"
+                )
+            from spectrochempy_nmr.processing.topspin_replay import (  # noqa: PLC0415
+                replay_dqd_efp,
+            )
+
+            result, applied = replay_dqd_efp(ds)
+            return self._attach_scp_processing_trace(
+                result, requested={"replay": replay}, applied=applied
+            )
 
         apodization = None if apodization is _UNSET_NONE else apodization
         lb = None if lb is _UNSET_NONE else lb

@@ -7,13 +7,8 @@ import numpy as np
 from spectrochempy.core.units import ur
 
 
-def prepare_fid(dataset, *, remove_dc_offset, digital_filter, normalize_scan_gain):
-    if not isinstance(remove_dc_offset, bool) or not isinstance(
-        normalize_scan_gain, bool
-    ):
-        raise ValueError("DC and scan/gain options must be booleans")
-    if digital_filter not in (None, "time"):
-        raise ValueError("digital_filter must be None or 'time'")
+def validated_fid_inputs(dataset):
+    """Return the acquisition metadata, preparation descriptor and samples."""
     acquisition = dict(dataset.meta.get("acquisition", {}))
     recipe = acquisition.get("fid_preparation")
     if (
@@ -31,6 +26,7 @@ def prepare_fid(dataset, *, remove_dc_offset, digital_filter, normalize_scan_gai
         or not np.iscomplexobj(samples)
         or not np.isfinite(samples).all()
         or np.any(dataset.mask)
+        or axis is None
         or axis.units is None
         or not axis.units.is_compatible_with(ur.s)
         or not isinstance(width, (int, float))
@@ -42,6 +38,17 @@ def prepare_fid(dataset, *, remove_dc_offset, digital_filter, normalize_scan_gai
         )
     ):
         raise ValueError("FID preparation requires the original calibrated time grid")
+    return acquisition, recipe, samples
+
+
+def prepare_fid(dataset, *, remove_dc_offset, digital_filter, normalize_scan_gain):
+    if not isinstance(remove_dc_offset, bool) or not isinstance(
+        normalize_scan_gain, bool
+    ):
+        raise ValueError("DC and scan/gain options must be booleans")
+    if digital_filter not in (None, "time"):
+        raise ValueError("digital_filter must be None or 'time'")
+    acquisition, recipe, samples = validated_fid_inputs(dataset)
 
     stages = ("dc_offset", "digital_filter", "scan_gain")
     requested = (remove_dc_offset, digital_filter == "time", normalize_scan_gain)

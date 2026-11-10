@@ -256,3 +256,46 @@ def test_dqd_fid_filter_manual_phase_and_ppm(examdata):
         params["O1"] + (size // 2 - index) * params["SW_h"] / size
     ) / params["BF1"]
     np.testing.assert_allclose(phased.x.data, expected_ppm, rtol=0, atol=1e-8)
+
+
+@pytest.mark.parametrize(
+    ("experiment", "delay", "reference_scale"),
+    [
+        ("Cyclosporine/1", 76.0, 256),
+        ("exam_CMCse_1/1", 67.9842376708984, 0.25),
+    ],
+)
+def test_dqd_topspin_efp_replay(experiment, delay, reference_scale):
+    root = os.environ.get("NMR_TOPSPIN_EFP_REFERENCES")
+    if root is None:
+        pytest.skip("set NMR_TOPSPIN_EFP_REFERENCES to the TopSpin-processed copies")
+    path = Path(root).resolve(strict=True) / experiment
+
+    fid = _local_read(path / "fid")
+    original = fid.data.copy()
+    replay = Experiment(fid).process(replay="topspin")
+
+    pdata = path / "pdata" / "1"
+    pars, (real, imag) = ng.bruker.read_pdata(pdata, bin_files=["1r", "1i"])
+    reference = real + 1j * imag
+    # Fixed positive scales measured for these references. Do not fit a
+    # complex scale, which would hide a phase error in the delay correction.
+    residual = replay.data * reference_scale - reference
+    assert np.linalg.norm(residual) / np.linalg.norm(reference) < 1e-7
+
+    top_axis = scp.read_topspin(pdata / "1r", proc_axis=True, local_only=True).x
+    assert replay.x.units == top_axis.units == scp.ur.ppm
+    np.testing.assert_allclose(replay.x.data, top_axis.data, atol=2e-12, rtol=0)
+    assert pars["acqus"]["GRPDLY"] == pytest.approx(delay)
+    assert replay.meta.nmr_processing["scp_processing"]["applied"][
+        "group_delay_points"
+    ] == pytest.approx(delay)
+    assert Experiment(replay).is_frequency_domain
+    np.testing.assert_array_equal(fid.data, original)
+
+    with pytest.raises(ValueError, match="remove_digital_filter=False"):
+        Experiment(_local_read(path / "fid", filtered=True)).process(replay="topspin")
+    with pytest.raises(ValueError, match="recorded processing parameters"):
+        Experiment(fid).process(replay="topspin", phase="manual")
+    with pytest.raises(ValueError, match="original calibrated time grid"):
+        Experiment(fid[1:]).process(replay="topspin")
