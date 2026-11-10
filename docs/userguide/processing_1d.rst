@@ -14,6 +14,19 @@ records the SpectroChemPy-owned call in
 ``result.meta.nmr_processing["scp_processing"]``. ``requested`` contains
 explicit user arguments and ``applied`` records operations actually executed.
 
+To inspect intermediate results, apply the core operations to the
+``NDDataset`` exposed by ``experiment.dataset``. You can call them as
+dataset methods or as functions such as ``scp.em(experiment.dataset, lb=5.0)``.
+
+.. code-block:: python
+
+   windowed = experiment.dataset.em(lb=5.0)
+   spectrum = windowed.fft()
+
+The original FID is preserved by default in both workflows.
+Use ``Experiment.process()`` when you want the plugin to validate the
+processing sequence for the acquisition and record the operations it applies.
+
 A pseudo-2D series contains ordinary 1D spectra that can be processed one
 spectrum at a time. For acquisitions with two Fourier dimensions, see
 :doc:`processing_2d`.
