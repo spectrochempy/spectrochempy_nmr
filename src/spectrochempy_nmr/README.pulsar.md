@@ -604,6 +604,48 @@ more closely than the intensities. This comparison does not isolate
 which effects of excitation, processing or model assumptions explain
 the residual intensity differences.
 
+## Aluminum MAS dataset with documented RF excitation
+
+The [Bernasconi et al. archive](https://doi.org/10.5281/zenodo.17130697)
+includes the Bruker experiment `raw data/PBG1_2,5mm/1` with its FID, phase
+cycle, acquisition parameters and processed spectrum. The `raw data.rar`
+used here has SHA-256
+`9dea155c54c70a3c0ea0ee13ccedda0c36ba286d7962b60795c8e9dbdbcce405`.
+The precompiled `pf_zg` sequence applies one rectangular `p1` pulse before
+direct acquisition. The experiment title specifies a 50 kHz RF field at
+32 W. The acquisition record gives a 0.5 µs pulse, 195.439811 MHz carrier,
+30 kHz MAS, 2.5 MHz acquisition width, 0.1 s recycle delay and nominal 6.5 µs
+receiver dead time. The nominal free-spin flip angle is 9°. For simulations
+on the processed chemical-shift reference, the carrier offset is about
++4.409 kHz, obtained from `SFO1 - SF`. The acquisition value `O1 = 340 Hz`
+is relative to the instrument's base frequency `BF1`.
+
+```sh
+python tools/measure_pulsar_pbg_bands.py "/path/to/raw data/PBG1_2,5mm/1"
+```
+
+The [measurement script](../../tools/measure_pulsar_pbg_bands.py) uses
+the real TopSpin spectrum on its published frequency grid (152.59 Hz per
+point). It subtracts a separate straight baseline for each order using
+the flanks 8.5–12.5 kHz from the nominal band center. It integrates within
+±6 kHz of each center and repeats the measurement at ±4.5 and ±7.5 kHz to
+expose sensitivity to the choice of window. Each area is reported as a
+percentage of the central **window** area at the same width. Across the
+20 satellite windows (orders ±1 to ±10), the ±6 kHz areas range from
+2.26% to 7.86% of the central window. Their sum varies from 84.64% to
+91.06% of the central window across the three widths. An independent check
+using shoulder medians instead of a linear baseline changed individual
+±6 kHz ratios by up to 0.67 percentage points.
+
+These measurements supply experimental targets for a finite-pulse
+comparison. The sample is an amorphous binder with multiple aluminum
+environments, as described in the [associated article](https://doi.org/10.1016/j.jnoncrysol.2026.124054).
+A quantitative test of PULSAR still requires a sample model determined
+independently of these windows and an assessment of the receiver and
+processing response. The TopSpin spectrum already has a baseline
+correction. The window ratios describe that processed spectrum and
+include any contribution from overlapping transitions.
+
 ## Experimental check of phosphorus CSA bands
 
 The [MRSimulator phosphorus example](https://mrsimulator.readthedocs.io/en/v1.0/fitting/1D_fitting/plot_1_31P_Na2PO4_MAS.html)
