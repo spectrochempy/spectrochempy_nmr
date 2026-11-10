@@ -90,6 +90,7 @@ html_theme_options = {
     "navbar_persistent": ["search-button-field"],
     "header_links_before_dropdown": 6,
     "navigation_depth": 4,
+    "secondary_sidebar_items": ["edit-this-page", "sourcelink"],
     "show_nav_level": 1,
     "show_toc_level": 2,
     "collapse_navigation": False,

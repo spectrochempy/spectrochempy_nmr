@@ -161,3 +161,21 @@ html[data-theme="dark"] {
   --pst-color-link: #8be8c0;
   --pst-color-link-hover: #b3f3d7;
 }
+
+.nmr-sidebar-nav .nmr-sidebar-toc ul {
+  list-style: none;
+  padding-inline-start: 1rem;
+}
+
+.nmr-sidebar-nav .nmr-sidebar-toc > ul {
+  padding-inline-start: 0;
+}
+
+.nmr-sidebar-nav .nmr-sidebar-toc a {
+  display: block;
+  padding: 0.25rem 0.5rem;
+}
+
+.nmr-sidebar-nav .nmr-sidebar-toc + .bd-links__title {
+  margin-top: 1rem;
+}
