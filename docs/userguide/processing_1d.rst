@@ -14,17 +14,11 @@ records the SpectroChemPy-owned call in
 ``result.meta.nmr_processing["scp_processing"]``. ``requested`` contains
 explicit user arguments and ``applied`` records operations actually executed.
 
-``Experiment.process()`` is validated for 1D experiments only and raises for
-general multidimensional datasets. A pseudo-2D series is a collection of
-ordinary 1D spectra and may be processed one spectrum at a time; it is not a
-general 2D Fourier-processing chain.
+A pseudo-2D series contains ordinary 1D spectra that can be processed one
+spectrum at a time. For acquisitions with two Fourier dimensions, see
+:doc:`processing_2d`.
 
-Generic operations such as :external+core:py:func:`spectrochempy.fft`,
-apodization methods, :external+core:py:class:`spectrochempy.NDDataset`,
-:external+core:py:class:`spectrochempy.Coord`,
-:external+core:py:class:`spectrochempy.CoordSet`, and units belong to the
-core documentation.
-This site documents their NMR use without duplicating their technical API.
+See :ref:`nmr-core-operations` for the core functions used in NMR.
 
 Replay TopSpin EFP on a Bruker DQD FID
 --------------------------------------
