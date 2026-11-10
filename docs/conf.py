@@ -30,7 +30,12 @@ release = version
 language = "en"
 master_doc = "index"
 source_suffix = ".rst"
-exclude_patterns = ["_build", "_static", "**.ipynb_checkpoints"]
+exclude_patterns = [
+    "_build",
+    "_static",
+    "**.ipynb_checkpoints",
+    "examples/gallery/**/*.ipynb",  # Sphinx-Gallery renders the paired RST.
+]
 templates_path = ["_templates"]
 
 core_docs_url = os.environ.get(
@@ -56,6 +61,7 @@ extensions = [
     "sphinx.ext.viewcode",
     "sphinx.ext.githubpages",
     "sphinx_gallery.gen_gallery",
+    "nbsphinx",
 ]
 
 autodoc_default_options = {
@@ -75,6 +81,8 @@ intersphinx_mapping = {
     "python": ("https://docs.python.org/3", None),
     "numpy": ("https://numpy.org/doc/stable/", None),
 }
+
+nbsphinx_execute = "always"
 
 html_theme = "pydata_sphinx_theme"
 html_title = f"{project} {release}"
