@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import hashlib
 import json
+from importlib import import_module
 from pathlib import Path
 
 import numpy as np
@@ -156,6 +157,11 @@ def test_experiment_imported_states_matches_raw_nmrpipe_checkpoints(
         metadata={},
         diagnostics=(),
     )
+    core_fft = import_module("spectrochempy.processing.fft.fft")
+    if profile == "states" and getattr(core_fft, "FFT_PREVALIDATION_API", 0) < 1:
+        with pytest.raises(NotImplementedError, match="FFT prevalidation"):
+            from_interop(normalized, profile=profile)
+        return
     source = from_interop(normalized, profile=profile)
     stages = []
     if profile == "states":

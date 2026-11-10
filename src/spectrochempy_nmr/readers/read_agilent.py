@@ -459,7 +459,7 @@ def _read_normalized_agilent_2d(
         )
         result = normalize(stored, legacy_presentation=True, **options)
         dataset = from_interop(result)
-    except OSError as exc:
+    except (OSError, NotImplementedError) as exc:
         if requested:
             raise SpectroChemPyError(str(exc)) from exc
         raise

@@ -269,7 +269,7 @@ are known to follow the NMRPipe States convention, use::
 This FFT-only path uses ``FT -nodf`` in both dimensions, with F2 before F1
 and no alternating sign in F1. It returns the four real component planes
 and centered Hz axes. Use ``Experiment.process()`` to enforce the transform
-order.
+order. The pure States profile requires SpectroChemPy 1.2.0 or later.
 
 The Agilent qualification uses the historical ``agilent_2d`` acquisition
 from the nmrglue v0.5 corpus and explicit ``var2pipe`` States conversion.

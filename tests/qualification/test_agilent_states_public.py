@@ -12,6 +12,7 @@ from nmrglue import interop
 from nmrglue import varian
 
 import spectrochempy as scp
+from spectrochempy.utils.exceptions import SpectroChemPyError
 import spectrochempy_nmr.interop as adapter
 
 
@@ -175,6 +176,15 @@ def test_synthetic_states_quadrature_auto_and_manual(synthetic_states, monkeypat
     np.testing.assert_array_equal(unresolved.data, auto.data)
     with pytest.raises(NotImplementedError, match="UNVALIDATED"):
         unresolved.fft(dim="y")
+
+    source.write_bytes(bytes(256 * 1024 + 1))
+    unresolved = scp.nmr.read_agilent(path)
+    assert unresolved.meta.quadrature_mode == "states-stored-2d"
+    assert unresolved.meta.acquisition["quadrature_selection"]["mode"] is None
+    core_fft = import_module("spectrochempy.processing.fft.fft")
+    monkeypatch.setattr(core_fft, "FFT_PREVALIDATION_API", 0)
+    with pytest.raises(SpectroChemPyError, match="FFT prevalidation"):
+        scp.nmr.read_agilent(path, quadrature="states")
 
 
 def test_synthetic_states_older_provider(synthetic_states, monkeypatch):
