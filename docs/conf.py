@@ -56,6 +56,7 @@ if _release_build:
 
 extensions = [
     "sphinx.ext.autodoc",
+    "sphinx.ext.autosummary",
     "sphinx.ext.intersphinx",
     "sphinx.ext.napoleon",
     "sphinx.ext.viewcode",
@@ -63,6 +64,8 @@ extensions = [
     "sphinx_gallery.gen_gallery",
     "nbsphinx",
 ]
+
+autosummary_generate = True
 
 autodoc_default_options = {
     "members": True,

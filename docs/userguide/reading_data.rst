@@ -18,7 +18,7 @@ Reader catalogue
 
 Use the calls below with your file or experiment directory. The available
 processing steps depend on the acquisition and file layout. See the
-:doc:`../reference/nmr_api` for reader options.
+:doc:`../reference/readers` for reader options.
 
 .. list-table::
    :header-rows: 1
