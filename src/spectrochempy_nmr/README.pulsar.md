@@ -229,3 +229,44 @@ single-threaded comparison. On the development machine, accuracy 8 took
 Accuracy 16 took 1.34 s (36 evaluations) and recovered it to within 3 Hz.
 This benchmark measures fit cost and sensitivity to the powder mesh.
 Experimental spectra are still needed to assess model accuracy.
+
+## Experimental check with aluminum acetylacetonate
+
+The [MRSimulator fitting tutorial](https://mrsimulator.readthedocs.io/en/stable/introduction/fitting_example.html)
+provides a Bruker whole-echo acquisition of aluminum acetylacetonate
+at 9.4 T. Use its supplied, phased `pdata/1/1r` for this check.
+Download and extract the
+[original archive](https://ssnmr.org/sites/default/files/mrsimulator/Al_acac3_0.zip)
+locally. The archive used here has SHA-256
+`d0c32c470efe29d4e3236812b0064ddf558a888d8e8f0d93a8d4430085358b60`.
+The repository contains the [qualification script](../../tools/qualify_pulsar_alacac.py)
+and does not redistribute the acquisition.
+
+```sh
+OPENBLAS_NUM_THREADS=1 python tools/qualify_pulsar_alacac.py /path/to/pdata/1
+```
+
+The script reads the processed real spectrum with nmrglue-ng and uses
+`OFFSET`, `SW_p`, `SF` and `SI` to construct its frequency axis. It
+uses every sixteenth point and fits the window from −1300 to +1100 Hz
+relative to the processed carrier. The model is a spin-5/2 central
+transition at a single site. The fit estimates the coupling, asymmetry,
+offset and Gaussian width, and solves for an amplitude and a linear
+baseline at each evaluation. It uses 12.5 kHz MAS as stated in the
+tutorial and in the spectrum title. The acquisition's `MASR` field
+instead reads 4.2 kHz. Rerunning with `--rotor-hz 4200` at accuracy 16
+changes the fitted coupling by about 0.10 kHz and the residual RMS
+from 1.94% to 1.96% of the peak. The central-band fit cannot establish
+which rotor rate was used.
+
+At accuracy 16, the fit gave **2.923 MHz**, **0.140** asymmetry,
+**+475.5 Hz** offset and **65.1 Hz** Gaussian FWHM. The fit took about
+0.86 s for 102 residual evaluations on the development machine.
+Doubling accuracy to 32 changed the coupling by 0.81 kHz and left the
+residual RMS at 1.94% to two decimal places. The tutorial reports an
+asymmetry of 0.136 and a Gaussian FWHM of 63 Hz, using its own processing
+and a model of echo truncation. The PULSAR fit does not model that
+truncation explicitly. The offset above uses the processed carrier
+rather than the tutorial's external chemical-shift reference. This
+check covers one measured central band. It does not qualify
+experimental sideband intensities.
