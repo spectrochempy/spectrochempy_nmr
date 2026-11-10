@@ -844,7 +844,7 @@ with the EFG. The 3QMAS ridge comparison above uses an empirical spread
 of $P_Q$ and chemical shift at fixed $\eta$.
 
 The implementation is in [czjzek.py](czjzek.py), with examples and API
-conventions in the [Czjzek guide](../../../docs/userguide/czjzek.rst).
+conventions in the [Czjzek guide](../../docs/userguide/czjzek.rst).
 It constructs
 
 $$
