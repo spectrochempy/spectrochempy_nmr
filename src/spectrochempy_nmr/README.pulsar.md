@@ -192,5 +192,16 @@ An illustrative adjustment on a synthetic noisy MAS profile took
 0.47 s after batching, down from 4.13 s, with 32 evaluations in both
 runs. The timings are for the central band. With several bands the
 FFT supplies their intensities together, while powder integration
-is repeated per band. Performance for experimental adjustments
-with sidebands remains to be measured.
+is repeated per band.
+
+The [sideband fit benchmark](../../tools/benchmark_pulsar_sideband_fit.py)
+fits the central band and two sidebands on each side at 8 kHz MAS.
+It estimates the quadrupolar coupling, asymmetry and shift from a
+synthetic spectrum generated at accuracy 32 with Gaussian broadening
+and noise at 0.2% of the peak. The fit uses the same known broadening.
+Run it with the plugin installed and `OPENBLAS_NUM_THREADS=1` for a
+single-threaded comparison. On the development machine, accuracy 8 took
+0.42 s (32 evaluations) and recovered the shift to within 13 Hz.
+Accuracy 16 took 1.34 s (36 evaluations) and recovered it to within 3 Hz.
+This benchmark measures fit cost and sensitivity to the powder mesh.
+Experimental spectra are still needed to assess model accuracy.
