@@ -115,6 +115,9 @@ as retained complex samples. To meet that recommendation with the same
 The warning disappears at that size. The isolated RR discrepancy
 persists at the corresponding tile boundary.
 
+The :doc:`PST-5 gallery notebook </examples/gallery/nmr/plot_replay_mqmas_pst5>`
+shows the zero-filled recipe and plots the RR plane.
+
 Multiplex coherence selection requires the corresponding acquisition
 conventions to be represented by ``nmrglue.interop``.
 
