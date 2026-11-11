@@ -1,8 +1,8 @@
 """
-Replay a 2D aluminium-27 MQMAS spectrum of PST-5
-================================================
+Processing an MQMAS spectrum
+============================
 
-Start from experiment 51 of the PST-5 Bruker States acquisition. The
+Start from experiment 51 of the aluminium-27 Bruker States acquisition of PST-5. The
 example uses the rectangular TopSpin recipe with no baseline correction
 and manual F2 phase. It reconstructs the direct quadrature with a Hilbert
 transform and rescales F1 to the isotropic chemical-shift axis.
