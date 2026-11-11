@@ -568,7 +568,13 @@ class TestProcessTimeDomain:
             atol=1.0e-12,
         )
 
-        manual = zf_size(internal_apodized, size=size).fft()
+        padded = zf_size(internal_apodized, size=size)
+        # Older core versions apply the stored phase during FFT.
+        padded.meta.readonly = False
+        padded.meta.phc0 = [0] * padded.ndim
+        padded.meta.phc1 = [0] * padded.ndim
+        padded.meta.readonly = True
+        manual = padded.fft()
 
         np.testing.assert_allclose(
             np.asarray(public.data),
