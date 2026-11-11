@@ -11,6 +11,15 @@ Unreleased
 * Estimate phase for complex 1D spectra using masked ACME or DISPA reference
   windows, with optional real-channel baseline correction.
 
+* Add explicit spectral-grid MQMAS shearing with
+  ``Experiment.shear_mqmas()`` and isotropic F1 scaling. Preserve calibrated
+  coordinates and spectral components; document periodic boundaries and the
+  rectangular TopSpin reference comparison.
+
+* Add ``Experiment.replay_xfshear()`` for rectangular Bruker States MQMAS
+  processing with F2 Hilbert reconstruction and isotropic calibration.
+
+
 0.3.0
 -----
 
