@@ -50,8 +50,10 @@ def shear_mqmas(dataset, *, spin, coherence_order=3, pivot=0.0):
         raise ValueError("MQMAS shearing has already been applied")
     if set(dataset.dims) not in ({"y", "x"}, {"c", "y", "x"}):
         raise ValueError("MQMAS requires x/y spectral axes and optional c planes")
+    if dataset.coordset is None:
+        raise ValueError("MQMAS requires two calibrated spectral grids")
     if "c" in dataset.dims:
-        labels = dataset.coordset["c"].labels
+        labels = dataset.c.labels if dataset.c is not None else None
         layout = tuple(labels) if labels is not None else ()
         real_planes = layout == ("rr", "ri", "ir", "ii") and not np.iscomplexobj(
             dataset.data
@@ -100,6 +102,10 @@ def shear_mqmas(dataset, *, spin, coherence_order=3, pivot=0.0):
     y = coordinates["y"].data
     shifts = ratio * (coordinates["x"].data - pivot_hz) / (y[1] - y[0])
     ramp = np.exp(2j * np.pi * np.fft.fftfreq(len(y))[:, None] * shifts)
+    if "c" in dataset.dims and np.iscomplexobj(data) and len(y) % 2 == 0:
+        # The even-length Nyquist bin represents both signs for each real
+        # plane. Use its cosine response in the packed representation too.
+        ramp[len(y) // 2] = ramp[len(y) // 2].real
     shifted = np.fft.ifft(np.fft.fft(work, axis=-2) * ramp, axis=-2)
     if not np.iscomplexobj(data):
         shifted = shifted.real
@@ -202,8 +208,8 @@ def replay_xfshear(dataset, *, spin, coherence_order, size, direct_points):
         ):
             raise ValueError("XFSHEAR requires the original uniform acquisition grids")
     sf = float(meta.sf[-1].to("MHz").magnitude)
-    offset = float(meta.offset[-1])
-    if not np.isfinite(sf) or sf <= 0 or not np.isfinite(offset):
+    carrier = float(meta.sfo1[-1].to("MHz").magnitude)
+    if not np.isfinite(sf) or sf <= 0 or not np.isfinite(carrier) or carrier <= 0:
         raise ValueError("XFSHEAR requires the direct processing reference")
 
     real_f2 = _positive_fft(data[..., :direct_points], sx, -1).real
@@ -234,7 +240,7 @@ def replay_xfshear(dataset, *, spin, coherence_order, size, direct_points):
     if not np.isfinite(spectrum).all():
         raise ValueError("XFSHEAR produced nonfinite spectral values")
 
-    center = offset - sw2 / (2 * sf)
+    center = (carrier - sf) * 1e6 / sf
     coords = {
         "c": Coord(labels=["S_R", "S_I"]),
         "x": Coord(

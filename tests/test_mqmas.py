@@ -177,3 +177,23 @@ def test_mqmas_rejects_unreferenced_ppm():
     source.coordset["y"] = scp.Coord(source.y.data, units="ppm")
     with pytest.raises(ValueError, match="reference"):
         Experiment(source).shear_mqmas(spin=2.5)
+
+
+def test_mqmas_fractional_shift_does_not_mix_packed_nyquist_components():
+    x = scp.Coord(np.arange(2.0) * 12 / 19, units="Hz", rounding=False, sigdigits=15)
+    y = scp.Coord(np.arange(8.0), units="Hz")
+    nyquist = np.broadcast_to((-1.0) ** np.arange(8)[:, None], (8, 2))
+    source = scp.NDDataset(
+        np.stack((nyquist.astype(complex), np.zeros_like(nyquist))),
+        dims=["c", "y", "x"],
+    )
+    source.set_coordset(c=scp.Coord(labels=["S_R", "S_I"]), y=y, x=x)
+    source.meta.component_axis = "c"
+    result = Experiment(source).shear_mqmas(spin=2.5, pivot=-6 / 19)
+    np.testing.assert_allclose(result.data, 0, atol=1e-12)
+
+
+def test_mqmas_rejects_dataset_without_coordinates():
+    source = scp.NDDataset(np.zeros((8, 2)))
+    with pytest.raises(ValueError, match="calibrated spectral grids"):
+        Experiment(source).shear_mqmas(spin=2.5)
