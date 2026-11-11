@@ -123,7 +123,12 @@ def shear_mqmas(dataset, *, spin, coherence_order=3, pivot=0.0):
     )
     isotropic.meta.update(dict(coordinates["x"].meta.copy()))
     if dataset.coordset["y"].units == scp.ur.ppm:
-        isotropic.ito("ppm")
+        try:
+            isotropic.ito("ppm")
+        except (ValueError, TypeError) as exc:
+            raise ValueError(
+                "MQMAS requires an F2 frequency reference when F1 is in ppm"
+            ) from exc
         isotropic.title = "isotropic chemical shift"
     result.coordset["y"] = isotropic
     readonly = result.meta.readonly

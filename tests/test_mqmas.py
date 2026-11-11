@@ -197,3 +197,11 @@ def test_mqmas_rejects_dataset_without_coordinates():
     source = scp.NDDataset(np.zeros((8, 2)))
     with pytest.raises(ValueError, match="calibrated spectral grids"):
         Experiment(source).shear_mqmas(spin=2.5)
+
+
+def test_mqmas_requires_direct_reference_for_ppm_output():
+    source = _map()
+    source.y.meta.acquisition_frequency = 100 * scp.ur.MHz
+    source.y.ito("ppm")
+    with pytest.raises(ValueError, match="F2 frequency reference"):
+        Experiment(source).shear_mqmas(spin=2.5)
