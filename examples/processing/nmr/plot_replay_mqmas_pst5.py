@@ -18,10 +18,7 @@ import spectrochempy as scp
 
 # Keep the acquired points intact at import. prepare_xfshear() will
 # correct the digital group delay on the F2 frequency grid.
-raw = scp.nmr.read(
-    "nmrdata/bruker/tests/nmr/MQMAS_27AL_PST5/51/ser",
-    raw=True,
-)
+raw = scp.nmr.read("nmrdata/bruker/tests/nmr/MQMAS_27AL_PST5/51/ser")
 
 # %%
 # Retain the first 2048 complex points in F2 and zero-fill to 4096 points,

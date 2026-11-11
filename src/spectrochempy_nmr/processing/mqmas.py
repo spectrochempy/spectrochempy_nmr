@@ -57,7 +57,7 @@ def prepare_xfshear(
     ):
         raise ValueError(
             "XFSHEAR requires an uncorrected, normalized Bruker States SER. "
-            "Read it with raw=True."
+            "Read the SER without import corrections."
         )
     data = np.asarray(dataset.data)
     if not np.iscomplexobj(data) or np.any(dataset.mask) or not np.isfinite(data).all():

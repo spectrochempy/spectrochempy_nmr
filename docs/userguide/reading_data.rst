@@ -1,6 +1,12 @@
 Reading NMR data
 ================
 
+Bruker FID and SER files are read without digital-filter or DC-offset
+correction by default. The reader still decodes the quadrature, calibrates
+the time coordinates, and applies its scan-count and receiver-gain amplitude
+normalization. Use :doc:`processing_1d` or :doc:`processing_2d` to select a
+correction during processing.
+
 ``scp.nmr.read(...)`` dispatches public readers for TopSpin/Bruker, Agilent or
 Varian, JEOL and SIMPSON inputs. A protocol can be supplied explicitly
 when automatic detection is not appropriate.

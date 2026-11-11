@@ -627,11 +627,10 @@ class Experiment:
             Bruker Rance–Kay shuffling with no additional F1 sign alternation.
             An explicit selection is required for imported echo/anti-echo data.
         digital_filter : str, optional
-            Select "phase" for NMRPipe FT -df or "time" for the historical
-            reader's time-domain correction, which shortens F2. For a raw
-            Bruker QSIM 1D FID, select "pknl" to apply the fractional group
-            delay on the final FFT grid. Import with
-            ``remove_digital_filter=False`` and ``remove_dc_offset=False``.
+            Select "time" to correct and shorten a supported Bruker 1D
+            FID or echo/anti-echo SER, or "phase" for NMRPipe FT -df on
+            echo/anti-echo data. For a raw Bruker QSIM 1D FID, select
+            "pknl" to apply the fractional group delay on the final FFT grid.
             This mode uses the processing ppm reference, supports exponential
             apodization and optional manual phase angles at the first bin,
             and defaults to the recorded FFT size when ``size`` is omitted.
@@ -642,7 +641,7 @@ class Experiment:
         replay : str, optional
             Select "topspin" to replay recorded DQD 1D EFP or supported
             uniform 2D XFB processing parameters.
-            Import with remove_digital_filter=False. Replay uses the
+            Read the uncorrected acquisition. Replay uses the
             processing ppm grid and retains the FID's scan/gain normalization.
             Other processing options cannot be combined with replay.
 
@@ -752,9 +751,12 @@ class Experiment:
             )
         if digital_filter not in (None, "phase", "time"):
             raise ValueError('digital_filter must be "phase", "time" or "pknl"')
+        if digital_filter == "time" and self.ndim == 1:
+            ds = self.prepare_fid(digital_filter="time")
+            digital_filter = None
         if digital_filter is not None and not supports_echo:
             raise ValueError(
-                "digital_filter requires an imported raw echo/anti-echo FID"
+                "digital_filter requires a supported 1D or echo/anti-echo acquisition"
             )
         if bruker_group_delay is not None and not supports_echo:
             raise ValueError(

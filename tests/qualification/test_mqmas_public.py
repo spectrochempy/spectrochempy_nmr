@@ -26,13 +26,10 @@ def test_replay_xfshear_matches_mqmas_51_four_planes(sx, reference_env, phase):
     pdata = os.environ.get(reference_env)
     if not ser or not pdata:
         pytest.skip("requires MQMAS/51 SER and its rectangular XFSHEAR reference")
-    source = scp.nmr.read_topspin(
-        ser,
-        local_only=True,
-        raw=True,
-        remove_digital_filter=True,
-        remove_dc_offset=True,
-    )
+    source = scp.nmr.read_topspin(ser, local_only=True)
+    assert source.meta.acquisition["digital_filter"]["applied"] is False
+    assert source.meta.acquisition["dc_offset"]["applied"] is False
+    assert source.fft(dim="x").shape == source.shape
     original = source.data.copy()
     ref = scp.nmr.read_topspin(pdata, local_only=True, proc_axis=True)
     mixed = Experiment(source).prepare_xfshear(
@@ -78,7 +75,7 @@ def test_echo_window_follows_each_f1_increment():
     ser = os.environ.get("SCP_MQMAS_SER")
     if not ser:
         pytest.skip("requires the PST-5 SER")
-    raw = scp.nmr.read(ser, local_only=True, raw=True)
+    raw = scp.nmr.read(ser, local_only=True)
     experiment = Experiment(raw)
     windowed = experiment.prepare_xfshear(
         size=(512, 4096),

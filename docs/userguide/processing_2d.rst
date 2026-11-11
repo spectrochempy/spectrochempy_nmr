@@ -18,6 +18,13 @@ mixed-domain result after F2 before transforming F1.
    f2 = fid.fft(dim="x")
    spectrum = f2.fft(dim="y")
 
+A direct FFT uses the supplied samples, including the original group delay
+when reading a Bruker SER with default options. TopSpin XFB replay applies
+the recorded correction for supported acquisitions. The echo/anti-echo
+workflow also offers explicit time-domain and phase correction. To reproduce
+a direct FFT script that relied on correction during import, pass
+``remove_digital_filter=True`` to the reader.
+
 Here ``x`` and ``y`` are the direct and indirect dimensions of the
 imported FID. Keep both quadrature branches through the indirect FFT.
 Select the desired spectral component before plotting or extracting a
@@ -38,11 +45,7 @@ processing parameters explicitly:
 
    import spectrochempy as scp
 
-   fid = scp.read_topspin(
-       "path/to/experiment/ser",
-       remove_digital_filter=False,
-       remove_dc_offset=False,
-   )
+   fid = scp.read_topspin("path/to/experiment/ser")
    spectrum = scp.nmr.Experiment(fid).process(replay="topspin")
    trace = spectrum.meta.nmr_processing["scp_processing"]["applied"]
 

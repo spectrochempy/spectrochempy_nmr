@@ -203,6 +203,36 @@ def test_synthetic_provider_binary_to_experiment_chain(provider, tmp_path, filte
         np.testing.assert_allclose(deferred.data, source.data, atol=1e-12)
 
 
+def test_public_default_fid_defers_filter_until_experiment(provider, tmp_path):
+    if (
+        "preserve_storage"
+        not in signature(provider.interop.normalize_bruker_fid).parameters
+    ):
+        pytest.skip("requires the Bruker FID preparation contract")
+    (tmp_path / "acqus").write_text(
+        "##TITLE= Synthetic Bruker qualification\n"
+        "##JCAMPDX= 5.00\n"
+        "##$TD= 64\n##$SW_h= 2000\n##$SFO1= 125.00025\n"
+        "##$BF1= 125\n##$O1= 250\n##$AQ_mod= 3\n"
+        "##$DECIM= 16\n##$DSPFVS= 12\n##$GRPDLY= 2.5\n"
+        "##$BYTORDA= 0\n##$DTYPA= 0\n##$NS= 2\n##$RG= 4\n##END=\n"
+    )
+    words = np.zeros(256, dtype="<i4")
+    words[:64] = np.arange(64)
+    path = tmp_path / "fid"
+    path.write_bytes(words.tobytes())
+    raw = scp.nmr.read(path)
+    legacy = scp.nmr.read(path, remove_digital_filter=True, remove_dc_offset=True)
+    assert raw.meta.acquisition["digital_filter"]["applied"] is False
+    assert raw.meta.acquisition["dc_offset"]["applied"] is False
+    assert raw.fft().shape == raw.shape
+    prepared = Experiment(raw).prepare_fid(digital_filter="time", remove_dc_offset=True)
+    np.testing.assert_allclose(prepared.fft().data, legacy.fft().data, atol=1e-12)
+    np.testing.assert_array_equal(prepared.x.data, legacy.x.data)
+    assert prepared.meta.acquisition["digital_filter"]["applied"] is True
+    assert prepared.meta.acquisition["dc_offset"]["applied"] is True
+
+
 def _check_public_fid(provider, path, filtered, dc, monkeypatch, *, supported=True):
     reader = import_module("spectrochempy_nmr.readers.read_topspin")
     converter = import_module("spectrochempy_nmr.interop")
