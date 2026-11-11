@@ -505,19 +505,26 @@ class Experiment:
             normalize_scan_gain=normalize_scan_gain,
         )
 
-    def prepare_xfshear(self, *, size, direct_points=None):
+    def prepare_xfshear(self, *, size, direct_points=None, correct_digital_filter=True):
         """Transform F2 and retain both complex States branches for inspection.
 
         Supply the final FFT sizes as (F1, F2). The uncorrected acquisition
         is read with both digital filter and DC correction disabled. Set
         ``direct_points`` to keep the F2 acquisition interval fixed while
-        increasing the F2 size for zero filling.
+        increasing the F2 size for zero filling. XF2 corrects the Bruker
+        group delay on the frequency grid before phase inspection.
+        Set ``correct_digital_filter=False`` to disable this step.
         """
         from .processing.mqmas import prepare_xfshear  # noqa: PLC0415
 
         if self.is_multi_dataset:
             raise ValueError("XFSHEAR requires a single Bruker acquisition")
-        return prepare_xfshear(self.dataset, size=size, direct_points=direct_points)
+        return prepare_xfshear(
+            self.dataset,
+            size=size,
+            direct_points=direct_points,
+            correct_digital_filter=correct_digital_filter,
+        )
 
     def replay_xfshear(
         self, *, spin, coherence_order=3, phc0=0.0, phc1=0.0, pivot=0, f1_shift=0.0

@@ -24,11 +24,12 @@ recommendation.
        size=(512, 4096), direct_points=2048
    )
    first_row = xf2[0, 0, :].squeeze()
-   phase = {"phc0": -58.0, "phc1": -27360.0, "pivot": 0}
+   phase = {"phc0": -58.0, "phc1": 0.0, "pivot": 0}
    first_row.pk(**phase).real[65.0:20.0].plot()
 
-The starting first-order phase compensates the 76-point group delay
-of this acquisition. Adjust the phase on the preview until the region
+The reader keeps the original samples. XF2 compensates the recorded
+group delay on its frequency grid before the phase preview. Use
+``correct_digital_filter=False`` to disable that correction explicitly. Adjust the phase on the preview until the region
 of interest is phased.
 The phase angles are in degrees and the pivot is an F2 sample index.
 The sign convention matches SpectroChemPy's ``pk()``. To reproduce
@@ -75,7 +76,8 @@ the signed slope and isotropic F1 scale divisor are
 For spin 5/2 and triple-quantum coherence, :math:`R=19/12` and
 :math:`D=17/12`.
 
-The qualified PST-5 recipe runs without apodization and with PKNL disabled.
+The TopSpin comparison with PKNL disabled uses
+``correct_digital_filter=False``. The gallery uses automatic correction.
 TopSpin reconstructs the imaginary F2 component on a grid twice the F2
 FFT size. With this recipe, its inverse and final forward F2 transforms
 cancel algebraically. The four output planes have been compared with

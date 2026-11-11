@@ -16,6 +16,8 @@ under `CC BY 4.0 <https://creativecommons.org/licenses/by/4.0/>`_.
 # %%
 import spectrochempy as scp
 
+# Keep the acquired points intact at import. prepare_xfshear() will
+# correct the digital group delay on the F2 frequency grid.
 raw = scp.nmr.read(
     "nmrdata/bruker/tests/nmr/MQMAS_27AL_PST5/51/ser",
     remove_digital_filter=False,
@@ -31,10 +33,9 @@ xf2 = scp.nmr.Experiment(raw).prepare_xfshear(size=(512, 4096), direct_points=20
 
 # %%
 # Inspect the first acquired row. Adjust the phase parameters on this
-# preview. The first-order starting value compensates the recorded
-# 76-point digital group delay as a phase ramp on the F2 FFT grid. The
-# pivot is a sample index counted from the start of F2.
-phase = {"phc0": -58.0, "phc1": -27360.0, "pivot": 0}
+# preview. XF2 has already compensated the digital group delay on the
+# F2 frequency grid. The pivot is a sample index counted from the start of F2.
+phase = {"phc0": -58.0, "phc1": 0.0, "pivot": 0}
 first_row = xf2[0, 0, :].squeeze()
 _ = first_row.pk(**phase).real[65.0:20.0].plot()
 

@@ -31,10 +31,11 @@ def _mqmas_geometry(spin, coherence_order):
     return order, ratio, scale
 
 
-def prepare_xfshear(dataset, *, size, direct_points):
+def prepare_xfshear(dataset, *, size, direct_points, correct_digital_filter):
     """Compute complex XF2 branches for inspecting the phase before shearing."""
     from spectrochempy.core.dataset.coord import Coord  # noqa: PLC0415
     from spectrochempy.core.units import ur  # noqa: PLC0415
+    from spectrochempy_nmr.processing.bruker_filter import resolve_bruker_delay  # noqa: PLC0415
     from spectrochempy_nmr.processing.topspin_xfb import _positive_fft  # noqa: PLC0415
 
     meta = dataset.meta
@@ -111,7 +112,20 @@ def prepare_xfshear(dataset, *, size, direct_points):
     axis.meta["reference_frequency"] = sf * ur.MHz
     result = dataset.copy()
     result.delete_coordset()
-    result.data = _positive_fft(data[..., :direct_points], sx, -1)
+    xf2 = _positive_fft(data[..., :direct_points], sx, -1)
+    filter_correction = {"applied": False}
+    if correct_digital_filter:
+        delay, source = resolve_bruker_delay(dataset, None)
+        if not np.isfinite(delay) or delay < 0:
+            raise ValueError("XFSHEAR requires a finite nonnegative Bruker group delay")
+        xf2 *= np.exp(-2j * np.pi * delay * np.arange(sx) / sx)
+        filter_correction = {
+            "applied": True,
+            "group_delay_points": float(delay),
+            "delay_source": source,
+            "method": "frequency-domain phase ramp",
+        }
+    result.data = xf2
     result.set_coordset(c=dataset.c.copy(), y=dataset.y.copy(), x=axis)
     readonly = result.meta.readonly
     result.meta.readonly = False
@@ -135,6 +149,7 @@ def prepare_xfshear(dataset, *, size, direct_points):
                 "widths_hz": (sw1, sw2),
                 "sf_mhz": sf,
                 "carrier_mhz": carrier,
+                "digital_filter": filter_correction,
             },
         }
     )

@@ -31,8 +31,14 @@ def test_replay_xfshear_matches_mqmas_51_four_planes(sx, reference_env, phase):
     )
     original = source.data.copy()
     ref = scp.nmr.read_topspin(pdata, local_only=True, proc_axis=True)
-    mixed = Experiment(source).prepare_xfshear(size=(512, sx), direct_points=2048)
+    mixed = Experiment(source).prepare_xfshear(
+        size=(512, sx), direct_points=2048, correct_digital_filter=False
+    )
     mixed_data = mixed.data.copy()
+    automatic = Experiment(source).prepare_xfshear(size=(512, sx), direct_points=2048)
+    corrected_spectrum = Experiment(automatic).replay_xfshear(spin=2.5, phc0=-58)
+    manual_spectrum = Experiment(mixed).replay_xfshear(spin=2.5, phc0=-58, phc1=-27360)
+    np.testing.assert_allclose(corrected_spectrum.data, manual_spectrum.data, atol=1e-8)
     if phase:
         preview = mixed[0, 0, :].squeeze().pk(phc0=-30.0, phc1=60.0, pivot=0)
         angle = np.deg2rad(-30.0 + 60.0 * np.arange(sx) / sx)
