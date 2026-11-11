@@ -2,7 +2,7 @@ Compatibility and scope
 =======================
 
 NMR 0.3.0 requires ``spectrochempy>=1.1.0,<2`` and
-``nmrglue-ng>=1.2.4,<2``. Guarded native-channel workflows require the core
+``nmrglue-ng>=1.3.0,<2``. Guarded native-channel workflows require the core
 FFT prevalidation hook (``FFT_PREVALIDATION_API >= 1``), available in
 SpectroChemPy 1.2.0. The plugin stores supported paired 2D data as two
 ordinary complex channels. See :doc:`userguide/processing_2d` for the

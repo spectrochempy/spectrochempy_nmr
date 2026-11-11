@@ -6,7 +6,7 @@ public ``read_agilent()`` routes use the external ``nmrglue-ng``
 provider and convert normalized acquisitions with ``from_interop()``.
 The 1D qualification includes SpectroChemPy core 1.1.4.
 
-The qualification pins the published nmrglue-ng 1.2.4 wheel in
+The qualification pins the published nmrglue-ng 1.3.0 wheel in
 ``tests/qualification/requirements.txt``. The CI job installs both packages
 as wheels, verifies the provider version and imports outside the
 checkout, then runs the real-provider tests on Python 3.11 and 3.13.
