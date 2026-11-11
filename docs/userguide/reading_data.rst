@@ -91,7 +91,8 @@ alternation.
 
 The default ``quadrature="auto"`` uses recognized pulse-program sources.
 Supply the source used for the acquisition with ``pulse_program_source``,
-or put it next to ``fid`` and ``procpar``. Check the selected quadrature
+or put it next to ``fid`` and ``procpar`` with the name given by ``seqfil``
+and a ``.c`` suffix. Check the selected quadrature
 in the reader's log. If the mode remains undetermined, you can read the
 traces and transform F2. Choose ``"states"`` or ``"states-tppi"`` explicitly
 before transforming F1, once you know the acquisition convention.
