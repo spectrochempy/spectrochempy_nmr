@@ -299,6 +299,13 @@ same experiment folders processed with the original F1 ``LPfr`` settings.
 Run
 ``pytest tests/qualification/test_topspin_examdata.py -k xfb``.
 
+With the same reference directories, run
+``pytest tests/qualification/test_topspin_xfb_roundtrip.py -k paired`` to
+qualify saved replay for experiments ``30`` and ``40``. The test compares
+all four component planes and the ppm axes against TopSpin, then checks
+exact parity of the spectrum, axes and trace in a separate Python process
+with the raw metadata removed and access to the provider and the corpus blocked.
+
 For the window comparisons, set ``NMR_TOPSPIN_XFB_WINDOW_REFERENCES`` to
 a directory with six case subdirectories, each containing the same three
 experiment folders processed by ``xfb``. Use ``LB=37`` Hz in F1 and
