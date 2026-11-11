@@ -274,21 +274,25 @@ def replay_xfb(source):
 
 def _xfb_axis_plan(params):
     """Translate validated TopSpin fields to execution parameters."""
+    window = int(params["WDW"])
+    baseline = int(params["BC_mod"])
     return {
-        "window_mode": params.get("WDW"),
-        "line_broadening_hz": params.get("LB"),
-        "sine_shift": params.get("SSB"),
-        "first_point_scale": params.get("FCOR"),
-        "spectral_width_hz": params.get("SW_p"),
-        "reference_frequency_mhz": params.get("SF"),
-        "baseline_filter_width_ppm": params.get("BCFW"),
-        "baseline_mode": params.get("BC_mod"),
-        "baseline_offset_hz": params.get("COROFFS"),
-        "first_point_ppm": params.get("OFFSET"),
-        "fft_size": params.get("SI"),
-        "phase_zero_deg": params.get("PHC0"),
-        "phase_first_deg": params.get("PHC1"),
-        "digital_filter_phase": params.get("PKNL"),
+        "window_mode": window,
+        "line_broadening_hz": float(params["LB"]) if window == 1 else None,
+        "sine_shift": float(params["SSB"]) if window in (3, 4) else None,
+        "first_point_scale": float(params["FCOR"]),
+        "spectral_width_hz": float(params["SW_p"]),
+        "reference_frequency_mhz": float(params["SF"]),
+        "baseline_filter_width_ppm": float(params["BCFW"])
+        if baseline in (5, 6)
+        else None,
+        "baseline_mode": baseline,
+        "baseline_offset_hz": float(params["COROFFS"]) if baseline in (4, 6) else None,
+        "first_point_ppm": float(params["OFFSET"]),
+        "fft_size": params["SI"],
+        "phase_zero_deg": float(params["PHC0"]),
+        "phase_first_deg": float(params["PHC1"]),
+        "digital_filter_phase": params["PKNL"],
     }
 
 
@@ -326,7 +330,7 @@ def _build_xfb_plan(status, mode, shape, widths):
     _check_baseline(x, (0, 4, 6), nx - origin)
     return {
         "mode": mode,
-        "widths_hz": tuple(widths),
+        "widths_hz": tuple(float(width) for width in widths),
         "f1_points": f1_points,
         "f1_prediction_order": lp_order,
         "group_delay_points": delay,

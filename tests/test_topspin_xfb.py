@@ -59,6 +59,9 @@ def qf_fid():
 
 
 def test_xfb_executor_needs_only_serialized_plan(qf_fid, tmp_path):
+    qf_fid.meta.source_metadata["procs"].update(
+        WDW=np.int64(0), BC_mod=np.int64(0), LB=np.array([0.0]), BCFW=np.nan
+    )
     expected = Experiment(qf_fid).process(replay="topspin")
     plan = _build_xfb_plan(
         qf_fid.meta.source_metadata,
@@ -70,7 +73,8 @@ def test_xfb_executor_needs_only_serialized_plan(qf_fid, tmp_path):
     path = tmp_path / "xfb-acquisition.scp"
     qf_fid.write(path, confirm=False)
     source = scp.read(path)
-    actual, applied = _execute_xfb(source, source.data, json.loads(json.dumps(plan)))
+    serialized = json.dumps(plan, allow_nan=False)
+    actual, applied = _execute_xfb(source, source.data, json.loads(serialized))
 
     np.testing.assert_array_equal(actual.data, expected.data)
     np.testing.assert_array_equal(actual.x.data, expected.x.data)
