@@ -195,6 +195,19 @@ jobs:
           python -I -m pytest -ra tests/qualification/test_bruker_pdata_2d.py -k "synthetic and public_reader"
           python -I -m pytest -ra tests/qualification/test_bruker_ser_migration.py -k synthetic
 
+      - name: Qualify saved TopSpin XFB replay against the public COSY reference
+        if: matrix.python-version == '3.13'
+        env:
+          NMR_TOPSPIN_XFB_QF_REFERENCE: ${{ runner.temp }}/topspin-xfb-cosy
+        run: |
+          reference_url="https://raw.githubusercontent.com/spectrochempy/spectrochempy_data/13a7809e239ee7bff81e509975deadd211bdaf0e/testdata/nmrdata/bruker/tests/nmr/exam2d_HH/1"
+          mkdir -p "$NMR_TOPSPIN_XFB_QF_REFERENCE/pdata/1"
+          for file in ser acqus acqu2s pdata/1/2rr pdata/1/procs pdata/1/proc2s; do
+            curl --fail --silent --show-error --location --retry 3 \
+              "$reference_url/$file" --output "$NMR_TOPSPIN_XFB_QF_REFERENCE/$file"
+          done
+          python -I -m pytest -ra tests/qualification/test_topspin_xfb_roundtrip.py
+
   pinned-core:
     needs: pinned-core-tests
     if: ${{ always() }}
