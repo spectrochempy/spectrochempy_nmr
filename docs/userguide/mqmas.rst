@@ -54,8 +54,9 @@ F2 quadrature by Hilbert transform and performs the F1 FFT internally.
    rr[52.0:25.0, 65.0:20.0].plot(method="contour")
 
 To revise the F2 phase, return to the complex XF2 dataset and run
-``xf2p()`` again with the new angles. The optional ``f1_shift`` uses the AU convention in
-isotropic ppm. It adds a phase ramp before the F1 transform and adjusts
+``xf2p()`` again with the new angles. Use ``pk()`` on the preview row
+to select the angles and ``xf2p()`` on the complete dataset to record them
+for XFSHEAR. The optional ``f1_shift`` uses the AU convention in isotropic ppm. It adds a phase ramp before the F1 transform and adjusts
 the F1 reference so you can reposition the signal within the window.
 For shifted-echo acquisitions, ``echo_window=(slope, sigma)`` in
 ``xf2()`` applies a Gaussian along F2 before its FFT.
