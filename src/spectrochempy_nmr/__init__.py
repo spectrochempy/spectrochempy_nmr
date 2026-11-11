@@ -636,6 +636,10 @@ def __getattr__(name: str):
         from .interop import from_interop  # noqa: PLC0415
 
         return from_interop
+    if name == "autophase":
+        from .processing.autophase import autophase
+
+        return autophase
     if name == "reference_interop_1d":
         from .processing.interop_reference import reference_interop_1d
 
@@ -660,6 +664,7 @@ def __dir__() -> list[str]:
         "CzjzekDistribution",
         "CzjzekSamples",
         "simulate_czjzek",
+        "autophase",
         "process_agilent_noesy_states_tppi",
         "extract_noesy_components",
         "from_interop",

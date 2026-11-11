@@ -83,8 +83,11 @@ jobs:
       fail-fast: false
       matrix:
         python-version: ["3.11", "3.12", "3.13"]
-        # Keep the protected 1.1.3 checks alongside the floor and latest release.
+        # Keep the protected 1.1.3 checks alongside the 1.1.x floor and patch release.
         spectrochempy-version: ["1.1.0", "1.1.3", "1.1.4"]
+        include:
+          - python-version: "3.13"
+            spectrochempy-version: "1.2.0"
     steps:
       - uses: actions/checkout@v7
       - uses: actions/setup-python@v7
@@ -104,6 +107,9 @@ jobs:
       - name: Run synthetic tests against installed artifacts
         run: |
           python -I -m pytest -ra tests/test_linear_prediction.py tests/test_fft_encodings.py tests/test_fft_2d_characterization.py tests/test_nmrpipe_oracle_conventions.py tests/test_nmrpipe_states_tppi_oracle.py tests/test_nmrpipe_echo_antiecho_oracle.py tests/test_native_readers.py::test_jeol_real_qf_reader_preserves_fft_support tests/test_fft_prevalidation_compatibility.py
+      - name: Qualify saved TopSpin XFB on the released core
+        if: matrix.spectrochempy-version == '1.2.0'
+        run: python -I -m pytest -ra tests/test_topspin_xfb.py
 
   released-interop:
     needs: artifacts
@@ -185,7 +191,7 @@ jobs:
           python -m pip check
       - name: Run synthetic tests against installed artifacts
         run: |
-          python -I -m pytest -ra tests/test_linear_prediction.py tests/test_fft_encodings.py tests/test_fft_2d_characterization.py tests/test_nmrpipe_oracle_conventions.py tests/test_nmrpipe_states_tppi_oracle.py tests/test_nmrpipe_echo_antiecho_oracle.py tests/test_native_readers.py tests/test_fft_prevalidation_compatibility.py tests/test_complex_channels.py tests/test_quadrature.py tests/test_agilent_noesy_processing.py tests/test_interop_conversion.py tests/test_agilent_interop_facade.py tests/test_agilent_reference.py tests/test_experiment_interop.py tests/test_processed_interop.py tests/test_processing_architecture.py
+          python -I -m pytest -ra tests/test_linear_prediction.py tests/test_fft_encodings.py tests/test_fft_2d_characterization.py tests/test_nmrpipe_oracle_conventions.py tests/test_nmrpipe_states_tppi_oracle.py tests/test_nmrpipe_echo_antiecho_oracle.py tests/test_topspin_xfb.py tests/test_native_readers.py tests/test_fft_prevalidation_compatibility.py tests/test_complex_channels.py tests/test_quadrature.py tests/test_agilent_noesy_processing.py tests/test_interop_conversion.py tests/test_agilent_interop_facade.py tests/test_agilent_reference.py tests/test_experiment_interop.py tests/test_processed_interop.py tests/test_processing_architecture.py
 
       - name: Qualify SIMPSON migration and Tecmag reader withdrawal
         run: python -I -m pytest -ra tests/test_read_simpson.py tests/test_simpson_migration.py
@@ -194,6 +200,19 @@ jobs:
         run: |
           python -I -m pytest -ra tests/qualification/test_bruker_pdata_2d.py -k "synthetic and public_reader"
           python -I -m pytest -ra tests/qualification/test_bruker_ser_migration.py -k synthetic
+
+      - name: Qualify saved TopSpin XFB replay against the public COSY reference
+        if: matrix.python-version == '3.13'
+        env:
+          NMR_TOPSPIN_XFB_QF_REFERENCE: ${{ runner.temp }}/topspin-xfb-cosy
+        run: |
+          reference_url="https://raw.githubusercontent.com/spectrochempy/spectrochempy_data/13a7809e239ee7bff81e509975deadd211bdaf0e/testdata/nmrdata/bruker/tests/nmr/exam2d_HH/1"
+          mkdir -p "$NMR_TOPSPIN_XFB_QF_REFERENCE/pdata/1"
+          for file in ser acqus acqu2s pdata/1/2rr pdata/1/procs pdata/1/proc2s; do
+            curl --fail --silent --show-error --location --retry 3 \
+              "$reference_url/$file" --output "$NMR_TOPSPIN_XFB_QF_REFERENCE/$file"
+          done
+          python -I -m pytest -ra tests/qualification/test_topspin_xfb_roundtrip.py
 
   pinned-core:
     needs: pinned-core-tests
@@ -235,7 +254,7 @@ jobs:
       - name: Install the released provider and qualify the public reader
         run: |
           python -m pip install "spectrochempy==1.1.4" pytest
-          python -m pip install --only-binary nmrglue-ng "nmrglue-ng==1.2.4" dist/*.whl
+          python -m pip install --only-binary nmrglue-ng "nmrglue-ng==1.3.0" dist/*.whl
           python -m pip check
           cp jeol-provider/tests/fixtures/fileio/data/jeol/epicatechin_1h.jdf "$NMR_JEOL_REFERENCE"
           echo "6ab899b72d314f05d187e07c69389efae30572bae9b0c74fb0249cfa468ae7e0  $NMR_JEOL_REFERENCE" | sha256sum -c -

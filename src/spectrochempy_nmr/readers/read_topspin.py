@@ -786,9 +786,9 @@ def read_topspin(*paths, **kwargs):
         the directory parameter.
     recursive : `bool`, optional, default: `False`
         Read also in subfolders.
-    remove_digital_filter : `bool`, optional, default: `True`
+    remove_digital_filter : `bool`, optional, default: `False`
         Remove the Bruker digital filter (group delay correction) from raw
-        FID/SER data. Set to `False` to keep the uncorrected data.
+        FID/SER data at import. Set to `True` to request the legacy correction.
     remove_dc_offset : `bool`, optional, default: `False`
         Remove the receiver DC offset from the FID before digital filter
         removal. This subtracts the mean of each row along the last axis,
@@ -1226,22 +1226,24 @@ def _read_topspin(*args, **kwargs):
     processed_components = None
     normalized_dataset = None
     if not processed:
+        remove_filter = bool(kwargs.get("remove_digital_filter", False))
+        remove_dc = bool(kwargs.get("remove_dc_offset", False))
         normalized = None
         if path.name == "fid":
             normalized = _read_normalized_fid(
                 f_expno,
                 acqus_files,
                 procs_files,
-                remove_filter=bool(kwargs.get("remove_digital_filter", True)),
-                remove_dc=bool(kwargs.get("remove_dc_offset", False)),
+                remove_filter=remove_filter,
+                remove_dc=remove_dc,
             )
         elif path.name == "ser" and not kwargs.get("use_list", False):
             normalized = _read_normalized_ser(
                 f_expno,
                 acqus_files,
                 procs_files,
-                remove_filter=bool(kwargs.get("remove_digital_filter", True)),
-                remove_dc=bool(kwargs.get("remove_dc_offset", False)),
+                remove_filter=remove_filter,
+                remove_dc=remove_dc,
             )
         if normalized is None:
             dic, data = _read_raw_data(f_expno, path.name, acqus_files, procs_files)
@@ -1282,10 +1284,10 @@ def _read_topspin(*args, **kwargs):
             data = data[..., :ntd]
 
         if normalized_dataset is None:
-            if kwargs.get("remove_dc_offset", False):
+            if remove_dc:
                 data = data - data.mean(axis=-1, keepdims=True)
 
-            if kwargs.get("remove_digital_filter", True) and dic["acqus"]["DECIM"] > 1:
+            if remove_filter and dic["acqus"]["DECIM"] > 1:
                 data = _remove_digital_filter(dic, data)
 
     else:
@@ -1637,6 +1639,14 @@ def _read_topspin(*args, **kwargs):
         dataset.data = data
         dataset.meta.update(meta)
         dataset.set_coordset(*tuple(coords))
+    if normalized_ser:
+        from ..processing.topspin_xfb import capture_xfb_plan  # noqa: PLC0415
+
+        profile = dataset.meta.nmr_processing.get("vendor_profile")
+        if profile is not None:
+            plan = capture_xfb_plan(dataset)
+            if plan is not None:
+                profile["xfb_plan"] = plan
     dataset.meta.readonly = True
 
     dataset.units = "count"

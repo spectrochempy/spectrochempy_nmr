@@ -287,6 +287,24 @@ def test_synthetic_tppi_public(synthetic_states, monkeypatch):
 
 
 @pytest.mark.parametrize("synthetic_states", ["tppi"], indirect=True)
+def test_synthetic_missing_phase_does_not_enable_indirect_fft(synthetic_states):
+    path, samples = synthetic_states
+    procpar_path = path.with_name("procpar")
+    procpar = varian.read_procpar(procpar_path)
+    del procpar["phase"]
+    varian.write_procpar(procpar_path, procpar, overwrite=True)
+
+    raw = scp.read_agilent(path)
+    np.testing.assert_array_equal(raw.data, samples / 6)
+    assert raw.meta.encoding == ["UNVALIDATED:AGILENT-F1", "QSIM"]
+    direct = raw.fft(dim="x")
+    assert direct.shape == raw.shape
+    for dataset in (raw, direct):
+        with pytest.raises(NotImplementedError, match="UNVALIDATED:AGILENT-F1"):
+            dataset.fft(dim="y")
+
+
+@pytest.mark.parametrize("synthetic_states", ["tppi"], indirect=True)
 def test_synthetic_tppi_older_provider(synthetic_states, monkeypatch):
     path, samples = synthetic_states
     monkeypatch.delattr(interop, "normalize_agilent_tppi_2d", raising=False)
@@ -423,7 +441,9 @@ def test_synthetic_inconsistent_3d_uses_external_varian_fallback(
     np.testing.assert_array_equal(dataset.data, expected)
     np.testing.assert_array_equal(dataset.y.data, np.arange(6))
     np.testing.assert_array_equal(dataset.x.data, np.arange(4) * 200)
-    assert dataset.meta.encoding == ["QF", "QSIM"]
+    assert dataset.meta.encoding == ["UNVALIDATED:AGILENT-F1", "QSIM"]
+    with pytest.raises(NotImplementedError, match="UNVALIDATED:AGILENT-F1"):
+        dataset.fft(dim="y")
 
 
 @pytest.mark.skipif(

@@ -10,7 +10,9 @@ peaks in a real proton spectrum using SpectroChemPy.
 import spectrochempy as scp
 
 fid = scp.nmr.read("nmrdata/bruker/tests/nmr/topspin_1d/1/fid")
-spectrum = scp.nmr.Experiment(fid).process(apodization="em", lb=2.0, size=16384)
+spectrum = scp.nmr.Experiment(fid).process(
+    apodization="em", lb=2.0, size=16384, digital_filter="time"
+)
 
 # %%
 # Work on the real, baseline-corrected spectrum. Specify the minimum peak

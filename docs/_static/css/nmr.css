@@ -114,6 +114,35 @@ body,
   color: #ffffff;
 }
 
+/* PyData also renders the main navigation inside the mobile drawer. */
+.bd-sidebar-primary .sidebar-header-items .nmr-navbar .nav-item > :is(.nav-link, .dropdown-toggle) {
+  display: block;
+  width: 100%;
+  padding: 0.4rem 0.6rem;
+  color: #eceae7;
+  text-align: start;
+}
+
+.bd-sidebar-primary .sidebar-header-items .nmr-navbar .dropdown-menu {
+  background-color: var(--scp-sidebar);
+  border-color: rgba(255, 255, 255, 0.2);
+}
+
+.bd-sidebar-primary .sidebar-header-items .nmr-navbar .dropdown-divider {
+  border-color: rgba(255, 255, 255, 0.2);
+}
+
+.bd-sidebar-primary .sidebar-header-items .nmr-navbar .dropdown-menu a.dropdown-item,
+.bd-sidebar-primary .sidebar-header-items .theme-switch-button {
+  color: #eceae7;
+}
+
+.bd-sidebar-primary .sidebar-header-items .nmr-navbar :is(.nav-link, .dropdown-toggle, .dropdown-item):is(:hover, :focus-visible, .active, [aria-expanded="true"]),
+.bd-sidebar-primary .sidebar-header-items .theme-switch-button:is(:hover, :focus-visible) {
+  background-color: var(--scp-sidebar-hover);
+  color: #ffffff;
+}
+
 .bd-sidebar-primary .bd-links .current > a {
   border-left: 3px solid var(--scp-accent);
   background: var(--scp-sidebar-hover);

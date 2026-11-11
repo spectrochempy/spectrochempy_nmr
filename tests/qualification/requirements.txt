@@ -1,5 +1,5 @@
 # Pin the runtime provider for reproducible qualification.
-nmrglue-ng==1.2.4
+nmrglue-ng==1.3.0
 
 # Optional XML reader used only by nmrML qualification.
 xmltodict
