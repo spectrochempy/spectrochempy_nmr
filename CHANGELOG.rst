@@ -11,6 +11,9 @@ Unreleased
 * Expose separate ``Experiment.xf2()``, ``xf2p()``, and ``xfshear()``
   steps for Bruker States MQMAS processing.
 
+* Apply recorded phase in 1D FID processing when requested with
+  ``Experiment.process(phase="metadata")``.
+
 * Read Bruker FID and SER data without digital-filter correction by default.
   Correct supported acquisitions in ``Experiment`` or request the previous
   import correction explicitly with ``remove_digital_filter=True``.

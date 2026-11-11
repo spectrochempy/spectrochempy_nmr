@@ -15,9 +15,9 @@ fid = scp.nmr.read_topspin(path, expno=1, remove_digital_filter=True)
 reference = scp.nmr.read_topspin(path, expno=1, procno=1)
 
 # %%
-# The direct FFT uses the phase information carried by this FID. Scale each
-# real spectrum by its own maximum to compare peak positions and shapes.
-spectrum = fid.fft(size=reference.shape[-1])
+# Apply the recorded phase after the FFT. Scale each real spectrum by its
+# own maximum to compare peak positions and shapes.
+spectrum = scp.nmr.Experiment(fid).process(size=reference.shape[-1], phase="metadata")
 calculated = spectrum.real.normalize()
 topspin = reference.real.normalize()
 

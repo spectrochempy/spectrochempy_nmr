@@ -38,6 +38,9 @@ The supported apodization modes are ``em``, ``gm`` and ``sp``. The result
 records the workflow in
 ``result.meta.nmr_processing["scp_processing"]``. ``requested`` contains
 explicit user arguments and ``applied`` records operations actually executed.
+Use ``phase="metadata"`` to apply the phase angles attached to the FID,
+or ``phase="manual"`` with explicit angles. With ``phase=None``, the
+transform leaves the phase untouched.
 
 To inspect intermediate results, apply the core operations to the
 ``NDDataset`` exposed by ``experiment.dataset``. You can call them as

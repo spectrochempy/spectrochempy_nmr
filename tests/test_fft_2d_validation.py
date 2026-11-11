@@ -176,9 +176,17 @@ class TestFFT2DTopSpin:
         reference = scp.read_topspin(pdata)
         raw = scp.nmr.read(TOPSPIN_2D, expno=1, remove_digital_filter=True)
 
+        phase_zero, phase_first = raw.meta.phc0, raw.meta.phc1
+        raw.meta.readonly = False
+        raw.meta.phc0 = [0] * raw.ndim
+        raw.meta.phc1 = [0] * raw.ndim
+        raw.meta.readonly = True
+
         f2 = raw.em(lb="50 Hz", dim="x").fft(dim="x", size=reference.shape[-1])
+        f2 = f2.pk(dim="x", phc0=phase_zero[-1], phc1=phase_first[-1], pivot=0)
         f2.data[:, 0, :] *= 0.5
         result = f2.zf_size(size=reference.shape[-2], dim="y").fft(dim="y")
+        result = result.pk(dim="y", phc0=phase_zero[-2], phc1=phase_first[-2], pivot=0)
 
         actual_slots = _channel_slots(result.data)
         reference_slots = np.stack(

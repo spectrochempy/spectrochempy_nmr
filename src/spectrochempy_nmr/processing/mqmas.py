@@ -166,9 +166,7 @@ def xf2(
     else:
         prepared = dataset[..., :direct_points]
         prepared.data = retained.copy()
-        result = prepared.fft(
-            dim="x", size=sx, convention="topspin-xf2", phase=False, inplace=True
-        )
+        result = prepared.fft(dim="x", size=sx, convention="topspin-xf2", inplace=True)
         if result.shape[-1] != sx or result.x.units != ur.ppm:
             raise ValueError("XF2 did not produce the requested F2 frequency grid")
     filter_correction = {"applied": False}
