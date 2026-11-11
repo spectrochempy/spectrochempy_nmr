@@ -304,19 +304,27 @@ def replay_xfb(source):
 
 
 def _finite_plan_number(value):
-    return type(value) in (int, float) and np.isfinite(value)
+    return (
+        isinstance(value, (int, float))
+        and not isinstance(value, bool)
+        and np.isfinite(value)
+    )
+
+
+def _plan_integer(value):
+    return isinstance(value, int) and not isinstance(value, bool)
 
 
 def _check_stored_xfb_axis(axis, *, points, baseline_points, direct):
     if not isinstance(axis, Mapping):
         raise ValueError("missing axis parameters")
     size = axis["fft_size"]
-    if type(size) is not int or size < max(points, 2 if direct else 4) or size % 2:
+    if not _plan_integer(size) or size < max(points, 2 if direct else 4) or size % 2:
         raise ValueError("invalid FFT size")
     window, baseline = axis["window_mode"], axis["baseline_mode"]
-    if type(window) is not int or window not in (0, 1, 3, 4):
+    if not _plan_integer(window) or window not in (0, 1, 3, 4):
         raise ValueError("unsupported window")
-    if type(baseline) is not int:
+    if not _plan_integer(baseline):
         raise ValueError("invalid baseline mode")
     for key in (
         "first_point_scale",
@@ -331,7 +339,7 @@ def _check_stored_xfb_axis(axis, *, points, baseline_points, direct):
     if min(axis["spectral_width_hz"], axis["reference_frequency_mhz"]) <= 0:
         raise ValueError("invalid frequency calibration")
     pknl = axis["digital_filter_phase"]
-    if type(pknl) is not bool or (pknl and not direct):
+    if not isinstance(pknl, bool) or (pknl and not direct):
         raise ValueError("PKNL is only supported on F2")
     if direct and axis["first_point_scale"] != 1:
         raise ValueError("invalid F2 first-point scale")
@@ -367,15 +375,15 @@ def _validate_stored_xfb_plan(plan, mode, shape, widths):
         if (
             not _finite_plan_number(delay)
             or not 0 <= delay < nx - 1
-            or type(origin) is not int
+            or not _plan_integer(origin)
             or origin != int(np.ceil(delay))
             or origin >= nx - 1
         ):
             raise ValueError("invalid direct group delay")
         points, order = plan["f1_points"], plan["f1_prediction_order"]
         if (
-            type(points) is not int
-            or type(order) is not int
+            not _plan_integer(points)
+            or not _plan_integer(order)
             or not 0 <= 2 * order <= ny
             or (points <= ny if order else points != ny)
         ):
