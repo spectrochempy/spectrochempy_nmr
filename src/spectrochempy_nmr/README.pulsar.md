@@ -879,6 +879,93 @@ distribution sampling and orientation accuracy separately when checking
 convergence. Shift/EFG correlations and tensor-relative CSA orientations
 would require extending this initial distribution API.
 
+### PBG1 extended Czjzek comparison
+
+```sh
+OPENBLAS_NUM_THREADS=1 python tools/qualify_pulsar_pbg_czjzek.py "/path/to/raw data/PBG1_2,5mm"
+```
+
+The [Czjzek benchmark](../../tools/qualify_pulsar_pbg_czjzek.py) uses the
+same five regions from the archived 3QMAS map. Write $Y=-\mathrm{QIS}$
+and $a=10/17$, so $F_1=\delta_{iso}+aY$ and $F_2=\delta_{iso}-Y$
+plus the orientation-dependent F2 displacement. If the chemical shift
+and EFG distributions are independent and the F2 displacement has zero
+conditional mean, then
+$\mathrm{Var}(Y)=[\mathrm{Var}(F_1)-\mathrm{Cov}(F_1,F_2)]/[a(1+a)]$.
+Using the covariance avoids assigning the entire F2 linewidth to tensor
+disorder. The regional centroids fix the means of $Y$ and $\delta_{iso}$.
+
+Because $Y$ is proportional to the squared norm of a five-dimensional
+Gaussian EFG vector with a fixed mean, its relative variance is
+$\mathrm{Var}(Y)/\langle Y\rangle^2=0.4(1-f^2)$, where
+$f=P_{Q,0}^2/\langle P_Q^2\rangle$ is the fraction of the mean squared
+coupling supplied by the local tensor. At fixed mean $Y$, the script
+projects its apparent variance onto the feasible interval and allocates
+the remaining F1 variance to Gaussian chemical shift disorder. The 3QMAS
+moments constrain the tensor norm. The local asymmetry is set to
+$\eta_0=0.5$ and the local coupling is taken positive, as in the previous
+ridge benchmark.
+
+| Region | Apparent relative QIS variance | Feasible variance used |
+| --- | ---: | ---: |
+| 1 | 2.024 | 0.400 |
+| 2 | 0.378 | 0.378 |
+| 3 | 2.518 | 0.400 |
+| 4 | 4.415 | 0.400 |
+| 5 | 22.874 | 0.400 |
+
+The projection reaches the standard Czjzek limit ($f=0$) in four
+regions. These widths are apparent 3QMAS widths. The fit has no model
+for nonuniform 3Q transfer, the finite indirect-dimension response
+(21 complex increments before zero filling), or the effects of the
+regional masks on the moments. Regions 3 and 4 partly overlap. The
+out-of-range variances show that this moment model cannot reproduce the
+observed covariance in those regions. As a sensitivity test,
+`--local-floor 0.5` forces the local tensor to supply at least half
+the mean squared coupling in each region.
+
+The ensemble is propagated with the same 0.5 µs pulse at nominal 50 kHz
+RF, 30 kHz MAS, 6.5 µs delay and matched `efp` replay as the ridge model.
+Only the published 1D center calibrates the relative regional weights
+and common Gaussian width. The 20 lateral windows of the replayed FID
+are reserved for prediction checks.
+
+The recorded FID gives a summed area of 89.40% of the central window.
+All model sums use the same normalization. The area MAE is in
+percentage points over the 20 individual windows. The first four rows
+are the preceding ridge comparison at powder accuracy 4 and 20 orders
+per side. The new runs vary the number of Sobol points per region, the
+scramble seed and the powder/sideband settings.
+
+| Model | Powder accuracy / orders | Sum | Area MAE |
+| --- | ---: | ---: | ---: |
+| Regional centroids | 4 / 20 | 145.03% | 3.05 pp |
+| Three slices | 4 / 20 | 180.01% | 4.53 pp |
+| Five slices | 4 / 20 | 87.92% | 1.20 pp |
+| Five slices, 20% QIS floor | 4 / 20 | 150.50% | 3.06 pp |
+| Czjzek, 8 Sobol nodes | 4 / 20 | 143.37% | 2.70 pp |
+| Czjzek, 8 Sobol nodes | 6 / 30 | 143.40% | 2.70 pp |
+| Czjzek, 16 Sobol nodes | 4 / 20 | 150.30% | 3.05 pp |
+| Czjzek, 16 Sobol nodes, `--seed 17` | 4 / 20 | 146.30% | 2.85 pp |
+| Czjzek, 32 Sobol nodes | 4 / 20 | 149.61% | 3.01 pp |
+| Czjzek, 16 Sobol nodes, local fraction at least 0.5 | 4 / 20 | 142.87% | 2.67 pp |
+
+With 32 Sobol nodes, the summed area is 60.21 percentage points above
+the measured value and the central RMS is 3.65%, close to 3.64% for
+the regional centroids. Enforcing a nonzero local tensor in every
+region still leaves a 53.47-point excess. The powder and sideband
+refinement at eight nodes changes the sum by 0.04 point. Varying the
+Sobol count and seed moves the sum by several points, so the numerical
+checks support the large residual while leaving the smaller changes in
+area MAE unresolved.
+
+The simulations use all transitions. The benchmark prints the areas
+for each order as well as the 1D central calibration error. For the
+longer runs, a separate real tridiagonal Taylor exponential gave the same
+one-point control as the regular Hermitian eigensolver to the printed
+precision in every area. The command above uses the regular PULSAR
+path and can take several minutes per region.
+
 ## Experimental check of phosphorus CSA bands
 
 The [MRSimulator phosphorus example](https://mrsimulator.readthedocs.io/en/v1.0/fitting/1D_fitting/plot_1_31P_Na2PO4_MAS.html)
