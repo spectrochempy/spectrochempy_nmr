@@ -55,6 +55,10 @@ def test_replay_xfshear_matches_mqmas_51_four_planes(sx, reference_env, phase):
     )
     np.testing.assert_array_equal(result.data, legacy.data)
     np.testing.assert_array_equal(xf2.data, mixed_data)
+    previously_phased = mixed.pk(phc0=20.0, dim="x")
+    legacy_replayed = Experiment(previously_phased).replay_xfshear(spin=2.5)
+    expected_replay = Experiment(mixed).replay_xfshear(spin=2.5, phc0=20.0)
+    np.testing.assert_allclose(legacy_replayed.data, expected_replay.data, atol=1e-10)
     with pytest.raises(ValueError, match="with xf2p"):
         Experiment(xf2).xfshear(size=512, spin=2.5)
     with pytest.raises(ValueError, match="already applied"):

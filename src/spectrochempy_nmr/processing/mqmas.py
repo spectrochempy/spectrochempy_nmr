@@ -212,7 +212,7 @@ def xf2(
     return result
 
 
-def _validated_xf2(dataset):
+def _validated_xf2(dataset, *, check_phase=True):
     from spectrochempy.core.units import ur  # noqa: PLC0415
 
     plan = dataset.meta.get("mqmas_xf2")
@@ -250,6 +250,8 @@ def _validated_xf2(dataset):
         raise ValueError(
             "XFSHEAR requires the full unmasked XF2 grid in acquired order"
         )
+    if not check_phase:
+        return plan
     history_length = plan.get("history_length")
     if history_length is not None and len(dataset.history) != history_length:
         raise ValueError("The XF2 processing history changed. Start from xf2().")
@@ -261,9 +263,9 @@ def _validated_xf2(dataset):
     return plan
 
 
-def xf2p(dataset, *, phc0, phc1, pivot):
+def xf2p(dataset, *, phc0, phc1, pivot, check_phase=True):
     """Apply one common F2 phase to both complex States branches."""
-    plan = _validated_xf2(dataset)
+    plan = _validated_xf2(dataset, check_phase=check_phase)
     if "f2_phase" in plan:
         raise ValueError("F2 phase is already applied. Start from the XF2 result.")
     _, sx = plan["size"]
@@ -284,6 +286,7 @@ def xf2p(dataset, *, phc0, phc1, pivot):
     result.meta.phc0[-1] = float(phc0) * result.meta.phc0[-1].units
     result.meta.phc1[-1] = float(phc1) * result.meta.phc1[-1].units
     result.meta.pivot[-1] = float(pivot) * result.x.units
+    result.meta.exptc[-1] = 0
     result.history = "Applied common MQMAS phase in F2"
     result.meta.mqmas_xf2 = {
         **plan,
@@ -296,7 +299,7 @@ def xf2p(dataset, *, phc0, phc1, pivot):
 
 def replay_xfshear(dataset, *, spin, coherence_order, phc0, phc1, pivot, f1_shift):
     """Apply common F2 phase and complete XFSHEAR, including the F1 FFT."""
-    phased = xf2p(dataset, phc0=phc0, phc1=phc1, pivot=pivot)
+    phased = xf2p(dataset, phc0=phc0, phc1=phc1, pivot=pivot, check_phase=False)
     return xfshear(
         phased, size=None, spin=spin, coherence_order=coherence_order, f1_shift=f1_shift
     )
