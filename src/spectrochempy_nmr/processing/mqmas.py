@@ -181,6 +181,7 @@ def xf2(
     result.set_coordset(c=dataset.c.copy(), y=dataset.y.copy(), x=axis)
     readonly = result.meta.readonly
     result.meta.readonly = False
+    result.history = "Applied complex XF2 for MQMAS phase inspection"
     result.meta.update(
         {
             "stage": "mqmas_xf2",
@@ -203,11 +204,11 @@ def xf2(
                 "carrier_mhz": carrier,
                 "digital_filter": filter_correction,
                 "echo_window": window_metadata,
+                "history_length": len(result.history),
             },
         }
     )
     result.meta.readonly = readonly
-    result.history = "Applied complex XF2 for MQMAS phase inspection"
     return result
 
 
@@ -249,6 +250,9 @@ def _validated_xf2(dataset):
         raise ValueError(
             "XFSHEAR requires the full unmasked XF2 grid in acquired order"
         )
+    history_length = plan.get("history_length")
+    if history_length is not None and len(dataset.history) != history_length:
+        raise ValueError("The XF2 processing history changed. Start from xf2().")
     phase = plan.get("f2_phase", {"phc0": 0.0, "phc1": 0.0, "pivot": 0.0})
     for name, expected in (*phase.items(), ("exptc", 0.0)):
         current = dataset.meta[name][-1]
@@ -280,12 +284,13 @@ def xf2p(dataset, *, phc0, phc1, pivot):
     result.meta.phc0[-1] = float(phc0) * result.meta.phc0[-1].units
     result.meta.phc1[-1] = float(phc1) * result.meta.phc1[-1].units
     result.meta.pivot[-1] = float(pivot) * result.x.units
+    result.history = "Applied common MQMAS phase in F2"
     result.meta.mqmas_xf2 = {
         **plan,
+        "history_length": len(result.history),
         "f2_phase": {"phc0": float(phc0), "phc1": float(phc1), "pivot": float(pivot)},
     }
     result.meta.readonly = readonly
-    result.history = "Applied common MQMAS phase in F2"
     return result
 
 
