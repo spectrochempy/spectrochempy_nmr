@@ -1111,6 +1111,7 @@ class Experiment:
         work.meta.readonly = False
         for key in ("phc0", "phc1", "exptc", "pivot"):
             work.meta[key] = [0] * work.ndim
+        work.meta.physical_pivots = [False] * work.ndim
         work = work.fft(_interop_physical_fft=physical_fft)
         work.meta.readonly = False
         work.meta.pivot = [0] * work.ndim
@@ -1126,9 +1127,9 @@ class Experiment:
             if phase == "metadata":
                 work.meta.readonly = False
                 for key, value in phase_metadata.items():
-                    if value is not None:
+                    if value:
                         work.meta[key] = value
-                if phase_metadata["phased"] is None:
+                if not phase_metadata["phased"]:
                     work.meta.phased = [False] * work.ndim
             work = self._apply_phase(work, phase, phc0=phc0, phc1=phc1)
             applied["phase"] = self._build_applied_phase_trace(
