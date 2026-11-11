@@ -1,10 +1,14 @@
 """Always-on tests for the TopSpin XFB replay path."""
 
+import json
+
 import numpy as np
 import pytest
 import spectrochempy as scp
 
 from spectrochempy_nmr.experiment import Experiment
+from spectrochempy_nmr.processing.topspin_xfb import _build_xfb_plan
+from spectrochempy_nmr.processing.topspin_xfb import _execute_xfb
 from spectrochempy_nmr.processing.topspin_xfb import _gaussian_baseline
 from spectrochempy_nmr.processing.topspin_xfb import _subtract_baseline
 
@@ -52,6 +56,26 @@ def qf_fid():
         }
     )
     return source
+
+
+def test_xfb_executor_needs_only_serialized_plan(qf_fid, tmp_path):
+    expected = Experiment(qf_fid).process(replay="topspin")
+    plan = _build_xfb_plan(
+        qf_fid.meta.source_metadata,
+        "qf",
+        qf_fid.shape,
+        qf_fid.meta.acquisition["spectral_width_hz"],
+    )
+    qf_fid.meta.source_metadata = {}
+    path = tmp_path / "xfb-acquisition.scp"
+    qf_fid.write(path, confirm=False)
+    source = scp.read(path)
+    actual, applied = _execute_xfb(source, source.data, json.loads(json.dumps(plan)))
+
+    np.testing.assert_array_equal(actual.data, expected.data)
+    np.testing.assert_array_equal(actual.x.data, expected.x.data)
+    np.testing.assert_array_equal(actual.y.data, expected.y.data)
+    assert applied == expected.meta.nmr_processing["scp_processing"]["applied"]
 
 
 @pytest.mark.parametrize("predict", [False, True])
