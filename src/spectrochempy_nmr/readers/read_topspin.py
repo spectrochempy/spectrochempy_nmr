@@ -780,19 +780,15 @@ def read_topspin(*paths, **kwargs):
         ``'opus'``, ``'topspin'``, ``'matlab'``, ``'jcamp'``,
         ``'csv'``, ``'excel'``}. If not provided, the correct protocol
         is inferred (whenever it is possible) from the filename extension.
-    raw : `bool`, optional, default: `False`
-        Keep the acquisition samples without group-delay or DC correction.
-        Use this for workflows that apply corrections during processing.
-        This option takes precedence over the two correction flags for FID/SER.
     read_only: `bool`, optional, default: `True`
         Used only when url are specified.  If True, saving of the
         files is performed in the current directory, or in the directory specified by
         the directory parameter.
     recursive : `bool`, optional, default: `False`
         Read also in subfolders.
-    remove_digital_filter : `bool`, optional, default: `True`
+    remove_digital_filter : `bool`, optional, default: `False`
         Remove the Bruker digital filter (group delay correction) from raw
-        FID/SER data. Set to `False` to keep the uncorrected data.
+        FID/SER data at import. Set to `True` to request the legacy correction.
     remove_dc_offset : `bool`, optional, default: `False`
         Remove the receiver DC offset from the FID before digital filter
         removal. This subtracts the mean of each row along the last axis,
@@ -1230,9 +1226,8 @@ def _read_topspin(*args, **kwargs):
     processed_components = None
     normalized_dataset = None
     if not processed:
-        raw = kwargs.get("raw", False)
-        remove_filter = not raw and bool(kwargs.get("remove_digital_filter", True))
-        remove_dc = not raw and bool(kwargs.get("remove_dc_offset", False))
+        remove_filter = bool(kwargs.get("remove_digital_filter", False))
+        remove_dc = bool(kwargs.get("remove_dc_offset", False))
         normalized = None
         if path.name == "fid":
             normalized = _read_normalized_fid(

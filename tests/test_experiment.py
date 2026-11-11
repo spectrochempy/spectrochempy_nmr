@@ -1001,7 +1001,7 @@ class TestPublic1DRealAxisValidation:
         o1 = _read_param(acqus_file, "O1")
         bf1 = sfo1 - (o1 or 0.0) * 1e-6 if sfo1 is not None else None
 
-        spectrum = Experiment(fid).process(size=n, phase=None)
+        spectrum = Experiment(fid).process(size=n, phase=None, digital_filter="time")
 
         # Verify the calculated axis independently against the expected FFT axis.
         # The FFT post-processing builds: first = (sfo1-sf)*1e6 + sw_h/2 (Hz),
@@ -1097,7 +1097,7 @@ class TestPublic1DRealAxisValidation:
         reason="TopSpin 1D raw/pdata pair missing",
     )
     def test_topspin_reference_oracle_is_sensitive_to_historical_conventions(self):
-        fid = _read_or_skip(nmrdir / "topspin_1d/1/fid")
+        fid = _read_or_skip(nmrdir / "topspin_1d/1/fid", remove_digital_filter=True)
         ref = _read_or_skip(nmrdir / "topspin_1d", expno=1, procno=1)
         size = int(ref.meta.si[0])
 

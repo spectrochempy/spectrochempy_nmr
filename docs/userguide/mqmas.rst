@@ -15,10 +15,7 @@ recommendation.
 
 .. code-block:: python
 
-   raw = scp.nmr.read(
-       "nmrdata/bruker/tests/nmr/MQMAS_27AL_PST5/51/ser",
-       raw=True,
-   )
+   raw = scp.nmr.read("nmrdata/bruker/tests/nmr/MQMAS_27AL_PST5/51/ser")
    xf2 = scp.nmr.Experiment(raw).prepare_xfshear(
        size=(512, 4096), direct_points=2048
    )

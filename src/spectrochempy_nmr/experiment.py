@@ -627,11 +627,10 @@ class Experiment:
             Bruker Rance–Kay shuffling with no additional F1 sign alternation.
             An explicit selection is required for imported echo/anti-echo data.
         digital_filter : str, optional
-            Select "phase" for NMRPipe FT -df or "time" for the historical
-            reader's time-domain correction, which shortens F2. For a raw
-            Bruker QSIM 1D FID, select "pknl" to apply the fractional group
-            delay on the final FFT grid. Import with
-            ``remove_digital_filter=False`` and ``remove_dc_offset=False``.
+            Select "time" to correct and shorten a supported Bruker 1D
+            FID or echo/anti-echo SER, or "phase" for NMRPipe FT -df on
+            echo/anti-echo data. For a raw Bruker QSIM 1D FID, select
+            "pknl" to apply the fractional group delay on the final FFT grid.
             This mode uses the processing ppm reference, supports exponential
             apodization and optional manual phase angles at the first bin,
             and defaults to the recorded FFT size when ``size`` is omitted.
@@ -642,7 +641,7 @@ class Experiment:
         replay : str, optional
             Select "topspin" to replay recorded DQD 1D EFP or supported
             uniform 2D XFB processing parameters.
-            Import with remove_digital_filter=False. Replay uses the
+            Read the uncorrected acquisition. Replay uses the
             processing ppm grid and retains the FID's scan/gain normalization.
             Other processing options cannot be combined with replay.
 
@@ -752,9 +751,12 @@ class Experiment:
             )
         if digital_filter not in (None, "phase", "time"):
             raise ValueError('digital_filter must be "phase", "time" or "pknl"')
-        if digital_filter is not None and not supports_echo:
+        prepare_time_filter = digital_filter == "time" and self.ndim == 1
+        if prepare_time_filter:
+            ds = self.prepare_fid(digital_filter="time")
+        if digital_filter is not None and not (supports_echo or prepare_time_filter):
             raise ValueError(
-                "digital_filter requires an imported raw echo/anti-echo FID"
+                "digital_filter requires a supported 1D or echo/anti-echo acquisition"
             )
         if bruker_group_delay is not None and not supports_echo:
             raise ValueError(
@@ -909,6 +911,7 @@ class Experiment:
                 phc1=phc1,
                 explicit_arguments=explicit_arguments,
                 physical_fft=reference is not None,
+                prepare_time_filter=prepare_time_filter,
             )
         elif self.is_frequency_domain:
             if self._nmr_meta.normalized_interop:
@@ -1054,6 +1057,7 @@ class Experiment:
         phc1: float,
         explicit_arguments: dict[str, bool],
         physical_fft: bool,
+        prepare_time_filter: bool,
     ) -> NDDataset:
         """Process time-domain data: apodize → zero-fill → FFT → phase."""
         work = ds.copy()
@@ -1076,6 +1080,12 @@ class Experiment:
             phc1=phc1,
         )
         applied: dict[str, object] = {}
+        if prepare_time_filter:
+            requested["digital_filter"] = "time"
+            correction = ds.meta.acquisition["digital_filter"]
+            previous = self.dataset.meta.acquisition.get("digital_filter")
+            if correction != previous:
+                applied["digital_filter"] = dict(correction)
         if apodization is not None:
             work = self._apply_apodization(work, apodization, **apodization_kwargs)
             applied["apodization"] = apodization.lower()

@@ -37,7 +37,12 @@ U = scp.ur
 # %%
 # Import a pseudo-2D delay series
 # -------------------------------
-dataset = scp.nmr.read("nmrdata/bruker/tests/nmr/relax/100/ser", use_list="vdlist")
+# This pseudo-2D series uses the reader's explicit time-domain correction.
+dataset = scp.nmr.read(
+    "nmrdata/bruker/tests/nmr/relax/100/ser",
+    use_list="vdlist",
+    remove_digital_filter=True,
+)
 
 # %%
 # Analysing the data

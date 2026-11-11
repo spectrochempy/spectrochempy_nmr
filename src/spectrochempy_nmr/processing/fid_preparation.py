@@ -66,10 +66,18 @@ def prepare_fid(dataset, *, remove_dc_offset, digital_filter, normalize_scan_gai
         requested[1] and not applied[1] and not filter_already_skipped,
         requested[2] and not applied[2],
     )
+    # The public Bruker reader scales amplitudes by a constant at import.
+    # That scaling commutes with both DC subtraction and filter correction.
+    gain_applied_at_import = any(
+        operation.get("name") == "normalize-bruker-complex-fid"
+        and operation.get("scan_gain", {}).get("applied") is True
+        for operation in dataset.meta.get("applied_operations", ())
+    )
+    ordered_stages = (*applied[:2], applied[2] and not gain_applied_at_import)
     for index, wanted in enumerate(pending):
         if (
             wanted
-            and any(applied[index + 1 :])
+            and any(ordered_stages[index + 1 :])
             and not (index == 1 and no_filter_needed)
         ):
             raise ValueError(
