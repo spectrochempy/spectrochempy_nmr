@@ -2,8 +2,8 @@
 Processing an MQMAS spectrum
 ============================
 
-Start from experiment 51 of the aluminium-27 Bruker States acquisition
-of PST-5. The example follows the TopSpin XFSHEAR workflow, with manual
+This example processes an aluminium-27 Bruker States acquisition of PST-5.
+It follows the TopSpin XFSHEAR workflow, with manual
 F2 phasing and without apodization or baseline correction. It reconstructs
 the direct quadrature with a Hilbert transform and rescales F1 to the
 isotropic chemical-shift axis.
