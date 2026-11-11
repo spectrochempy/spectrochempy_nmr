@@ -122,15 +122,19 @@ def _fft_postprocess_result(new, dim=-1, inv=False, **kwargs):
         new.coordset[dim] = axis
         readonly = new.meta.readonly
         new.meta.readonly = False
-        new.meta.update(
-            {
-                "phased": [False, False, True],
-                "phc0": [0 * ur.degree] * 3,
-                "phc1": [0 * ur.degree] * 3,
-                "pivot": [0] * 3,
-                "exptc": [0] * 3,
-            }
-        )
+        if not new.meta.phased:
+            new.meta.phased = [False] * new.ndim
+        new.meta.phased[-1] = True
+        for name, zero in (
+            ("phc0", 0 * ur.degree),
+            ("phc1", 0 * ur.degree),
+            ("pivot", 0),
+            ("exptc", 0),
+            ("physical_pivots", False),
+        ):
+            values = list(new.meta.get(name) or [zero] * new.ndim)
+            values[-1] = zero
+            new.meta[name] = values
         new.meta.readonly = readonly
         return new
 

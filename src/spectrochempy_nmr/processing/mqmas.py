@@ -272,9 +272,10 @@ def xf2p(dataset, *, phc0, phc1, pivot, check_phase=True):
         if (
             isinstance(value, bool)
             or not isinstance(value, Real)
-            or not np.isfinite(value)
+            or not np.isfinite(float(value))
         ):
             raise ValueError(f"XFSHEAR requires a finite numerical {name}")
+    phc0, phc1, pivot = map(float, (phc0, phc1, pivot))
     if not 0 <= pivot < sx:
         raise ValueError("XFSHEAR phase pivot must be an F2 sample index")
     if max(abs(phc0), abs(phc1)) > np.finfo(float).max / np.pi:
@@ -287,15 +288,15 @@ def xf2p(dataset, *, phc0, phc1, pivot, check_phase=True):
         )
     readonly = result.meta.readonly
     result.meta.readonly = False
-    result.meta.phc0[-1] = float(phc0) * result.meta.phc0[-1].units
-    result.meta.phc1[-1] = float(phc1) * result.meta.phc1[-1].units
-    result.meta.pivot[-1] = float(pivot) * result.x.units
+    result.meta.phc0[-1] = phc0 * result.meta.phc0[-1].units
+    result.meta.phc1[-1] = phc1 * result.meta.phc1[-1].units
+    result.meta.pivot[-1] = pivot * result.x.units
     result.meta.exptc[-1] = 0
     result.history = "Applied common MQMAS phase in F2"
     result.meta.mqmas_xf2 = {
         **plan,
         "history_length": len(result.history),
-        "f2_phase": {"phc0": float(phc0), "phc1": float(phc1), "pivot": float(pivot)},
+        "f2_phase": {"phc0": phc0, "phc1": phc1, "pivot": pivot},
     }
     result.meta.readonly = readonly
     return result

@@ -58,6 +58,8 @@ def test_replay_xfshear_matches_mqmas_51_four_planes(sx, reference_env, phase):
     generic = source[..., :2048].fft(dim="x", size=sx, convention="topspin-xf2")
     np.testing.assert_array_equal(generic.data, xf2.data)
     np.testing.assert_array_equal(generic.x.data, xf2.x.data)
+    assert generic.meta.phc0[-2] == source.meta.phc0[-2]
+    assert generic.meta.phc1[-2] == source.meta.phc1[-2]
     np.testing.assert_array_equal(xf2.pk(dim="x", **phase_options).data, phased.data)
     previously_phased = mixed.pk(phc0=20.0, dim="x")
     legacy_replayed = Experiment(previously_phased).replay_xfshear(spin=2.5)
@@ -162,6 +164,20 @@ def test_xf2_preserves_two_retained_points():
     assert result.x.size == 4
     phased = Experiment(result).xf2p(phc0=1e308)
     assert np.isfinite(phased.data).all()
+
+
+def test_xf2p_keeps_phase_precision_for_numpy_scalars():
+    ser = os.environ.get("SCP_MQMAS_SER")
+    if not ser:
+        pytest.skip("requires the PST-5 SER")
+    raw = scp.nmr.read(ser, local_only=True)
+    xf2 = Experiment(raw).xf2(size=32, direct_points=16)
+    experiment = Experiment(xf2)
+    expected = experiment.xf2p(phc0=360000.0, phc1=22.5, pivot=3.5)
+    actual = experiment.xf2p(
+        phc0=np.float32(360000), phc1=np.float32(22.5), pivot=np.float32(3.5)
+    )
+    np.testing.assert_array_equal(actual.data, expected.data)
 
 
 def test_invalid_xf2_reference_is_rejected_before_inplace_fft():
