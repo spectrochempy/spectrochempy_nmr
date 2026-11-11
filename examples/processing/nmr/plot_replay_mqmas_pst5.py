@@ -24,10 +24,7 @@ raw = scp.nmr.read("nmrdata/bruker/tests/nmr/MQMAS_27AL_PST5/51/ser")
 
 # %%
 # Retain the first 2048 complex points in F2 and zero-fill to 4096 points
-# for a denser frequency grid before phase adjustment. XFSHEAR uses
-# a separate zero extension during Hilbert reconstruction. Aluminium-27 has
-# spin 5/2. For triple-quantum coherence, the signed slope is 19/12
-# and the F1 scale divisor is 17/12.
+# for a denser frequency grid before phase adjustment.
 xf2 = scp.nmr.Experiment(raw).xf2(
     size=4096, direct_points=2048, correct_digital_filter=True
 )
@@ -83,7 +80,7 @@ baseline = scp.Baseline(
 baseline.fit(windowed_rr)
 corrected = windowed_rr - baseline.baseline
 
-peak = region.data.max()
+peak = float(scp.Quantity(region.max()).magnitude)
 positive_levels = [0.08 * peak * 1.3**i for i in range(10)]
 levels = [-level for level in reversed(positive_levels)] + positive_levels
 _ = scp.multiplot(

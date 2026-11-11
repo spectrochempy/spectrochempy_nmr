@@ -6,16 +6,14 @@ this repository worktree:
 ```console
 python -m venv /tmp/opencode/nmr-docs-venv
 source /tmp/opencode/nmr-docs-venv/bin/activate
-python -m pip install -r docs/requirements-docs.txt
-python -m pip install -e /path/to/spectrochempy
+python -m pip install -r docs/requirements-rtd.txt
 python -m pip install -e .
 python -m sphinx -W --keep-going -b html docs docs/_build/html
 ```
 
-The editable installs intentionally use the three local checkouts for
-development. Their exact versions and commits are recorded in
-`docs/compatibility.toml`; a release build must replace them with the tagged
-source revisions for that release.
+This uses the same core and nmrglue-ng versions as the development
+documentation on Read the Docs. To test a change in the core alongside
+the plugin, install the relevant core checkout in the same environment.
 
 For a tagged build, select the matching source links explicitly:
 

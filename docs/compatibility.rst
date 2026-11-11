@@ -1,15 +1,16 @@
 Compatibility and scope
 =======================
 
-NMR 0.3.0 requires ``spectrochempy>=1.1.0,<2`` and
-``nmrglue-ng>=1.3.0,<2``. Guarded native-channel workflows require the core
-FFT prevalidation hook (``FFT_PREVALIDATION_API >= 1``), available in
-SpectroChemPy 1.2.0. The plugin stores supported paired 2D data as two
-ordinary complex channels. See :doc:`userguide/processing_2d` for the
-processing scope and :doc:`concepts/hypercomplex` for the storage contract.
+The NMR 0.3 series requires SpectroChemPy 1.1.0 or later and
+nmrglue-ng 1.3.0 or later, within their respective 1.x series.
+Use SpectroChemPy 1.2.0 or later for workflows with paired 2D data or
+undetermined indirect quadrature. SpectroChemPy 1.2.1 separates the FFT from
+phase correction. In a step-by-step workflow, apply the phase with ``pk()``
+after the FFT.
 
-``docs/compatibility.toml``, ``docs/build-manifest.txt`` and
-``docs/phase2b-validation.md`` are historical phase-2b build records. They do
-not describe the current development dependencies. The active RTD requirements
-are in ``docs/requirements-rtd.txt``. No RTD parent/subproject relationship or
-DNS setting is changed by this migration.
+The development documentation also covers features listed under
+:doc:`changelog` in the Unreleased section. Use the documentation version
+that matches your installed plugin.
+
+See :doc:`userguide/reading_data` for supported file formats and
+:doc:`userguide/processing_2d` for supported acquisition and processing profiles.

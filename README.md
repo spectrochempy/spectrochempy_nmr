@@ -1,5 +1,11 @@
 # spectrochempy-nmr
 
+[![Tests](https://github.com/spectrochempy/spectrochempy_nmr/actions/workflows/test.yml/badge.svg)](https://github.com/spectrochempy/spectrochempy_nmr/actions/workflows/test.yml)
+[![Conda](https://img.shields.io/conda/v/spectrocat/spectrochempy-nmr)](https://anaconda.org/spectrocat/spectrochempy-nmr)
+[![PyPI version](https://img.shields.io/pypi/v/spectrochempy-nmr)](https://pypi.org/project/spectrochempy-nmr/)
+[![Documentation](https://img.shields.io/badge/docs-online-blue.svg)](https://www.spectrochempy.fr/projects/nmr/latest/)
+[![License](https://img.shields.io/badge/license-CeCILL--B-blue.svg)](LICENSE)
+
 NMR plugin for SpectroChemPy.
 
 > [!WARNING]
@@ -11,18 +17,16 @@ NMR plugin for SpectroChemPy.
 The plugin provides NMR-specific readers for vendor and exchange formats,
 validated 1D workflows, and processing for qualified 2D acquisitions.
 The 0.3 series stores paired 2D data as two ordinary complex channels.
-See the [standalone NMR documentation](https://spectrochempy-nmr.readthedocs.io/latest/)
+See the [NMR documentation](https://www.spectrochempy.fr/projects/nmr/latest/)
 for installation, readers, processing and supported acquisition profiles.
 
 ## Installation
 
-This plugin requires SpectroChemPy 1.1.0 or later (and remains
-restricted to SpectroChemPy versions below 2). Users who stay on
-SpectroChemPy 1.0.0 should keep an earlier compatible version of this plugin.
-
+SpectroChemPy 1.2.1 is the recommended starting point for the published NMR
+workflows.
 
 ```bash
-pip install "spectrochempy>=1.1.0,<2" "spectrochempy-nmr==0.3.0"
+python -m pip install "spectrochempy[nmr]>=1.2.1"
 ```
 
 For an editable development install from this repository, see
@@ -33,16 +37,18 @@ For an editable development install from this repository, see
 ```python
 import spectrochempy as scp
 
-dataset = scp.nmr.read("path/to/1/fid")
-dataset = scp.nmr.read("path/to/1/pdata/1/1r")
-dataset = scp.nmr.read("path/to/experiment", expno=1, procno=1)
-
-experiment = scp.nmr.Experiment(dataset)
+fid = scp.nmr.read("path/to/1/fid")
+experiment = scp.nmr.Experiment(fid)
 spectrum = experiment.process(apodization="em", lb=2.0, size=32768)
+
+processed = scp.nmr.read("path/to/1/pdata/1/1r")
 ```
 
+The [Quickstart](https://www.spectrochempy.fr/projects/nmr/latest/getting_started/quickstart.html)
+shows how to apply phase correction explicitly.
+
 Use `Experiment.process(replay="topspin")` to replay supported TopSpin
-recipes explicitly. The [2D processing guide](https://spectrochempy-nmr.readthedocs.io/latest/userguide/processing_2d.html)
+recipes explicitly. The [2D processing guide](https://www.spectrochempy.fr/projects/nmr/latest/userguide/processing_2d.html)
 describes the qualified XFB workflow.
 
 The current explicit apodization contract covers the public modes already
@@ -234,6 +240,5 @@ python -m build
 ```
 
 Both distributions include `LICENSE` (CeCILL-B) and `NMRGLUE_LICENSE.rst`
-(the notice for the remaining adapted parsers). The plugin depends on
-nmrglue-ng for qualified Bruker processed 2D spectra. SpectroChemPy core
-does not require the NMR plugin or nmrglue-ng.
+(the notice for code adapted from nmrglue). The plugin uses nmrglue-ng
+for vendor and exchange format decoding.
