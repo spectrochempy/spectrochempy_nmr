@@ -8,6 +8,7 @@ from typing import TYPE_CHECKING
 import numpy as np
 
 from spectrochempy import Baseline
+from spectrochempy import CoordSet
 from spectrochempy import NDDataset
 from spectrochempy import ur
 from spectrochempy.core.dataset.nddataset import _history_selection_value
@@ -37,6 +38,8 @@ def autophase(spectrum, *, exclude=None, baseline_options=None, apply=True, **op
     Pass `apply=False` for diagnostics only. If the estimate fails to converge,
     the result contains diagnostics alone. Pass `baseline_options` to fit a
     separate baseline on the phased real channel using the core `Baseline` processor.
+    For the fit, masked samples are filled by linear interpolation in sample
+    index, with nearest valid values at the ends. The output mask is retained.
     Use the phased complex intermediate for further phase corrections. Its
     linear phase metadata is relative to this call's input, with the previous
     phase state recorded in history.
@@ -44,13 +47,21 @@ def autophase(spectrum, *, exclude=None, baseline_options=None, apply=True, **op
     from nmrglue.process import proc_autophase  # noqa: PLC0415
 
     data = spectrum.data
-    coord = spectrum.x if spectrum.ndim == 1 else None
+    coord = spectrum.coord(spectrum.dims[0]) if spectrum.ndim == 1 else None
+    if isinstance(coord, CoordSet):
+        coord = coord.default
+    units = coord.units if coord is not None else None
     if (
         spectrum.ndim != 1
         or not np.iscomplexobj(data)
         or coord is None
         or spectrum.meta.get("data_domain") == "time"
-        or (coord.units is not None and coord.units.dimensionality == "[time]")
+        or (
+            units is not None
+            and not (
+                units.dimensionless or units.dimensionality == ur.Hz.dimensionality
+            )
+        )
         or spectrum.meta.get("isfreq") == [False]
     ):
         raise ValueError("autophase requires a complex 1D frequency-domain spectrum")
@@ -65,6 +76,8 @@ def autophase(spectrum, *, exclude=None, baseline_options=None, apply=True, **op
             raise ValueError("exclude must be a boolean array matching the spectrum")
         mask |= exclude
 
+    if "references" in options:
+        options["references"] = tuple(tuple(ref) for ref in options["references"])
     estimate = proc_autophase.estimate_phase(data, mask=mask, **options)
     if not apply or not estimate.success:
         return AutoPhaseResult(estimate, None)
@@ -121,7 +134,22 @@ def autophase(spectrum, *, exclude=None, baseline_options=None, apply=True, **op
 
     absorption = phased.real
     processor = Baseline(**baseline_options)
-    processor.fit(absorption)
+    dataset_mask = np.broadcast_to(absorption.mask, data.shape)
+    if not np.isfinite(absorption.data[~dataset_mask]).all():
+        raise ValueError(
+            "baseline correction requires finite unmasked absorption samples"
+        )
+    fit_input = absorption
+    if dataset_mask.any():
+        # Some core models remove the mask during the fit.
+        points = np.arange(data.size)
+        filled = absorption.data.copy()
+        filled[dataset_mask] = np.interp(
+            points[dataset_mask], points[~dataset_mask], filled[~dataset_mask]
+        )
+        fit_input = absorption.copy()
+        fit_input.data = filled
+    processor.fit(fit_input)
     baseline = processor.baseline
     corrected = absorption.copy()
     corrected.data = absorption.data - baseline.data
@@ -129,6 +157,7 @@ def autophase(spectrum, *, exclude=None, baseline_options=None, apply=True, **op
         operation="baseline_correction",
         parameters={
             "model": processor.model,
+            "masked_sample_fill": "linear_index" if dataset_mask.any() else None,
             "options": {
                 key: _history_selection_value(value)
                 for key, value in baseline_options.items()

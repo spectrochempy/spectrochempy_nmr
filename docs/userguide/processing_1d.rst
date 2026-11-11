@@ -92,7 +92,9 @@ Inspect ``result.estimate`` for the correction angles and fit diagnostics.
 ``result.baseline`` and ``result.corrected`` are real datasets. Use
 ``result.phased`` to make further phase adjustments. Its phase metadata records
 the correction relative to the input of this call, and the history retains
-the previous phase metadata. AsLS is intended here
+the previous phase metadata. For baseline fitting, values behind the dataset
+mask are filled from neighboring valid samples. The output retains the
+original mask. AsLS is intended here
 for spectra with positive peaks. Tune its smoothness for the spectral grid
 and check that integration areas are preserved. For signed spectra, use a polynomial fit on
 known signal-free regions with ``baseline_options`` specifying ``ranges``.

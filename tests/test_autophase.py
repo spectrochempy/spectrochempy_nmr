@@ -116,3 +116,54 @@ def test_phase_metadata_references_this_call_for_already_phased_input(spectrum):
     ]
     assert previous["pivot"] == [50]
     assert previous["exptc"] == [1]
+
+
+def test_autophase_uses_the_actual_1d_dimension(spectrum):
+    source, _ = spectrum
+    renamed = NDDataset(
+        source.data, dims=["y"], coordset=[Coord(source.x.data, units="Hz")]
+    )
+    result = autophase(renamed, method="dispa", references=[(780, 821, 1)])
+    assert result.estimate.p0 == pytest.approx(-37, abs=0.8)
+    assert result.phased.dims == ["y"]
+    np.testing.assert_array_equal(result.phased.y.data, renamed.y.data)
+
+    spatial = NDDataset(
+        source.data, dims=["y"], coordset=[Coord(source.x.data, units="m")]
+    )
+    with pytest.raises(ValueError, match="frequency-domain"):
+        autophase(spatial)
+
+
+def test_dispa_reference_generator_is_recorded(spectrum):
+    source, _ = spectrum
+    result = autophase(source, method="dispa", references=iter([(780, 821, 1)]))
+    assert result.phased.history_entries[-1]["parameters"]["references"] == [
+        [780, 821, 1]
+    ]
+
+
+@pytest.mark.parametrize("hidden", [np.nan, -1e5])
+def test_asls_is_invariant_to_masked_sample_values(spectrum, hidden):
+    source, _ = spectrum
+    options = {
+        "method": "dispa",
+        "references": [(780, 821, 1)],
+        "baseline_options": {"model": "asls", "lamb": 1e9},
+    }
+    expected = autophase(source, **options)
+    changed = source.copy()
+    data = source.data.copy()
+    data[source.mask] = hidden
+    changed.data = data
+    result = autophase(changed, **options)
+
+    assert result.estimate == expected.estimate
+    valid = ~source.mask
+    assert np.isfinite(result.corrected.data[valid]).all()
+    for actual, reference in (
+        (result.baseline, expected.baseline),
+        (result.corrected, expected.corrected),
+    ):
+        np.testing.assert_array_equal(actual.mask, source.mask)
+        np.testing.assert_allclose(actual.data[valid], reference.data[valid])
