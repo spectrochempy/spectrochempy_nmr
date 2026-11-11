@@ -36,9 +36,10 @@ processing parameters:
 
 The supported apodization modes are ``em``, ``gm`` and ``sp``. Use
 ``result.history`` to inspect the steps recorded on the spectrum.
-Use ``phase="metadata"`` to apply the phase angles attached to the FID,
-or ``phase="manual"`` with explicit angles. With ``phase=None``, the
-transform leaves the phase untouched.
+Use ``phase="manual"`` with explicit angles. With core 1.2.1 and
+``phase=None``, the transform leaves the phase untouched. The development
+version of the plugin also supports ``phase="metadata"`` to apply angles
+attached to the FID.
 
 To inspect intermediate results, apply the core operations to the
 ``NDDataset`` exposed by ``experiment.dataset``. You can call them as
@@ -69,13 +70,12 @@ phase angles in degrees. With core 1.2.1, the FFT leaves the phase untouched. Pl
 fitting.
 
 A direct ``.fft()`` transforms the samples supplied to it. For a Bruker FID
-with a supported preparation descriptor, use
-``experiment.prepare_fid(digital_filter="time")`` before ``.fft()``, or
-``experiment.process(digital_filter="time")`` to correct the filter as part
-of processing. To subtract the DC offset as well, pass
-``remove_dc_offset=True`` to ``prepare_fid()``. To reproduce a script that
-previously relied on correction during import, pass
-``remove_digital_filter=True`` to the reader.
+you can explicitly correct the filter at import with
+``remove_digital_filter=True``. With the development plugin, use
+``experiment.process(digital_filter="time")`` to correct a supported FID
+as part of processing. For a normalized FID that has not been scaled by
+scan count and receiver gain, ``prepare_fid()`` can also apply DC-offset
+and digital-filter corrections before the FFT.
 
 A pseudo-2D series contains ordinary 1D spectra that can be processed one
 spectrum at a time. For acquisitions with two Fourier dimensions, see
