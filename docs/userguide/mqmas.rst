@@ -8,10 +8,16 @@ common F2 phase and isotropic F1 calibration.
 Transform F2 and inspect the first row
 --------------------------------------
 
-Read the original SER without DC or digital-filter correction. Supply
-the final FFT sizes in F1, F2 order. For PST-5, retain the first 2048
-complex samples in F2 and zero-fill to 4096 to meet the TopSpin Hilbert
-recommendation.
+Read the SER and supply the final FFT sizes in F1, F2 order.
+For PST-5, keep 2048 acquired complex samples in F2 and zero-fill to
+4096 before XF2. This samples the same spectrum on a finer grid before
+phase adjustment and quadrature reconstruction. The acquisition interval
+and the physical resolution are set by the retained samples.
+
+XFSHEAR then uses the equivalent of TopSpin's XHT2. It extends the
+real F2 spectrum with zeros to twice the F2 FFT size for the Hilbert
+transform. That extension moves the periodic wraparound farther from
+the retained bins during reconstruction of the imaginary component.
 
 .. code-block:: python
 
@@ -23,10 +29,10 @@ recommendation.
    phase = {"phc0": -58.0, "phc1": 0.0, "pivot": 0}
    first_row.pk(**phase).real[65.0:20.0].plot()
 
-The reader keeps the original samples. XF2 compensates the recorded
-group delay on its frequency grid before the phase preview. Use
-``correct_digital_filter=False`` to disable that correction explicitly. Adjust the phase on the preview until the region
-of interest is phased.
+``prepare_xfshear()`` performs the XF2 step and removes the phase ramp
+caused by the digital filter on the F2 frequency grid. The
+``correct_digital_filter`` option controls this operation. Adjust the
+phase on the first-row preview before running XFSHEAR.
 The phase angles are in degrees and the pivot is an F2 sample index.
 The sign convention matches SpectroChemPy's ``pk()``. To reproduce
 TopSpin phase values with a pivot of zero, reverse the signs of PHC0
@@ -35,7 +41,7 @@ and PHC1. Keep the original complex XF2 dataset for the next step.
 Shear and transform F1
 ----------------------
 
-Pass the selected phase to XFSHEAR. It applies that phase to every F1
+Pass the selected phase to ``replay_xfshear()``, the XFSHEAR step. It applies that phase to every F1
 increment and both States branches before taking the real F2 traces.
 The algorithm rotates the States pairs in the hybrid domain, reconstructs
 F2 quadrature by Hilbert transform and performs the F1 FFT internally.

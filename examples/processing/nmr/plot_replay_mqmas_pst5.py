@@ -23,8 +23,9 @@ import spectrochempy as scp
 raw = scp.nmr.read("nmrdata/bruker/tests/nmr/MQMAS_27AL_PST5/51/ser")
 
 # %%
-# Retain the first 2048 complex points in F2 and zero-fill to 4096 points,
-# as recommended by TopSpin for Hilbert reconstruction. Aluminium-27 has
+# Retain the first 2048 complex points in F2 and zero-fill to 4096 points
+# for a denser frequency grid before phase adjustment. XFSHEAR uses
+# a separate zero extension during Hilbert reconstruction. Aluminium-27 has
 # spin 5/2. For triple-quantum coherence, the signed slope is 19/12
 # and the F1 scale divisor is 17/12.
 xf2 = scp.nmr.Experiment(raw).prepare_xfshear(size=(512, 4096), direct_points=2048)
