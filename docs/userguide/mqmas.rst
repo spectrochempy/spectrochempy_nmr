@@ -1,126 +1,91 @@
 Processing MQMAS spectra
 ========================
 
-MQMAS separates isotropic and second-order quadrupolar contributions for
-half-integer quadrupolar nuclei. An MQMAS spectrum generally contains tilted
-ridges. Shearing removes their quadrupolar slope, and scaling the indirect
-axis gives an isotropic chemical-shift axis.
+The XFSHEAR workflow separates isotropic and second-order quadrupolar
+contributions in MQMAS spectra. It uses the rectangular Bruker States
+recipe with a common F2 phase and isotropic F1 calibration.
 
-Shearing a frequency-domain map
--------------------------------
+Transform F2 and inspect the first row
+--------------------------------------
 
-Start with a reconstructed, Fourier-transformed spectrum whose physical F2
-and F1 coordinates are ``x`` and ``y``. Complete digital-filter correction
-and phasing before shearing. Both grids must be uniform, unmasked and finite,
-in Hz or in ppm with frequency references. Confirm the reference of each
-axis: an acquisition carrier or an already scaled isotropic axis is not
-interchangeable with the unsheared MQ frequency axis.
-
-For a spin-5/2 nucleus observed through its triple-quantum coherence:
-
-.. code-block:: python
-
-   experiment = scp.nmr.Experiment(spectrum)
-   isotropic = experiment.shear_mqmas(spin=2.5, coherence_order=3)
-
-The method returns a new ``NDDataset``. It preserves the source, signal units
-and component labels, records its parameters in ``meta.mqmas_shearing``, and
-adds a history entry. Transposition preserves the meaning of ``x`` and ``y``.
-Real maps, four real ``rr/ri/ir/ii`` planes, and the plugin's two complex
-``S_R/S_I`` spectral planes are supported. Shear all available components
-before selecting a component for display.
-
-Conventions
------------
-
-For a positive odd coherence order :math:`p` and nuclear spin :math:`I`,
-the implemented signed quadrupolar ridge slope is
-
-.. math::
-
-   R = \frac{p[-17p^2 + 36I(I+1)-10]}{9[4I(I+1)-3]}.
-
-The coordinate transformation is
-
-.. math::
-
-   f_{\mathrm{iso}} =
-   \frac{f_{\mathrm{MQ}} - R(f_{\mathrm{SQ}}-f_{\mathrm{pivot}})}{p-R}.
-
-For 3Q of a spin-5/2 nucleus, :math:`R=19/12` and :math:`p-R=17/12`.
-For 3Q of a spin-3/2 nucleus, :math:`R=-7/9` and :math:`p-R=34/9`.
-The method assumes the input uses this sign convention for the MQ frequency;
-confirm it when importing results from another processing package.
-
-The default pivot is zero Hz on the calibrated F2 chemical-shift frequency
-axis. A different pivot translates the final isotropic axis relative to this
-convention; it is not a phase-correction pivot. Pass a frequency explicitly:
-
-.. code-block:: python
-
-   isotropic = experiment.shear_mqmas(
-       spin=2.5, coherence_order=3, pivot=2500 * scp.ur.Hz
-   )
-
-The output F1 frequencies are divided by :math:`p-R`. Conversion of this
-isotropic axis to ppm uses the F2 reference frequency. The F2 axis is unchanged.
-Sample amplitudes receive no additional normalization; integration in the
-rescaled F1 coordinate therefore includes the coordinate scale change.
-
-Limits and qualification
-------------------------
-
-Fourier interpolation is periodic in F1: signal shifted past an edge folds
-back at the opposite edge. Inspect the full spectral width and any aliasing
-before interpreting a cropped region. This operation does not increase
-resolution or remove spinning sidebands. A recorded shearing operation cannot
-be applied twice to the same result.
-
-Replaying the rectangular TopSpin recipe
-----------------------------------------
-
-Use a normalized Bruker States SER with both corrections disabled. The FFT sizes
-are given in physical complex points in F1, F2 order. For MQMAS/51 the
-comparison used all 64 F1 increments and the first 2048 complex samples in F2.
+Read the original SER without DC or digital-filter correction. Supply
+the final FFT sizes in F1, F2 order. For PST-5, retain the first 2048
+complex samples in F2 and zero-fill to 4096 to meet the TopSpin Hilbert
+recommendation.
 
 .. code-block:: python
 
    raw = scp.nmr.read_topspin(
        "MQMAS/51/ser", remove_digital_filter=False, remove_dc_offset=False
    )
-   spectrum = scp.nmr.Experiment(raw).replay_xfshear(
-       spin=2.5, size=(512, 2048)
+   xf2 = scp.nmr.Experiment(raw).prepare_xfshear(
+       size=(512, 4096), direct_points=2048
    )
+   first_row = xf2[0, 0, :].squeeze()
+   phase = {"phc0": -58.0, "phc1": -27360.0, "pivot": 0}
+   first_row.pk(**phase).real[65.0:20.0].plot()
 
-The qualified recipe corresponds to ``xfshear noabs 0`` with rectangular
-windows, phase and baseline correction disabled, and PKNL off. The first
-F2 FFT supplies real traces. The two States branches are rotated as a
-function of F2 frequency and F1 time. The Hilbert transform reconstructs
-F2 quadrature on a grid twice the F2 FFT size. With these settings the
-inverse and final forward F2 transforms cancel, so the reconstructed
-branches pass directly to the F1 FFT. The output uses the direct processing
-reference and applies the MQMAS scale in F1.
+The starting first-order phase compensates the 76-point group delay
+of this acquisition. Adjust the phase on the preview until the region
+of interest is phased.
+The phase angles are in degrees and the pivot is an F2 sample index.
+The sign convention matches SpectroChemPy's ``pk()``. To reproduce
+TopSpin phase values with a pivot of zero, reverse the signs of PHC0
+and PHC1. Keep the original complex XF2 dataset for the next step.
 
-On MQMAS/51, both axes agree within 5e-9 ppm. With one common amplitude
-factor for all planes, the relative L2 errors against TopSpin 4.5.0 are
-5.94e-4 for RR, 5.78e-7 for RI, 5.10e-7 for IR and 4.97e-7 for II.
-One RR point at the F1 edge dominates its residual. The same point
-appears after TopSpin XFB on an unrotated XIF2 snapshot. On the tested
-tiled grids its F2 index was SI/2 minus XDIM (zero-based). The plugin retains
-the input reader's amplitude normalization.
+Shear and transform F1
+----------------------
 
-TopSpin warns when the first F2 FFT has fewer than twice as many bins
-as retained complex samples. To meet that recommendation with the same
-2048 retained points, use ``size=(512, 4096), direct_points=2048``.
-The warning disappears at that size. The isolated RR discrepancy
-persists at the corresponding tile boundary.
+Pass the selected phase to XFSHEAR. It applies that phase to every F1
+increment and both States branches before taking the real F2 traces.
+The algorithm rotates the States pairs in the hybrid domain, reconstructs
+F2 quadrature by Hilbert transform and performs the F1 FFT internally.
+
+.. code-block:: python
+
+   spectrum = scp.nmr.Experiment(xf2).replay_xfshear(
+       spin=2.5, coherence_order=3, f1_shift=-20.0, **phase
+   )
+   rr = spectrum[0, :, :].squeeze().real
+   rr[52.0:25.0, 65.0:20.0].plot(method="contour")
+
+To revise the F2 phase, return to the complex XF2 dataset and run
+XFSHEAR again. The optional ``f1_shift`` uses the AU convention in
+isotropic ppm. It adds a phase ramp before the F1 transform and adjusts
+the F1 reference so you can reposition the signal within the window.
+Use ordinary baseline correction on a selected real plane if needed.
+
+The returned channels pack RR and IR in ``S_R``, and RI and II in
+``S_I``. The F2 axis retains the acquisition reference. The F1 axis
+uses the isotropic scaling and any requested F1 shift.
+
+Conventions and qualification
+-----------------------------
+
+For positive odd coherence order :math:`p` and nuclear spin :math:`I`,
+the signed slope and isotropic F1 scale divisor are
+
+.. math::
+
+   R = \frac{p[-17p^2 + 36I(I+1)-10]}{9[4I(I+1)-3]},
+   \qquad D = p-R.
+
+For spin 5/2 and triple-quantum coherence, :math:`R=19/12` and
+:math:`D=17/12`.
+
+The qualified PST-5 recipe uses rectangular windows and PKNL disabled.
+TopSpin reconstructs the imaginary F2 component on a grid twice the F2
+FFT size. With this recipe, its inverse and final forward F2 transforms
+cancel algebraically. The four output planes have been compared with
+TopSpin 4.5.0 at F2 SI 2048 and 4096, including a case with nonzero F2
+phase and F1 shift. An isolated RR point at a tile boundary in the
+TopSpin output dominates the residual in the rectangular reference.
 
 The :doc:`PST-5 gallery notebook </examples/gallery/nmr/plot_replay_mqmas_pst5>`
-shows the zero-filled recipe and plots the RR plane.
+shows the phase preview and the final RR contour map. Multiplex coherence
+selection is a separate acquisition workflow.
 
-Multiplex coherence selection requires the corresponding acquisition
-conventions to be represented by ``nmrglue.interop``.
-
-For the MQMAS conventions and broader context, see C. Fernandez and M. Pruski,
-*Probing quadrupolar nuclei by solid-state NMR spectroscopy: recent advances*
-(2011), `doi:10.1007/128_2011_141 <https://doi.org/10.1007/128_2011_141>`_.
+For the MQMAS conventions and broader context, see C. Fernandez and
+M. Pruski, *Probing quadrupolar nuclei by solid-state NMR spectroscopy:
+recent advances* (2011),
+`doi:10.1007/128_2011_141 <https://doi.org/10.1007/128_2011_141>`_.

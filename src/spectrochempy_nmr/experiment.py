@@ -505,69 +505,43 @@ class Experiment:
             normalize_scan_gain=normalize_scan_gain,
         )
 
-    def shear_mqmas(self, *, spin, coherence_order=3, pivot=0.0):
-        """Shear a frequency-domain MQMAS map and rescale its F1 axis.
+    def prepare_xfshear(self, *, size, direct_points=None):
+        """Transform F2 and retain both complex States branches for inspection.
 
-        The spin and odd coherence order determine the slope. A numerical
-        pivot is in Hz. Coordinates must be in Hz or referenced ppm.
-        Periodic Fourier interpolation folds peaks crossing the F1 edges.
-        The source dataset is preserved.
-
-        Parameters
-        ----------
-        spin : float
-            Half-integer nuclear spin, for example 2.5 for aluminium-27.
-        coherence_order : int, default=3
-            Positive odd multiple-quantum order, at most twice the spin.
-        pivot : float or Quantity, default=0.0
-            F2 frequency about which to shear. A number is interpreted in Hz;
-            a quantity must be convertible to Hz.
-
-        Returns
-        -------
-        NDDataset
-            Sheared copy, with F1 divided by ``coherence_order - ratio``
-            and referenced to the F2 nucleus for conversion to ppm.
-
-        Notes
-        -----
-        This is a spectral-grid transformation, not a replay of TopSpin
-        ``xfshear``. The map must already have physical F1/F2 frequency axes
-        and a consistent chemical-shift reference. It neither reconstructs
-        multiplex branches nor infers an MQMAS pulse-program convention.
-        See the MQMAS processing guide for the transformation and limits.
+        Supply the final FFT sizes as (F1, F2). The uncorrected acquisition
+        is read with both digital filter and DC correction disabled. Set
+        ``direct_points`` to keep the F2 acquisition interval fixed while
+        increasing the F2 size for zero filling.
         """
-        from .processing.mqmas import shear_mqmas  # noqa: PLC0415
+        from .processing.mqmas import prepare_xfshear  # noqa: PLC0415
 
         if self.is_multi_dataset:
-            raise ValueError("MQMAS shearing requires a single spectral map")
-        return shear_mqmas(
-            self.dataset, spin=spin, coherence_order=coherence_order, pivot=pivot
-        )
+            raise ValueError("XFSHEAR requires a single Bruker acquisition")
+        return prepare_xfshear(self.dataset, size=size, direct_points=direct_points)
 
-    def replay_xfshear(self, *, spin, size, coherence_order=3, direct_points=None):
-        """Replay the rectangular TopSpin XFSHEAR recipe on a Bruker States SER.
+    def replay_xfshear(
+        self, *, spin, coherence_order=3, phc0=0.0, phc1=0.0, pivot=0, f1_shift=0.0
+    ):
+        """Complete XFSHEAR on the complex result of prepare_xfshear().
 
-        Use an uncorrected acquisition, an explicit (F1, F2) FFT size and
-        the direct processing reference from the input dataset. This recipe
-        uses zero F1 shift, no ABS2, no apodization or PKNL and no manual phase.
-        It reconstructs F2 quadrature with the same doubled Hilbert grid
-        as TopSpin and returns all four spectral components.
-        Set ``direct_points`` to hold the acquired F2 interval fixed while
-        increasing the FFT size for zero filling. By default, the interval
-        is limited to the acquired points or the F2 FFT size, whichever
-        is smaller.
+        Apply the same zero- and first-order F2 phase in degrees to all
+        rows and both States branches before shearing. The pivot is an F2
+        sample index. The optional F1 shift in isotropic ppm moves signal
+        within the window with the AU reference adjustment. This method
+        includes the F1 FFT and returns all four spectral components.
         """
         from .processing.mqmas import replay_xfshear  # noqa: PLC0415
 
         if self.is_multi_dataset:
-            raise ValueError("XFSHEAR requires a single Bruker acquisition")
+            raise ValueError("XFSHEAR requires one complex XF2 dataset")
         return replay_xfshear(
             self.dataset,
             spin=spin,
             coherence_order=coherence_order,
-            size=size,
-            direct_points=direct_points,
+            phc0=phc0,
+            phc1=phc1,
+            pivot=pivot,
+            f1_shift=f1_shift,
         )
 
     def process(

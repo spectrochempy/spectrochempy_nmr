@@ -1,4 +1,4 @@
-"""Coordinate-aware shearing of frequency-domain MQMAS maps."""
+"""Hybrid-domain TopSpin XFSHEAR for Bruker States acquisitions."""
 
 from numbers import Integral
 from numbers import Real
@@ -31,130 +31,12 @@ def _mqmas_geometry(spin, coherence_order):
     return order, ratio, scale
 
 
-def shear_mqmas(dataset, *, spin, coherence_order=3, pivot=0.0):
-    """Shear an MQMAS spectrum and rescale its indirect frequency axis.
-
-    The transformation is f_iso = (f_MQ - R * (f_SQ - pivot)) / (p - R).
-    Both axes must use Hz or ppm with an explicit frequency reference.
-    A numerical pivot is in Hz. Fourier interpolation is periodic along F1.
-    The input must already be reconstructed and Fourier transformed.
-    Phasing and digital-filter correction precede this operation.
-
-    For spin 5/2 and 3Q, R is 19/12 and the scale divisor is 17/12.
-    See Fernandez and Pruski (2011), DOI 10.1007/128_2011_141.
-    """
-    import spectrochempy as scp  # noqa: PLC0415
-
-    order, ratio, scale = _mqmas_geometry(spin, coherence_order)
-    if dataset.meta.get("mqmas_shearing"):
-        raise ValueError("MQMAS shearing has already been applied")
-    if set(dataset.dims) not in ({"y", "x"}, {"c", "y", "x"}):
-        raise ValueError("MQMAS requires x/y spectral axes and optional c planes")
-    if dataset.coordset is None:
-        raise ValueError("MQMAS requires two calibrated spectral grids")
-    if "c" in dataset.dims:
-        labels = dataset.c.labels if dataset.c is not None else None
-        layout = tuple(labels) if labels is not None else ()
-        real_planes = layout == ("rr", "ri", "ir", "ii") and not np.iscomplexobj(
-            dataset.data
-        )
-        complex_planes = layout == ("S_R", "S_I") and np.iscomplexobj(dataset.data)
-        if dataset.meta.get("component_axis") != "c" or not (
-            real_planes or complex_planes
-        ):
-            raise ValueError("MQMAS requires spectral rr/ri/ir/ii or S_R/S_I planes")
-    if np.any(dataset.mask) or not np.isfinite(dataset.data).all():
-        raise ValueError("MQMAS requires finite unmasked spectra")
-
-    coordinates = {}
-    for dim in ("y", "x"):
-        axis = dataset.coordset[dim]
-        if axis is None or axis.size < 2:
-            raise ValueError("MQMAS requires two calibrated spectral grids")
-        if axis.units not in (scp.ur.Hz, scp.ur.ppm):
-            raise ValueError("MQMAS axes must be in Hz or referenced ppm")
-        try:
-            hz = axis.to("Hz")
-        except (ValueError, TypeError) as exc:
-            raise ValueError("MQMAS ppm axes require a frequency reference") from exc
-        values = np.asarray(hz.data)
-        steps = np.diff(values)
-        if (
-            not np.isfinite(values).all()
-            or steps[0] == 0
-            or not np.allclose(steps, steps[0], rtol=1e-7, atol=1e-10)
-        ):
-            raise ValueError("MQMAS requires uniform monotonic spectral grids")
-        coordinates[dim] = hz
-    try:
-        pivot_hz = (
-            float(pivot.to("Hz").magnitude) if hasattr(pivot, "to") else float(pivot)
-        )
-    except (ValueError, TypeError, OverflowError) as exc:
-        raise ValueError("MQMAS pivot must be a finite frequency") from exc
-    if isinstance(pivot, (bool, np.bool_)) or not np.isfinite(pivot_hz):
-        raise ValueError("MQMAS pivot must be a finite frequency")
-
-    data = np.asarray(dataset.data)
-    y_axis = dataset.dims.index("y")
-    x_axis = dataset.dims.index("x")
-    work = np.moveaxis(data, (y_axis, x_axis), (-2, -1))
-    y = coordinates["y"].data
-    shifts = ratio * (coordinates["x"].data - pivot_hz) / (y[1] - y[0])
-    ramp = np.exp(2j * np.pi * np.fft.fftfreq(len(y))[:, None] * shifts)
-    if "c" in dataset.dims and np.iscomplexobj(data) and len(y) % 2 == 0:
-        # The even-length Nyquist bin represents both signs for each real
-        # plane. Use its cosine response in the packed representation too.
-        ramp[len(y) // 2] = ramp[len(y) // 2].real
-    shifted = np.fft.ifft(np.fft.fft(work, axis=-2) * ramp, axis=-2)
-    if not np.iscomplexobj(data):
-        shifted = shifted.real
-    if not np.isfinite(shifted).all():
-        raise ValueError("MQMAS shearing produced nonfinite samples")
-
-    result = dataset.copy()
-    result.data = np.moveaxis(shifted, (-2, -1), (y_axis, x_axis))
-    isotropic = scp.Coord(
-        y / scale,
-        units="Hz",
-        title="isotropic frequency",
-        rounding=False,
-        sigdigits=15,
-    )
-    isotropic.meta.update(dict(coordinates["x"].meta.copy()))
-    if dataset.coordset["y"].units == scp.ur.ppm:
-        try:
-            isotropic.ito("ppm")
-        except (ValueError, TypeError) as exc:
-            raise ValueError(
-                "MQMAS requires an F2 frequency reference when F1 is in ppm"
-            ) from exc
-        isotropic.title = "isotropic chemical shift"
-    result.coordset["y"] = isotropic
-    readonly = result.meta.readonly
-    result.meta.readonly = False
-    result.meta.mqmas_shearing = {
-        "spin": float(spin),
-        "coherence_order": order,
-        "ratio": float(ratio),
-        "scale_divisor": float(scale),
-        "pivot_hz": pivot_hz,
-        "boundary": "periodic",
-    }
-    result.meta.readonly = readonly
-    result.history = "Applied MQMAS shearing and isotropic F1 scaling"
-    return result
-
-
-def replay_xfshear(dataset, *, spin, coherence_order, size, direct_points):
-    """Process an uncorrected Bruker States SER with the rectangular AU recipe."""
-    from scipy.signal import hilbert  # noqa: PLC0415
-
+def prepare_xfshear(dataset, *, size, direct_points):
+    """Compute complex XF2 branches for inspecting the phase before shearing."""
     from spectrochempy.core.dataset.coord import Coord  # noqa: PLC0415
     from spectrochempy.core.units import ur  # noqa: PLC0415
     from spectrochempy_nmr.processing.topspin_xfb import _positive_fft  # noqa: PLC0415
 
-    order, ratio, scale = _mqmas_geometry(spin, coherence_order)
     meta = dataset.meta
     acquisition = meta.get("acquisition") or {}
     if (
@@ -217,9 +99,118 @@ def replay_xfshear(dataset, *, spin, coherence_order, size, direct_points):
     if not np.isfinite(sf) or sf <= 0 or not np.isfinite(carrier) or carrier <= 0:
         raise ValueError("XFSHEAR requires the direct processing reference")
 
-    real_f2 = _positive_fft(data[..., :direct_points], sx, -1).real
     centered_f2 = (np.arange(sx) - sx // 2) * sw2 / sx
-    phase = 2 * np.pi * ratio * (np.arange(ny) / sw1)[:, None] * centered_f2
+    center = (carrier - sf) * 1e6 / sf
+    axis = Coord(
+        center - centered_f2 / sf,
+        units="ppm",
+        title="F2 chemical shift",
+        rounding=False,
+        sigdigits=15,
+    )
+    axis.meta["reference_frequency"] = sf * ur.MHz
+    result = dataset.copy()
+    result.delete_coordset()
+    result.data = _positive_fft(data[..., :direct_points], sx, -1)
+    result.set_coordset(c=dataset.c.copy(), y=dataset.y.copy(), x=axis)
+    readonly = result.meta.readonly
+    result.meta.readonly = False
+    result.meta.update(
+        {
+            "stage": "mqmas_xf2",
+            "data_domain": "mixed",
+            "isfreq": [False, False, True],
+            # The XF2 phase reference starts at zero. Initialize pk's
+            # relative phase state independently of imported vendor values.
+            "phased": [False, False, True],
+            "phc0": [0 * ur.degree] * 3,
+            "phc1": [0 * ur.degree] * 3,
+            "pivot": [0] * 3,
+            "exptc": [0] * 3,
+            "td": list(result.shape),
+            "si": list(result.shape),
+            "mqmas_xf2": {
+                "size": (sy, sx),
+                "direct_points": int(direct_points),
+                "widths_hz": (sw1, sw2),
+                "sf_mhz": sf,
+                "carrier_mhz": carrier,
+            },
+        }
+    )
+    result.meta.readonly = readonly
+    result.history = "Applied complex XF2 for MQMAS phase inspection"
+    return result
+
+
+def replay_xfshear(dataset, *, spin, coherence_order, phc0, phc1, pivot, f1_shift):
+    """Apply common F2 phase and complete XFSHEAR, including the F1 FFT."""
+    from scipy.signal import hilbert  # noqa: PLC0415
+
+    from spectrochempy.core.dataset.coord import Coord  # noqa: PLC0415
+    from spectrochempy.core.units import ur  # noqa: PLC0415
+    from spectrochempy_nmr.processing.topspin_xfb import _positive_fft  # noqa: PLC0415
+
+    order, ratio, scale = _mqmas_geometry(spin, coherence_order)
+    plan = dataset.meta.get("mqmas_xf2")
+    if dataset.meta.get("stage") != "mqmas_xf2" or not plan:
+        raise ValueError(
+            "XFSHEAR requires the full complex dataset from prepare_xfshear()"
+        )
+    sy, sx = plan["size"]
+    sw1, sw2 = plan["widths_hz"]
+    sf, carrier = plan["sf_mhz"], plan["carrier_mhz"]
+    data = np.asarray(dataset.data)
+    ny = dataset.shape[-2]
+    if (
+        tuple(dataset.dims) != ("c", "y", "x")
+        or data.shape != (2, ny, sx)
+        or dataset.c is None
+        or dataset.c.labels is None
+        or tuple(dataset.c.labels) != ("E1", "E2")
+        or dataset.y is None
+        or dataset.y.units != ur.s
+        or dataset.x is None
+        or dataset.x.units != ur.ppm
+        or ny != dataset.meta.tdeff[-2]
+        or not np.iscomplexobj(data)
+        or np.any(dataset.mask)
+        or not np.isfinite(data).all()
+        or not np.allclose(
+            dataset.x.data,
+            (carrier - sf) * 1e6 / sf - (np.arange(sx) - sx // 2) * sw2 / (sx * sf),
+            rtol=1e-10,
+            atol=1e-10,
+        )
+        or not np.allclose(dataset.y.data, np.arange(ny) / sw1, rtol=1e-7, atol=0)
+    ):
+        raise ValueError(
+            "XFSHEAR requires the full unmasked XF2 grid in acquired order"
+        )
+    for name, value in (
+        ("phc0", phc0),
+        ("phc1", phc1),
+        ("pivot", pivot),
+        ("f1_shift", f1_shift),
+    ):
+        if (
+            isinstance(value, bool)
+            or not isinstance(value, Real)
+            or not np.isfinite(value)
+        ):
+            raise ValueError(f"XFSHEAR requires a finite numerical {name}")
+    if not 0 <= pivot < sx:
+        raise ValueError("XFSHEAR phase pivot must be an F2 sample index")
+
+    f2_phase = np.deg2rad(phc0 + phc1 * (np.arange(sx) - pivot) / sx)
+    real_f2 = (data * np.exp(1j * f2_phase)).real
+    centered_f2 = (np.arange(sx) - sx // 2) * sw2 / sx
+    # AU f1shift is an isotropic ppm shift. Convert it using the scaled
+    # carrier to obtain the additional phase ramp on the unscaled F1 grid.
+    f1_shift_hz = f1_shift * carrier * scale
+    phase = (
+        2 * np.pi * (np.arange(ny) / sw1)[:, None] * (ratio * centered_f2 + f1_shift_hz)
+    )
     rotated = (real_f2[0] + 1j * real_f2[1]) * np.exp(1j * phase)
     branches = np.stack((rotated.real, rotated.imag))
 
@@ -245,26 +236,23 @@ def replay_xfshear(dataset, *, spin, coherence_order, size, direct_points):
     if not np.isfinite(spectrum).all():
         raise ValueError("XFSHEAR produced nonfinite spectral values")
 
-    center = (carrier - sf) * 1e6 / sf
+    # The AU re-references F1 after shifting the signal in the window.
+    shifted_sf = sf + f1_shift_hz * 1e-6 / scale
+    if not np.isfinite(shifted_sf) or shifted_sf <= 0:
+        raise ValueError("XFSHEAR F1 shift gives an invalid reference frequency")
+    center_f1 = (carrier - shifted_sf) * 1e6 / shifted_sf
     coords = {
         "c": Coord(labels=["S_R", "S_I"]),
-        "x": Coord(
-            center - centered_f2 / sf,
-            units="ppm",
-            title="F2 chemical shift",
-            rounding=False,
-            sigdigits=15,
-        ),
+        "x": dataset.x.copy(),
         "y": Coord(
-            center - (np.arange(sy) - cy) * sw1 / (sy * scale * sf),
+            center_f1 - (np.arange(sy) - cy) * sw1 / (sy * scale * shifted_sf),
             units="ppm",
             title="isotropic chemical shift",
             rounding=False,
             sigdigits=15,
         ),
     }
-    for dim in ("y", "x"):
-        coords[dim].meta["reference_frequency"] = sf * ur.MHz
+    coords["y"].meta["reference_frequency"] = shifted_sf * ur.MHz
     result = dataset.copy()
     result.delete_coordset()
     result.data = spectrum
@@ -276,6 +264,7 @@ def replay_xfshear(dataset, *, spin, coherence_order, size, direct_points):
             "data_domain": "frequency",
             "stage": "spectrum",
             "isfreq": [False, True, True],
+            "phased": [False, True, True],
             "iscomplex": [False, True, True],
             "component_labels": ("S_R", "S_I"),
             "quadrature_mode": "complex-channel-pair-2d",
@@ -289,7 +278,9 @@ def replay_xfshear(dataset, *, spin, coherence_order, size, direct_points):
                 "ratio": float(ratio),
                 "scale_divisor": float(scale),
                 "hilbert_fft_size": 2 * sx,
-                "direct_points": int(direct_points),
+                "direct_points": plan["direct_points"],
+                "f2_phase": {"phc0": phc0, "phc1": phc1, "pivot": pivot},
+                "f1_shift_ppm": f1_shift,
             },
         }
     )

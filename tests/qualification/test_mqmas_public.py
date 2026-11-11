@@ -1,10 +1,6 @@
-"""Optional public-reader integration with the private historical MQMAS map.
-
-This checks integration and ownership, not TopSpin xfshear numerical parity.
-"""
+"""Optional qualification against the historical PST-5 TopSpin references."""
 
 import os
-from pathlib import Path
 
 import numpy as np
 import pytest
@@ -13,39 +9,19 @@ import spectrochempy as scp
 from spectrochempy_nmr import Experiment
 
 
-def test_mqmas_public_processed_reader_preserves_input():
-    path = os.environ.get("SCP_MQMAS_PDATA")
-    if not path:
-        pytest.skip("set SCP_MQMAS_PDATA to the historical processed 27Al MQMAS 2rr")
-    assert Path(path).is_file(), "SCP_MQMAS_PDATA must name an existing 2rr file"
-    source = scp.nmr.read_topspin(path, local_only=True, proc_axis=True)
-    original_data = source.data.copy()
-    original_x = source.x.data.copy()
-    original_y = source.y.data.copy()
-    original_history = list(source.history)
-    result = Experiment(source).shear_mqmas(spin=2.5)
-    assert result is not source
-    assert result.dims == source.dims
-    assert result.shape == source.shape
-    assert result.units == source.units
-    assert np.isfinite(result.data).all()
-    np.testing.assert_array_equal(source.data, original_data)
-    np.testing.assert_array_equal(source.x.data, original_x)
-    np.testing.assert_array_equal(source.y.data, original_y)
-    assert source.history == original_history
-    np.testing.assert_allclose(result.x.data, source.x.data, rtol=1e-11, atol=1e-11)
-    np.testing.assert_allclose(
-        result.y.to("Hz").data, source.y.to("Hz").data / (17 / 12), rtol=1e-12
-    )
-    assert result.meta.component_labels == source.meta.component_labels
-    assert not np.shares_memory(result.data, source.data)
-
-
 @pytest.mark.parametrize(
-    ("sx", "reference_env"),
-    [(2048, "SCP_MQMAS_XFSHEAR_PDATA"), (4096, "SCP_MQMAS_XFSHEAR_ZF_PDATA")],
+    ("sx", "reference_env", "phase"),
+    [
+        (2048, "SCP_MQMAS_XFSHEAR_PDATA", {}),
+        (4096, "SCP_MQMAS_XFSHEAR_ZF_PDATA", {}),
+        (
+            4096,
+            "SCP_MQMAS_XFSHEAR_PHASE_PDATA",
+            {"phc0": -30.0, "phc1": 60.0, "f1_shift": 5.0},
+        ),
+    ],
 )
-def test_replay_xfshear_matches_mqmas_51_four_planes(sx, reference_env):
+def test_replay_xfshear_matches_mqmas_51_four_planes(sx, reference_env, phase):
     ser = os.environ.get("SCP_MQMAS_SER")
     pdata = os.environ.get(reference_env)
     if not ser or not pdata:
@@ -55,9 +31,14 @@ def test_replay_xfshear_matches_mqmas_51_four_planes(sx, reference_env):
     )
     original = source.data.copy()
     ref = scp.nmr.read_topspin(pdata, local_only=True, proc_axis=True)
-    result = Experiment(source).replay_xfshear(
-        spin=2.5, size=(512, sx), direct_points=2048
-    )
+    mixed = Experiment(source).prepare_xfshear(size=(512, sx), direct_points=2048)
+    mixed_data = mixed.data.copy()
+    if phase:
+        preview = mixed[0, 0, :].squeeze().pk(phc0=-30.0, phc1=60.0, pivot=0)
+        angle = np.deg2rad(-30.0 + 60.0 * np.arange(sx) / sx)
+        np.testing.assert_allclose(preview.data, mixed_data[0, 0] * np.exp(1j * angle))
+    result = Experiment(mixed).replay_xfshear(spin=2.5, **phase)
+    np.testing.assert_array_equal(mixed.data, mixed_data)
     np.testing.assert_array_equal(source.data, original)
     np.testing.assert_allclose(result.x.data, ref.x.data, rtol=0, atol=1e-7)
     np.testing.assert_allclose(result.y.data, ref.y.data, rtol=0, atol=1e-7)
@@ -80,4 +61,4 @@ def test_replay_xfshear_matches_mqmas_51_four_planes(sx, reference_env):
 
     corrected = scp.nmr.read_topspin(ser, local_only=True, remove_dc_offset=True)
     with pytest.raises(ValueError, match="uncorrected"):
-        Experiment(corrected).replay_xfshear(spin=2.5, size=(512, 2048))
+        Experiment(corrected).prepare_xfshear(size=(512, 2048))

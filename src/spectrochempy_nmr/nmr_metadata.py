@@ -765,7 +765,10 @@ def extract_nmr_metadata(meta, *, ndim=None) -> NMRMetadata:
                 for role, state in zip(roles, display.domains, strict=True)
             )
             return replace(display, domains=domains, source_kind="unknown")
-        states = quadrature == "states" and domain in ("time", "frequency")
+        states = quadrature == "states" and (
+            domain in ("time", "frequency")
+            or (domain == "mixed" and meta.get("stage") == "mqmas_xf2")
+        )
         states_tppi = quadrature == "states-tppi" and (
             domain,
             meta.get("tppi_alternation_state"),
