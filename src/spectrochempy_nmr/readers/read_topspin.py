@@ -1637,6 +1637,14 @@ def _read_topspin(*args, **kwargs):
         dataset.data = data
         dataset.meta.update(meta)
         dataset.set_coordset(*tuple(coords))
+    if normalized_ser:
+        from ..processing.topspin_xfb import capture_xfb_plan  # noqa: PLC0415
+
+        profile = dataset.meta.nmr_processing.get("vendor_profile")
+        if profile is not None:
+            plan = capture_xfb_plan(dataset)
+            if plan is not None:
+                profile["xfb_plan"] = plan
     dataset.meta.readonly = True
 
     dataset.units = "count"

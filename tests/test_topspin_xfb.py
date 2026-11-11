@@ -11,6 +11,7 @@ from spectrochempy_nmr.processing.topspin_xfb import _build_xfb_plan
 from spectrochempy_nmr.processing.topspin_xfb import _execute_xfb
 from spectrochempy_nmr.processing.topspin_xfb import _gaussian_baseline
 from spectrochempy_nmr.processing.topspin_xfb import _subtract_baseline
+from spectrochempy_nmr.processing.topspin_xfb import capture_xfb_plan
 
 
 @pytest.fixture
@@ -80,6 +81,49 @@ def test_xfb_executor_needs_only_serialized_plan(qf_fid, tmp_path):
     np.testing.assert_array_equal(actual.x.data, expected.x.data)
     np.testing.assert_array_equal(actual.y.data, expected.y.data)
     assert applied == expected.meta.nmr_processing["scp_processing"]["applied"]
+
+
+def test_xfb_replays_captured_plan_after_reload(qf_fid, tmp_path):
+    expected = Experiment(qf_fid).process(replay="topspin")
+    plan = capture_xfb_plan(qf_fid)
+    qf_fid.meta.nmr_processing = {"vendor_profile": {"xfb_plan": plan}}
+    qf_fid.meta.source_metadata = {}
+    path = tmp_path / "xfb-captured-plan.scp"
+    qf_fid.write(path, confirm=False)
+    source = scp.read(path)
+
+    actual = Experiment(source).process(replay="topspin")
+    np.testing.assert_array_equal(actual.data, expected.data)
+    np.testing.assert_array_equal(actual.x.data, expected.x.data)
+    np.testing.assert_array_equal(actual.y.data, expected.y.data)
+    assert (
+        actual.meta.nmr_processing["scp_processing"]
+        == expected.meta.nmr_processing["scp_processing"]
+    )
+    with pytest.raises(ValueError, match="plan does not match"):
+        Experiment(source[:, :3]).process(replay="topspin")
+
+
+@pytest.mark.parametrize(
+    ("field", "value", "message"),
+    [
+        ("fft_size", 2, "invalid FFT size"),
+        ("baseline_mode", 7, "baseline correction mode"),
+        ("phase_zero_deg", float("nan"), "invalid phase_zero_deg"),
+        ("f2", None, "missing axis parameters"),
+        ("source_shape", None, "plan does not match"),
+        ("f2_time_origin_points", 1, "invalid direct group delay"),
+    ],
+)
+def test_xfb_refuses_invalid_captured_plan(qf_fid, field, value, message):
+    plan = capture_xfb_plan(qf_fid)
+    if field in plan["f2"]:
+        plan["f2"][field] = value
+    else:
+        plan[field] = value
+    qf_fid.meta.nmr_processing = {"vendor_profile": {"xfb_plan": plan}}
+    with pytest.raises(ValueError, match=message):
+        Experiment(qf_fid).process(replay="topspin")
 
 
 @pytest.mark.parametrize("predict", [False, True])
