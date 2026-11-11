@@ -53,15 +53,15 @@ def _check_axis(params, points, words_per_point, ft_mode, phase_mode):
 
 
 def _window(params, points, width, delay=0):
-    mode = params["WDW"]
+    mode = params["window_mode"]
     if mode == 1:
         time = (np.arange(points) - delay) / width
         with np.errstate(over="ignore"):
-            weights = np.exp(-np.pi * time * params["LB"])
+            weights = np.exp(-np.pi * time * params["line_broadening_hz"])
         if not np.isfinite(weights).all():
             raise ValueError("TopSpin XFB exponential window overflowed")
     elif mode in (3, 4):
-        shift = params["SSB"]
+        shift = params["sine_shift"]
         phase = np.pi / shift if shift >= 2 else 0
         position = (np.arange(points) - delay) / (points - delay + 0.5)
         weights = np.sin(phase + (np.pi - phase) * position)
@@ -69,7 +69,7 @@ def _window(params, points, width, delay=0):
             weights **= 2
     else:
         weights = np.ones(points)
-    weights[0] *= params["FCOR"]
+    weights[0] *= params["first_point_scale"]
     return weights
 
 
@@ -155,8 +155,12 @@ def _gaussian_baseline(data, radius):
 
 
 def _gaussian_radius(params, points):
-    width_ppm = params["SW_p"] / params["SF"]
-    return int(min(points // 4, max(1, 0.625 * width_ppm / params["BCFW"])))
+    width_ppm = params["spectral_width_hz"] / params["reference_frequency_mhz"]
+    return int(
+        min(
+            points // 4, max(1, 0.625 * width_ppm / params["baseline_filter_width_ppm"])
+        )
+    )
 
 
 def _subtract_baseline(data, mode, cycles_per_point=0, radius=0):
@@ -181,7 +185,7 @@ def _subtract_baseline(data, mode, cycles_per_point=0, radius=0):
 
 def _correct_f1_baseline(data, params, profile, width):
     """Use TopSpin's scalar word order for the single-channel F1 modes."""
-    baseline = params["BC_mod"]
+    baseline = params["baseline_mode"]
     if not baseline:
         return data
     traces = data.swapaxes(-2, -1)
@@ -201,7 +205,9 @@ def _correct_f1_baseline(data, params, profile, width):
             corrected = -1j * corrected
     else:
         sign = 1 if profile == "qf" else -1
-        cycles_per_point = sign * params["COROFFS"] / width if baseline in (4, 6) else 0
+        cycles_per_point = (
+            sign * params["baseline_offset_hz"] / width if baseline in (4, 6) else 0
+        )
         corrected = _subtract_baseline(traces, baseline, cycles_per_point, radius)
     return corrected.swapaxes(-2, -1)
 
@@ -211,15 +217,16 @@ def _positive_fft(data, size, axis):
 
 
 def _processed_axis(params, source_axis):
-    bins = np.arange(params["SI"]) / params["SI"]
+    bins = np.arange(params["fft_size"]) / params["fft_size"]
     axis = Coord(
-        params["OFFSET"] - bins * (params["SW_p"] / params["SF"]),
+        params["first_point_ppm"]
+        - bins * (params["spectral_width_hz"] / params["reference_frequency_mhz"]),
         units="ppm",
         title=source_axis.title,
         rounding=False,
         sigdigits=15,
     )
-    axis.meta["reference_frequency"] = params["SF"] * ur.MHz
+    axis.meta["reference_frequency"] = params["reference_frequency_mhz"] * ur.MHz
     return axis
 
 
@@ -261,7 +268,38 @@ def replay_xfb(source):
         ):
             raise ValueError("TopSpin XFB requires the original calibrated time grids")
 
-    status = meta.get("source_metadata", {})
+    plan = _build_xfb_plan(meta.get("source_metadata", {}), mode, (ny, nx), widths)
+    return _execute_xfb(source, data, plan)
+
+
+def _xfb_axis_plan(params):
+    """Translate validated TopSpin fields to execution parameters."""
+    window = int(params["WDW"])
+    baseline = int(params["BC_mod"])
+    return {
+        "window_mode": window,
+        "line_broadening_hz": float(params["LB"]) if window == 1 else None,
+        "sine_shift": float(params["SSB"]) if window in (3, 4) else None,
+        "first_point_scale": float(params["FCOR"]),
+        "spectral_width_hz": float(params["SW_p"]),
+        "reference_frequency_mhz": float(params["SF"]),
+        "baseline_filter_width_ppm": float(params["BCFW"])
+        if baseline in (5, 6)
+        else None,
+        "baseline_mode": baseline,
+        "baseline_offset_hz": float(params["COROFFS"]) if baseline in (4, 6) else None,
+        "first_point_ppm": float(params["OFFSET"]),
+        "fft_size": params["SI"],
+        "phase_zero_deg": float(params["PHC0"]),
+        "phase_first_deg": float(params["PHC1"]),
+        "digital_filter_phase": params["PKNL"],
+    }
+
+
+def _build_xfb_plan(status, mode, shape, widths):
+    """Interpret a TopSpin recipe without applying any processing."""
+    ny, nx = shape
+    qf = mode == "qf"
     y, x = status.get("proc2s", {}), status.get("procs", {})
     if x.get("ME_mod") != 0:
         raise ValueError("TopSpin XFB linear prediction is only supported on F1")
@@ -290,18 +328,49 @@ def replay_xfb(source):
         raise ValueError("TopSpin XFB group delay leaves fewer than two direct points")
     _check_baseline(y, (0, 1, 2, 3, 4, 5, 6), ny)
     _check_baseline(x, (0, 4, 6), nx - origin)
-    f2_input = data.copy() if x["BC_mod"] else data
-    if x["BC_mod"]:
-        radius = _gaussian_radius(x, nx - origin) if x["BC_mod"] == 6 else 0
+    return {
+        "mode": mode,
+        "widths_hz": tuple(float(width) for width in widths),
+        "f1_points": f1_points,
+        "f1_prediction_order": lp_order,
+        "group_delay_points": delay,
+        "f2_time_origin_points": origin,
+        "f1": _xfb_axis_plan(y),
+        "f2": _xfb_axis_plan(x),
+    }
+
+
+def _execute_xfb(source, data, plan):
+    """Run an already validated XFB plan."""
+    mode = plan["mode"]
+    qf = mode == "qf"
+    _, nx = data.shape[-2:]
+    widths = plan["widths_hz"]
+    f1_points = plan["f1_points"]
+    lp_order = plan["f1_prediction_order"]
+    delay = plan["group_delay_points"]
+    origin = plan["f2_time_origin_points"]
+    y, x = plan["f1"], plan["f2"]
+    f2_input = data.copy() if x["baseline_mode"] else data
+    if x["baseline_mode"]:
+        radius = _gaussian_radius(x, nx - origin) if x["baseline_mode"] == 6 else 0
         f2_input[..., origin:] = _subtract_baseline(
-            data[..., origin:], x["BC_mod"], -x["COROFFS"] / widths[1], radius
+            data[..., origin:],
+            x["baseline_mode"],
+            -x["baseline_offset_hz"] / widths[1],
+            radius,
         )
     f2_input = f2_input * _window(x, nx, widths[1], origin)
     if mode == "echo-antiecho":
         f2_input = _rance_kay(f2_input)
-    sx, sy = x["SI"], y["SI"]
+    sx, sy = x["fft_size"], y["fft_size"]
     f2 = _positive_fft(f2_input, sx, -1)
-    phase_x = x["PHC0"] + (x["PHC1"] + 360 * delay * x["PKNL"]) * np.arange(sx) / sx
+    phase_x = (
+        x["phase_zero_deg"]
+        + (x["phase_first_deg"] + 360 * delay * x["digital_filter_phase"])
+        * np.arange(sx)
+        / sx
+    )
     f2 *= np.exp(-1j * np.deg2rad(phase_x))
     f1_window = _window(y, f1_points, widths[0])[:, None]
     if qf:
@@ -320,7 +389,7 @@ def replay_xfb(source):
             rr_ir, ri_ii = a.real - 1j * b.real, -a.imag + 1j * b.imag
         else:
             rr_ir, ri_ii = a.imag - 1j * b.imag, a.real - 1j * b.real
-        phase_y = y["PHC0"] + y["PHC1"] * np.arange(sy) / sy
+        phase_y = y["phase_zero_deg"] + y["phase_first_deg"] * np.arange(sy) / sy
         rotation = np.exp(1j * np.deg2rad(phase_y))[:, None]
         # Rotate F1 in pairs (2rr, 2ri) and (2ir, 2ii).
         real = (rr_ir.real + 1j * ri_ii.real) * rotation
@@ -368,13 +437,13 @@ def replay_xfb(source):
         "replay": "topspin",
         "command": "xfb",
         "size": (sy, sx),
-        "window": (y["WDW"], x["WDW"]),
+        "window": (y["window_mode"], x["window_mode"]),
         "group_delay_points": delay,
         "f2_time_origin_points": origin,
-        "pknl": x["PKNL"],
+        "pknl": x["digital_filter_phase"],
         "phase": {
-            "f1": (y["PHC0"], y["PHC1"]),
-            "f2": (x["PHC0"], x["PHC1"]),
+            "f1": (y["phase_zero_deg"], y["phase_first_deg"]),
+            "f2": (x["phase_zero_deg"], x["phase_first_deg"]),
         },
         "axis_calibration": "procs",
     }
@@ -385,6 +454,6 @@ def replay_xfb(source):
             "order": lp_order,
             "size": f1_points,
         }
-    if y["BC_mod"] or x["BC_mod"]:
-        applied["baseline"] = (y["BC_mod"], x["BC_mod"])
+    if y["baseline_mode"] or x["baseline_mode"]:
+        applied["baseline"] = (y["baseline_mode"], x["baseline_mode"])
     return result, applied
