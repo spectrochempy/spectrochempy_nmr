@@ -1102,8 +1102,21 @@ class Experiment:
             if int(work.shape[-1]) != initial_size:
                 applied["zero_filling"] = {"size": int(work.shape[-1])}
 
-        # 3. FFT
+        # Keep the recorded angles available for an explicit metadata phase.
+        # Neutralize them before FFT for compatibility with older core versions.
+        phase_metadata = {
+            key: work.meta.get(key)
+            for key in ("phased", "phc0", "phc1", "exptc", "pivot", "physical_pivots")
+        }
+        work.meta.readonly = False
+        for key in ("phc0", "phc1", "exptc", "pivot"):
+            work.meta[key] = [0] * work.ndim
+        work.meta.physical_pivots = [False] * work.ndim
         work = work.fft(_interop_physical_fft=physical_fft)
+        work.meta.readonly = False
+        work.meta.pivot = [0] * work.ndim
+        work.meta.physical_pivots = [False] * work.ndim
+        work.meta.readonly = True
         applied["fft"] = True
 
         # 3b. Encoding-specific intermediate phase convention adjustments
@@ -1111,6 +1124,13 @@ class Experiment:
 
         # 4. Phase correction
         if phase is not None:
+            if phase == "metadata":
+                work.meta.readonly = False
+                for key, value in phase_metadata.items():
+                    if value:
+                        work.meta[key] = value
+                if not phase_metadata["phased"]:
+                    work.meta.phased = [False] * work.ndim
             work = self._apply_phase(work, phase, phc0=phc0, phc1=phc1)
             applied["phase"] = self._build_applied_phase_trace(
                 phase,

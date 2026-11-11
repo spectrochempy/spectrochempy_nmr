@@ -80,8 +80,8 @@ reader preserves aligned trace length and applies the selected corrections
 before pairing. Other storage profiles continue through the earlier reader.
 
 Transform F2 before F1. States uses the same cross-pairs as States-TPPI
-without sign alternation. Public FFTs use the declared initial phases and
-ppm presentation. ``Experiment(dataset).process()`` uses the NMRPipe
+without sign alternation. Public FFTs use the ppm presentation. Apply
+any additional phase with ``pk()``. ``Experiment(dataset).process()`` uses the NMRPipe
 FFT convention and carrier-relative Hz axes.
 
 To replay the opt-in NMRPipe comparison, set

@@ -568,7 +568,13 @@ class TestProcessTimeDomain:
             atol=1.0e-12,
         )
 
-        manual = zf_size(internal_apodized, size=size).fft()
+        padded = zf_size(internal_apodized, size=size)
+        # Older core versions apply the stored phase during FFT.
+        padded.meta.readonly = False
+        padded.meta.phc0 = [0] * padded.ndim
+        padded.meta.phc1 = [0] * padded.ndim
+        padded.meta.readonly = True
+        manual = padded.fft()
 
         np.testing.assert_allclose(
             np.asarray(public.data),
@@ -1001,7 +1007,13 @@ class TestPublic1DRealAxisValidation:
         o1 = _read_param(acqus_file, "O1")
         bf1 = sfo1 - (o1 or 0.0) * 1e-6 if sfo1 is not None else None
 
-        spectrum = Experiment(fid).process(size=n, phase=None, digital_filter="time")
+        spectrum = Experiment(fid).process(
+            size=n,
+            digital_filter="time",
+            phase="manual",
+            phc0=fid.meta.phc0[0],
+            phc1=fid.meta.phc1[0],
+        )
 
         # Verify the calculated axis independently against the expected FFT axis.
         # The FFT post-processing builds: first = (sfo1-sf)*1e6 + sw_h/2 (Hz),
@@ -1065,7 +1077,7 @@ class TestPublic1DRealAxisValidation:
         not (_has_topspin_1d() and _has_topspin_1d_pdata()),
         reason="TopSpin 1D raw/pdata pair missing",
     )
-    def test_topspin_reference_oracle_metadata_phase_is_neutral_for_this_oracle(self):
+    def test_topspin_reference_oracle_metadata_phase_is_explicit(self):
         fid = _read_or_skip(nmrdir / "topspin_1d/1/fid")
         ref = _read_or_skip(nmrdir / "topspin_1d", expno=1, procno=1)
         size = int(ref.meta.si[0])
@@ -1073,24 +1085,11 @@ class TestPublic1DRealAxisValidation:
         unphased = Experiment(fid).process(size=size, phase=None)
         metadata_phased = Experiment(fid).process(size=size, phase="metadata")
 
-        metrics_none = _topspin_1d_oracle_metrics(unphased, ref)
-        metrics_metadata = _topspin_1d_oracle_metrics(metadata_phased, ref)
-
-        assert metrics_none["complex_overlap"] == pytest.approx(
-            metrics_metadata["complex_overlap"], abs=1.0e-12
+        expected = unphased.pk(
+            phc0=fid.meta.phc0[0], phc1=fid.meta.phc1[0], pivot=0, rel=True
         )
-        assert metrics_none["real_corr"] == pytest.approx(
-            metrics_metadata["real_corr"], abs=1.0e-12
-        )
-        assert metrics_none["residual_rms"] == pytest.approx(
-            metrics_metadata["residual_rms"], abs=1.0e-12
-        )
-        assert metrics_none["residual_max"] == pytest.approx(
-            metrics_metadata["residual_max"], abs=1.0e-12
-        )
-        assert metrics_none["phase_deg"] == pytest.approx(
-            metrics_metadata["phase_deg"], abs=1.0e-12
-        )
+        np.testing.assert_allclose(metadata_phased.data, expected.data)
+        assert not np.allclose(unphased.data, metadata_phased.data)
 
     @pytest.mark.skipif(
         not (_has_topspin_1d() and _has_topspin_1d_pdata()),
@@ -1101,20 +1100,25 @@ class TestPublic1DRealAxisValidation:
         ref = _read_or_skip(nmrdir / "topspin_1d", expno=1, procno=1)
         size = int(ref.meta.si[0])
 
+        phase = {
+            "phase": "manual",
+            "phc0": fid.meta.phc0[0],
+            "phc1": fid.meta.phc1[0],
+        }
         baseline = _topspin_1d_oracle_metrics(
-            Experiment(fid).process(size=size, phase=None), ref
+            Experiment(fid).process(size=size, **phase), ref
         )
 
         rotated = fid.copy()
         rotated._data = np.asarray(fid.data) * np.exp(-1j * np.pi / 2.0)
         rotated_metrics = _topspin_1d_oracle_metrics(
-            Experiment(rotated).process(size=size, phase=None), ref
+            Experiment(rotated).process(size=size, **phase), ref
         )
 
         conjugated = fid.copy()
         conjugated._data = np.conj(np.asarray(fid.data))
         conjugated_metrics = _topspin_1d_oracle_metrics(
-            Experiment(conjugated).process(size=size, phase=None), ref
+            Experiment(conjugated).process(size=size, **phase), ref
         )
 
         assert baseline["residual_rms"] < rotated_metrics["residual_rms"]
