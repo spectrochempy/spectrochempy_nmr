@@ -74,6 +74,52 @@ spectrum at a time. For acquisitions with two Fourier dimensions, see
 
 See :ref:`nmr-core-operations` for the core functions used in NMR.
 
+Estimate phase and correct the baseline
+---------------------------------------
+
+The standalone ``autophase()`` workflow accepts a complex spectrum after the
+FFT and requires a version of nmrglue-ng that provides ``estimate_phase()``.
+
+.. code-block:: python
+
+   from spectrochempy_nmr import autophase
+
+   diagnostic = autophase(spectrum, order=0, apply=False)
+   result = autophase(spectrum, order=0, baseline_options={"model": "asls", "lamb": 1e9})
+
+Inspect ``result.estimate`` for the correction angles and fit diagnostics.
+``result.phased`` is the complex spectrum. If you request baseline correction,
+``result.baseline`` and ``result.corrected`` are real datasets. Use
+``result.phased`` to make further phase adjustments. Its phase metadata records
+the correction relative to the input of this call, and the history retains
+the previous phase metadata. AsLS is intended here
+for spectra with positive peaks. Tune its smoothness for the spectral grid
+and check that integration areas are preserved. For signed spectra, use a polynomial fit on
+known signal-free regions with ``baseline_options`` specifying ``ranges``.
+
+ACME assumes positive absorption peaks. Pass a boolean ``exclude`` array to
+omit artifacts from phase scoring while retaining their data in the result.
+For isolated peaks of known signs, choose ``method="dispa"`` and provide
+``references=[(start, stop, sign), ...]`` with half-open index windows. Use
+well-separated references for order one. The optional
+``baseline_mask`` selects signal-free indices to fit a provisional complex
+linear background for phase scoring. The final real baseline is a separate
+fit. A successful solver status still calls for inspecting the result.
+
+For a spectrum produced with ``fftshift(fft(fid))`` on an increasing
+frequency grid, use the measured receiver timing to fix the slope and fit
+only the constant phase. A rectangular hard 90° pulse contributes
+approximately twice its duration divided by pi to the effective delay.
+Use the time from the pulse end to the first complex sample and account for
+any digital filter correction separately.
+
+.. code-block:: python
+
+   from nmrglue.process.proc_autophase import phase_slope_from_delay
+
+   slope = phase_slope_from_delay(10_000, 8e-6, hard_90_pulse_s=10e-6)
+   result = autophase(spectrum, fixed_p1=slope)
+
 Replay TopSpin EFP on a Bruker DQD FID
 --------------------------------------
 

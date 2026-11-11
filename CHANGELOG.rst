@@ -5,6 +5,12 @@ This changelog covers the independently versioned ``spectrochempy-nmr``
 distribution. The sections below describe changes in each plugin release.
 
 
+Unreleased
+----------
+
+* Estimate phase for complex 1D spectra using masked ACME or DISPA reference
+  windows, with optional real-channel baseline correction.
+
 0.3.0
 -----
 
