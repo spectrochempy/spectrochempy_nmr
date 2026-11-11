@@ -28,7 +28,9 @@ raw = scp.nmr.read("nmrdata/bruker/tests/nmr/MQMAS_27AL_PST5/51/ser")
 # a separate zero extension during Hilbert reconstruction. Aluminium-27 has
 # spin 5/2. For triple-quantum coherence, the signed slope is 19/12
 # and the F1 scale divisor is 17/12.
-xf2 = scp.nmr.Experiment(raw).xf2(size=4096, direct_points=2048)
+xf2 = scp.nmr.Experiment(raw).xf2(
+    size=4096, direct_points=2048, correct_digital_filter=True
+)
 
 # %%
 # Inspect the first acquired row. Adjust the phase parameters on this

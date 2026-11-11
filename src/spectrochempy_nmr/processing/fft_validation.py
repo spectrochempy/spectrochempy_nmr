@@ -15,6 +15,13 @@ def _require_fft_prevalidation():
 
 def _fft_validate_input(dataset, *, dim, inv=False, **kwargs):
     """Reject unsupported transforms without modifying the original dataset."""
+    if kwargs.get("convention") == "topspin-xf2" and (
+        inv
+        or dim != "x"
+        or tuple(dataset.dims) != ("c", "y", "x")
+        or dataset.meta.get("normalization_profile") != "bruker-ser-states-2d-v1"
+    ):
+        raise ValueError("TopSpin XF2 convention requires direct Bruker States F2 data")
     component = getattr(dataset.meta, "component_axis", None)
     if component == "c":
         if dim == component:

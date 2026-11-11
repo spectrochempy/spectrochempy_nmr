@@ -27,7 +27,12 @@ the retained bins during reconstruction of the imaginary component.
    phase = {"phc0": -58.0, "phc1": 0.0, "pivot": 0}
    first_row.pk(**phase).real[65.0:20.0].plot()
 
-``xf2()`` removes the phase ramp
+``xf2()`` uses the core FFT along ``x`` with the TopSpin XF2 convention.
+On an uncorrected Bruker States dataset, the call
+``dataset.fft(dim="x", size=4096, convention="topspin-xf2")`` computes
+the positive-exponent FFT on the TopSpin F2 grid. The MQMAS helper also
+prepares the acquired samples and records the state needed by XFSHEAR.
+With ``correct_digital_filter=True``, ``xf2()`` removes the phase ramp
 caused by the digital filter on the F2 frequency grid. The
 ``correct_digital_filter`` option controls this operation. Adjust the
 phase on the first-row preview before running XFSHEAR.

@@ -54,10 +54,8 @@ def xf2(
     dataset, *, size, direct_points, correct_digital_filter, echo_window, f1_size=None
 ):
     """Compute complex XF2 branches for inspecting the phase before shearing."""
-    from spectrochempy.core.dataset.coord import Coord  # noqa: PLC0415
     from spectrochempy.core.units import ur  # noqa: PLC0415
     from spectrochempy_nmr.processing.bruker_filter import resolve_bruker_delay  # noqa: PLC0415
-    from spectrochempy_nmr.processing.topspin_xfb import _positive_fft  # noqa: PLC0415
 
     meta = dataset.meta
     acquisition = meta.get("acquisition") or {}
@@ -117,18 +115,6 @@ def xf2(
     if not np.isfinite(sf) or sf <= 0 or not np.isfinite(carrier) or carrier <= 0:
         raise ValueError("XFSHEAR requires the direct processing reference")
 
-    centered_f2 = (np.arange(sx) - sx // 2) * sw2 / sx
-    center = (carrier - sf) * 1e6 / sf
-    axis = Coord(
-        center - centered_f2 / sf,
-        units="ppm",
-        title="F2 chemical shift",
-        rounding=False,
-        sigdigits=15,
-    )
-    axis.meta["reference_frequency"] = sf * ur.MHz
-    result = dataset.copy()
-    result.delete_coordset()
     if echo_window is not None and (
         not isinstance(echo_window, (tuple, list))
         or len(echo_window) != 2
@@ -167,18 +153,18 @@ def xf2(
             "sigma_seconds": sigma,
             "group_delay_points": delay,
         }
-    transformed = _positive_fft(retained, sx, -1)
+    prepared = dataset[..., :direct_points].copy()
+    prepared.data = retained.copy()
+    result = prepared.fft(dim="x", size=sx, convention="topspin-xf2")
     filter_correction = {"applied": False}
     if correct_digital_filter and delay > 0:
-        transformed *= np.exp(-2j * np.pi * delay * np.arange(sx) / sx)
+        result.data = result.data * np.exp(-2j * np.pi * delay * np.arange(sx) / sx)
         filter_correction = {
             "applied": True,
             "group_delay_points": float(delay),
             "delay_source": source,
             "method": "frequency-domain phase ramp",
         }
-    result.data = transformed
-    result.set_coordset(c=dataset.c.copy(), y=dataset.y.copy(), x=axis)
     readonly = result.meta.readonly
     result.meta.readonly = False
     result.history = "Applied complex XF2 for MQMAS phase inspection"
@@ -278,9 +264,7 @@ def xf2p(dataset, *, phc0, phc1, pivot, check_phase=True):
             raise ValueError(f"XFSHEAR requires a finite numerical {name}")
     if not 0 <= pivot < sx:
         raise ValueError("XFSHEAR phase pivot must be an F2 sample index")
-    f2_phase = np.deg2rad(phc0 + phc1 * (np.arange(sx) - pivot) / sx)
-    result = dataset.copy()
-    result.data = np.asarray(dataset.data) * np.exp(1j * f2_phase)
+    result = dataset.pk(dim="x", phc0=phc0, phc1=phc1, pivot=pivot, exptc=0.0, rel=True)
     readonly = result.meta.readonly
     result.meta.readonly = False
     result.meta.phc0[-1] = float(phc0) * result.meta.phc0[-1].units

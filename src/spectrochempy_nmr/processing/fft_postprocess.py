@@ -8,6 +8,7 @@ from collections.abc import Mapping
 import numpy as np
 
 from spectrochempy.core.dataset.coord import Coord  # noqa: PLC0415
+from spectrochempy.core.units import ur
 
 
 def _meta_dim_index(new, dim):
@@ -93,6 +94,37 @@ def _fft_postprocess_result(new, dim=-1, inv=False, **kwargs):
     the spectral axis when the dataset carries NMR metadata (``sfo1``,
     ``bf1``, ``sw_h``, ``nuc1``).
     """
+    if kwargs.get("convention") == "topspin-xf2":
+        sw = new.meta.sw_h[-1].to("Hz").magnitude
+        sf = new.meta.sf[-1].to("MHz").magnitude
+        carrier = new.meta.sfo1[-1].to("MHz").magnitude
+        if not all(np.isfinite(v) and v > 0 for v in (sw, sf, carrier)):
+            raise ValueError("TopSpin XF2 requires a finite positive F2 reference")
+        size = new.shape[-1]
+        centered_hz = (np.arange(size) - size // 2) * sw / size
+        axis = Coord(
+            (carrier - sf) * 1e6 / sf - centered_hz / sf,
+            units="ppm",
+            title="F2 chemical shift",
+            rounding=False,
+            sigdigits=15,
+        )
+        axis.meta["reference_frequency"] = new.meta.sf[-1]
+        new.coordset[dim] = axis
+        readonly = new.meta.readonly
+        new.meta.readonly = False
+        new.meta.update(
+            {
+                "phased": [False, False, True],
+                "phc0": [0 * ur.degree] * 3,
+                "phc1": [0 * ur.degree] * 3,
+                "pivot": [0] * 3,
+                "exptc": [0] * 3,
+            }
+        )
+        new.meta.readonly = readonly
+        return new
+
     if new.meta.get("quadrature_mode") == "series-stored-2d":
         readonly = new.meta.readonly
         new.meta.readonly = False
