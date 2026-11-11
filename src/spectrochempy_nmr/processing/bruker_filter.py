@@ -74,4 +74,4 @@ def resolve_bruker_delay(dataset, override):
     delay, source = _delay_from_bruker_metadata(dataset.meta.get("source_metadata", {}))
     if delay is not None:
         return delay, source
-    raise ValueError("Unknown Bruker group delay; supply bruker_group_delay explicitly")
+    raise ValueError("Unknown Bruker group delay")

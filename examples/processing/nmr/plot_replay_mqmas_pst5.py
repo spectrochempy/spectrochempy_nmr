@@ -16,6 +16,8 @@ under `CC BY 4.0 <https://creativecommons.org/licenses/by/4.0/>`_.
 # %%
 import spectrochempy as scp
 
+# sphinx_gallery_thumbnail_number = 2
+
 # Keep the acquired points intact at import. prepare_xfshear() will
 # correct the digital group delay on the F2 frequency grid.
 raw = scp.nmr.read("nmrdata/bruker/tests/nmr/MQMAS_27AL_PST5/51/ser")
@@ -40,7 +42,6 @@ _ = first_row.pk(**phase).real[65.0:20.0].plot()
 # States branches and every F1 increment before the shear and Hilbert
 # reconstruction. XFSHEAR also performs the F1 FFT. The optional shift
 # moves the signal within the F1 window in isotropic ppm.
-# sphinx_gallery_thumbnail_number = 2
 spectrum = scp.nmr.Experiment(xf2).replay_xfshear(
     spin=2.5, coherence_order=3, f1_shift=-20.0, **phase
 )

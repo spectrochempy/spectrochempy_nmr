@@ -129,7 +129,14 @@ def prepare_xfshear(
             "echo_window requires a finite slope and positive sigma in seconds"
         )
     if correct_digital_filter or echo_window is not None:
-        delay, source = resolve_bruker_delay(dataset, None)
+        acqus = meta.get("source_metadata", {}).get("acqus", {})
+        recorded_delay = acquisition["digital_filter"].get("group_delay_points")
+        no_decimation = (
+            acqus.get("DECIM") == 1
+            and acqus.get("GRPDLY") in (None, 0)
+            and recorded_delay in (None, 0)
+        )
+        delay, source = resolve_bruker_delay(dataset, 0.0 if no_decimation else None)
         if not np.isfinite(delay) or delay < 0:
             raise ValueError("XFSHEAR requires a finite nonnegative Bruker group delay")
     retained = data[..., :direct_points]
@@ -147,7 +154,7 @@ def prepare_xfshear(
         }
     xf2 = _positive_fft(retained, sx, -1)
     filter_correction = {"applied": False}
-    if correct_digital_filter:
+    if correct_digital_filter and delay > 0:
         xf2 *= np.exp(-2j * np.pi * delay * np.arange(sx) / sx)
         filter_correction = {
             "applied": True,

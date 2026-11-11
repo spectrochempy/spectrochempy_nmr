@@ -90,3 +90,30 @@ def test_echo_window_follows_each_f1_increment():
             np.abs(raw.data[:, row, center]), rel=1e-4
         )
     assert np.all(np.abs(recovered[:, 32, 76]) < np.abs(raw.data[:, 32, 76]) * 0.001)
+
+
+@pytest.mark.parametrize("echo_window", [None, (19 / 12, 0.0008)])
+def test_xf2_without_decimation_has_zero_group_delay(echo_window):
+    ser = os.environ.get("SCP_MQMAS_SER")
+    if not ser:
+        pytest.skip("requires the PST-5 SER")
+    raw = scp.nmr.read(ser, local_only=True)
+    raw.meta.readonly = False
+    acquisition = dict(raw.meta.acquisition)
+    acquisition["digital_filter"] = {"applied": False}
+    raw.meta.acquisition = acquisition
+    source = dict(raw.meta.source_metadata)
+    source["acqus"] = {**source["acqus"], "DECIM": 1, "GRPDLY": 0.0}
+    raw.meta.source_metadata = source
+
+    experiment = Experiment(raw)
+    xf2 = experiment.prepare_xfshear(size=(512, 2048), echo_window=echo_window)
+    plan = xf2.meta.mqmas_xf2
+    assert plan["digital_filter"]["applied"] is False
+    if echo_window is None:
+        expected = experiment.prepare_xfshear(
+            size=(512, 2048), correct_digital_filter=False
+        )
+        np.testing.assert_array_equal(xf2.data, expected.data)
+    else:
+        assert plan["echo_window"]["group_delay_points"] == 0.0
