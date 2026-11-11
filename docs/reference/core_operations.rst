@@ -26,10 +26,11 @@ use each operation on an acquisition or spectrum.
        :external+core:py:func:`~spectrochempy.ifft`
      - Transform along a selected dimension. For paired 2D acquisitions,
        use the :doc:`supported processing paths </userguide/processing_2d>`
-       to respect the indirect quadrature and dimension order.
+       to respect the indirect quadrature and dimension order. With core
+       1.2.1, apply phase correction separately with ``pk()``.
    * - :external+core:py:func:`~spectrochempy.pk`
      - Apply zero- or first-order phase correction to a complex spectrum.
-       In core 1.2, a pivot given as a quantity selects the nearest sample
+       With core 1.2.1, a pivot given as a quantity selects the nearest sample
        in the axis units. A plain number specifies a sample index.
    * - :external+core:py:func:`~spectrochempy.dc`
      - Subtract a constant estimated from the end of a time-domain signal.
@@ -40,10 +41,9 @@ use each operation on an acquisition or spectrum.
        :external+core:py:class:`~spectrochempy.CoordSet`
      - Inspect the samples and calibrated axes. Conversion between hertz
        and ppm requires the reference frequency for the selected axis.
-   * - :external+core:py:func:`~spectrochempy.plot`,
-       :external+core:py:func:`~spectrochempy.plot_map`
-     - Display a 1D spectrum or a 2D map. For paired 2D data, select the
-       spectral component before plotting.
+   * - :external+core:py:func:`~spectrochempy.plot`
+     - Display a 1D spectrum or use ``plot(method="contour")`` for a 2D map.
+       For paired data, select the spectral component before plotting.
    * - :external+core:py:func:`~spectrochempy.trapezoid`,
        :external+core:py:func:`~spectrochempy.simpson`
      - Integrate a selected 1D peak region on the calibrated axis after

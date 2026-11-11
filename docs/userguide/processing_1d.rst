@@ -34,10 +34,8 @@ processing parameters:
    experiment = scp.nmr.Experiment(fid)
    result = experiment.process(apodization="em", lb=5.0, phase=None)
 
-The supported apodization modes are ``em``, ``gm`` and ``sp``. The result
-records the workflow in
-``result.meta.nmr_processing["scp_processing"]``. ``requested`` contains
-explicit user arguments and ``applied`` records operations actually executed.
+The supported apodization modes are ``em``, ``gm`` and ``sp``. Use
+``result.history`` to inspect the steps recorded on the spectrum.
 Use ``phase="metadata"`` to apply the phase angles attached to the FID,
 or ``phase="manual"`` with explicit angles. With ``phase=None``, the
 transform leaves the phase untouched.
@@ -56,7 +54,7 @@ Both approaches preserve the original FID by default. A supported complex
 JEOL 1D FID read with ``scp.nmr.read_jeol()`` can use either approach.
 For example, on the epicatechin JDF reference, ``Experiment.process()``
 produces a spectrum referenced in ppm, and the stepwise core workflow above
-produce a frequency axis in Hz.
+produces a frequency axis in Hz.
 
 For a 1D acquisition outside the scope of ``Experiment.process()``, you
 can still apply individual operations when the data meet their input
@@ -66,7 +64,7 @@ and FFT.
 An exponential window trades some resolution for sensitivity. Zero filling
 sets the spacing of the frequency bins. Once the spectrum is in the
 frequency domain, use ``spectrum.pk(phc0=..., phc1=...)`` to apply explicit
-phase angles in degrees. Plot the result with ``spectrum.plot()``, then use
+phase angles in degrees. With core 1.2.1, the FFT leaves the phase untouched. Plot the result with ``spectrum.plot()``, then use
 :doc:`analysis` for baseline correction, peak picking, integration and
 fitting.
 
@@ -88,27 +86,24 @@ See :ref:`nmr-core-operations` for the core functions used in NMR.
 Estimate phase and correct the baseline
 ---------------------------------------
 
-The standalone ``autophase()`` workflow accepts a complex spectrum after the
-FFT and requires a version of nmrglue-ng that provides ``estimate_phase()``.
+The development version of the plugin provides ``autophase()`` for a
+complex spectrum after the FFT. It requires a version of nmrglue-ng with
+phase estimation support.
 
 .. code-block:: python
 
    from spectrochempy_nmr import autophase
 
    diagnostic = autophase(spectrum, order=0, apply=False)
-   result = autophase(spectrum, order=0, baseline_options={"model": "asls", "lamb": 1e9})
+   result = autophase(
+       spectrum, order=0, baseline_options={"model": "asls", "lamb": 1e9}
+   )
 
 Inspect ``result.estimate`` for the correction angles and fit diagnostics.
 ``result.phased`` is the complex spectrum. If you request baseline correction,
 ``result.baseline`` and ``result.corrected`` are real datasets. Use
-``result.phased`` to make further phase adjustments. Its phase metadata records
-the correction relative to the input of this call, and the history retains
-the previous phase metadata. For baseline fitting, values behind the dataset
-mask are filled from neighboring valid samples. The output retains the
-original mask. AsLS is intended here
-for spectra with positive peaks. Tune its smoothness for the spectral grid
-and check that integration areas are preserved. For signed spectra, use a polynomial fit on
-known signal-free regions with ``baseline_options`` specifying ``ranges``.
+``result.phased`` for further phase adjustments. AsLS is suited to positive
+peaks. For signed peaks, fit a polynomial on known signal-free regions.
 
 ACME assumes positive absorption peaks. Pass a boolean ``exclude`` array to
 omit artifacts from phase scoring while retaining their data in the result.
@@ -119,20 +114,6 @@ well-separated references for order one. The optional
 linear background for phase scoring. The final real baseline is a separate
 fit. A successful solver status still calls for inspecting the result.
 
-For a spectrum produced with ``fftshift(fft(fid))`` on an increasing
-frequency grid, use the measured receiver timing to fix the slope and fit
-only the constant phase. A rectangular hard 90° pulse contributes
-approximately twice its duration divided by pi to the effective delay.
-Use the time from the pulse end to the first complex sample and account for
-any digital filter correction separately.
-
-.. code-block:: python
-
-   from nmrglue.process.proc_autophase import phase_slope_from_delay
-
-   slope = phase_slope_from_delay(10_000, 8e-6, hard_90_pulse_s=10e-6)
-   result = autophase(spectrum, fixed_p1=slope)
-
 Replay TopSpin EFP on a Bruker DQD FID
 --------------------------------------
 
@@ -141,7 +122,7 @@ TopSpin ``efp`` run in the same experiment:
 
 .. code-block:: python
 
-   fid = scp.read_topspin("experiment/1/fid", remove_digital_filter=False)
+   fid = scp.nmr.read_topspin("experiment/1/fid")
    spectrum = scp.nmr.Experiment(fid).process(replay="topspin")
 
 Replay uses the recorded exponential window, FFT size and phase. It applies
@@ -157,16 +138,13 @@ axis reversal disabled.
 Fractional PKNL correction for a Bruker QSIM FID
 ------------------------------------------------
 
-Read the original FID with digital-filter and DC correction disabled.
-The plugin obtains the group delay from the acquisition and applies its
-fractional phase ramp on the final FFT grid. It rejects a FID whose
-digital filter was already corrected at import.
+Read the original FID with the reader defaults. The plugin applies the
+digital-filter correction after the FFT. If you already corrected the
+filter during import, reread the original FID before using PKNL.
 
 .. code-block:: python
 
-   fid = scp.nmr.read_topspin(
-       "experiment/80/fid", remove_digital_filter=False, remove_dc_offset=False
-   )
+   fid = scp.nmr.read_topspin("experiment/80/fid")
    spectrum = scp.nmr.Experiment(fid).process(
        apodization="em", lb=50.0, size=8192, digital_filter="pknl"
    )

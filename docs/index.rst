@@ -53,3 +53,4 @@ Contents
    reference/index
    examples_overview
    about
+   devguide/index

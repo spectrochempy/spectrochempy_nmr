@@ -1,8 +1,8 @@
 Reading NMR data
 ================
 
-Acquisition readers leave digital-filter and DC-offset correction to
-processing by default. They decode the data, represent the acquisition
+The development version of the Bruker reader leaves digital-filter and
+DC-offset correction to processing by default. They decode the data, represent the acquisition
 quadrature, and calibrate the time coordinates when the format provides
 the required metadata. Bruker FID and SER readers also normalize amplitudes
 by scan count and receiver gain. Use :doc:`processing_1d` or
@@ -71,8 +71,8 @@ analyzed directly.
    spectrum = scp.nmr.read_topspin("path/to/experiment", expno=1, procno=1)
    _ = spectrum.real.plot()
 
-See :doc:`../processed_1d_interop` for details on the ppm reference, stored
-components, and qualification coverage.
+Use ``proc_axis=True`` to use the reference saved during TopSpin processing.
+This is useful when the spectrum was re-referenced after acquisition.
 
 Agilent/Varian States quadrature
 --------------------------------
@@ -89,24 +89,12 @@ physical time grids. Processing applies the declared NMRPipe input
 convention and performs F2 before F1. Only States-TPPI applies F1
 alternation.
 
-The default ``quadrature="auto"`` recognizes versioned pulse-program
-sources. Pass the exact source used for acquisition with
-``pulse_program_source="path/to/NOESY.c"`` or include the source next to
-``fid`` and ``procpar``, named after ``seqfil`` with a ``.c`` suffix.
-The initial catalogue recognizes the audited OpenVnmrJ `NOESY.c
-<https://github.com/OpenVnmrJ/OpenVnmrJ/blob/0f6b0a4664def0cdf2ee9eb37cb2df7369f38ca3/src/psglib/NOESY.c>`_
-as States-TPPI when the name and SHA-256 match and ``d2=0`` establishes
-the first increment. The source must correspond
-to the acquisition. A sequence name or a two-branch phase array alone
-cannot distinguish States from States-TPPI.
-
-The reader logs the choice at INFO level and records the mode and its
-source in ``fid.meta.acquisition["quadrature_selection"]``. For an unknown
-program or absent source, automatic selection leaves the mode unset and
-F1 processing guarded. Reading the stored traces and the historical F2
-operation remain available. Quadrature selection requires an nmrglue-ng
-provider that supports it and a SpectroChemPy core with FFT
-prevalidation (1.2.0 or later).
+The default ``quadrature="auto"`` uses recognized pulse-program sources.
+Supply the source used for the acquisition with ``pulse_program_source``,
+or put it next to ``fid`` and ``procpar``. Check the selected quadrature
+in the reader's log. If the mode remains undetermined, you can read the
+traces and transform F2. Choose ``"states"`` or ``"states-tppi"`` explicitly
+before transforming F1, once you know the acquisition convention.
 
 .. _reading-exchange-formats-through-interop:
 
@@ -153,10 +141,8 @@ Use ``scp.nmr.read_simpson(...)`` for SIMPSON data files or a simulation
 input file with a sibling output. Supported standalone FIDs use calibrated
 time coordinates. Supported standalone spectra use frequency coordinates
 in Hz. The direct FFT is available for supported 2D FIDs. The indirect quadrature convention
-has yet to be established. Files with simulation metadata from an
-``.in`` file and other legacy layouts use the compatibility presentation.
-nmrglue-ng decodes these data files. For indexed XYREIM, the plugin keeps
-the historical ascending order on both axes.
+has yet to be established. When reading a simulation input file, keep
+its output in the same directory.
 
 Additional formats available in nmrglue-ng
 ------------------------------------------
