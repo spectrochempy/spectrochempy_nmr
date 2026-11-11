@@ -44,7 +44,21 @@ def test_replay_xfshear_matches_mqmas_51_four_planes(sx, reference_env, phase):
         preview = mixed[0, 0, :].squeeze().pk(phc0=-30.0, phc1=60.0, pivot=0)
         angle = np.deg2rad(-30.0 + 60.0 * np.arange(sx) / sx)
         np.testing.assert_allclose(preview.data, mixed_data[0, 0] * np.exp(1j * angle))
-    result = Experiment(mixed).replay_xfshear(spin=2.5, **phase)
+    legacy = Experiment(mixed).replay_xfshear(spin=2.5, **phase)
+    xf2 = Experiment(source).xf2(
+        size=sx, direct_points=2048, correct_digital_filter=False
+    )
+    phase_options = {key: value for key, value in phase.items() if key != "f1_shift"}
+    phased = Experiment(xf2).xf2p(**phase_options)
+    result = Experiment(phased).xfshear(
+        size=512, spin=2.5, f1_shift=phase.get("f1_shift", 0.0)
+    )
+    np.testing.assert_array_equal(result.data, legacy.data)
+    np.testing.assert_array_equal(xf2.data, mixed_data)
+    with pytest.raises(ValueError, match="with xf2p"):
+        Experiment(xf2).xfshear(size=512, spin=2.5)
+    with pytest.raises(ValueError, match="already applied"):
+        Experiment(phased).xf2p()
     np.testing.assert_array_equal(mixed.data, mixed_data)
     np.testing.assert_array_equal(source.data, original)
     np.testing.assert_allclose(result.x.data, ref.x.data, rtol=0, atol=1e-7)

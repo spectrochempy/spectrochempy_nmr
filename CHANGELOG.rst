@@ -8,6 +8,9 @@ distribution. The sections below describe changes in each plugin release.
 Unreleased
 ----------
 
+* Expose separate ``Experiment.xf2()``, ``xf2p()``, and ``xfshear()``
+  steps for Bruker States MQMAS processing.
+
 * Read Bruker FID and SER data without digital-filter correction by default.
   Correct supported acquisitions in ``Experiment`` or request the previous
   import correction explicitly with ``remove_digital_filter=True``.

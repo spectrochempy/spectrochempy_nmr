@@ -34,6 +34,25 @@ def _mqmas_geometry(spin, coherence_order):
 def prepare_xfshear(
     dataset, *, size, direct_points, correct_digital_filter, echo_window=None
 ):
+    if not isinstance(size, (tuple, list)) or len(size) != 2 or not _even_size(size[0]):
+        raise ValueError("XFSHEAR size must contain two even FFT sizes (F1, F2)")
+    return xf2(
+        dataset,
+        size=size[1],
+        direct_points=direct_points,
+        correct_digital_filter=correct_digital_filter,
+        echo_window=echo_window,
+        f1_size=size[0],
+    )
+
+
+def _even_size(size):
+    return isinstance(size, Integral) and not isinstance(size, bool) and size % 2 == 0
+
+
+def xf2(
+    dataset, *, size, direct_points, correct_digital_filter, echo_window, f1_size=None
+):
     """Compute complex XF2 branches for inspecting the phase before shearing."""
     from spectrochempy.core.dataset.coord import Coord  # noqa: PLC0415
     from spectrochempy.core.units import ur  # noqa: PLC0415
@@ -62,15 +81,10 @@ def prepare_xfshear(
     data = np.asarray(dataset.data)
     if not np.iscomplexobj(data) or np.any(dataset.mask) or not np.isfinite(data).all():
         raise ValueError("XFSHEAR requires finite unmasked complex samples")
-    if (
-        not isinstance(size, (tuple, list))
-        or len(size) != 2
-        or any(
-            isinstance(n, bool) or not isinstance(n, Integral) or n % 2 for n in size
-        )
-    ):
-        raise ValueError("XFSHEAR size must contain two even FFT sizes (F1, F2)")
-    sy, sx = map(int, size)
+    if not _even_size(size):
+        raise ValueError("XF2 size must be an even FFT size")
+    sx = int(size)
+    sy = None if f1_size is None else int(f1_size)
     _, ny, nx = data.shape
     acquired_y, acquired_x = meta.tdeff[-2:]
     if direct_points is None:
@@ -79,7 +93,8 @@ def prepare_xfshear(
         not isinstance(direct_points, Integral)
         or isinstance(direct_points, bool)
         or not 2 <= direct_points <= min(sx, nx, acquired_x)
-        or not (4 <= sy and ny == acquired_y <= sy)
+        or ny != acquired_y
+        or (sy is not None and (sy < 4 or sy < ny))
     ):
         raise ValueError(
             "XFSHEAR requires all F1 increments and enough acquired F2 samples"
@@ -152,17 +167,17 @@ def prepare_xfshear(
             "sigma_seconds": sigma,
             "group_delay_points": delay,
         }
-    xf2 = _positive_fft(retained, sx, -1)
+    transformed = _positive_fft(retained, sx, -1)
     filter_correction = {"applied": False}
     if correct_digital_filter and delay > 0:
-        xf2 *= np.exp(-2j * np.pi * delay * np.arange(sx) / sx)
+        transformed *= np.exp(-2j * np.pi * delay * np.arange(sx) / sx)
         filter_correction = {
             "applied": True,
             "group_delay_points": float(delay),
             "delay_source": source,
             "method": "frequency-domain phase ramp",
         }
-    result.data = xf2
+    result.data = transformed
     result.set_coordset(c=dataset.c.copy(), y=dataset.y.copy(), x=axis)
     readonly = result.meta.readonly
     result.meta.readonly = False
@@ -196,21 +211,15 @@ def prepare_xfshear(
     return result
 
 
-def replay_xfshear(dataset, *, spin, coherence_order, phc0, phc1, pivot, f1_shift):
-    """Apply common F2 phase and complete XFSHEAR, including the F1 FFT."""
-    from scipy.signal import hilbert  # noqa: PLC0415
-
-    from spectrochempy.core.dataset.coord import Coord  # noqa: PLC0415
+def _validated_xf2(dataset):
     from spectrochempy.core.units import ur  # noqa: PLC0415
-    from spectrochempy_nmr.processing.topspin_xfb import _positive_fft  # noqa: PLC0415
 
-    order, ratio, scale = _mqmas_geometry(spin, coherence_order)
     plan = dataset.meta.get("mqmas_xf2")
     if dataset.meta.get("stage") != "mqmas_xf2" or not plan:
         raise ValueError(
-            "XFSHEAR requires the full complex dataset from prepare_xfshear()"
+            "XFSHEAR requires the full complex dataset from xf2() or prepare_xfshear()"
         )
-    sy, sx = plan["size"]
+    _, sx = plan["size"]
     sw1, sw2 = plan["widths_hz"]
     sf, carrier = plan["sf_mhz"], plan["carrier_mhz"]
     data = np.asarray(dataset.data)
@@ -240,12 +249,16 @@ def replay_xfshear(dataset, *, spin, coherence_order, phc0, phc1, pivot, f1_shif
         raise ValueError(
             "XFSHEAR requires the full unmasked XF2 grid in acquired order"
         )
-    for name, value in (
-        ("phc0", phc0),
-        ("phc1", phc1),
-        ("pivot", pivot),
-        ("f1_shift", f1_shift),
-    ):
+    return plan
+
+
+def xf2p(dataset, *, phc0, phc1, pivot):
+    """Apply one common F2 phase to both complex States branches."""
+    plan = _validated_xf2(dataset)
+    if "f2_phase" in plan:
+        raise ValueError("F2 phase is already applied. Start from the XF2 result.")
+    _, sx = plan["size"]
+    for name, value in (("phc0", phc0), ("phc1", phc1), ("pivot", pivot)):
         if (
             isinstance(value, bool)
             or not isinstance(value, Real)
@@ -254,9 +267,54 @@ def replay_xfshear(dataset, *, spin, coherence_order, phc0, phc1, pivot, f1_shif
             raise ValueError(f"XFSHEAR requires a finite numerical {name}")
     if not 0 <= pivot < sx:
         raise ValueError("XFSHEAR phase pivot must be an F2 sample index")
-
     f2_phase = np.deg2rad(phc0 + phc1 * (np.arange(sx) - pivot) / sx)
-    real_f2 = (data * np.exp(1j * f2_phase)).real
+    result = dataset.copy()
+    result.data = np.asarray(dataset.data) * np.exp(1j * f2_phase)
+    readonly = result.meta.readonly
+    result.meta.readonly = False
+    result.meta.mqmas_xf2 = {
+        **plan,
+        "f2_phase": {"phc0": float(phc0), "phc1": float(phc1), "pivot": float(pivot)},
+    }
+    result.meta.readonly = readonly
+    result.history = "Applied common MQMAS phase in F2"
+    return result
+
+
+def replay_xfshear(dataset, *, spin, coherence_order, phc0, phc1, pivot, f1_shift):
+    """Apply common F2 phase and complete XFSHEAR, including the F1 FFT."""
+    phased = xf2p(dataset, phc0=phc0, phc1=phc1, pivot=pivot)
+    return xfshear(
+        phased, size=None, spin=spin, coherence_order=coherence_order, f1_shift=f1_shift
+    )
+
+
+def xfshear(dataset, *, size, spin, coherence_order, f1_shift):
+    """Complete XFSHEAR on phased XF2 data, including the F1 FFT."""
+    from scipy.signal import hilbert  # noqa: PLC0415
+
+    from spectrochempy.core.dataset.coord import Coord  # noqa: PLC0415
+    from spectrochempy.core.units import ur  # noqa: PLC0415
+    from spectrochempy_nmr.processing.topspin_xfb import _positive_fft  # noqa: PLC0415
+
+    order, ratio, scale = _mqmas_geometry(spin, coherence_order)
+    plan = _validated_xf2(dataset)
+    if "f2_phase" not in plan:
+        raise ValueError("Apply the common F2 phase with xf2p() before XFSHEAR")
+    default_sy, sx = plan["size"]
+    sy = default_sy if size is None else size
+    ny = dataset.shape[-2]
+    if not _even_size(sy) or sy < max(4, ny):
+        raise ValueError("XFSHEAR F1 size must be even and fit all acquired increments")
+    if (
+        isinstance(f1_shift, bool)
+        or not isinstance(f1_shift, Real)
+        or not np.isfinite(f1_shift)
+    ):
+        raise ValueError("XFSHEAR requires a finite numerical f1_shift")
+    sw1, sw2 = plan["widths_hz"]
+    sf, carrier = plan["sf_mhz"], plan["carrier_mhz"]
+    real_f2 = np.asarray(dataset.data).real
     centered_f2 = (np.arange(sx) - sx // 2) * sw2 / sx
     # AU f1shift is an isotropic ppm shift. Convert it using the scaled
     # carrier to obtain the additional phase ramp on the unscaled F1 grid.
@@ -332,7 +390,7 @@ def replay_xfshear(dataset, *, spin, coherence_order, phc0, phc1, pivot, f1_shif
                 "scale_divisor": float(scale),
                 "hilbert_fft_size": 2 * sx,
                 "direct_points": plan["direct_points"],
-                "f2_phase": {"phc0": phc0, "phc1": phc1, "pivot": pivot},
+                "f2_phase": plan["f2_phase"],
                 "f1_shift_ppm": f1_shift,
             },
         }
