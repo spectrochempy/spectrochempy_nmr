@@ -20,10 +20,13 @@ mixed-domain result after F2 before transforming F1.
 
 A direct FFT uses the supplied samples, including the original group delay
 when reading a Bruker SER with default options. TopSpin XFB replay applies
-the recorded correction for supported acquisitions. The echo/anti-echo
-workflow also offers explicit time-domain and phase correction. To reproduce
-a direct FFT script that relied on correction during import, pass
-``remove_digital_filter=True`` to the reader.
+the recorded correction for supported acquisitions. For echo/anti-echo,
+``Experiment.process(echo_antiecho="bruker-rance-kay", digital_filter="phase")``
+applies a phase correction in F2. Use ``digital_filter="time"`` for
+time-domain correction instead. The ordinary QF, States, and States-TPPI
+FFT workflows transform the supplied traces without filter correction.
+For these workflows, or for a direct FFT script that used the former
+import correction, pass ``remove_digital_filter=True`` to the reader.
 
 Here ``x`` and ``y`` are the direct and indirect dimensions of the
 imported FID. Keep both quadrature branches through the indirect FFT.

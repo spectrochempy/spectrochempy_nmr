@@ -203,7 +203,9 @@ def test_synthetic_provider_binary_to_experiment_chain(provider, tmp_path, filte
         np.testing.assert_allclose(deferred.data, source.data, atol=1e-12)
 
 
-def test_public_default_fid_defers_filter_until_experiment(provider, tmp_path):
+def test_synthetic_public_default_fid_defers_filter_until_experiment(
+    provider, tmp_path
+):
     if (
         "preserve_storage"
         not in signature(provider.interop.normalize_bruker_fid).parameters
@@ -231,6 +233,11 @@ def test_public_default_fid_defers_filter_until_experiment(provider, tmp_path):
     np.testing.assert_array_equal(prepared.x.data, legacy.x.data)
     assert prepared.meta.acquisition["digital_filter"]["applied"] is True
     assert prepared.meta.acquisition["dc_offset"]["applied"] is True
+
+    spectrum = Experiment(raw).process(digital_filter="time")
+    trace = spectrum.meta.nmr_processing["scp_processing"]
+    assert trace["requested"]["digital_filter"] == "time"
+    assert trace["applied"]["digital_filter"]["applied"] is True
 
 
 def _check_public_fid(provider, path, filtered, dc, monkeypatch, *, supported=True):

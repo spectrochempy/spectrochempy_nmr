@@ -82,15 +82,15 @@ def test_read_topspin():
     assert nd.x.size == 1024
 
     nd = _read_topspin_or_skip(_require_path(nmrdir / "topspin_1d/1/fid"))
-    assert str(nd) == "NDDataset: [complex128] count (size: 12466)"
-    assert nd.x.size == 12466
+    assert str(nd) == "NDDataset: [complex128] count (size: 12544)"
+    assert nd.x.size == 12544
 
     nd = _read_topspin_or_skip(_require_path(nmrdir / "topspin_1d/1/pdata/1/1r"))
     assert str(nd) == "NDDataset: [complex128] count (size: 16384)"
     assert nd.x.size == 16384
 
     nd = _read_topspin_or_skip(_require_path(nmrdir / "topspin_2d/1/ser"))
-    assert str(nd) == "NDDataset: [complex128] count (shape: (c:2, y:96, x:946))"
+    assert str(nd) == "NDDataset: [complex128] count (shape: (c:2, y:96, x:1024))"
 
     nd = _read_topspin_or_skip(_require_path(nmrdir / "topspin_2d/1/pdata/1/2rr"))
     assert str(nd) == "NDDataset: [complex128] count (shape: (c:2, y:1024, x:2048))"
@@ -151,7 +151,7 @@ def test_1d_fid_metadata():
     assert nd.meta.isfreq == [False]
     assert nd.meta.iscomplex == [True]
     assert nd.meta.nuc1 == ["1H"]
-    assert nd.x.size == 12466
+    assert nd.x.size == 12544
     assert nd.x.title == "F1 acquisition time"
 
 
@@ -182,7 +182,7 @@ def test_2d_ser_metadata():
     assert nd.meta.fnmode[-2] == 5  # STATES-TPPI
     # Direct dimension uses AQ_mod
     assert nd.meta.aq_mod[-1] == 3  # DQD
-    assert nd.shape == (2, 96, 946)
+    assert nd.shape == (2, 96, 1024)
 
 
 @pytest.mark.skipif(not NMRDATA.exists(), reason="NMR test data not available")

@@ -751,10 +751,10 @@ class Experiment:
             )
         if digital_filter not in (None, "phase", "time"):
             raise ValueError('digital_filter must be "phase", "time" or "pknl"')
-        if digital_filter == "time" and self.ndim == 1:
+        prepare_time_filter = digital_filter == "time" and self.ndim == 1
+        if prepare_time_filter:
             ds = self.prepare_fid(digital_filter="time")
-            digital_filter = None
-        if digital_filter is not None and not supports_echo:
+        if digital_filter is not None and not (supports_echo or prepare_time_filter):
             raise ValueError(
                 "digital_filter requires a supported 1D or echo/anti-echo acquisition"
             )
@@ -911,6 +911,7 @@ class Experiment:
                 phc1=phc1,
                 explicit_arguments=explicit_arguments,
                 physical_fft=reference is not None,
+                prepare_time_filter=prepare_time_filter,
             )
         elif self.is_frequency_domain:
             if self._nmr_meta.normalized_interop:
@@ -1056,6 +1057,7 @@ class Experiment:
         phc1: float,
         explicit_arguments: dict[str, bool],
         physical_fft: bool,
+        prepare_time_filter: bool,
     ) -> NDDataset:
         """Process time-domain data: apodize → zero-fill → FFT → phase."""
         work = ds.copy()
@@ -1078,6 +1080,12 @@ class Experiment:
             phc1=phc1,
         )
         applied: dict[str, object] = {}
+        if prepare_time_filter:
+            requested["digital_filter"] = "time"
+            correction = ds.meta.acquisition["digital_filter"]
+            previous = self.dataset.meta.acquisition.get("digital_filter")
+            if correction != previous:
+                applied["digital_filter"] = dict(correction)
         if apodization is not None:
             work = self._apply_apodization(work, apodization, **apodization_kwargs)
             applied["apodization"] = apodization.lower()
