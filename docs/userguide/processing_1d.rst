@@ -65,8 +65,16 @@ sets the spacing of the frequency bins. Once the spectrum is in the
 frequency domain, use ``spectrum.pk(phc0=..., phc1=...)`` to apply explicit
 phase angles in degrees. Plot the result with ``spectrum.plot()``, then use
 :doc:`analysis` for baseline correction, peak picking, integration and
-fitting. For Bruker digital-filter correction, check the import options
-before applying any separate preparation or requesting TopSpin replay.
+fitting.
+
+A direct ``.fft()`` transforms the samples supplied to it. For a Bruker FID
+with a supported preparation descriptor, use
+``experiment.prepare_fid(digital_filter="time")`` before ``.fft()``, or
+``experiment.process(digital_filter="time")`` to correct the filter as part
+of processing. To subtract the DC offset as well, pass
+``remove_dc_offset=True`` to ``prepare_fid()``. To reproduce a script that
+previously relied on correction during import, pass
+``remove_digital_filter=True`` to the reader.
 
 A pseudo-2D series contains ordinary 1D spectra that can be processed one
 spectrum at a time. For acquisitions with two Fourier dimensions, see

@@ -8,8 +8,17 @@ distribution. The sections below describe changes in each plugin release.
 Unreleased
 ----------
 
+* Read Bruker FID and SER data without digital-filter correction by default.
+  Correct supported acquisitions in ``Experiment`` or request the previous
+  import correction explicitly with ``remove_digital_filter=True``.
+
 * Estimate phase for complex 1D spectra using masked ACME or DISPA reference
   windows, with optional real-channel baseline correction.
+
+* Add staged rectangular Bruker States MQMAS processing with automatic F2 group-delay
+  correction, phase inspection, a common F2 phase, XFSHEAR with integrated F1 FFT, and
+  optional F1 shift and isotropic calibration.
+
 
 0.3.0
 -----

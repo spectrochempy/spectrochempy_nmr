@@ -271,3 +271,47 @@ size = 16384
 path = "nmrdata/bruker/tests/nmr/CP/94/pdata/1/procs"
 sha256 = "90d6db3f20cf7662dd421412837b260fe2609bcea713dd0b207d3cbfff9fc96a"
 size = 1796
+
+# PST-5 aluminium-27 MQMAS, Christian Fernandez, LCS (CC BY 4.0).
+
+[[files]]
+path = "nmrdata/bruker/tests/nmr/MQMAS_27AL_PST5/51/acqu"
+url = "https://raw.githubusercontent.com/spectrochempy/spectrochempy_data/86f8c4b9bf6dcbd512a7d8d0c476c1b2a7e1d18d/testdata/nmrdata/bruker/tests/nmr/MQMAS_27AL_PST5/51/acqu"
+sha256 = "778ba31375056a0f0153c96053a230501a09db8f7d87a519b5f617dfd242becc"
+size = 7328
+
+[[files]]
+path = "nmrdata/bruker/tests/nmr/MQMAS_27AL_PST5/51/acqu2"
+url = "https://raw.githubusercontent.com/spectrochempy/spectrochempy_data/86f8c4b9bf6dcbd512a7d8d0c476c1b2a7e1d18d/testdata/nmrdata/bruker/tests/nmr/MQMAS_27AL_PST5/51/acqu2"
+sha256 = "229bc17cb4ffe8f0c593ff327c5e1d3aafb931517277dbf88632a98571b96075"
+size = 576
+
+[[files]]
+path = "nmrdata/bruker/tests/nmr/MQMAS_27AL_PST5/51/acqu2s"
+url = "https://raw.githubusercontent.com/spectrochempy/spectrochempy_data/86f8c4b9bf6dcbd512a7d8d0c476c1b2a7e1d18d/testdata/nmrdata/bruker/tests/nmr/MQMAS_27AL_PST5/51/acqu2s"
+sha256 = "14422a8c35da29dc670baad49f5fb52f67a8ed51e6bfe4d97b987f0028ff8029"
+size = 630
+
+[[files]]
+path = "nmrdata/bruker/tests/nmr/MQMAS_27AL_PST5/51/acqus"
+url = "https://raw.githubusercontent.com/spectrochempy/spectrochempy_data/86f8c4b9bf6dcbd512a7d8d0c476c1b2a7e1d18d/testdata/nmrdata/bruker/tests/nmr/MQMAS_27AL_PST5/51/acqus"
+sha256 = "778ba31375056a0f0153c96053a230501a09db8f7d87a519b5f617dfd242becc"
+size = 7328
+
+[[files]]
+path = "nmrdata/bruker/tests/nmr/MQMAS_27AL_PST5/51/pdata/1/proc2s"
+url = "https://raw.githubusercontent.com/spectrochempy/spectrochempy_data/86f8c4b9bf6dcbd512a7d8d0c476c1b2a7e1d18d/testdata/nmrdata/bruker/tests/nmr/MQMAS_27AL_PST5/51/pdata/1/proc2s"
+sha256 = "be97bb78aa0133cba0c82b518ce64d5a51d721f0c2b43107cc136264c20a8e84"
+size = 1969
+
+[[files]]
+path = "nmrdata/bruker/tests/nmr/MQMAS_27AL_PST5/51/pdata/1/procs"
+url = "https://raw.githubusercontent.com/spectrochempy/spectrochempy_data/86f8c4b9bf6dcbd512a7d8d0c476c1b2a7e1d18d/testdata/nmrdata/bruker/tests/nmr/MQMAS_27AL_PST5/51/pdata/1/procs"
+sha256 = "76705a5686ce5271541524418f67a98fc4bfc455b982077397a7e00ff96d381c"
+size = 2081
+
+[[files]]
+path = "nmrdata/bruker/tests/nmr/MQMAS_27AL_PST5/51/ser"
+url = "https://raw.githubusercontent.com/spectrochempy/spectrochempy_data/86f8c4b9bf6dcbd512a7d8d0c476c1b2a7e1d18d/testdata/nmrdata/bruker/tests/nmr/MQMAS_27AL_PST5/51/ser"
+sha256 = "eca52a5418efc10cb615f1477376f6d8f6a1f2632c9848e4a32f7dc1cfb7e0a8"
+size = 2752512

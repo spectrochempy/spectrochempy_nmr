@@ -1,6 +1,13 @@
 Reading NMR data
 ================
 
+Acquisition readers leave digital-filter and DC-offset correction to
+processing by default. They decode the data, represent the acquisition
+quadrature, and calibrate the time coordinates when the format provides
+the required metadata. Bruker FID and SER readers also normalize amplitudes
+by scan count and receiver gain. Use :doc:`processing_1d` or
+:doc:`processing_2d` to select a correction during processing.
+
 ``scp.nmr.read(...)`` dispatches public readers for TopSpin/Bruker, Agilent or
 Varian, JEOL and SIMPSON inputs. A protocol can be supplied explicitly
 when automatic detection is not appropriate.

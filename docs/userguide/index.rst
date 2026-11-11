@@ -7,6 +7,7 @@ Guides
    reading_data
    processing_1d
    processing_2d
+   mqmas
    analysis
    ../concepts/quadrature
    ../concepts/hypercomplex

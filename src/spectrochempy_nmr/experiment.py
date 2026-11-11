@@ -505,6 +505,58 @@ class Experiment:
             normalize_scan_gain=normalize_scan_gain,
         )
 
+    def prepare_xfshear(
+        self, *, size, direct_points=None, correct_digital_filter=True, echo_window=None
+    ):
+        """Transform F2 and retain both complex States branches for inspection.
+
+        Supply the final FFT sizes as (F1, F2). The uncorrected acquisition
+        is read with both digital filter and DC correction disabled. Set
+        ``direct_points`` to keep the F2 acquisition interval fixed while
+        increasing the F2 size for zero filling. XF2 corrects the Bruker
+        group delay on the frequency grid before phase inspection.
+        Set ``correct_digital_filter=False`` to disable this step.
+        For a shifted-echo acquisition, ``echo_window=(slope, sigma)``
+        applies a Gaussian along F2 centered at the group delay plus
+        ``slope * t1`` for each increment. Supply ``sigma`` in seconds.
+        """
+        from .processing.mqmas import prepare_xfshear  # noqa: PLC0415
+
+        if self.is_multi_dataset:
+            raise ValueError("XFSHEAR requires a single Bruker acquisition")
+        return prepare_xfshear(
+            self.dataset,
+            size=size,
+            direct_points=direct_points,
+            correct_digital_filter=correct_digital_filter,
+            echo_window=echo_window,
+        )
+
+    def replay_xfshear(
+        self, *, spin, coherence_order=3, phc0=0.0, phc1=0.0, pivot=0, f1_shift=0.0
+    ):
+        """Complete XFSHEAR on the complex result of prepare_xfshear().
+
+        Apply the same zero- and first-order F2 phase in degrees to all
+        rows and both States branches before shearing. The pivot is an F2
+        sample index. The optional F1 shift in isotropic ppm moves signal
+        within the window with the AU reference adjustment. This method
+        includes the F1 FFT and returns all four spectral components.
+        """
+        from .processing.mqmas import replay_xfshear  # noqa: PLC0415
+
+        if self.is_multi_dataset:
+            raise ValueError("XFSHEAR requires one complex XF2 dataset")
+        return replay_xfshear(
+            self.dataset,
+            spin=spin,
+            coherence_order=coherence_order,
+            phc0=phc0,
+            phc1=phc1,
+            pivot=pivot,
+            f1_shift=f1_shift,
+        )
+
     def process(
         self,
         *,
@@ -575,11 +627,10 @@ class Experiment:
             Bruker Rance–Kay shuffling with no additional F1 sign alternation.
             An explicit selection is required for imported echo/anti-echo data.
         digital_filter : str, optional
-            Select "phase" for NMRPipe FT -df or "time" for the historical
-            reader's time-domain correction, which shortens F2. For a raw
-            Bruker QSIM 1D FID, select "pknl" to apply the fractional group
-            delay on the final FFT grid. Import with
-            ``remove_digital_filter=False`` and ``remove_dc_offset=False``.
+            Select "time" to correct and shorten a supported Bruker 1D
+            FID or echo/anti-echo SER, or "phase" for NMRPipe FT -df on
+            echo/anti-echo data. For a raw Bruker QSIM 1D FID, select
+            "pknl" to apply the fractional group delay on the final FFT grid.
             This mode uses the processing ppm reference, supports exponential
             apodization and optional manual phase angles at the first bin,
             and defaults to the recorded FFT size when ``size`` is omitted.
@@ -590,7 +641,7 @@ class Experiment:
         replay : str, optional
             Select "topspin" to replay recorded DQD 1D EFP or supported
             uniform 2D XFB processing parameters.
-            Import with remove_digital_filter=False. Replay uses the
+            Read the uncorrected acquisition. Replay uses the
             processing ppm grid and retains the FID's scan/gain normalization.
             Other processing options cannot be combined with replay.
 
@@ -700,9 +751,12 @@ class Experiment:
             )
         if digital_filter not in (None, "phase", "time"):
             raise ValueError('digital_filter must be "phase", "time" or "pknl"')
-        if digital_filter is not None and not supports_echo:
+        prepare_time_filter = digital_filter == "time" and self.ndim == 1
+        if prepare_time_filter:
+            ds = self.prepare_fid(digital_filter="time")
+        if digital_filter is not None and not (supports_echo or prepare_time_filter):
             raise ValueError(
-                "digital_filter requires an imported raw echo/anti-echo FID"
+                "digital_filter requires a supported 1D or echo/anti-echo acquisition"
             )
         if bruker_group_delay is not None and not supports_echo:
             raise ValueError(
@@ -857,6 +911,7 @@ class Experiment:
                 phc1=phc1,
                 explicit_arguments=explicit_arguments,
                 physical_fft=reference is not None,
+                prepare_time_filter=prepare_time_filter,
             )
         elif self.is_frequency_domain:
             if self._nmr_meta.normalized_interop:
@@ -1002,6 +1057,7 @@ class Experiment:
         phc1: float,
         explicit_arguments: dict[str, bool],
         physical_fft: bool,
+        prepare_time_filter: bool,
     ) -> NDDataset:
         """Process time-domain data: apodize → zero-fill → FFT → phase."""
         work = ds.copy()
@@ -1024,6 +1080,12 @@ class Experiment:
             phc1=phc1,
         )
         applied: dict[str, object] = {}
+        if prepare_time_filter:
+            requested["digital_filter"] = "time"
+            correction = ds.meta.acquisition["digital_filter"]
+            previous = self.dataset.meta.acquisition.get("digital_filter")
+            if correction != previous:
+                applied["digital_filter"] = dict(correction)
         if apodization is not None:
             work = self._apply_apodization(work, apodization, **apodization_kwargs)
             applied["apodization"] = apodization.lower()

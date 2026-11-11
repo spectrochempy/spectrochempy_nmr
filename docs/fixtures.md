@@ -17,7 +17,12 @@ under CC0 1.0. They are retrieved from pinned revisions of nmrglue-ng.
 The NMRPipe file is a conversion of the processed Bruker RR plane from
 [nmrXiv sample S213](https://nmrxiv.org/sample/S213).
 
-The selected files total about 11 MiB. Run the same fetch as the RTD
+The Bruker PST-5 aluminium-27 MQMAS acquisition (experiment 51) comes from
+[spectrochempy_data revision 86f8c4b](https://github.com/spectrochempy/spectrochempy_data/tree/86f8c4b9bf6dcbd512a7d8d0c476c1b2a7e1d18d/testdata/nmrdata/bruker/tests/nmr/MQMAS_27AL_PST5/).
+The dataset is licensed under CC BY 4.0 and attributed to Christian Fernandez,
+LCS. The fixture contains the SER and the parameters used to read it.
+
+The selected files total about 14 MiB. Run the same fetch as the RTD
 pre-build job locally with:
 
 ```console
