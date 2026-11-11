@@ -548,7 +548,12 @@ def _from_echo_antiecho(result, data):
         raise ValueError(
             "Echo/anti-echo requires normalized F1/F2 time-domain complex branches"
         )
+    from .processing.bruker_filter import imported_bruker_filter
+
     dataset = _raw_channel_dataset(result, data.copy(), tuple(result.branch_order))
+    dataset.meta.acquisition = imported_bruker_filter(
+        dataset.meta.acquisition, dataset.meta.source_metadata
+    )
     _set_ser_fft_presentation(dataset, result)
     return dataset
 
