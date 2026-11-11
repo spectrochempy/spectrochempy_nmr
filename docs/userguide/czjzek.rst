@@ -57,6 +57,33 @@ selective central-transition nutation rate can differ from that coupling
 frequency. Document the experimental RF calibration before comparing
 satellite intensities.
 
+Validation scope and current uncertainties
+------------------------------------------
+
+Numerical tests check the standard distribution against its analytical
+invariants, verify the zero-disorder limit against a single-tensor PULSAR
+simulation, and check the averaging of finite-pulse spectra. The gallery
+overlay below illustrates central line shapes. Quantitative experimental
+validation remains open.
+
+On PBG1, the extended model was constrained using the public 3QMAS map
+with a finite F1 response and simulated 3Q transfer. The 1D central line
+set the component weights and common width. The 20 satellite-band areas
+were held out. At 32 samples per region, their summed area was 124.16%
+of the central area, with 89.40% measured. The mean absolute error per
+band was 1.85 percentage points.
+
+The transfer model uses nominal RF fields and an ideal population filter.
+It approximates the processed 3QMAS response and omits relaxation.
+Several regional parameters are sensitive to the sampling used to fit
+the map. In the 1D prediction, increasing the sample count from 16 to 32
+changed the area sum by 5.89 percentage points. That variation exceeds
+the 3.17-point difference between the simulated and uniform transfer
+controls at 32 samples. The benchmark therefore leaves the accuracy of
+satellite intensities and the inferred regional disorder uncertain.
+The protocol and sensitivity checks are documented in
+``src/spectrochempy_nmr/README.pulsar.md``.
+
 Experimental gallery candidate from Dropbox Storage
 ---------------------------------------------------
 
@@ -85,13 +112,6 @@ experimental files are supplied locally, and the gallery also runs with
 simulated components alone. The plots make it possible to inspect whether
 a proposed distribution spans the observed central shapes before a
 quantitative model is developed.
-
-The PBG1 validation notes in ``src/spectrochempy_nmr/README.pulsar.md``
-document the separate public experiment and its held-out satellite areas.
-The empirical 3QMAS ridge discretization used there shows strong
-sensitivity to the low-coupling tail. A Czjzek distribution supplies a
-physical tensor model for that tail, with parameters requiring their own
-experimental constraints.
 
 Additional Storage candidates
 -----------------------------
