@@ -1,5 +1,7 @@
 """Replay the qualified uniform Bruker XFB profiles."""
 
+from collections.abc import Mapping
+
 import numpy as np
 from numpy.polynomial.legendre import legvander
 
@@ -14,6 +16,28 @@ _PROFILES = {
     "bruker-ser-states-tppi-2d-v1": "states-tppi",
     "bruker-ser-echo-antiecho-2d-v1": "echo-antiecho",
 }
+_PLAN_SCHEMA = "topspin-xfb-v1"
+
+
+def capture_xfb_plan(dataset):
+    """Capture the supported vendor recipe without making it an import gate."""
+    meta = dataset.meta
+    mode = _PROFILES.get(meta.get("normalization_profile"))
+    acquisition = meta["acquisition"]
+    if mode is None or any(
+        acquisition.get(key, {}).get("applied")
+        for key in ("dc_offset", "digital_filter")
+    ):
+        return None
+    try:
+        return _build_xfb_plan(
+            meta.get("source_metadata", {}),
+            mode,
+            dataset.shape[-2:],
+            acquisition["spectral_width_hz"],
+        )
+    except ValueError:
+        return None
 
 
 def _check_axis(params, points, words_per_point, ft_mode, phase_mode):
@@ -268,7 +292,18 @@ def replay_xfb(source):
         ):
             raise ValueError("TopSpin XFB requires the original calibrated time grids")
 
-    plan = _build_xfb_plan(meta.get("source_metadata", {}), mode, (ny, nx), widths)
+    profile = meta.get("nmr_processing", {}).get("vendor_profile", {})
+    plan = profile.get("xfb_plan")
+    if plan is None:
+        plan = _build_xfb_plan(meta.get("source_metadata", {}), mode, (ny, nx), widths)
+    elif (
+        not isinstance(plan, Mapping)
+        or plan.get("schema") != _PLAN_SCHEMA
+        or plan.get("mode") != mode
+        or tuple(plan.get("source_shape", ())) != (ny, nx)
+        or tuple(plan.get("widths_hz", ())) != tuple(widths)
+    ):
+        raise ValueError("Stored TopSpin XFB plan does not match this acquisition")
     return _execute_xfb(source, data, plan)
 
 
@@ -329,7 +364,9 @@ def _build_xfb_plan(status, mode, shape, widths):
     _check_baseline(y, (0, 1, 2, 3, 4, 5, 6), ny)
     _check_baseline(x, (0, 4, 6), nx - origin)
     return {
+        "schema": _PLAN_SCHEMA,
         "mode": mode,
+        "source_shape": list(shape),
         "widths_hz": tuple(float(width) for width in widths),
         "f1_points": f1_points,
         "f1_prediction_order": lp_order,
