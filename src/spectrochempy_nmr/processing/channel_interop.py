@@ -1,6 +1,5 @@
 """NMRPipe-convention FFTs for explicitly imported complex channel pairs."""
 
-from collections.abc import Mapping
 from numbers import Real
 
 import numpy as np
@@ -41,54 +40,10 @@ def _conjugate_and_negate_second(data):
     return branches
 
 
-def _bruker_delay(dataset, override):
-    acquisition = dataset.meta.get("acquisition", {})
-    operations = dataset.meta.get("applied_operations", ())
-    for record in (acquisition, *operations):
-        correction = record.get("digital_filter")
-        if isinstance(correction, Mapping) and correction.get("applied"):
-            raise ValueError("Bruker digital filter has already been corrected")
-
-    if override is not None:
-        return override, "caller"
-
-    correction = acquisition.get("digital_filter")
-    if (
-        isinstance(correction, Mapping)
-        and correction.get("group_delay_points") is not None
-    ):
-        return correction["group_delay_points"], "normalized acquisition"
-
-    acqus = dataset.meta.get("source_metadata", {}).get("acqus", {})
-    if isinstance(acqus, Mapping):
-        delay = acqus.get("GRPDLY")
-        if (
-            isinstance(delay, Real)
-            and not isinstance(delay, (bool, np.bool_))
-            and delay > 0
-        ):
-            return delay, "GRPDLY"
-        firmware, decimation = acqus.get("DSPFVS"), acqus.get("DECIM")
-        if (
-            all(
-                isinstance(value, Real) and not isinstance(value, (bool, np.bool_))
-                for value in (firmware, decimation)
-            )
-            and 0 <= firmware < 20
-        ):
-            from ..readers.read_topspin import bruker_dsp_table  # noqa: PLC0415
-
-            delay = bruker_dsp_table.get(firmware, {}).get(decimation)
-            if delay is not None:
-                return delay, "DSPFVS/DECIM"
-    raise ValueError("Unknown Bruker group delay; supply bruker_group_delay explicitly")
-
-
 def process_echo_antiecho_fft(
-    dataset, widths, *, digital_filter=None, group_delay=None
+    dataset, widths, *, digital_filter=None, group_delay=None, delay_source=None
 ):
     if digital_filter is not None:
-        group_delay, source = _bruker_delay(dataset, group_delay)
         if (
             isinstance(group_delay, (bool, np.bool_))
             or not isinstance(group_delay, Real)
@@ -111,7 +66,7 @@ def process_echo_antiecho_fft(
         result.meta.bruker_digital_filter = {
             "method": digital_filter,
             "group_delay_points": group_delay,
-            "delay_source": source,
+            "delay_source": delay_source,
             "removed_points": dataset.shape[-1] - result.shape[-1],
         }
     return result

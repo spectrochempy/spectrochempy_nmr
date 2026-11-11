@@ -126,6 +126,27 @@ def test_synthetic_echo_antiecho_checkpoints(monkeypatch, tmp_path, digital_filt
             )
             np.testing.assert_array_equal(automatic.data, manual.data)
             assert automatic.meta.bruker_digital_filter["delay_source"] == "GRPDLY"
+
+            normalized.metadata = source.meta.source_metadata
+            imported = from_interop(normalized)
+            assert imported.meta.acquisition["digital_filter"] == {
+                "group_delay_points": 2.5,
+                "delay_source": "GRPDLY",
+            }
+            imported.meta.source_metadata = {}
+            raw_path = tmp_path / "echo-acquisition.scp"
+            imported.write(raw_path, confirm=False)
+            reloaded = scp.read(raw_path)
+            replay = Experiment(reloaded).process(
+                echo_antiecho=PROFILE, digital_filter="phase"
+            )
+            np.testing.assert_array_equal(replay.data, automatic.data)
+            np.testing.assert_array_equal(replay.x.data, automatic.x.data)
+            np.testing.assert_array_equal(replay.y.data, automatic.y.data)
+            assert (
+                replay.meta.bruker_digital_filter
+                == automatic.meta.bruker_digital_filter
+            )
         corrected = source.copy()
         corrected.meta.acquisition = {
             **normalized.acquisition,

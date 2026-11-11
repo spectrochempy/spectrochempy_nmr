@@ -719,6 +719,7 @@ class Experiment:
             ):
                 raise ValueError("normalized 2D processing supports FFT only")
             if self._supports_states_fft or supports_echo:
+                from .processing.bruker_filter import resolve_bruker_delay  # noqa: PLC0415
                 from .processing.channel_interop import process_echo_antiecho_fft  # noqa: PLC0415
                 from .processing.channel_interop import process_states_fft  # noqa: PLC0415
 
@@ -730,11 +731,17 @@ class Experiment:
                     method = digital_filter
                     if method is None and bruker_group_delay is not None:
                         method = "phase"
+                    delay, delay_source = None, None
+                    if method is not None:
+                        delay, delay_source = resolve_bruker_delay(
+                            ds, bruker_group_delay
+                        )
                     result = process_echo_antiecho_fft(
                         ds,
                         widths,
                         digital_filter=method,
-                        group_delay=bruker_group_delay,
+                        group_delay=delay,
+                        delay_source=delay_source,
                     )
                     reconstruction["echo_antiecho"] = echo_antiecho
                     if digital_filter is not None:
