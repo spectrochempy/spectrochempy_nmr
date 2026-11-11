@@ -66,27 +66,31 @@ def test_topspin_xfb_roundtrip_without_provider(tmp_path):
     root = Path(reference).resolve(strict=True)
     for name, checksum in _CHECKSUMS.items():
         assert hashlib.sha256((root / name).read_bytes()).hexdigest() == checksum, name
-    _assert_xfb_roundtrip(root, tmp_path, "qf")
+    _assert_xfb_roundtrip(root, tmp_path, "qf", with_prediction=True)
 
 
 @pytest.mark.parametrize(
-    "variable", ["NMR_TOPSPIN_XFB_REFERENCES", "NMR_TOPSPIN_XFB_LP_REFERENCES"]
+    ("variable", "with_prediction"),
+    [("NMR_TOPSPIN_XFB_REFERENCES", False), ("NMR_TOPSPIN_XFB_LP_REFERENCES", True)],
 )
 @pytest.mark.parametrize(
     ("experiment", "mode"), [("30", "states-tppi"), ("40", "echo-antiecho")]
 )
 def test_paired_topspin_xfb_roundtrip_without_provider(
-    tmp_path, variable, experiment, mode
+    tmp_path, variable, with_prediction, experiment, mode
 ):
     reference = os.environ.get(variable)
     if reference is None:
         pytest.skip(f"set {variable} to the corresponding TopSpin XFB copies")
     _assert_xfb_roundtrip(
-        Path(reference).resolve(strict=True) / experiment, tmp_path, mode
+        Path(reference).resolve(strict=True) / experiment,
+        tmp_path,
+        mode,
+        with_prediction=with_prediction,
     )
 
 
-def _assert_xfb_roundtrip(root, tmp_path, mode):
+def _assert_xfb_roundtrip(root, tmp_path, mode, *, with_prediction):
     import nmrglue as ng
 
     source = scp.read_topspin(
@@ -119,6 +123,19 @@ def _assert_xfb_roundtrip(root, tmp_path, mode):
     np.testing.assert_array_less(
         residual / np.linalg.norm(reference, axis=(1, 2)), 2e-6
     )
+    trace = expected.meta.nmr_processing["scp_processing"]
+    f1 = metadata["proc2s"]
+    if with_prediction:
+        assert f1["ME_mod"] == 2
+        assert trace["applied"]["linear_prediction"] == {
+            "axis": "F1",
+            "mode": "LPfr",
+            "order": f1["NCOEF"] // 2,
+            "size": f1["LPBIN"] // (1 if mode == "qf" else 2),
+        }
+    else:
+        assert f1["ME_mod"] == 0
+        assert "linear_prediction" not in trace["applied"]
     for axis, key in ((expected.y, "proc2s"), (expected.x, "procs")):
         pars = metadata[key]
         grid = pars["OFFSET"] - np.arange(pars["SI"]) * pars["SW_p"] / (
@@ -138,7 +155,6 @@ def _assert_xfb_roundtrip(root, tmp_path, mode):
         np.testing.assert_array_equal(actual["data"], expected.data)
         np.testing.assert_array_equal(actual["x"], expected.x.data)
         np.testing.assert_array_equal(actual["y"], expected.y.data)
-    trace = expected.meta.nmr_processing["scp_processing"]
     assert json.loads(
         (tmp_path / "trace.json").read_text(encoding="utf-8")
     ) == json.loads(json.dumps(trace, allow_nan=False))

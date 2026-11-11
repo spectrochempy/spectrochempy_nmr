@@ -299,8 +299,8 @@ same experiment folders processed with the original F1 ``LPfr`` settings.
 Run
 ``pytest tests/qualification/test_topspin_examdata.py -k xfb``.
 
-With the same reference directories, run
-``pytest tests/qualification/test_topspin_xfb_roundtrip.py -k paired`` to
+With the same reference directories and the core and plugin installed, run
+``python -I -m pytest tests/qualification/test_topspin_xfb_roundtrip.py -k paired`` to
 qualify saved replay for experiments ``30`` and ``40``. The test compares
 all four component planes and the ppm axes against TopSpin, then checks
 exact parity of the spectrum, axes and trace in a separate Python process
