@@ -133,7 +133,7 @@ def prepare_xfshear(
         recorded_delay = acquisition["digital_filter"].get("group_delay_points")
         no_decimation = (
             acqus.get("DECIM") == 1
-            and acqus.get("GRPDLY") in (None, 0)
+            and acqus.get("GRPDLY") in (None, -1, 0)
             and recorded_delay in (None, 0)
         )
         delay, source = resolve_bruker_delay(dataset, 0.0 if no_decimation else None)

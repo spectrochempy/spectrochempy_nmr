@@ -93,7 +93,8 @@ def test_echo_window_follows_each_f1_increment():
 
 
 @pytest.mark.parametrize("echo_window", [None, (19 / 12, 0.0008)])
-def test_xf2_without_decimation_has_zero_group_delay(echo_window):
+@pytest.mark.parametrize("stored_delay", [0.0, -1.0])
+def test_xf2_without_decimation_has_zero_group_delay(echo_window, stored_delay):
     ser = os.environ.get("SCP_MQMAS_SER")
     if not ser:
         pytest.skip("requires the PST-5 SER")
@@ -103,7 +104,7 @@ def test_xf2_without_decimation_has_zero_group_delay(echo_window):
     acquisition["digital_filter"] = {"applied": False}
     raw.meta.acquisition = acquisition
     source = dict(raw.meta.source_metadata)
-    source["acqus"] = {**source["acqus"], "DECIM": 1, "GRPDLY": 0.0}
+    source["acqus"] = {**source["acqus"], "DECIM": 1, "GRPDLY": stored_delay}
     raw.meta.source_metadata = source
 
     experiment = Experiment(raw)
