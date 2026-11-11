@@ -8,6 +8,9 @@ distribution. The sections below describe changes in each plugin release.
 Unreleased
 ----------
 
+* Expose separate ``Experiment.xf2()``, ``xf2p()``, and ``xfshear()``
+  steps for Bruker States MQMAS processing.
+
 * Apply recorded phase in 1D FID processing when requested with
   ``Experiment.process(phase="metadata")``.
 

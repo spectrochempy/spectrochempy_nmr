@@ -8,7 +8,7 @@ common F2 phase and isotropic F1 calibration.
 Transform F2 and inspect the first row
 --------------------------------------
 
-Read the SER and supply the final FFT sizes in F1, F2 order.
+Read the SER and supply the F2 FFT size.
 For PST-5, keep 2048 acquired complex samples in F2 and zero-fill to
 4096 before XF2. This samples the same spectrum on a finer grid before
 phase adjustment and quadrature reconstruction. The acquisition interval
@@ -22,14 +22,17 @@ the retained bins during reconstruction of the imaginary component.
 .. code-block:: python
 
    raw = scp.nmr.read("nmrdata/bruker/tests/nmr/MQMAS_27AL_PST5/51/ser")
-   xf2 = scp.nmr.Experiment(raw).prepare_xfshear(
-       size=(512, 4096), direct_points=2048
-   )
+   xf2 = scp.nmr.Experiment(raw).xf2(size=4096, direct_points=2048)
    first_row = xf2[0, 0, :].squeeze()
    phase = {"phc0": -58.0, "phc1": 0.0, "pivot": 0}
    first_row.pk(**phase).real[65.0:20.0].plot()
 
-``prepare_xfshear()`` performs the XF2 step and removes the phase ramp
+``xf2()`` uses the core FFT along ``x`` with the TopSpin XF2 convention.
+On an uncorrected Bruker States dataset, the call
+``dataset.fft(dim="x", size=4096, convention="topspin-xf2")`` computes
+the positive-exponent FFT on the TopSpin F2 grid. The MQMAS helper also
+prepares the acquired samples and records the state needed by XFSHEAR.
+With ``correct_digital_filter=True``, ``xf2()`` removes the phase ramp
 caused by the digital filter on the F2 frequency grid. The
 ``correct_digital_filter`` option controls this operation. Adjust the
 phase on the first-row preview before running XFSHEAR.
@@ -41,25 +44,27 @@ and PHC1. Keep the original complex XF2 dataset for the next step.
 Shear and transform F1
 ----------------------
 
-Pass the selected phase to ``replay_xfshear()``, the XFSHEAR step. It applies that phase to every F1
-increment and both States branches before taking the real F2 traces.
+Apply the selected phase with ``xf2p()`` to every F1 increment and both
+States branches. Pass the phased dataset and the F1 FFT size to ``xfshear()``.
 The algorithm rotates the States pairs in the hybrid domain, reconstructs
 F2 quadrature by Hilbert transform and performs the F1 FFT internally.
 
 .. code-block:: python
 
-   spectrum = scp.nmr.Experiment(xf2).replay_xfshear(
-       spin=2.5, coherence_order=3, f1_shift=-20.0, **phase
+   phased = scp.nmr.Experiment(xf2).xf2p(**phase)
+   spectrum = scp.nmr.Experiment(phased).xfshear(
+       size=512, spin=2.5, coherence_order=3, f1_shift=-20.0
    )
    rr = spectrum[0, :, :].squeeze().real
    rr[52.0:25.0, 65.0:20.0].plot(method="contour")
 
 To revise the F2 phase, return to the complex XF2 dataset and run
-XFSHEAR again. The optional ``f1_shift`` uses the AU convention in
-isotropic ppm. It adds a phase ramp before the F1 transform and adjusts
+``xf2p()`` again with the new angles. Use ``pk()`` on the preview row
+to select the angles and ``xf2p()`` on the complete dataset to record them
+for XFSHEAR. The optional ``f1_shift`` uses the AU convention in isotropic ppm. It adds a phase ramp before the F1 transform and adjusts
 the F1 reference so you can reposition the signal within the window.
 For shifted-echo acquisitions, ``echo_window=(slope, sigma)`` in
-``prepare_xfshear()`` applies a Gaussian along F2 before its FFT.
+``xf2()`` applies a Gaussian along F2 before its FFT.
 Its center follows the expected echo at each F1 increment and includes
 the digital group delay. Choose the slope for the acquisition and give
 ``sigma`` in seconds. For baseline correction, fit the selected real plane

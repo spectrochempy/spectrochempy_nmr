@@ -505,6 +505,58 @@ class Experiment:
             normalize_scan_gain=normalize_scan_gain,
         )
 
+    def xf2(
+        self, *, size, direct_points=None, correct_digital_filter=True, echo_window=None
+    ):
+        """Transform F2 of a Bruker States MQMAS acquisition.
+
+        Supply the F2 FFT size and optionally the number of acquired F2
+        points to retain. By default, compensate the digital group delay
+        on the frequency grid. For shifted echoes, pass
+        ``echo_window=(slope, sigma)`` with ``sigma`` in seconds.
+        """
+        from .processing.mqmas import xf2  # noqa: PLC0415
+
+        if self.is_multi_dataset:
+            raise ValueError("XF2 requires a single Bruker acquisition")
+        return xf2(
+            self.dataset,
+            size=size,
+            direct_points=direct_points,
+            correct_digital_filter=correct_digital_filter,
+            echo_window=echo_window,
+        )
+
+    def xf2p(self, *, phc0=0.0, phc1=0.0, pivot=0):
+        """Apply a common F2 phase in degrees to both States branches.
+
+        Use the SpectroChemPy phase sign convention and an F2 pivot in
+        sample indices. Pass the returned dataset to ``xfshear()``.
+        """
+        from .processing.mqmas import xf2p  # noqa: PLC0415
+
+        if self.is_multi_dataset:
+            raise ValueError("XF2 phase requires one complex XF2 dataset")
+        return xf2p(self.dataset, phc0=phc0, phc1=phc1, pivot=pivot)
+
+    def xfshear(self, *, size, spin, coherence_order=3, f1_shift=0.0):
+        """Shear phased MQMAS data, reconstruct F2 quadrature, and transform F1.
+
+        Supply the F1 FFT size and the nuclear spin. The optional F1 shift
+        uses isotropic ppm. The result contains all four spectral components.
+        """
+        from .processing.mqmas import xfshear  # noqa: PLC0415
+
+        if self.is_multi_dataset:
+            raise ValueError("XFSHEAR requires one phased XF2 dataset")
+        return xfshear(
+            self.dataset,
+            size=size,
+            spin=spin,
+            coherence_order=coherence_order,
+            f1_shift=f1_shift,
+        )
+
     def prepare_xfshear(
         self, *, size, direct_points=None, correct_digital_filter=True, echo_window=None
     ):

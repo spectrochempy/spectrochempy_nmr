@@ -129,6 +129,10 @@ def _fft_encoding_handler(data, encoding, **kwargs):
         and kwargs.get("_interop_physical_fft", False)
     ):
         return _complex_fft(data)
+    if kwargs.get("convention") == "topspin-xf2":
+        from .topspin_xfb import _positive_fft  # noqa: PLC0415
+
+        return _positive_fft(data, data.shape[-1], -1)
     if encoding == "CONJUGATE-FFT":
         return _qf_fft(data)
     if encoding.startswith("DIRECT:"):
