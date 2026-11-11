@@ -27,7 +27,11 @@ def test_replay_xfshear_matches_mqmas_51_four_planes(sx, reference_env, phase):
     if not ser or not pdata:
         pytest.skip("requires MQMAS/51 SER and its rectangular XFSHEAR reference")
     source = scp.nmr.read_topspin(
-        ser, local_only=True, remove_digital_filter=False, remove_dc_offset=False
+        ser,
+        local_only=True,
+        raw=True,
+        remove_digital_filter=True,
+        remove_dc_offset=True,
     )
     original = source.data.copy()
     ref = scp.nmr.read_topspin(pdata, local_only=True, proc_axis=True)
@@ -68,3 +72,24 @@ def test_replay_xfshear_matches_mqmas_51_four_planes(sx, reference_env, phase):
     corrected = scp.nmr.read_topspin(ser, local_only=True, remove_dc_offset=True)
     with pytest.raises(ValueError, match="uncorrected"):
         Experiment(corrected).prepare_xfshear(size=(512, 2048))
+
+
+def test_echo_window_follows_each_f1_increment():
+    ser = os.environ.get("SCP_MQMAS_SER")
+    if not ser:
+        pytest.skip("requires the PST-5 SER")
+    raw = scp.nmr.read(ser, local_only=True, raw=True)
+    experiment = Experiment(raw)
+    windowed = experiment.prepare_xfshear(
+        size=(512, 4096),
+        direct_points=2048,
+        correct_digital_filter=False,
+        echo_window=(19 / 12, 0.0008),
+    )
+    recovered = np.fft.fft(np.fft.ifftshift(windowed.data, axes=-1), axis=-1) / 4096
+    # Sample each States pair at the predicted echo and at the first-row center.
+    for row, center in [(0, 76), (16, 163), (32, 250)]:
+        assert np.abs(recovered[:, row, center]) == pytest.approx(
+            np.abs(raw.data[:, row, center]), rel=1e-4
+        )
+    assert np.all(np.abs(recovered[:, 32, 76]) < np.abs(raw.data[:, 32, 76]) * 0.001)

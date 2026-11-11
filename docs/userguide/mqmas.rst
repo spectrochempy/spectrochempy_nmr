@@ -17,8 +17,7 @@ recommendation.
 
    raw = scp.nmr.read(
        "nmrdata/bruker/tests/nmr/MQMAS_27AL_PST5/51/ser",
-       remove_digital_filter=False,
-       remove_dc_offset=False,
+       raw=True,
    )
    xf2 = scp.nmr.Experiment(raw).prepare_xfshear(
        size=(512, 4096), direct_points=2048
@@ -56,7 +55,12 @@ To revise the F2 phase, return to the complex XF2 dataset and run
 XFSHEAR again. The optional ``f1_shift`` uses the AU convention in
 isotropic ppm. It adds a phase ramp before the F1 transform and adjusts
 the F1 reference so you can reposition the signal within the window.
-Use ordinary baseline correction on a selected real plane if needed.
+For shifted-echo acquisitions, ``echo_window=(slope, sigma)`` in
+``prepare_xfshear()`` applies a Gaussian along F2 before its FFT.
+Its center follows the expected echo at each F1 increment and includes
+the digital group delay. Choose the slope for the acquisition and give
+``sigma`` in seconds. For baseline correction, fit the selected real plane
+along F2 using signal-free regions.
 
 The returned channels pack RR and IR in ``S_R``, and RI and II in
 ``S_I``. The F2 axis retains the acquisition reference. The F1 axis
@@ -86,8 +90,8 @@ phase and F1 shift. An isolated RR point at a tile boundary in the
 TopSpin output dominates the residual in the TopSpin comparison.
 
 The :doc:`PST-5 gallery notebook </examples/gallery/nmr/plot_replay_mqmas_pst5>`
-shows the phase preview and the final RR contour map. Multiplex coherence
-selection is a separate acquisition workflow.
+shows the phase preview and compares RR maps with apodization and baseline
+correction. Multiplex coherence selection is a separate acquisition workflow.
 
 For the MQMAS conventions and broader context, see C. Fernandez and
 M. Pruski, *Probing quadrupolar nuclei by solid-state NMR spectroscopy:

@@ -780,6 +780,10 @@ def read_topspin(*paths, **kwargs):
         ``'opus'``, ``'topspin'``, ``'matlab'``, ``'jcamp'``,
         ``'csv'``, ``'excel'``}. If not provided, the correct protocol
         is inferred (whenever it is possible) from the filename extension.
+    raw : `bool`, optional, default: `False`
+        Keep the acquisition samples without group-delay or DC correction.
+        Use this for workflows that apply corrections during processing.
+        This option takes precedence over the two correction flags for FID/SER.
     read_only: `bool`, optional, default: `True`
         Used only when url are specified.  If True, saving of the
         files is performed in the current directory, or in the directory specified by
@@ -1226,22 +1230,25 @@ def _read_topspin(*args, **kwargs):
     processed_components = None
     normalized_dataset = None
     if not processed:
+        raw = kwargs.get("raw", False)
+        remove_filter = not raw and bool(kwargs.get("remove_digital_filter", True))
+        remove_dc = not raw and bool(kwargs.get("remove_dc_offset", False))
         normalized = None
         if path.name == "fid":
             normalized = _read_normalized_fid(
                 f_expno,
                 acqus_files,
                 procs_files,
-                remove_filter=bool(kwargs.get("remove_digital_filter", True)),
-                remove_dc=bool(kwargs.get("remove_dc_offset", False)),
+                remove_filter=remove_filter,
+                remove_dc=remove_dc,
             )
         elif path.name == "ser" and not kwargs.get("use_list", False):
             normalized = _read_normalized_ser(
                 f_expno,
                 acqus_files,
                 procs_files,
-                remove_filter=bool(kwargs.get("remove_digital_filter", True)),
-                remove_dc=bool(kwargs.get("remove_dc_offset", False)),
+                remove_filter=remove_filter,
+                remove_dc=remove_dc,
             )
         if normalized is None:
             dic, data = _read_raw_data(f_expno, path.name, acqus_files, procs_files)
@@ -1282,10 +1289,10 @@ def _read_topspin(*args, **kwargs):
             data = data[..., :ntd]
 
         if normalized_dataset is None:
-            if kwargs.get("remove_dc_offset", False):
+            if remove_dc:
                 data = data - data.mean(axis=-1, keepdims=True)
 
-            if kwargs.get("remove_digital_filter", True) and dic["acqus"]["DECIM"] > 1:
+            if remove_filter and dic["acqus"]["DECIM"] > 1:
                 data = _remove_digital_filter(dic, data)
 
     else:

@@ -3,8 +3,8 @@ Processing an MQMAS spectrum
 ============================
 
 This example processes an aluminium-27 Bruker States acquisition of PST-5.
-It follows the TopSpin XFSHEAR workflow, with manual
-F2 phasing and without apodization or baseline correction. It reconstructs
+It follows the TopSpin XFSHEAR workflow with manual F2 phasing and
+compares the effects of apodization and baseline correction. It reconstructs
 the direct quadrature with a Hilbert transform and rescales F1 to the
 isotropic chemical-shift axis.
 
@@ -20,8 +20,7 @@ import spectrochempy as scp
 # correct the digital group delay on the F2 frequency grid.
 raw = scp.nmr.read(
     "nmrdata/bruker/tests/nmr/MQMAS_27AL_PST5/51/ser",
-    remove_digital_filter=False,
-    remove_dc_offset=False,
+    raw=True,
 )
 
 # %%
@@ -55,3 +54,41 @@ spectrum = scp.nmr.Experiment(xf2).replay_xfshear(
 rr = spectrum[0, :, :].squeeze().real
 region = rr[52.0:25.0, 65.0:20.0]
 _ = region.plot(method="contour", start=0.08, nlevels=12)
+
+
+# %%
+# Apply a Gaussian before the F2 FFT, centered on the expected echo
+# in each row. In this shifted-echo experiment the echo moves by
+# (19/12) × t1 along F2, in addition to the digital group delay.
+# Both States branches at a given t1 receive the same window. The
+# Gaussian standard deviation is 0.8 ms. Keep the phase and shear
+# settings identical to isolate the effect of the window.
+xf2_windowed = scp.nmr.Experiment(raw).prepare_xfshear(
+    size=(512, 4096), direct_points=2048, echo_window=(19 / 12, 0.0008)
+)
+windowed = scp.nmr.Experiment(xf2_windowed).replay_xfshear(
+    spin=2.5, coherence_order=3, f1_shift=-20.0, **phase
+)
+windowed_rr = windowed[0, :, :].squeeze().real[52.0:25.0, 65.0:20.0]
+
+# %%
+# Fit a linear baseline along F2 for each row of the real RR map, using
+# regions on either side of the resonances. All three maps use the same
+# contour levels so changes in intensity remain visible.
+baseline = scp.Baseline(
+    model="polynomial", order=1, ranges=[(21.0, 24.0), (61.0, 64.0)]
+)
+baseline.fit(windowed_rr)
+corrected = windowed_rr - baseline.baseline
+
+peak = region.data.max()
+positive_levels = [0.08 * peak * 1.3**i for i in range(10)]
+levels = [-level for level in reversed(positive_levels)] + positive_levels
+_ = scp.multiplot(
+    [region, windowed_rr, corrected],
+    ncol=3,
+    method="contour",
+    labels=["Reference", "F2 apodization", "F2 apodization and baseline correction"],
+    levels=levels,
+    figsize=(13, 4),
+)

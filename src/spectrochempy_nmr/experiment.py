@@ -505,7 +505,9 @@ class Experiment:
             normalize_scan_gain=normalize_scan_gain,
         )
 
-    def prepare_xfshear(self, *, size, direct_points=None, correct_digital_filter=True):
+    def prepare_xfshear(
+        self, *, size, direct_points=None, correct_digital_filter=True, echo_window=None
+    ):
         """Transform F2 and retain both complex States branches for inspection.
 
         Supply the final FFT sizes as (F1, F2). The uncorrected acquisition
@@ -514,6 +516,9 @@ class Experiment:
         increasing the F2 size for zero filling. XF2 corrects the Bruker
         group delay on the frequency grid before phase inspection.
         Set ``correct_digital_filter=False`` to disable this step.
+        For a shifted-echo acquisition, ``echo_window=(slope, sigma)``
+        applies a Gaussian along F2 centered at the group delay plus
+        ``slope * t1`` for each increment. Supply ``sigma`` in seconds.
         """
         from .processing.mqmas import prepare_xfshear  # noqa: PLC0415
 
@@ -524,6 +529,7 @@ class Experiment:
             size=size,
             direct_points=direct_points,
             correct_digital_filter=correct_digital_filter,
+            echo_window=echo_window,
         )
 
     def replay_xfshear(

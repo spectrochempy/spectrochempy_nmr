@@ -31,7 +31,9 @@ def _mqmas_geometry(spin, coherence_order):
     return order, ratio, scale
 
 
-def prepare_xfshear(dataset, *, size, direct_points, correct_digital_filter):
+def prepare_xfshear(
+    dataset, *, size, direct_points, correct_digital_filter, echo_window=None
+):
     """Compute complex XF2 branches for inspecting the phase before shearing."""
     from spectrochempy.core.dataset.coord import Coord  # noqa: PLC0415
     from spectrochempy.core.units import ur  # noqa: PLC0415
@@ -55,7 +57,7 @@ def prepare_xfshear(dataset, *, size, direct_points, correct_digital_filter):
     ):
         raise ValueError(
             "XFSHEAR requires an uncorrected, normalized Bruker States SER. "
-            "Read it with remove_dc_offset=False and remove_digital_filter=False."
+            "Read it with raw=True."
         )
     data = np.asarray(dataset.data)
     if not np.iscomplexobj(data) or np.any(dataset.mask) or not np.isfinite(data).all():
@@ -112,12 +114,40 @@ def prepare_xfshear(dataset, *, size, direct_points, correct_digital_filter):
     axis.meta["reference_frequency"] = sf * ur.MHz
     result = dataset.copy()
     result.delete_coordset()
-    xf2 = _positive_fft(data[..., :direct_points], sx, -1)
-    filter_correction = {"applied": False}
-    if correct_digital_filter:
+    if echo_window is not None and (
+        not isinstance(echo_window, (tuple, list))
+        or len(echo_window) != 2
+        or any(
+            isinstance(value, (bool, np.bool_))
+            or not isinstance(value, Real)
+            or not np.isfinite(value)
+            for value in echo_window
+        )
+        or echo_window[1] <= 0
+    ):
+        raise ValueError(
+            "echo_window requires a finite slope and positive sigma in seconds"
+        )
+    if correct_digital_filter or echo_window is not None:
         delay, source = resolve_bruker_delay(dataset, None)
         if not np.isfinite(delay) or delay < 0:
             raise ValueError("XFSHEAR requires a finite nonnegative Bruker group delay")
+    retained = data[..., :direct_points]
+    window_metadata = None
+    if echo_window is not None:
+        slope, sigma = map(float, echo_window)
+        t1 = np.arange(ny) / sw1
+        t2 = (np.arange(direct_points) - delay) / sw2
+        relative_time = t2[None, :] - slope * t1[:, None]
+        retained = retained * np.exp(-0.5 * (relative_time / sigma) ** 2)
+        window_metadata = {
+            "slope": slope,
+            "sigma_seconds": sigma,
+            "group_delay_points": delay,
+        }
+    xf2 = _positive_fft(retained, sx, -1)
+    filter_correction = {"applied": False}
+    if correct_digital_filter:
         xf2 *= np.exp(-2j * np.pi * delay * np.arange(sx) / sx)
         filter_correction = {
             "applied": True,
@@ -150,6 +180,7 @@ def prepare_xfshear(dataset, *, size, direct_points, correct_digital_filter):
                 "sf_mhz": sf,
                 "carrier_mhz": carrier,
                 "digital_filter": filter_correction,
+                "echo_window": window_metadata,
             },
         }
     )
