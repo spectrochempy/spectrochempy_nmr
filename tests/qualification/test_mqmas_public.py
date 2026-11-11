@@ -149,3 +149,30 @@ def test_xf2_without_decimation_has_zero_group_delay(echo_window, stored_delay):
         np.testing.assert_array_equal(xf2.data, expected.data)
     else:
         assert plan["echo_window"]["group_delay_points"] == 0.0
+
+
+def test_xf2_preserves_two_retained_points():
+    ser = os.environ.get("SCP_MQMAS_SER")
+    if not ser:
+        pytest.skip("requires the PST-5 SER")
+    raw = scp.nmr.read(ser, local_only=True)
+    result = Experiment(raw).xf2(size=4, direct_points=2, correct_digital_filter=False)
+    expected = np.fft.fftshift(np.fft.ifft(raw.data[..., :2], n=4, axis=-1), axes=-1)
+    np.testing.assert_array_equal(result.data, 4 * expected)
+    assert result.x.size == 4
+    phased = Experiment(result).xf2p(phc0=1e308)
+    assert np.isfinite(phased.data).all()
+
+
+def test_invalid_xf2_reference_is_rejected_before_inplace_fft():
+    ser = os.environ.get("SCP_MQMAS_SER")
+    if not ser:
+        pytest.skip("requires the PST-5 SER")
+    raw = scp.nmr.read(ser, local_only=True)[..., :128]
+    raw.meta.readonly = False
+    raw.meta.sf[-1] *= 0
+    samples = raw.data.copy()
+    with pytest.raises(ValueError, match="finite positive F2 reference"):
+        raw.fft(dim="x", size=256, convention="topspin-xf2", inplace=True)
+    np.testing.assert_array_equal(raw.data, samples)
+    assert raw.x.units.is_compatible_with(scp.ur.s)

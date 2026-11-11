@@ -86,6 +86,29 @@ def _apply_interop_fft_presentation(dataset, dim, *, ppm, physical, acquisition=
     dataset.coordset[dim] = coord
 
 
+def _topspin_xf2_reference(dataset):
+    sw = dataset.meta.sw_h[-1].to("Hz").magnitude
+    sf = dataset.meta.sf[-1].to("MHz").magnitude
+    carrier = dataset.meta.sfo1[-1].to("MHz").magnitude
+    if not all(np.isfinite(v) and v > 0 for v in (sw, sf, carrier)):
+        raise ValueError("TopSpin XF2 requires a finite positive F2 reference")
+    return sw, sf, carrier
+
+
+def _topspin_xf2_axis(dataset, size):
+    sw, sf, carrier = _topspin_xf2_reference(dataset)
+    centered_hz = (np.arange(size) - size // 2) * sw / size
+    axis = Coord(
+        (carrier - sf) * 1e6 / sf - centered_hz / sf,
+        units="ppm",
+        title="F2 chemical shift",
+        rounding=False,
+        sigdigits=15,
+    )
+    axis.meta["reference_frequency"] = dataset.meta.sf[-1]
+    return axis
+
+
 def _fft_postprocess_result(new, dim=-1, inv=False, **kwargs):
     """
     Apply NMR-specific coordinate creation and unit conversion after FFT.
@@ -95,21 +118,7 @@ def _fft_postprocess_result(new, dim=-1, inv=False, **kwargs):
     ``bf1``, ``sw_h``, ``nuc1``).
     """
     if kwargs.get("convention") == "topspin-xf2":
-        sw = new.meta.sw_h[-1].to("Hz").magnitude
-        sf = new.meta.sf[-1].to("MHz").magnitude
-        carrier = new.meta.sfo1[-1].to("MHz").magnitude
-        if not all(np.isfinite(v) and v > 0 for v in (sw, sf, carrier)):
-            raise ValueError("TopSpin XF2 requires a finite positive F2 reference")
-        size = new.shape[-1]
-        centered_hz = (np.arange(size) - size // 2) * sw / size
-        axis = Coord(
-            (carrier - sf) * 1e6 / sf - centered_hz / sf,
-            units="ppm",
-            title="F2 chemical shift",
-            rounding=False,
-            sigdigits=15,
-        )
-        axis.meta["reference_frequency"] = new.meta.sf[-1]
+        axis = _topspin_xf2_axis(new, new.shape[-1])
         new.coordset[dim] = axis
         readonly = new.meta.readonly
         new.meta.readonly = False

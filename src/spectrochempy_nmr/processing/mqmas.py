@@ -153,9 +153,24 @@ def xf2(
             "sigma_seconds": sigma,
             "group_delay_points": delay,
         }
-    prepared = dataset[..., :direct_points].copy()
-    prepared.data = retained.copy()
-    result = prepared.fft(dim="x", size=sx, convention="topspin-xf2")
+    if direct_points == 2:
+        from .fft_postprocess import _topspin_xf2_axis  # noqa: PLC0415
+        from .topspin_xfb import _positive_fft  # noqa: PLC0415
+
+        result = dataset.copy()
+        result.delete_coordset()
+        result.data = _positive_fft(retained, sx, -1)
+        result.set_coordset(
+            c=dataset.c.copy(), y=dataset.y.copy(), x=_topspin_xf2_axis(dataset, sx)
+        )
+    else:
+        prepared = dataset[..., :direct_points]
+        prepared.data = retained.copy()
+        result = prepared.fft(
+            dim="x", size=sx, convention="topspin-xf2", phase=False, inplace=True
+        )
+        if result.shape[-1] != sx or result.x.units != ur.ppm:
+            raise ValueError("XF2 did not produce the requested F2 frequency grid")
     filter_correction = {"applied": False}
     if correct_digital_filter and delay > 0:
         result.data = result.data * np.exp(-2j * np.pi * delay * np.arange(sx) / sx)
@@ -264,7 +279,14 @@ def xf2p(dataset, *, phc0, phc1, pivot, check_phase=True):
             raise ValueError(f"XFSHEAR requires a finite numerical {name}")
     if not 0 <= pivot < sx:
         raise ValueError("XFSHEAR phase pivot must be an F2 sample index")
-    result = dataset.pk(dim="x", phc0=phc0, phc1=phc1, pivot=pivot, exptc=0.0, rel=True)
+    if max(abs(phc0), abs(phc1)) > np.finfo(float).max / np.pi:
+        radians = np.deg2rad(phc0) + np.deg2rad(phc1) * ((np.arange(sx) - pivot) / sx)
+        result = dataset.copy()
+        result.data = dataset.data * np.exp(1j * radians)
+    else:
+        result = dataset.pk(
+            dim="x", phc0=phc0, phc1=phc1, pivot=pivot, exptc=0.0, rel=True
+        )
     readonly = result.meta.readonly
     result.meta.readonly = False
     result.meta.phc0[-1] = float(phc0) * result.meta.phc0[-1].units
