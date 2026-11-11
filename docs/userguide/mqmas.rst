@@ -2,8 +2,8 @@ Processing MQMAS spectra
 ========================
 
 The XFSHEAR workflow separates isotropic and second-order quadrupolar
-contributions in MQMAS spectra. It uses the rectangular Bruker States
-recipe with a common F2 phase and isotropic F1 calibration.
+contributions in MQMAS spectra. It uses a Bruker States acquisition with a
+common F2 phase and isotropic F1 calibration.
 
 Transform F2 and inspect the first row
 --------------------------------------
@@ -75,13 +75,13 @@ the signed slope and isotropic F1 scale divisor are
 For spin 5/2 and triple-quantum coherence, :math:`R=19/12` and
 :math:`D=17/12`.
 
-The qualified PST-5 recipe uses rectangular windows and PKNL disabled.
+The qualified PST-5 recipe runs without apodization and with PKNL disabled.
 TopSpin reconstructs the imaginary F2 component on a grid twice the F2
 FFT size. With this recipe, its inverse and final forward F2 transforms
 cancel algebraically. The four output planes have been compared with
 TopSpin 4.5.0 at F2 SI 2048 and 4096, including a case with nonzero F2
 phase and F1 shift. An isolated RR point at a tile boundary in the
-TopSpin output dominates the residual in the rectangular reference.
+TopSpin output dominates the residual in the TopSpin comparison.
 
 The :doc:`PST-5 gallery notebook </examples/gallery/nmr/plot_replay_mqmas_pst5>`
 shows the phase preview and the final RR contour map. Multiplex coherence

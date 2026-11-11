@@ -2,10 +2,11 @@
 Processing an MQMAS spectrum
 ============================
 
-Start from experiment 51 of the aluminium-27 Bruker States acquisition of PST-5. The
-example uses the rectangular TopSpin recipe with no baseline correction
-and manual F2 phase. It reconstructs the direct quadrature with a Hilbert
-transform and rescales F1 to the isotropic chemical-shift axis.
+Start from experiment 51 of the aluminium-27 Bruker States acquisition
+of PST-5. The example follows the TopSpin XFSHEAR workflow, with manual
+F2 phasing and without apodization or baseline correction. It reconstructs
+the direct quadrature with a Hilbert transform and rescales F1 to the
+isotropic chemical-shift axis.
 
 Data: Christian Fernandez, LCS, distributed through
 `spectrochempy_data <https://github.com/spectrochempy/spectrochempy_data>`_
