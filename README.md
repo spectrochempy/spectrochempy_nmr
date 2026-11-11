@@ -37,13 +37,15 @@ For an editable development install from this repository, see
 ```python
 import spectrochempy as scp
 
-dataset = scp.nmr.read("path/to/1/fid")
-dataset = scp.nmr.read("path/to/1/pdata/1/1r")
-dataset = scp.nmr.read("path/to/experiment", expno=1, procno=1)
-
-experiment = scp.nmr.Experiment(dataset)
+fid = scp.nmr.read("path/to/1/fid")
+experiment = scp.nmr.Experiment(fid)
 spectrum = experiment.process(apodization="em", lb=2.0, size=32768)
+
+processed = scp.nmr.read("path/to/1/pdata/1/1r")
 ```
+
+The [Quickstart](https://www.spectrochempy.fr/projects/nmr/latest/getting_started/quickstart.html)
+shows how to apply phase correction explicitly.
 
 Use `Experiment.process(replay="topspin")` to replay supported TopSpin
 recipes explicitly. The [2D processing guide](https://www.spectrochempy.fr/projects/nmr/latest/userguide/processing_2d.html)
