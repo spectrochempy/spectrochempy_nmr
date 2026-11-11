@@ -1,4 +1,4 @@
-"""Qualify XFB replay on the checksum-pinned public Bruker COSY reference."""
+"""Qualify saved XFB replay against TopSpin processed references."""
 
 import hashlib
 import json
@@ -60,14 +60,38 @@ assert not any(name.split(".")[0] == "nmrglue" for name in sys.modules)
 
 
 def test_topspin_xfb_roundtrip_without_provider(tmp_path):
-    import nmrglue as ng
-
     reference = os.environ.get("NMR_TOPSPIN_XFB_QF_REFERENCE")
     if reference is None:
         pytest.skip("set NMR_TOPSPIN_XFB_QF_REFERENCE to exam2d_HH/1")
     root = Path(reference).resolve(strict=True)
     for name, checksum in _CHECKSUMS.items():
         assert hashlib.sha256((root / name).read_bytes()).hexdigest() == checksum, name
+    _assert_xfb_roundtrip(root, tmp_path, "qf", with_prediction=True)
+
+
+@pytest.mark.parametrize(
+    ("variable", "with_prediction"),
+    [("NMR_TOPSPIN_XFB_REFERENCES", False), ("NMR_TOPSPIN_XFB_LP_REFERENCES", True)],
+)
+@pytest.mark.parametrize(
+    ("experiment", "mode"), [("30", "states-tppi"), ("40", "echo-antiecho")]
+)
+def test_paired_topspin_xfb_roundtrip_without_provider(
+    tmp_path, variable, with_prediction, experiment, mode
+):
+    reference = os.environ.get(variable)
+    if reference is None:
+        pytest.skip(f"set {variable} to the corresponding TopSpin XFB copies")
+    _assert_xfb_roundtrip(
+        Path(reference).resolve(strict=True) / experiment,
+        tmp_path,
+        mode,
+        with_prediction=with_prediction,
+    )
+
+
+def _assert_xfb_roundtrip(root, tmp_path, mode, *, with_prediction):
+    import nmrglue as ng
 
     source = scp.read_topspin(
         root / "ser",
@@ -75,17 +99,43 @@ def test_topspin_xfb_roundtrip_without_provider(tmp_path):
         remove_digital_filter=False,
         remove_dc_offset=False,
     )
-    assert "xfb_plan" in source.meta.nmr_processing["vendor_profile"]
+    plan = source.meta.nmr_processing["vendor_profile"]["xfb_plan"]
+    assert plan["mode"] == mode
     expected = Experiment(source).process(replay="topspin")
-    metadata, spectrum = ng.bruker.read_pdata(
-        root / "pdata" / "1", bin_files=["2rr"], scale_data=True
+    names = ["2rr"] if mode == "qf" else ["2rr", "2ri", "2ir", "2ii"]
+    metadata, reference = ng.bruker.read_pdata(
+        root / "pdata" / "1", bin_files=names, scale_data=True
     )
+    if mode == "qf":
+        planes = expected.data[None]
+        reference = reference[None]
+    else:
+        assert tuple(expected.c.labels) == ("S_R", "S_I")
+        first, second = expected.data
+        planes = np.stack((first.real, second.real, first.imag, second.imag))
+        reference = np.asarray(reference)
     acqus = metadata["acqus"]
-    scale = acqus["NS"] * acqus["RG"] * 2.0 ** acqus["NC"]
-    relative = np.linalg.norm(expected.data * scale - spectrum) / np.linalg.norm(
-        spectrum
+    scale = acqus["NS"] * acqus["RG"]
+    if acqus["DTYPA"] == 0:
+        scale *= 2.0 ** acqus["NC"]
+    assert planes.shape == reference.shape
+    residual = np.linalg.norm(planes * scale - reference, axis=(1, 2))
+    np.testing.assert_array_less(
+        residual / np.linalg.norm(reference, axis=(1, 2)), 2e-6
     )
-    assert relative < 2e-6
+    trace = expected.meta.nmr_processing["scp_processing"]
+    f1 = metadata["proc2s"]
+    if with_prediction:
+        assert f1["ME_mod"] == 2
+        assert trace["applied"]["linear_prediction"] == {
+            "axis": "F1",
+            "mode": "LPfr",
+            "order": f1["NCOEF"] // 2,
+            "size": f1["LPBIN"] // (1 if mode == "qf" else 2),
+        }
+    else:
+        assert f1["ME_mod"] == 0
+        assert "linear_prediction" not in trace["applied"]
     for axis, key in ((expected.y, "proc2s"), (expected.x, "procs")):
         pars = metadata[key]
         grid = pars["OFFSET"] - np.arange(pars["SI"]) * pars["SW_p"] / (
@@ -105,7 +155,6 @@ def test_topspin_xfb_roundtrip_without_provider(tmp_path):
         np.testing.assert_array_equal(actual["data"], expected.data)
         np.testing.assert_array_equal(actual["x"], expected.x.data)
         np.testing.assert_array_equal(actual["y"], expected.y.data)
-    trace = expected.meta.nmr_processing["scp_processing"]
     assert json.loads(
         (tmp_path / "trace.json").read_text(encoding="utf-8")
     ) == json.loads(json.dumps(trace, allow_nan=False))
