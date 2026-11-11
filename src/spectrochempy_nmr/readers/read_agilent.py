@@ -804,6 +804,13 @@ def _read_agilent(*args, **kwargs):
         if ndim == 2 and meta.encoding[0] == "TPPI":
             _require_fft_prevalidation()
             meta.encoding[0] = "UNVALIDATED:AGILENT-TPPI"
+        elif (
+            ndim == 2
+            and "phase" not in pdic
+            and _extract_procpar_integer(pdic, "ni", default=0) > 1
+        ):
+            _require_fft_prevalidation()
+            meta.encoding[0] = "UNVALIDATED:AGILENT-F1"
         dataset.data = data
         dataset.meta.update(meta)
         dataset.set_coordset(*tuple(coords))
