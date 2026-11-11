@@ -15,8 +15,10 @@ recommendation.
 
 .. code-block:: python
 
-   raw = scp.nmr.read_topspin(
-       "MQMAS/51/ser", remove_digital_filter=False, remove_dc_offset=False
+   raw = scp.nmr.read(
+       "nmrdata/bruker/tests/nmr/MQMAS_27AL_PST5/51/ser",
+       remove_digital_filter=False,
+       remove_dc_offset=False,
    )
    xf2 = scp.nmr.Experiment(raw).prepare_xfshear(
        size=(512, 4096), direct_points=2048

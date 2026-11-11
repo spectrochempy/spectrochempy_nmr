@@ -7,36 +7,26 @@ example uses the rectangular TopSpin recipe with no baseline correction
 and manual F2 phase. It reconstructs the direct quadrature with a Hilbert
 transform and rescales F1 to the isotropic chemical-shift axis.
 
-To run the notebook, set the environment variable ``SCP_MQMAS_SER`` to
-the path of your PST-5 experiment 51 SER file, with its acquisition and
-processing parameters in the original Bruker directory structure.
-The acquisition is supplied locally.
+Data: Christian Fernandez, LCS, distributed through
+`spectrochempy_data <https://github.com/spectrochempy/spectrochempy_data>`_
+under `CC BY 4.0 <https://creativecommons.org/licenses/by/4.0/>`_.
 """
 
 # %%
-import os
-from pathlib import Path
-
 import spectrochempy as scp
 
-ser_path = os.environ.get("SCP_MQMAS_SER")
-if not ser_path:
-    print("Set SCP_MQMAS_SER to the path of the PST-5 experiment 51 SER file.")
-else:
-    raw = scp.nmr.read_topspin(
-        Path(ser_path),
-        local_only=True,
-        remove_digital_filter=False,
-        remove_dc_offset=False,
-    )
+raw = scp.nmr.read(
+    "nmrdata/bruker/tests/nmr/MQMAS_27AL_PST5/51/ser",
+    remove_digital_filter=False,
+    remove_dc_offset=False,
+)
 
 # %%
 # Retain the first 2048 complex points in F2 and zero-fill to 4096 points,
 # as recommended by TopSpin for Hilbert reconstruction. Aluminium-27 has
 # spin 5/2. For triple-quantum coherence, the signed slope is 19/12
 # and the F1 scale divisor is 17/12.
-if ser_path:
-    xf2 = scp.nmr.Experiment(raw).prepare_xfshear(size=(512, 4096), direct_points=2048)
+xf2 = scp.nmr.Experiment(raw).prepare_xfshear(size=(512, 4096), direct_points=2048)
 
 # %%
 # Inspect the first acquired row. Adjust the phase parameters on this
@@ -44,9 +34,8 @@ if ser_path:
 # 76-point digital group delay as a phase ramp on the F2 FFT grid. The
 # pivot is a sample index counted from the start of F2.
 phase = {"phc0": -58.0, "phc1": -27360.0, "pivot": 0}
-if ser_path:
-    first_row = xf2[0, 0, :].squeeze()
-    _ = first_row.pk(**phase).real[65.0:20.0].plot()
+first_row = xf2[0, 0, :].squeeze()
+_ = first_row.pk(**phase).real[65.0:20.0].plot()
 
 # %%
 # Pass the same phase to XFSHEAR. It applies the correction to both
@@ -54,15 +43,13 @@ if ser_path:
 # reconstruction. XFSHEAR also performs the F1 FFT. The optional shift
 # moves the signal within the F1 window in isotropic ppm.
 # sphinx_gallery_thumbnail_number = 2
-if ser_path:
-    spectrum = scp.nmr.Experiment(xf2).replay_xfshear(
-        spin=2.5, coherence_order=3, f1_shift=-20.0, **phase
-    )
+spectrum = scp.nmr.Experiment(xf2).replay_xfshear(
+    spin=2.5, coherence_order=3, f1_shift=-20.0, **phase
+)
 
 # %%
 # The real part of the first channel is RR. Use the calibrated ppm axes
 # to select the region around the main resonances.
-if ser_path:
-    rr = spectrum[0, :, :].squeeze().real
-    region = rr[52.0:25.0, 65.0:20.0]
-    _ = region.plot(method="contour", start=0.08, nlevels=12)
+rr = spectrum[0, :, :].squeeze().real
+region = rr[52.0:25.0, 65.0:20.0]
+_ = region.plot(method="contour", start=0.08, nlevels=12)

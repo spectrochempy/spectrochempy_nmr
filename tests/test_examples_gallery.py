@@ -34,13 +34,13 @@ JEOL_DATA = {
 
 def _has_nmr_example_data(example: Path) -> bool:
     root = Path(scp.preferences.datadir) / "nmrdata"
-    if example.stem == "plot_replay_mqmas_pst5":
-        return True  # The example also runs without the optional acquisition.
     if example.stem in JEOL_DATA:
         return (root / "jeol" / JEOL_DATA[example.stem]).is_file()
     if example.stem in {"plot_read_nmrpipe_2d", "plot_analyze_cosy_2d"}:
         return (root / "nmrpipe" / "nmrpipe_2d_cosy_example.ft2").is_file()
     bruker = root / "bruker" / "tests" / "nmr"
+    if example.stem == "plot_replay_mqmas_pst5":
+        return (bruker / "MQMAS_27AL_PST5" / "51" / "ser").is_file()
     if example.stem == "plot_processing_cp_nmr":
         return all(
             (bruker / "CP" / str(expno) / "fid").is_file() for expno in range(80, 95)
