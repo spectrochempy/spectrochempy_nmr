@@ -966,6 +966,109 @@ one-point control as the regular Hermitian eigensolver to the printed
 precision in every area. The command above uses the regular PULSAR
 path and can take several minutes per region.
 
+### PBG1 3QMAS resolution and transfer
+
+The [forward benchmark](../../tools/qualify_pulsar_pbg_3qmas.py) fits
+the archived signed 3QMAS map over the union of the five previous
+region masks. It counts overlapping pixels once and fits all regional
+components together. The 3QMAS-only fit varies the mean chemical
+shift, RMS $P_Q$, local fraction of mean $P_Q^2$, and independent
+chemical shift width for each component. It fixes local asymmetry
+at 0.5 and solves for nonnegative regional amplitudes at each step.
+The mean shifts can move by 4 ppm on either side of the earlier
+centroids, and RMS $P_Q$ is bounded between 0.5 and 7 MHz.
+Transfer changes the relative contributions of tensors and orientations
+within each component. The regional 3QMAS amplitudes are nuisance scales.
+
+The F1 point-spread function is the real part of the finite Fourier
+sum over 21 complex States increments at 30 kHz. It uses the archived
+15 Hz exponential apodization, first-point factor 0.5 and processed
+F1 reference of 276.8668 MHz. The kernel is centered at
+$\delta_{iso}-10\mathrm{QIS}/17$ for each tensor. Its central FWHM is
+3.20 ppm, sampled at the archived zero-fill spacing of 0.847 ppm.
+The forward fit retains the signed sidelobes. It assumes an absorptive
+F1 response after the
+19/12 shear and does not replay residual F1 phase or the full complex
+TopSpin processing.
+
+The transfer calculation starts from thermal $I_z$, selects the
+inner ±3Q coherence, and projects onto populations after conversion
+before detecting the central transition. It propagates the
+3.7, 1.25 and 8.3 µs rectangular pulses from the acquisition status
+through the rotor trajectory. The title gives rounded or stale
+durations for the first two pulses. The model uses
+nominal hard/soft RF couplings of 100/10 kHz and the pulse-program
+Z-filter delay. It interpolates signed orientation amplitudes over
+$|C_Q|$, $\eta$, and chemical shift detuning from the actual carrier.
+The lookup steps are 0.5 MHz, 0.125, and 10 kHz respectively.
+The direct axis uses the orientation-dependent CT frequency, the
+zero-order MAS response, and a fixed Gaussian F2 smoothing of 0.6 ppm
+standard deviation. The uniform-transfer control retains the F1
+response and orientation-dependent frequencies while replacing the
+direct weights by the powder weights. The calculation omits 3Q
+relaxation, residual coherence pathways and variation of transfer
+over the indirect increments. It assumes a spatially uniform RF
+field and retains the uncertainty in the nominal RF calibration.
+See the [z-filter sequence and transfer analysis](https://doi.org/10.1016/j.crci.2007.07.003).
+
+```sh
+OPENBLAS_NUM_THREADS=1 python tools/qualify_pulsar_pbg_3qmas.py \
+    "/path/to/raw data/PBG1_2,5mm" --samples 32
+```
+
+Use `--fit-output` and `--fit-only` to save a 3QMAS fit separately.
+The columns are chemical shift in ppm, RMS $P_Q$ in MHz, local fraction
+of mean $P_Q^2$, and chemical shift standard deviation in ppm.
+Use `--fit-input` to repeat the 1D comparison from the saved parameters.
+The 1D center alone sets the regional weights and common broadening,
+as above. The finite pulse, `efp` replay and 20 held-out sideband
+windows follow the previous PBG1 benchmark.
+
+The nominal weighted fit has a signed 3QMAS RMS residual of 7.75%
+of the peak in the fitted mask. The uniform-transfer fit gives
+7.64% within its evaluation budget. The nominal fit estimates
+local fractions of 0.23, 0.09, 0.00, 0.44 and 0.44. The second
+chemical shift is close to its lower bound. Increasing the fitting
+ensemble from 64 to 128 nodes and changing its scramble seed to 17
+gives a 7.35% RMS residual but sends the third region to the minimum
+RMS $P_Q$ and the maximum local fraction. The fits therefore supply
+effective distributions for the sideband comparison, with limited
+identifiability of individual regional parameters.
+
+The 20 measured bands sum to 89.40% of the central window. All
+predictions use the same normalization and a powder accuracy of 4
+with 20 orders per side. The Sobol counts in this table refer to
+the 1D propagation. Its seed is 0 in every row.
+
+| 3QMAS model | 1D nodes | Center RMS | Sum | Area MAE |
+| --- | ---: | ---: | ---: | ---: |
+| Previous moment projection | 32 | 3.65% | 149.61% | 3.01 pp |
+| F1 response, uniform transfer | 32 | 3.80% | 127.33% | 1.97 pp |
+| F1 response and finite transfer | 8 | 5.25% | 100.22% | 0.66 pp |
+| F1 response and finite transfer | 16 | 4.08% | 118.27% | 1.58 pp |
+| F1 response and finite transfer | 32 | 3.81% | 124.16% | 1.85 pp |
+| Finite transfer, 5 kHz detuning step | 16 | 4.08% | 118.36% | 1.58 pp |
+| Finite transfer at 90% nominal 3Q RF | 16 | 4.15% | 114.83% | 1.45 pp |
+| Finite transfer, 128-node 3Q fit with seed 17 | 16 | 3.92% | 110.26% | 1.90 pp |
+
+At 32 nodes, the nominal prediction remains 34.8 percentage points
+above the measured sum. With the earlier rounded central weights
+of (0.677, 0.173, 0.035, 0.102, 0.013) and the same 1200 Hz width, it
+gives 134.70% and a 2.27-point MAE. The new distributions reduce the
+sum by 14.91 points with fixed weights. Recalibrating the center
+reduces it by a further 10.54 points and changes the weights of the
+first two regions to 0.517 and 0.324. The uniform-transfer control is
+within 3.17 points of the nominal prediction at the same node count.
+
+The eight-node calculation gives the same per-order outputs with the
+regular Hermitian eigensolver and the independent tridiagonal Taylor
+exponential used to accelerate the longer 1D runs. The benchmark
+command uses the regular solver. The spread across 1D sample counts is
+substantial and limits quantitative comparison between nearby models.
+Halving the detuning lookup step changes the sum by 0.09 point at
+16 nodes. Changes in the RF setting and in the 3QMAS ensemble produce
+larger shifts in the area predictions.
+
 ## Experimental check of phosphorus CSA bands
 
 The [MRSimulator phosphorus example](https://mrsimulator.readthedocs.io/en/v1.0/fitting/1D_fitting/plot_1_31P_Na2PO4_MAS.html)
