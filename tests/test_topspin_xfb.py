@@ -104,6 +104,28 @@ def test_xfb_replays_captured_plan_after_reload(qf_fid, tmp_path):
         Experiment(source[:, :3]).process(replay="topspin")
 
 
+@pytest.mark.parametrize(
+    ("field", "value", "message"),
+    [
+        ("fft_size", 2, "invalid FFT size"),
+        ("baseline_mode", 7, "baseline correction mode"),
+        ("phase_zero_deg", float("nan"), "invalid phase_zero_deg"),
+        ("f2", None, "missing axis parameters"),
+        ("source_shape", None, "plan does not match"),
+        ("f2_time_origin_points", 1, "invalid direct group delay"),
+    ],
+)
+def test_xfb_refuses_invalid_captured_plan(qf_fid, field, value, message):
+    plan = capture_xfb_plan(qf_fid)
+    if field in plan["f2"]:
+        plan["f2"][field] = value
+    else:
+        plan[field] = value
+    qf_fid.meta.nmr_processing = {"vendor_profile": {"xfb_plan": plan}}
+    with pytest.raises(ValueError, match=message):
+        Experiment(qf_fid).process(replay="topspin")
+
+
 @pytest.mark.parametrize("predict", [False, True])
 def test_qf_xfb_replaces_only_the_center_bin(qf_fid, predict):
     before = qf_fid.data.copy()

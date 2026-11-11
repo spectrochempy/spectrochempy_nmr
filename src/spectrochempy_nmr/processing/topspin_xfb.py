@@ -124,8 +124,7 @@ def _prepare_f1(data, window, points, order):
     return data * window
 
 
-def _check_baseline(params, supported, points):
-    mode = params.get("BC_mod")
+def _check_baseline(mode, offset, width, supported, points):
     if mode not in supported:
         raise ValueError(
             "TopSpin XFB baseline correction mode is not supported on this axis"
@@ -133,7 +132,6 @@ def _check_baseline(params, supported, points):
     if mode in (1, 2) and (points < 4 or points % 4):
         raise ValueError("TopSpin XFB tail-mean baseline requires full quarters")
     if mode in (3, 4, 5, 6):
-        offset = params.get("COROFFS")
         if mode in (3, 4) and points < 6:
             raise ValueError(
                 "TopSpin XFB polynomial baseline requires at least six points"
@@ -147,7 +145,6 @@ def _check_baseline(params, supported, points):
                 "TopSpin XFB requires a valid COROFFS for the baseline mode"
             )
     if mode in (5, 6):
-        width = params.get("BCFW")
         if not isinstance(width, (int, float)) or not np.isfinite(width) or width <= 0:
             raise ValueError("TopSpin XFB requires a positive finite BCFW")
         if points < 8:
@@ -292,19 +289,105 @@ def replay_xfb(source):
         ):
             raise ValueError("TopSpin XFB requires the original calibrated time grids")
 
-    profile = meta.get("nmr_processing", {}).get("vendor_profile", {})
+    processing = meta.get("nmr_processing") or {}
+    if not isinstance(processing, Mapping):
+        raise ValueError("Invalid stored NMR processing metadata")
+    profile = processing.get("vendor_profile") or {}
+    if not isinstance(profile, Mapping):
+        raise ValueError("Invalid stored TopSpin vendor profile")
     plan = profile.get("xfb_plan")
     if plan is None:
         plan = _build_xfb_plan(meta.get("source_metadata", {}), mode, (ny, nx), widths)
-    elif (
+    else:
+        _validate_stored_xfb_plan(plan, mode, (ny, nx), widths)
+    return _execute_xfb(source, data, plan)
+
+
+def _finite_plan_number(value):
+    return type(value) in (int, float) and np.isfinite(value)
+
+
+def _check_stored_xfb_axis(axis, *, points, baseline_points, direct):
+    if not isinstance(axis, Mapping):
+        raise ValueError("missing axis parameters")
+    size = axis["fft_size"]
+    if type(size) is not int or size < max(points, 2 if direct else 4) or size % 2:
+        raise ValueError("invalid FFT size")
+    window, baseline = axis["window_mode"], axis["baseline_mode"]
+    if type(window) is not int or window not in (0, 1, 3, 4):
+        raise ValueError("unsupported window")
+    if type(baseline) is not int:
+        raise ValueError("invalid baseline mode")
+    for key in (
+        "first_point_scale",
+        "spectral_width_hz",
+        "reference_frequency_mhz",
+        "first_point_ppm",
+        "phase_zero_deg",
+        "phase_first_deg",
+    ):
+        if not _finite_plan_number(axis[key]):
+            raise ValueError(f"invalid {key}")
+    if min(axis["spectral_width_hz"], axis["reference_frequency_mhz"]) <= 0:
+        raise ValueError("invalid frequency calibration")
+    pknl = axis["digital_filter_phase"]
+    if type(pknl) is not bool or (pknl and not direct):
+        raise ValueError("PKNL is only supported on F2")
+    if direct and axis["first_point_scale"] != 1:
+        raise ValueError("invalid F2 first-point scale")
+    if window == 1 and not _finite_plan_number(axis["line_broadening_hz"]):
+        raise ValueError("invalid line broadening")
+    if window in (3, 4) and (
+        not _finite_plan_number(axis["sine_shift"]) or axis["sine_shift"] < 0
+    ):
+        raise ValueError("invalid sine shift")
+    _check_baseline(
+        baseline,
+        0 if baseline in (3, 5) else axis.get("baseline_offset_hz"),
+        axis.get("baseline_filter_width_ppm"),
+        (0, 4, 6) if direct else (0, 1, 2, 3, 4, 5, 6),
+        baseline_points,
+    )
+
+
+def _validate_stored_xfb_plan(plan, mode, shape, widths):
+    if (
         not isinstance(plan, Mapping)
         or plan.get("schema") != _PLAN_SCHEMA
         or plan.get("mode") != mode
-        or tuple(plan.get("source_shape", ())) != (ny, nx)
-        or tuple(plan.get("widths_hz", ())) != tuple(widths)
+        or not isinstance(plan.get("source_shape"), (tuple, list))
+        or tuple(plan["source_shape"]) != shape
+        or not isinstance(plan.get("widths_hz"), (tuple, list))
+        or tuple(plan["widths_hz"]) != tuple(widths)
     ):
         raise ValueError("Stored TopSpin XFB plan does not match this acquisition")
-    return _execute_xfb(source, data, plan)
+    ny, nx = shape
+    try:
+        delay, origin = plan["group_delay_points"], plan["f2_time_origin_points"]
+        if (
+            not _finite_plan_number(delay)
+            or not 0 <= delay < nx - 1
+            or type(origin) is not int
+            or origin != int(np.ceil(delay))
+            or origin >= nx - 1
+        ):
+            raise ValueError("invalid direct group delay")
+        points, order = plan["f1_points"], plan["f1_prediction_order"]
+        if (
+            type(points) is not int
+            or type(order) is not int
+            or not 0 <= 2 * order <= ny
+            or (points <= ny if order else points != ny)
+        ):
+            raise ValueError("invalid F1 linear prediction")
+        _check_stored_xfb_axis(
+            plan["f1"], points=points, baseline_points=ny, direct=False
+        )
+        _check_stored_xfb_axis(
+            plan["f2"], points=nx, baseline_points=nx - origin, direct=True
+        )
+    except (KeyError, TypeError, ValueError, OverflowError) as exc:
+        raise ValueError(f"Invalid stored TopSpin XFB plan: {exc}") from exc
 
 
 def _xfb_axis_plan(params):
@@ -361,8 +444,12 @@ def _build_xfb_plan(status, mode, shape, widths):
     origin = int(np.ceil(delay))
     if origin >= nx - 1:
         raise ValueError("TopSpin XFB group delay leaves fewer than two direct points")
-    _check_baseline(y, (0, 1, 2, 3, 4, 5, 6), ny)
-    _check_baseline(x, (0, 4, 6), nx - origin)
+    _check_baseline(
+        y.get("BC_mod"), y.get("COROFFS"), y.get("BCFW"), (0, 1, 2, 3, 4, 5, 6), ny
+    )
+    _check_baseline(
+        x.get("BC_mod"), x.get("COROFFS"), x.get("BCFW"), (0, 4, 6), nx - origin
+    )
     return {
         "schema": _PLAN_SCHEMA,
         "mode": mode,
@@ -370,7 +457,7 @@ def _build_xfb_plan(status, mode, shape, widths):
         "widths_hz": tuple(float(width) for width in widths),
         "f1_points": f1_points,
         "f1_prediction_order": lp_order,
-        "group_delay_points": delay,
+        "group_delay_points": float(delay),
         "f2_time_origin_points": origin,
         "f1": _xfb_axis_plan(y),
         "f2": _xfb_axis_plan(x),
