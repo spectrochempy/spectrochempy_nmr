@@ -19,7 +19,7 @@ mixed-domain result after F2 before transforming F1.
    spectrum = f2.fft(dim="y")
 
 A direct FFT uses the supplied samples, including the original group delay
-when reading a Bruker SER with default options. TopSpin XFB replay applies
+when reading a Bruker SER without import correction. TopSpin XFB replay applies
 the recorded correction for supported acquisitions. For echo/anti-echo,
 ``Experiment.process(echo_antiecho="bruker-rance-kay", digital_filter="phase")``
 compensates the digital-filter delay in F2. Use ``digital_filter="time"`` for
@@ -42,7 +42,9 @@ processing parameters explicitly:
 
    import spectrochempy as scp
 
-   fid = scp.nmr.read_topspin("path/to/experiment/ser")
+   fid = scp.nmr.read_topspin(
+       "path/to/experiment/ser", remove_digital_filter=False, remove_dc_offset=False
+   )
    spectrum = scp.nmr.Experiment(fid).process(replay="topspin")
 
 XFB replay supports indirect QF magnitude, States-TPPI, and echo/anti-echo

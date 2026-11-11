@@ -122,7 +122,9 @@ TopSpin ``efp`` run in the same experiment:
 
 .. code-block:: python
 
-   fid = scp.nmr.read_topspin("experiment/1/fid")
+   fid = scp.nmr.read_topspin(
+       "experiment/1/fid", remove_digital_filter=False, remove_dc_offset=False
+   )
    spectrum = scp.nmr.Experiment(fid).process(replay="topspin")
 
 Replay uses the recorded exponential window, FFT size and phase. It applies
@@ -138,13 +140,15 @@ axis reversal disabled.
 Fractional PKNL correction for a Bruker QSIM FID
 ------------------------------------------------
 
-Read the original FID with the reader defaults. The plugin applies the
+Read the original FID with both import corrections disabled. The plugin applies the
 digital-filter correction after the FFT. If you already corrected the
 filter during import, reread the original FID before using PKNL.
 
 .. code-block:: python
 
-   fid = scp.nmr.read_topspin("experiment/80/fid")
+   fid = scp.nmr.read_topspin(
+       "experiment/80/fid", remove_digital_filter=False, remove_dc_offset=False
+   )
    spectrum = scp.nmr.Experiment(fid).process(
        apodization="em", lb=50.0, size=8192, digital_filter="pknl"
    )
