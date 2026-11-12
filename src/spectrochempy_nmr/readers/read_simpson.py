@@ -48,11 +48,11 @@ def read_simpson(*paths, **kwargs):
 
     Parameters
     ----------
-    *paths : `str`, `~pathlib.Path` objects or valid urls, optional
+    *paths : str or path-like, optional
         The data source(s).  Can be:
 
         - a path to a SIMPSON data file (``.spe``, ``.fid``, ``.txt``)
-        - a path to a SIMPSON experiment directory containing a ``.in`` file
+        - a path to a ``.in`` file with a sibling simulation output
         - a list of paths (datasets are merged if ``merge=True``)
 
     **kwargs : keyword parameters, optional
@@ -65,21 +65,18 @@ def read_simpson(*paths, **kwargs):
 
     Other Parameters
     ----------------
-    content : `bytes`, optional
-        Raw bytes content instead of a filename.
     description : `str`, optional
         A custom description.
     directory : `~pathlib.Path`, optional
         Base directory for resolving relative paths.
     merge : `bool`, optional, default: ``False``
-        If ``True`` and several filenames are provided, merge into a
-        single dataset.
+        Stack compatible datasets when reading multiple inputs.
     origin : str, optional
         Override the origin label (default ``'simpson'``).
 
     See Also
     --------
-    read : Generic reader inferring protocol from filename extension.
+    read : Select an NMR reader by file type or protocol.
 
     Examples
     --------
