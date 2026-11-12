@@ -95,10 +95,40 @@ def _resolve_read():
     def read(*paths, **kwargs):
         """Read NMR data with a native reader or explicit interop routing.
 
-        With ``protocol="interop"``, pass one path and an optional provider
-        ``profile``. Use ``read_options`` and ``normalize_options`` for the
-        respective provider stages and ``conversion_profile`` for an explicit
-        interpretation supported by ``from_interop()``.
+        Parameters
+        ----------
+        *paths : str or path-like
+            NMR data paths. The interop protocol takes exactly one path.
+        protocol : {"topspin", "agilent", "jeol", "simpson", "interop"}, optional
+            Select a reader explicitly. By default, select from the first
+            path and use TopSpin when no other format is recognized.
+        **kwargs : keyword parameters, optional
+            Options for the selected reader. See the format-specific reader
+            for its parameters and Other Parameters for interop options.
+
+        Returns
+        -------
+        NDDataset or ScpObjectList of NDDataset
+            The imported dataset or datasets.
+
+        Other Parameters
+        ----------------
+        profile : str, optional
+            Provider format profile for ``protocol="interop"``.
+        read_options : dict, optional
+            Options for the provider's reader with ``protocol="interop"``.
+        normalize_options : dict, optional
+            Options for provider normalization with ``protocol="interop"``.
+        conversion_profile : str, optional
+            Explicit interpretation for ``from_interop()`` with
+            ``protocol="interop"``.
+
+        See Also
+        --------
+        read_topspin : Read Bruker TopSpin data.
+        read_agilent : Read Agilent or Varian data.
+        read_jeol : Read JEOL JDF data.
+        read_simpson : Read SIMPSON data.
         """
         protocol = kwargs.get("protocol")
         if protocol == "interop":

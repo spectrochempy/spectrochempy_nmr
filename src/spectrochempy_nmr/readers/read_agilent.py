@@ -273,13 +273,20 @@ def read_agilent(*paths, **kwargs):
 
     Parameters
     ----------
-    *paths : `str`, `~pathlib.Path` objects or valid urls, optional
+    *paths : str or path-like, optional
         The data source(s).  Can be:
 
         - a path to a directory containing ``fid`` and ``procpar`` files
         - a path to the ``fid`` file itself
         - a list of paths (datasets are merged if ``merge=True``)
 
+    quadrature : {"auto", "states", "states-tppi"}, optional, default: "auto"
+        Choose the F1 convention for qualified paired 2D FIDs. Automatic
+        selection requires a recognized pulse program source.
+    pulse_program_source : path-like, optional
+        Source of the pulse program used for this acquisition, for automatic
+        selection. When omitted, the provider looks for the filename given
+        by ``seqfil`` with a ``.c`` suffix beside ``fid`` and ``procpar``.
     **kwargs : keyword parameters, optional
         See Other Parameters.
 
@@ -290,27 +297,18 @@ def read_agilent(*paths, **kwargs):
 
     Other Parameters
     ----------------
-    content : `bytes`, optional
-        Raw bytes content instead of a filename.
     description : `str`, optional
         A custom description.
     directory : `~pathlib.Path`, optional
         Base directory for resolving relative paths.
     merge : `bool`, optional, default: ``False``
-        If ``True`` and several filenames are provided, merge into a
-        single dataset.
+        Stack compatible datasets when reading multiple inputs.
     origin : str, optional
         Override the origin label (default ``'agilent'``).
-    quadrature : {"auto", "states", "states-tppi"}, optional
-        Choose the F1 convention for qualified paired 2D FIDs. Automatic
-        selection requires a recognized pulse program source.
-    pulse_program_source : path-like, optional
-        Source of the pulse program used for this acquisition, for automatic
-        selection. By default the provider checks for a known adjacent source.
 
     See Also
     --------
-    read : Generic reader inferring protocol from filename extension.
+    read : Select an NMR reader by file type or protocol.
 
     Examples
     --------
