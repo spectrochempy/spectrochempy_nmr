@@ -711,55 +711,23 @@ def read_topspin(*paths, **kwargs):
 
     Parameters
     ----------
-    *paths : `str`, `~pathlib.Path` object objects or valid urls, optional
-        The data source(s) can be specified by the name or a list of name for the
-        file(s) to be loaded:
-
-        - e.g., ( filename1, filename2, ..., kwargs )
-
-        If the list of filenames are enclosed into brackets:
-
-        - e.g., ( [filename1, filename2, ...], kwargs )
-
-        The returned datasets are merged to form a single dataset,
-        except if ``merge`` is set to `False`.
-    **kwargs : keyword parameters, optional
-        See Other Parameters.
-
-    Returns
-    -------
-    object : `NDDataset` or `ScpObjectList` of `NDDataset`
-        The returned dataset(s). When several datasets are returned, the
-        result is a list-like `ScpObjectList`.
-
-    Other Parameters
-    ----------------
-    content : `bytes` object, optional
-        Instead of passing a filename for further reading, a bytes content can be
-        directly provided as bytes objects.
-        The most convenient way is to use a dictionary. This feature is particularly
-        useful for a web application to handle drag and drop of files into a
-        Browser.
-    csv_delimiter : `str`, optional, default: `~spectrochempy.preferences.csv_delimiter`
-        Set the column delimiter in CSV file.
-    description : `str`, optional
-        A Custom description.
-    directory : `~pathlib.Path` object objects or valid urls, optional
-        From where to read the files.
-    download_only: `bool`, optional, default: `False`
-        Used only when url are specified.  If True, only downloading and saving of the
-        files is performed, with no attempt to read their content.
-    merge : `bool`, optional, default: `False`
-        If `True` and several filenames or a ``directory`` have been provided as
-        arguments, then a single `NDDataset` with merged dataset (stacked along the first
-        dimension) is returned. In the case not all datasets have compatible dimensions or types/origins,
-        then several NDDatasets can be returned for different groups of compatible datasets.
-    origin : str, optional
-        Override the origin label (default ``'topspin'``).
-    pattern : `str`, optional
-        A pattern to filter the files to read.
-
-        .. versionadded:: 0.7.2
+    *paths : str or path-like, optional
+        TopSpin experiment directories, raw ``fid`` or ``ser`` files, or
+        processed data such as ``pdata/1/1r``. Pass several paths or a list
+        to read multiple experiments.
+    expno : int or str, optional
+        Experiment number to select inside a dataset directory.
+    procno : int or str, optional
+        Processing number to select when resolving a dataset directory.
+        When reading a raw file directly, pass a string to select the
+        associated processing metadata directory (default ``"1"``).
+    processed : bool, optional, default: False
+        Select processed data when reading an experiment directory directly
+        or when searching multiple experiments with ``iterdir=True``.
+    iterdir : bool, optional, default: False
+        Search the directory tree for TopSpin files.
+    glob : str, optional
+        Glob pattern for selecting data files within a directory.
     proc_axis : `bool`, optional, default: `False`
         Select the processing parameters (``OFFSET``, ``SW_p``, ``SF`` in
         ``procs``/``proc2s``) as the source for processed spectral axes,
@@ -775,17 +743,6 @@ def read_topspin(*paths, **kwargs):
         during processing.  This option selects the axis parameter source;
         it does not replay or apply vendor processing.  Has no effect on
         raw FID/SER time-domain axes.
-    protocol : `str`, optional
-        ``Protocol`` used for reading. It can be one of {``'scp'``, ``'omnic'``,
-        ``'opus'``, ``'topspin'``, ``'matlab'``, ``'jcamp'``,
-        ``'csv'``, ``'excel'``}. If not provided, the correct protocol
-        is inferred (whenever it is possible) from the filename extension.
-    read_only: `bool`, optional, default: `True`
-        Used only when url are specified.  If True, saving of the
-        files is performed in the current directory, or in the directory specified by
-        the directory parameter.
-    recursive : `bool`, optional, default: `False`
-        Read also in subfolders.
     remove_digital_filter : `bool`, optional, default: `False`
         Remove the Bruker digital filter (group delay correction) from raw
         FID/SER data at import. Set to `True` to request the legacy correction.
@@ -794,28 +751,34 @@ def read_topspin(*paths, **kwargs):
         removal. This subtracts the mean of each row along the last axis,
         which removes the spike at the centre of the spectrum caused by the
         receiver DC offset.
-    replace_existing: `bool`, optional, default: `False`
-        Used only when url are specified. By default, existing files are not replaced
-        so not downloaded.
-    sortbydate : `bool`, optional, default: `True`
-        Sort multiple filename by acquisition date.
+    use_list : bool or str, optional, default: False
+        Use a list of values in seconds for the indirect coordinate of
+        pseudo-2D data. Set to ``True`` for ``vdlist`` or give the list filename
+        relative to the experiment directory.
+    **kwargs : keyword parameters, optional
+        See Other Parameters.
+
+    Returns
+    -------
+    NDDataset or ScpObjectList of NDDataset
+        One dataset, or a list of datasets if several are returned.
+
+    Other Parameters
+    ----------------
+    description : str, optional
+        Override the dataset description.
+    directory : path-like, optional
+        Base directory for resolving relative paths.
+    merge : bool, optional, default: False
+        Stack compatible datasets when reading multiple inputs.
+    origin : str, optional
+        Override the dataset origin label (default ``"topspin"``).
+    sortbydate : bool, optional, default: True
+        Sort merged datasets by acquisition date when available.
 
     See Also
     --------
-    read : Generic reader inferring protocol from the filename extension.
-    :func:`spectrochempy.read_zip` : Read Zip archives (containing spectrochempy readable files)
-    :func:`spectrochempy.read_dir` : Read an entire directory.
-    :func:`spectrochempy.read_opus` : Read OPUS spectra.
-    :func:`spectrochempy.read_labspec` : Read Raman LABSPEC spectra (:file:`.txt`).
-    :func:`spectrochempy.read_omnic` : Read Omnic spectra (:file:`.spa`, :file:`.spg`, :file:`.srs`).
-    :func:`spectrochempy.read_soc` : Read Surface Optics Corps. files (:file:`.ddr` , :file:`.hdr` or :file:`.sdr`).
-    :func:`spectrochempy.read_spc` : Read Galactic files (:file:`.spc`).
-    :func:`spectrochempy.read_quadera` : Read a Pfeiffer Vacuum's QUADERA mass spectrometer software file.
-    :func:`spectrochempy.read_csv` : Read CSV files (:file:`.csv`).
-    :func:`spectrochempy.read_matlab` : Read Matlab files (:file:`.mat`, :file:`.dso`).
-    :func:`spectrochempy.read_jcamp` : Read Infrared JCAMP-DX files (:file:`.jdx`, :file:`.dx`).
-    :func:`spectrochempy.carroucell.read` : Read files in a directory after a carroucell experiment.
-    :func:`spectrochempy.read_wire` : Read Renishaw Wire files (:file:`.wdf`).
+    read : Select an NMR reader by file type or protocol.
 
     Examples
     --------
