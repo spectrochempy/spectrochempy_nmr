@@ -72,6 +72,9 @@ Added
 Fixed
 ~~~~~
 
+* Report conflicting installations of ``nmrglue`` and ``nmrglue-ng`` when
+  accessing the NMR plugin API, with a link to the installation guide.
+
 * Resolve TopSpin experiment folders to their binary data instead of
   scanning auxiliary files.
 * Report canonical encoding for normalized 1D reads and preserve the
