@@ -26,6 +26,33 @@ an explicit additional phase without moving the axis. It does not replay phase
 parameters from raw vendor metadata. Inverse reconstruction of a source FID,
 especially from a real-only spectrum, is outside this qualification.
 
+Export a processed 1D spectrum
+------------------------------
+
+Use the NMR plugin writer for a real, unmasked spectrum with intensities
+without physical units and a regular Hz or ppm coordinate::
+
+   import spectrochempy as scp
+
+   spectrum = scp.read_jcamp("processed_proton.jdx")
+   path = scp.nmr.write_jcamp(spectrum, "export.jdx")
+   restored = scp.read_jcamp(path)
+
+The writer uses the stored coordinate and preserves its units and direction.
+The dataset title must be printable ASCII. If observation metadata are
+missing, pass ``observation_frequency`` in MHz (or as a compatible quantity)
+and ``nucleus`` as a string such as ``"^1H"``. Use ``overwrite=True`` to
+replace an existing local file.
+
+Bruker TopSpin 4.5.0 can import the tested 1D files using ``fromjdx``.
+Its imported processed data use integer intensities. The small synthetic
+test lost fractional intensity on import, while the tested real Bruker
+spectrum preserved its integer values. TopSpin can misread scientific
+notation in the data table. The writer uses plain decimals when they fit
+and may still use scientific notation for very small or large values.
+JCAMP exports from TopSpin can also use a relative Hz axis with a separate
+chemical shift reference.
+
 References and amplitudes
 -------------------------
 
