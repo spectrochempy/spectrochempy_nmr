@@ -11,3 +11,5 @@ Guides
    analysis
    ../concepts/quadrature
    ../concepts/hypercomplex
+   pulsar
+   czjzek

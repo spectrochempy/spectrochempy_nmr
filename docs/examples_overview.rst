@@ -14,6 +14,7 @@ to find the reader for your acquisition.
    examples/gallery/apodization/index
    examples/gallery/nmr/index
    examples/gallery/analysis/index
+   examples/gallery/simulation/index
 
 .. include:: examples/gallery/importer/index.rst
    :start-line: 2
@@ -28,6 +29,10 @@ to find the reader for your acquisition.
    :end-before: .. toctree::
 
 .. include:: examples/gallery/analysis/index.rst
+   :start-line: 2
+   :end-before: .. toctree::
+
+.. include:: examples/gallery/simulation/index.rst
    :start-line: 2
    :end-before: .. toctree::
 

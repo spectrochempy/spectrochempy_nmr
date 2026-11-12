@@ -274,3 +274,24 @@ jobs:
       - name: Qualify the JEOL compatibility reader with the released wheel
         run: |
           python -I -m pytest -ra tests/qualification/test_jeol_fallback.py
+
+  pulsar:
+    needs: artifacts
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+      - uses: actions/setup-python@v7
+        with:
+          python-version: "3.13"
+      - name: Secure pip bootstrap
+        uses: spectrochempy/spectrochempy/.github/actions/verified-pip@cdb087a24f06b8c83ea91ea036192304db9329e3
+      - uses: actions/download-artifact@v8
+        with:
+          name: plugin-dist
+          path: dist
+      - name: Test installed PULSAR and Czjzek APIs
+        run: |
+          python -m pip install "spectrochempy==1.1.4" pytest
+          python -m pip install dist/*.whl
+          python -m pip check
+          OPENBLAS_NUM_THREADS=1 python -I -m pytest -q tests/test_pulsar.py tests/test_czjzek.py

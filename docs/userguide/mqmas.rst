@@ -72,7 +72,5 @@ shows the phase preview and compares RR maps with apodization and baseline
 correction. See the :ref:`MQMAS qualification notes <mqmas-qualification>`
 for the TopSpin comparisons.
 
-For the MQMAS conventions and broader context, see C. Fernandez and
-M. Pruski, *Probing quadrupolar nuclei by solid-state NMR spectroscopy:
-recent advances* (2011),
-`doi:10.1007/128_2011_141 <https://doi.org/10.1007/128_2011_141>`_.
+For the MQMAS conventions and broader context, see
+:cite:t:`fernandez2011quadrupolar`.

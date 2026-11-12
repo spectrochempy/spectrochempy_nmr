@@ -33,8 +33,12 @@ source_suffix = ".rst"
 exclude_patterns = [
     "_build",
     "_static",
+    "conf.py",
+    "fetch_gallery_data.py",
     "**.ipynb_checkpoints",
-    "examples/gallery/**/*.ipynb",  # Sphinx-Gallery renders the paired RST.
+    # Sphinx-Gallery renders the paired RST for these downloads.
+    "examples/gallery/**/*.ipynb",
+    "examples/gallery/**/*.py",
 ]
 templates_path = ["_templates"]
 
@@ -70,7 +74,12 @@ extensions = [
     "sphinx.ext.githubpages",
     "sphinx_gallery.gen_gallery",
     "nbsphinx",
+    "sphinxcontrib.bibtex",
 ]
+
+bibtex_bibfiles = ["bibliography.bib"]
+bibtex_default_style = "plain"
+bibtex_reference_style = "author_year"
 
 autosummary_generate = True
 
@@ -93,6 +102,7 @@ intersphinx_mapping = {
 }
 
 nbsphinx_execute = "always"
+nbsphinx_custom_formats = {".py": ["jupytext.reads", {"fmt": "py:percent"}]}
 
 html_theme = "pydata_sphinx_theme"
 html_title = f"{project} {release}"
@@ -148,12 +158,14 @@ sphinx_gallery_conf = {
         str(_examples / "processing" / "apodization"),
         str(_examples / "processing" / "nmr"),
         str(_examples / "analysis" / "nmr"),
+        str(_examples / "simulation"),
     ],
     "gallery_dirs": [
         "examples/gallery/importer",
         "examples/gallery/apodization",
         "examples/gallery/nmr",
         "examples/gallery/analysis",
+        "examples/gallery/simulation",
     ],
     "filename_pattern": r"plot_",
     "plot_gallery": os.environ.get("NMR_DOCS_EXECUTE") == "1"
