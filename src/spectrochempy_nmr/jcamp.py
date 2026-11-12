@@ -40,14 +40,30 @@ def _axis(dataset, size):
     if not np.all(monotone):
         raise ValueError("the coordinate must be strictly monotone")
     expected = np.linspace(first, last, size)
-    magnitude = np.abs(expected)
-    ulp = np.maximum(
-        magnitude - np.nextafter(magnitude, 0.0), np.finfo(float).smallest_subnormal
-    )
+    magnitude = max(abs(first), abs(last), abs(span))
+    ulp = magnitude - np.nextafter(magnitude, 0.0)
     tolerance = np.minimum(4 * ulp, abs(step) * 1e-6)
     if not np.all(np.abs(values - expected) <= tolerance):
         raise ValueError("the coordinate must be regularly spaced")
     return coord, first, last, step
+
+
+def _declared_nucleus(dataset):
+    """Resolve a single observed isotope from source metadata."""
+    source = dataset.meta.get("source_metadata") or {}
+    labels = source.get(".OBSERVENUCLEUS")
+    if not labels and dataset.origin == "agilent":
+        procpar = dataset.meta.get("source_procpar") or {}
+        labels = procpar.get("tn", {}).get("values")
+    elif not labels:
+        labels = dataset.meta.get("nucleus")
+        if labels is None and dataset.origin == "topspin":
+            labels = dataset.meta.get("nuc1")
+    if isinstance(labels, (list, tuple)) and len(labels) == 1:
+        label = labels[0]
+        if isinstance(label, str):
+            return "^" + label.strip().removeprefix("^")
+    return None
 
 
 def _observation(dataset, coord, frequency, nucleus):
@@ -63,14 +79,7 @@ def _observation(dataset, coord, frequency, nucleus):
     ):
         raise ValueError("a positive finite observation frequency in MHz is required")
     if nucleus is None:
-        source = dataset.meta.get("source_metadata") or {}
-        labels = source.get(".OBSERVENUCLEUS")
-        if isinstance(labels, (list, tuple)) and len(labels) == 1:
-            nucleus = labels[0]
-        if nucleus is None and dataset.origin == "topspin":
-            labels = dataset.meta.get("nuc1")
-            if labels is not None and len(labels) == 1:
-                nucleus = f"^{labels[0]}"
+        nucleus = _declared_nucleus(dataset)
     if not isinstance(nucleus, str) or not re.fullmatch(
         r"\^[1-9][0-9]*[A-Z][a-z]?", nucleus
     ):

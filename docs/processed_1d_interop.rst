@@ -38,6 +38,9 @@ without physical units and a regular Hz or ppm coordinate::
    path = scp.nmr.write_jcamp(spectrum, "export.jdx")
    restored = scp.read_jcamp(path)
 
+Reading NMR through ``scp.read_jcamp()`` requires a core version that
+includes the NMR routing introduced after SpectroChemPy 1.2.1.
+
 The writer uses the stored coordinate and preserves its units and direction.
 The dataset title must be printable ASCII. If observation metadata are
 missing, pass ``observation_frequency`` in MHz (or as a compatible quantity)

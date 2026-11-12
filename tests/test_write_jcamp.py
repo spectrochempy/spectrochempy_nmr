@@ -49,6 +49,21 @@ def test_write_jcamp_roundtrip(tmp_path, axis, unit):
     np.testing.assert_array_equal(data.x.data, axis)
 
 
+@pytest.mark.parametrize("selection", [slice(None, None, -1), slice(5, -3, 3)])
+def test_write_jcamp_roundtrip_after_slicing(tmp_path, selection):
+    axis = np.linspace(-1.0, 1.0, 100)
+    data = scp.NDDataset(
+        np.arange(axis.size),
+        coordset=[scp.Coord(axis, units="ppm", rounding=False, sigdigits=15)],
+    )[selection]
+    path = scp.nmr.write_jcamp(
+        data, tmp_path / "sliced.jdx", observation_frequency=400, nucleus="^1H"
+    )
+    restored = scp.read_jcamp(path)
+    np.testing.assert_array_equal(restored.data, data.data)
+    np.testing.assert_allclose(restored.x.data, axis[selection], rtol=0, atol=1e-14)
+
+
 @pytest.mark.parametrize(
     "invalid", ["irregular", "axis_units", "intensity_units", "mask", "complex", "time"]
 )
@@ -84,6 +99,22 @@ def test_write_jcamp_rejects_invalid_spectrum(tmp_path, invalid):
 def test_write_jcamp_rejects_invalid_observation(tmp_path, kwargs, message):
     with pytest.raises(ValueError, match=message):
         scp.nmr.write_jcamp(spectrum(), tmp_path / "spectrum.jdx", **kwargs)
+
+
+@pytest.mark.parametrize("origin", ["jeol", "agilent", "topspin"])
+def test_write_jcamp_uses_declared_observed_nucleus(tmp_path, origin):
+    data = spectrum()
+    data.origin = origin
+    data.x.meta["acquisition_frequency"] = FREQUENCY * ur.MHz
+    if origin == "agilent":
+        data.meta.nucleus = ["1H"]
+        data.meta.source_procpar = {"tn": {"values": ["13C"]}}
+    elif origin == "topspin":
+        data.meta.nuc1 = ["13C"]
+    else:
+        data.meta.nucleus = ["13C"]
+    restored = scp.read_jcamp(scp.nmr.write_jcamp(data, tmp_path / "native.dx"))
+    assert restored.meta.source_metadata[".OBSERVENUCLEUS"] == ["^13C"]
 
 
 def test_write_jcamp_overwrite_is_atomic(tmp_path, monkeypatch):

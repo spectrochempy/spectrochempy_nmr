@@ -275,6 +275,36 @@ jobs:
         run: |
           python -I -m pytest -ra tests/qualification/test_jeol_fallback.py
 
+  jcamp-writer:
+    needs: artifacts
+    runs-on: ubuntu-latest
+    env:
+      MPLBACKEND: Agg
+    steps:
+      - uses: actions/checkout@v7
+      - uses: actions/setup-python@v7
+        with:
+          python-version: "3.13"
+      - uses: actions/checkout@v7
+        with:
+          repository: spectrochempy/spectrochempy
+          ref: bd19965a8b067264abd9a00db49617b0ffbdadb7
+          path: jcamp-core
+          fetch-depth: 0
+          persist-credentials: false
+      - name: Secure pip bootstrap
+        uses: spectrochempy/spectrochempy/.github/actions/verified-pip@cdb087a24f06b8c83ea91ea036192304db9329e3
+      - uses: actions/download-artifact@v8
+        with:
+          name: plugin-dist
+          path: dist
+      - name: Test the writer through the public core reader
+        run: |
+          python -m pip wheel --no-deps --wheel-dir core-wheels ./jcamp-core
+          python -m pip install core-wheels/*.whl dist/*.whl pytest
+          python -m pip check
+          python -I -m pytest -ra tests/test_write_jcamp.py
+
   pulsar:
     needs: artifacts
     runs-on: ubuntu-latest
