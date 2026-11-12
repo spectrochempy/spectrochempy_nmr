@@ -7,6 +7,7 @@ from itertools import combinations
 from pathlib import Path
 
 import numpy as np
+from spectrochempy_nmr import _check_nmrglue_installation
 
 
 def _acquisition_paths(paths, *, directory=None):
@@ -166,6 +167,7 @@ def read_agilent_interop(
     arbitrary child directories. ``merge=True`` stacks only scientifically
     compatible independent 1D acquisitions.
     """
+    _check_nmrglue_installation()
     if recursive:
         raise NotImplementedError("recursive Agilent discovery is not supported")
     acquisition_paths = _acquisition_paths(paths, directory=directory)

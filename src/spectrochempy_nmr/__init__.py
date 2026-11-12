@@ -6,16 +6,38 @@ from __future__ import annotations
 import re
 from collections.abc import Callable
 from importlib import import_module
+from importlib.metadata import PackageNotFoundError
+from importlib.metadata import distribution
 from pathlib import Path
 
 from spectrochempy.api.plugins import CORE_PLUGIN_API_VERSION
 from spectrochempy.api.plugins import PluginCapability
 from spectrochempy.api.plugins import SpectroChemPyPlugin
 from spectrochempy.plugins.proxies import lazy_proxy
+from spectrochempy.utils.exceptions import SpectroChemPyError
+
+
+def _check_nmrglue_installation() -> None:
+    """Detect overlapping distributions without importing their shared package."""
+    try:
+        distribution("nmrglue")
+        distribution("nmrglue-ng")
+    except PackageNotFoundError:
+        return
+
+    msg = (
+        "SpectroChemPy NMR detected both nmrglue and nmrglue-ng in this "
+        "environment. Both distributions install the same Python package. "
+        "Use a separate environment for the original nmrglue, or repair this "
+        "installation as described in the NMR installation guide: "
+        "https://www.spectrochempy.fr/projects/nmr/latest/getting_started/installation.html"
+    )
+    raise SpectroChemPyError(msg)
 
 
 def _resolve_read_topspin():
     """Lazily import and return the real ``read_topspin`` function."""
+    _check_nmrglue_installation()
     from .readers.read_topspin import read_topspin  # noqa: PLC0415
 
     return read_topspin
@@ -23,6 +45,7 @@ def _resolve_read_topspin():
 
 def _resolve_read_agilent():
     """Lazily import and return the real ``read_agilent`` function."""
+    _check_nmrglue_installation()
     from .readers.read_agilent import read_agilent  # noqa: PLC0415
 
     return read_agilent
@@ -30,6 +53,7 @@ def _resolve_read_agilent():
 
 def _resolve_read_jeol():
     """Lazily import and return the real ``read_jeol`` function."""
+    _check_nmrglue_installation()
     from .readers.read_jeol import read_jeol  # noqa: PLC0415
 
     return read_jeol
@@ -37,6 +61,7 @@ def _resolve_read_jeol():
 
 def _resolve_read_simpson():
     """Lazily import and return the real ``read_simpson`` function."""
+    _check_nmrglue_installation()
     from .readers.read_simpson import read_simpson  # noqa: PLC0415
 
     return read_simpson
@@ -617,6 +642,13 @@ class NMRPlugin(SpectroChemPyPlugin):
 
 
 def __getattr__(name: str):
+    if name in __dir__() and name not in {
+        "read_topspin",
+        "read_agilent",
+        "read_jeol",
+        "read_simpson",
+    }:
+        _check_nmrglue_installation()
     if name in {"pulsar", "czjzek"}:
         return import_module(f".{name}", __name__)
     if name in {"CzjzekDistribution", "CzjzekSamples", "simulate_czjzek"}:
@@ -624,21 +656,13 @@ def __getattr__(name: str):
 
         return getattr(czjzek, name)
     if name == "read_topspin":
-        from .readers.read_topspin import read_topspin  # noqa: PLC0415
-
-        return read_topspin
+        return _resolve_read_topspin()
     if name == "read_agilent":
-        from .readers.read_agilent import read_agilent  # noqa: PLC0415
-
-        return read_agilent
+        return _resolve_read_agilent()
     if name == "read_jeol":
-        from .readers.read_jeol import read_jeol  # noqa: PLC0415
-
-        return read_jeol
+        return _resolve_read_jeol()
     if name == "read_simpson":
-        from .readers.read_simpson import read_simpson  # noqa: PLC0415
-
-        return read_simpson
+        return _resolve_read_simpson()
     if name == "write_jcamp":
         from .jcamp import write_jcamp
 

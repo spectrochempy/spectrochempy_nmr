@@ -12,6 +12,8 @@ from spectrochempy import CoordSet
 from spectrochempy import NDDataset
 from spectrochempy import ur
 from spectrochempy.core.dataset.nddataset import _history_selection_value
+from spectrochempy_nmr import _check_nmrglue_installation
+
 
 if TYPE_CHECKING:
     from nmrglue.process.proc_autophase import PhaseEstimate
@@ -44,6 +46,7 @@ def autophase(spectrum, *, exclude=None, baseline_options=None, apply=True, **op
     linear phase metadata is relative to this call's input, with the previous
     phase state recorded in history.
     """
+    _check_nmrglue_installation()
     from nmrglue.process import proc_autophase  # noqa: PLC0415
 
     data = spectrum.data

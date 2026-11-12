@@ -12,6 +12,7 @@ The NMR plugin installs ``nmrglue-ng``, which provides the same Python
 package (``import nmrglue``) as the original ``nmrglue`` distribution.
 Use only one of these distributions per environment. Installing both can
 overwrite shared files even if pip reports a successful installation.
+The plugin reports the conflict when you access its public API.
 If you use the original ``nmrglue`` for other projects, install the NMR
 plugin in a separate environment.
 

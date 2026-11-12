@@ -35,11 +35,15 @@ from spectrochempy.utils._logging import info_
 from spectrochempy.utils._logging import warning_
 from spectrochempy.utils.exceptions import SpectroChemPyError
 from spectrochempy.utils.meta import Meta
-from nmrglue.fileio.varian import read as read_varian
+from spectrochempy_nmr import _check_nmrglue_installation
 from spectrochempy_nmr.processing.fft_validation import _require_fft_prevalidation
 from spectrochempy_nmr.readers._channels import pair_traces
 from spectrochempy_nmr.readers._channels import set_channel_data
 from spectrochempy_nmr.readers._metadata import apply_reader_metadata_options
+
+_check_nmrglue_installation()
+from nmrglue.fileio.varian import read as read_varian  # noqa: E402
+
 
 # ======================================================================================
 # Valid Agilent parameter names for metadata extraction
@@ -566,6 +570,7 @@ def _finalize_agilent_dataset(dataset, directory, options):
 
 @_importer_method
 def _read_agilent(*args, **kwargs):
+    _check_nmrglue_installation()
     dataset, path = args
 
     # Determine the directory containing fid and procpar

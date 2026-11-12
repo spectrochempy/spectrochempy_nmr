@@ -4,6 +4,7 @@
 
 import warnings
 from importlib import import_module
+from importlib.metadata import PackageNotFoundError
 from importlib.metadata import version
 
 import pytest
@@ -21,6 +22,7 @@ from spectrochempy.plugins.manager import ENTRY_POINT_GROUP
 from spectrochempy.plugins.manager import PluginManager
 from spectrochempy.plugins.registry import PluginRegistry
 from spectrochempy.testing.plugins import PluginTestHarness
+from spectrochempy.utils.exceptions import SpectroChemPyError
 
 
 def _isolate_scp_plugins(monkeypatch, scp):
@@ -127,6 +129,63 @@ def test_isolated_harness():
     h1.register(NMRPlugin())
     assert h1.has_plugin("nmr")
     assert h2.registry.metadata.get_plugin("nmr") is None
+
+
+def test_conflicting_nmrglue_distributions_report_installation_guide(monkeypatch):
+    pm, _ = _isolate_scp_plugins(monkeypatch, scp)
+
+    def distribution(name):
+        assert name in {"nmrglue", "nmrglue-ng"}
+        return object()
+
+    monkeypatch.setattr(spectrochempy_nmr, "distribution", distribution)
+    pm.register(NMRPlugin())
+
+    guide = r"getting_started/installation\.html"
+    with pytest.raises(SpectroChemPyError, match=guide):
+        scp.nmr.read("experiment/1/fid")
+    with pytest.raises(SpectroChemPyError, match=guide):
+        scp.read_topspin("experiment/1/fid")
+    with pytest.raises(SpectroChemPyError, match=guide):
+        scp.nmr.read_agilent("sample.fid")
+    with pytest.raises(SpectroChemPyError, match=guide):
+        spectrochempy_nmr.read_jeol("sample.jdf")
+
+    assert scp.NDDataset([1, 2]).size == 2
+
+
+def test_registered_reader_and_direct_processing_report_nmrglue_conflict(
+    monkeypatch, tmp_path
+):
+    from spectrochempy_nmr.processing.autophase import autophase
+    from spectrochempy_nmr.readers.read_topspin import read_topspin
+
+    pm, _ = _isolate_scp_plugins(monkeypatch, scp)
+    pm.register(NMRPlugin())
+    monkeypatch.setattr(spectrochempy_nmr, "distribution", lambda name: object())
+
+    path = tmp_path / "1" / "fid"
+    path.parent.mkdir()
+    path.touch()
+
+    guide = r"getting_started/installation\.html"
+    with pytest.raises(SpectroChemPyError, match=guide):
+        scp.read(path, protocol="topspin", local_only=True)
+    with pytest.raises(SpectroChemPyError, match=guide):
+        read_topspin(path, local_only=True)
+    with pytest.raises(SpectroChemPyError, match=guide):
+        autophase(scp.NDDataset([1, 2]))
+
+
+@pytest.mark.parametrize("installed", [{"nmrglue"}, {"nmrglue-ng"}, set()])
+def test_nmrglue_conflict_requires_both_distributions(monkeypatch, installed):
+    def distribution(name):
+        if name not in installed:
+            raise PackageNotFoundError(name)
+        return object()
+
+    monkeypatch.setattr(spectrochempy_nmr, "distribution", distribution)
+    spectrochempy_nmr._check_nmrglue_installation()
 
 
 def test_package_namespace_exposes_topspin_reader(monkeypatch):
