@@ -29,6 +29,12 @@ workflows.
 python -m pip install "spectrochempy[nmr]>=1.2.1"
 ```
 
+The plugin installs `nmrglue-ng`. If you use the original `nmrglue`, install
+the plugin in a separate environment because both distributions provide the
+same Python package. See the
+[installation guide](https://www.spectrochempy.fr/projects/nmr/latest/getting_started/installation.html)
+to repair an environment containing both.
+
 For an editable development install from this repository, see
 [Development](#development).
 
