@@ -32,6 +32,7 @@ from spectrochempy.core.readers.importer import _importer_method
 from spectrochempy.core.units import ur
 from spectrochempy.utils._logging import warning_
 from spectrochempy.utils.meta import Meta
+from spectrochempy_nmr import _check_nmrglue_installation
 from spectrochempy_nmr.readers._channels import pad_channel_metadata
 from spectrochempy_nmr.readers._channels import pair_traces
 from spectrochempy_nmr.readers._channels import set_channel_data
@@ -1155,6 +1156,7 @@ def _read_raw_data(directory, filename, acqus_files, procs_files):
 
 @_importer_method
 def _read_topspin(*args, **kwargs):
+    _check_nmrglue_installation()
     dataset, path = args
 
     # is-it a processed dataset file (1r, 2rr ....) ?

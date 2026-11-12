@@ -154,6 +154,29 @@ def test_conflicting_nmrglue_distributions_report_installation_guide(monkeypatch
     assert scp.NDDataset([1, 2]).size == 2
 
 
+def test_registered_reader_and_direct_processing_report_nmrglue_conflict(
+    monkeypatch, tmp_path
+):
+    from spectrochempy_nmr.processing.autophase import autophase
+    from spectrochempy_nmr.readers.read_topspin import read_topspin
+
+    pm, _ = _isolate_scp_plugins(monkeypatch, scp)
+    pm.register(NMRPlugin())
+    monkeypatch.setattr(spectrochempy_nmr, "distribution", lambda name: object())
+
+    path = tmp_path / "1" / "fid"
+    path.parent.mkdir()
+    path.touch()
+
+    guide = r"getting_started/installation\.html"
+    with pytest.raises(SpectroChemPyError, match=guide):
+        scp.read(path, protocol="topspin", local_only=True)
+    with pytest.raises(SpectroChemPyError, match=guide):
+        read_topspin(path, local_only=True)
+    with pytest.raises(SpectroChemPyError, match=guide):
+        autophase(scp.NDDataset([1, 2]))
+
+
 @pytest.mark.parametrize("installed", [{"nmrglue"}, {"nmrglue-ng"}, set()])
 def test_nmrglue_conflict_requires_both_distributions(monkeypatch, installed):
     def distribution(name):

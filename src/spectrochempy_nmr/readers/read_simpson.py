@@ -26,7 +26,6 @@ import re
 from pathlib import Path
 
 import numpy as np
-from nmrglue.fileio import simpson
 
 from spectrochempy.core.dataset.coord import Coord
 from spectrochempy.core.dataset.nddataset import NDDataset
@@ -34,8 +33,13 @@ from spectrochempy.core.readers.importer import _importer_method
 from spectrochempy.core.units import ur
 from spectrochempy.utils._logging import warning_
 from spectrochempy.utils.meta import Meta
+from spectrochempy_nmr import _check_nmrglue_installation
 from spectrochempy_nmr.readers._metadata import SingleAcquisitionImporter
 from spectrochempy_nmr.readers._metadata import apply_reader_metadata_options
+
+_check_nmrglue_installation()
+from nmrglue.fileio import simpson  # noqa: E402
+
 
 # ======================================================================================
 # Public entry point
@@ -200,6 +204,7 @@ def _finish_simpson(dataset, path, kwargs):
 
 def _read_simpson_core(dataset, path, **kwargs):
     """Core SIMPSON reading logic shared across file extensions."""
+    _check_nmrglue_installation()
     if not path.exists():
         warning_(f"File not found: {path}")
         return None
