@@ -111,9 +111,9 @@ def write_jcamp(
 ) -> Path:
     """Write a real processed 1D NMR spectrum to a local JCAMP-DX file.
 
-    The spectrum must have finite, unmasked intensities without physical units
-    and a regular Hz or ppm coordinate. An explicit frequency is in MHz unless
-    supplied as a quantity. Missing observation parameters are read from the
+    The spectrum must have finite, unmasked intensities with ``dataset.units
+    is None`` and a regular Hz or ppm coordinate. An explicit frequency is
+    in MHz unless supplied as a quantity. Missing observation parameters are read from the
     dataset when available. Existing files require ``overwrite=True``.
     """
     if not isinstance(dataset, NDDataset):

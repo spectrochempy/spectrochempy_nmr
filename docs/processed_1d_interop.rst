@@ -29,8 +29,9 @@ especially from a real-only spectrum, is outside this qualification.
 Export a processed 1D spectrum
 ------------------------------
 
-Use the NMR plugin writer for a real, unmasked spectrum with intensities
-without physical units and a regular Hz or ppm coordinate::
+Use the NMR plugin writer for a real, unmasked spectrum with no assigned
+intensity unit (``spectrum.units is None``) and a regular Hz or ppm
+coordinate::
 
    import spectrochempy as scp
 
