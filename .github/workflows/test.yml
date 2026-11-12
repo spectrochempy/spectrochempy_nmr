@@ -294,4 +294,4 @@ jobs:
           python -m pip install "spectrochempy==1.1.4" pytest
           python -m pip install dist/*.whl
           python -m pip check
-          OPENBLAS_NUM_THREADS=1 python -I -m pytest -q tests/test_pulsar.py tests/test_pulsar_fit.py tests/test_czjzek.py
+          OPENBLAS_NUM_THREADS=1 python -I -m pytest -q tests/test_pulsar.py tests/test_czjzek.py

@@ -12,16 +12,15 @@ spin-5/2 central-transition spectra with the same isotropic shift.
 import matplotlib.pyplot as plt
 import numpy as np
 
-from spectrochempy_nmr.czjzek import CzjzekDistribution
-from spectrochempy_nmr.czjzek import simulate_czjzek
+import spectrochempy as scp
 
 # %%
 # Define disorder and a persistent local tensor
 # ---------------------------------------------
 # Frequencies are in Hz. The noise scale is the standard deviation of each
 # orthonormal tensor coordinate. A fixed seed keeps these nodes reproducible.
-standard = CzjzekDistribution(sigma_hz=0.7e6, shift_hz=5000)
-extended = CzjzekDistribution(
+standard = scp.nmr.czjzek.CzjzekDistribution(sigma_hz=0.7e6, shift_hz=5000)
+extended = scp.nmr.czjzek.CzjzekDistribution(
     sigma_hz=0.25e6,
     cq_hz=3e6,
     eta=0.6,
@@ -51,7 +50,7 @@ axes[1].legend()
 # and powder ``accuracy`` when checking convergence for an actual fit.
 fig, ax = plt.subplots(figsize=(8, 3.4), constrained_layout=True)
 for label, distribution in (("Czjzek", standard), ("Extended Czjzek", extended)):
-    spectrum = simulate_czjzek(
+    spectrum = scp.nmr.czjzek.simulate_czjzek(
         distribution,
         samples=32,
         seed=0,

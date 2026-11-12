@@ -96,7 +96,5 @@ The :doc:`PST-5 gallery notebook </examples/gallery/nmr/plot_replay_mqmas_pst5>`
 shows the phase preview and compares RR maps with apodization and baseline
 correction. Multiplex coherence selection is a separate acquisition workflow.
 
-For the MQMAS conventions and broader context, see C. Fernandez and
-M. Pruski, *Probing quadrupolar nuclei by solid-state NMR spectroscopy:
-recent advances* (2011),
-`doi:10.1007/128_2011_141 <https://doi.org/10.1007/128_2011_141>`_.
+For the MQMAS conventions and broader context, see
+:cite:t:`fernandez2011quadrupolar`.

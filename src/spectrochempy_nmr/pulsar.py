@@ -13,6 +13,8 @@ See the adjacent README.pulsar.md for the equations and implementation notes.
 
 from dataclasses import dataclass
 from functools import lru_cache
+from math import log
+from math import sqrt
 from numbers import Complex, Real
 from operator import index
 
@@ -1637,3 +1639,68 @@ def _as_dataset(axis, profile, name):
     dataset = NDDataset(profile, name=name)
     dataset.set_coordset(x=Coord(axis, units="Hz", title="frequency offset"))
     return dataset
+
+
+def broaden(spectrum, *, gaussian_fwhm_hz):
+    """Apply Gaussian broadening to a one-dimensional spectrum.
+
+    The width is the full width at half maximum in Hz. The spectrum needs
+    a uniformly spaced frequency axis with units convertible to Hz and
+    finite, unmasked real or complex data. A zero width returns a copy.
+
+    The transform uses a periodic frequency grid. Leave enough room at
+    the edges of the spectral window to contain the broadened lines.
+    The returned spectrum retains the input axis, units, and total area.
+    """
+    from spectrochempy.core.dataset.coord import Coord
+    from spectrochempy.core.dataset.nddataset import NDDataset
+
+    (width,) = _real_scalars(gaussian_fwhm_hz)
+    if width < 0:
+        raise ValueError("Gaussian FWHM must be nonnegative.")
+    if not isinstance(spectrum, NDDataset):
+        raise TypeError("Expected an NDDataset spectrum.")
+    if spectrum.ndim != 1 or spectrum.size < 2:
+        raise ValueError(
+            "Expected a one-dimensional spectrum with at least two points."
+        )
+    axis = getattr(spectrum, "x", None)
+    if axis is None or axis.units is None or not axis.units.is_compatible_with("Hz"):
+        raise ValueError(
+            "Expected a frequency coordinate with units convertible to Hz."
+        )
+    steps = np.diff(axis.to("Hz").data)
+    step_hz = steps.mean()
+    if (
+        not np.isfinite(steps).all()
+        or not np.allclose(steps, step_hz, rtol=1e-3, atol=0)
+        or step_hz == 0
+    ):
+        raise ValueError("Expected a uniformly spaced frequency coordinate.")
+    if spectrum.is_masked or not np.isfinite(spectrum.data).all():
+        raise ValueError("Expected finite, unmasked spectrum data.")
+    result = spectrum.copy(keepname=True)
+    if width == 0:
+        return result
+
+    data = spectrum.data
+    if not spectrum.is_complex:
+        # Conjugate the analytic spectrum for the positive-time convention.
+        data = spectrum.ht().conj().data
+    time_data = np.fft.ifft(np.fft.ifftshift(data))
+    time = np.arange(spectrum.size) / (spectrum.size * abs(step_hz))
+    time_signal = NDDataset(time_data, coordset=[Coord(time, units="s", sigdigits=12)])
+    gb = width / (1.2 * sqrt(log(2)))
+    if spectrum.is_complex:
+        midpoint = time_signal.size // 2
+        center = time[midpoint] * time_signal.x.units
+        # Complex spectra have both positive and negative time lags.
+        windowed = time_signal.roll(pts=midpoint).gm(gb=gb, shifted=center)
+        windowed = windowed.roll(pts=-midpoint)
+    else:
+        windowed = time_signal.gm(gb=gb)
+    # The original coordinate is already present on the output copy.
+    broadened = np.fft.fftshift(np.fft.fft(windowed.data))
+    result.data = broadened if spectrum.is_complex else broadened.real
+    result.history = f"Applied Gaussian broadening ({width:g} Hz FWHM)"
+    return result

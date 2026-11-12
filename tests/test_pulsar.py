@@ -2,7 +2,10 @@
 
 import numpy as np
 import pytest
+from scipy.ndimage import gaussian_filter1d
 
+from spectrochempy.core.dataset.coord import Coord
+from spectrochempy.core.dataset.nddataset import NDDataset
 from spectrochempy.core.units import ur
 from spectrochempy_nmr.pulsar import Coherence
 from spectrochempy_nmr.pulsar import Delay
@@ -11,6 +14,7 @@ from spectrochempy_nmr.pulsar import PassiveJ
 from spectrochempy_nmr.pulsar import PhaseCycle
 from spectrochempy_nmr.pulsar import Pulse
 from spectrochempy_nmr.pulsar import SpinSite
+from spectrochempy_nmr.pulsar import broaden
 from spectrochempy_nmr.pulsar import simulate_central_transition
 from spectrochempy_nmr.pulsar import simulate_coupled_sequence
 from spectrochempy_nmr.pulsar import simulate_csa
@@ -928,3 +932,25 @@ def test_mas_phase_cycle_combines_each_scan_at_its_own_rotor_phase(output):
     np.testing.assert_allclose(
         combined, weights[0] * results[0] + weights[1] * results[1], atol=1e-12
     )
+
+
+@pytest.mark.parametrize("size", [2, 128, 129])
+@pytest.mark.parametrize("complex_input", [False, True])
+def test_broaden_matches_gaussian_convolution(size, complex_input):
+    data = np.zeros(size, dtype=complex if complex_input else float)
+    data[20 % size] = 1
+    if complex_input:
+        data[55 % size] = 2j
+    spectrum = NDDataset(data, name="test spectrum", units="mV")
+    spectrum.set_coordset(x=Coord(-0.005 * np.arange(size), units="kHz"))
+
+    broadened = broaden(spectrum, gaussian_fwhm_hz=80)
+    sigma = 80 / (np.sqrt(8 * np.log(2)) * 5)
+    expected = gaussian_filter1d(data, sigma, mode="wrap", truncate=8)
+    np.testing.assert_allclose(broadened.data, expected, atol=1e-8, rtol=0)
+    np.testing.assert_allclose(broadened.data.sum(), data.sum(), atol=1e-12)
+    np.testing.assert_array_equal(spectrum.data, data)
+    np.testing.assert_array_equal(broadened.x.data, spectrum.x.data)
+    assert broadened.x.units == spectrum.x.units
+    assert broadened.units == spectrum.units
+    assert broadened.is_complex == spectrum.is_complex

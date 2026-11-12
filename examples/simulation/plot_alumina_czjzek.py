@@ -21,8 +21,7 @@ from pathlib import Path
 import matplotlib.pyplot as plt
 import numpy as np
 
-from spectrochempy_nmr.czjzek import CzjzekDistribution
-from spectrochempy_nmr.czjzek import simulate_czjzek
+import spectrochempy as scp
 
 # %%
 # Simulate broad tetrahedral and octahedral environments
@@ -34,18 +33,22 @@ larmor_hz = 130.30630648e6
 models = (
     (
         "Octahedral model",
-        CzjzekDistribution(0.5e6, cq_hz=3e6, eta=0.5, shift_hz=12e-6 * larmor_hz),
+        scp.nmr.czjzek.CzjzekDistribution(
+            0.5e6, cq_hz=3e6, eta=0.5, shift_hz=12e-6 * larmor_hz
+        ),
     ),
     (
         "Tetrahedral model",
-        CzjzekDistribution(0.7e6, cq_hz=4e6, eta=0.5, shift_hz=70e-6 * larmor_hz),
+        scp.nmr.czjzek.CzjzekDistribution(
+            0.7e6, cq_hz=4e6, eta=0.5, shift_hz=70e-6 * larmor_hz
+        ),
     ),
 )
 
 fig, ax = plt.subplots(figsize=(8, 3.8), constrained_layout=True)
 profiles = []
 for label, distribution in models:
-    spectrum = simulate_czjzek(
+    spectrum = scp.nmr.czjzek.simulate_czjzek(
         distribution,
         samples=32,
         seed=0,

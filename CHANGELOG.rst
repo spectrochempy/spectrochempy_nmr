@@ -11,9 +11,10 @@ Unreleased
 Added
 ~~~~~
 
-* Add experimental PULSAR powder simulation and central-transition fitting.
-  The NumPy port supports quadrupolar and CSA interactions, spinning bands,
-  RF preparation sequences and secular isotropic J coupling.
+* Add experimental PULSAR powder simulation with quadrupolar and CSA
+  interactions, spinning bands, RF preparation sequences and secular
+  isotropic J coupling. The tutorial fits a central transition with
+  ``Optimize``.
 
 * Add standard and extended Czjzek EFG distributions with reproducible tensor
   sampling, ensemble powder simulation and executable gallery examples.

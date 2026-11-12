@@ -1,11 +1,10 @@
 # PULSAR algorithm notes
 
-This note describes the NumPy port in [`pulsar.py`](pulsar.py). It is a
-developer reference for the PULSAR module and a source for future plugin
-documentation. The implementation follows the central-transition path of
-Masaï PULSAR by Christian Fernandez and Jean-Paul Amoureux, available in
-the archived [fernandezc/masai repository](https://github.com/fernandezc/masai)
-and its [PULSAR component](https://github.com/fernandezc/masai/tree/master/masai/core/fit/pulsar).
+These notes document the algorithms, numerical conventions and benchmarks
+for the PULSAR implementation in [`pulsar.py`](pulsar.py). The
+[PULSAR tutorial](../../docs/userguide/pulsar.py) covers simulation and
+fitting, and the [Czjzek tutorial](../../docs/userguide/czjzek.py)
+shows how to simulate spectra from a distribution of quadrupolar tensors.
 
 ## Model and output
 
@@ -496,40 +495,12 @@ Experimental spectra are still needed to assess model accuracy.
 
 ## Fitting an NDDataset
 
-The plugin exposes `fit_central_transition` for a real, phased 1D
-spectrum. For an axis in frequency units, pass the reference as
-`origin_hz` if the coordinates are absolute or use another origin.
-A ppm coordinate already defines chemical zero. PULSAR converts
-ppm to offsets using the positive Larmor frequency and preserves
-the original axis and mask on the fitted spectrum and residuals.
-
-```python
-from spectrochempy_nmr import fit_central_transition
-from spectrochempy_nmr.pulsar_fit import CentralParameters
-
-result = fit_central_transition(
-    experimental_dataset,
-    initial=CentralParameters(3.0e6, 0.3, 500, 80),
-    bounds=(
-        CentralParameters(2.0e6, 0.0, 0, 20),
-        CentralParameters(4.0e6, 1.0, 1500, 250),
-    ),
-    larmor_hz=104.38e6,
-    spectral_width_hz=12500,
-    spinning_hz=12500,
-    spin=2.5,
-    window_hz=(-1300, 1100),
-)
-```
-
-The optimizer fits `Cq`, asymmetry, shift and Gaussian FWHM. Any
-specified CSA is fixed. For each candidate, it projects a nonnegative
-scale and linear baseline by least squares. The fit excludes masked
-or nonfinite observations and reports the RMS in the dataset's
-intensity units and the number of residual evaluations. The model
-window must cover every selected band over the parameter bounds.
-Use separate starts and mesh refinements when judging parameter
-stability.
+The [PULSAR tutorial](../../docs/userguide/pulsar.py) fits a central
+transition using a custom model in `scp.Optimize`. The model simulates
+the transition, applies Gaussian broadening, and interpolates the bin
+centers onto the observed frequency grid. The example uses a real,
+phased spectrum with frequency offsets in Hz and bounds that keep the
+selected bands inside the simulation window.
 
 ## Experimental check with aluminum acetylacetonate
 
@@ -844,7 +815,7 @@ with the EFG. The 3QMAS ridge comparison above uses an empirical spread
 of $P_Q$ and chemical shift at fixed $\eta$.
 
 The implementation is in [czjzek.py](czjzek.py), with examples and API
-conventions in the [Czjzek guide](../../docs/userguide/czjzek.rst).
+conventions in the [Czjzek guide](../../docs/userguide/czjzek.py).
 It constructs
 
 $$

@@ -3,12 +3,14 @@
 """Tests for spectrochempy-nmr plugin registration and lifecycle."""
 
 import warnings
+from importlib import import_module
 from importlib.metadata import version
 
 import pytest
 from spectrochempy_nmr import NMRPlugin
 
 import spectrochempy as scp
+import spectrochempy_nmr
 import spectrochempy.plugins.manager as manager_module
 from spectrochempy.api.plugins import PluginCapability
 from spectrochempy.api.plugins import PluginState
@@ -143,6 +145,16 @@ def test_package_namespace_exposes_topspin_reader(monkeypatch):
     assert registry.get_reader("topspin")["namespace"] == "nmr"
     assert top_level_reader.__module__ == namespaced_reader.__module__
     assert top_level_reader.__module__.startswith("spectrochempy_nmr")
+
+
+@pytest.mark.parametrize("name", ["pulsar", "czjzek"])
+def test_package_namespace_exposes_simulation_module(monkeypatch, name):
+    pm, _ = _isolate_scp_plugins(monkeypatch, scp)
+    pm.register(NMRPlugin())
+    monkeypatch.delitem(vars(spectrochempy_nmr), name, raising=False)
+
+    assert name in dir(scp.nmr)
+    assert getattr(scp.nmr, name) is import_module(f"spectrochempy_nmr.{name}")
 
 
 def test_package_namespace_exposes_short_read_alias(monkeypatch):

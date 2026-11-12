@@ -5,6 +5,7 @@ from __future__ import annotations
 
 import re
 from collections.abc import Callable
+from importlib import import_module
 from pathlib import Path
 
 from spectrochempy.api.plugins import CORE_PLUGIN_API_VERSION
@@ -586,14 +587,12 @@ class NMRPlugin(SpectroChemPyPlugin):
 
 
 def __getattr__(name: str):
+    if name in {"pulsar", "czjzek"}:
+        return import_module(f".{name}", __name__)
     if name in {"CzjzekDistribution", "CzjzekSamples", "simulate_czjzek"}:
         from . import czjzek
 
         return getattr(czjzek, name)
-    if name == "fit_central_transition":
-        from .pulsar_fit import fit_central_transition
-
-        return fit_central_transition
     if name == "read_topspin":
         from .readers.read_topspin import read_topspin  # noqa: PLC0415
 
@@ -660,7 +659,8 @@ def __dir__() -> list[str]:
     return [
         "NMRPlugin",
         "Experiment",
-        "fit_central_transition",
+        "pulsar",
+        "czjzek",
         "CzjzekDistribution",
         "CzjzekSamples",
         "simulate_czjzek",
