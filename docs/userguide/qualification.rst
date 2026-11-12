@@ -2,7 +2,8 @@ Qualification and interoperability
 ==================================
 
 These notes describe reference datasets, processing conventions and
-qualification results for specific profiles. For everyday reading and
+qualification results for specific profiles. Use the versions and fixture
+settings named in each report when reproducing its results. For everyday reading and
 processing, start with :doc:`reading_data`, :doc:`processing_1d` or
 :doc:`processing_2d`. See :ref:`nmr-processing-validation` for the distinction
 between qualification and input checks.

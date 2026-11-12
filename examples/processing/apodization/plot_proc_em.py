@@ -25,7 +25,7 @@ dataset1D = scp.nmr.read(path, expno=1, remove_digital_filter=True)
 
 # %%
 # Normalize the dataset values and reduce the time domain
-dataset1D /= dataset1D.real.data.max()  # normalize
+dataset1D /= float(scp.Quantity(dataset1D.real.max()).magnitude)
 dataset1D = dataset1D[0.0:15000.0]
 
 # %%

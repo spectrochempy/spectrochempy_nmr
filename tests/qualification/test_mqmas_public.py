@@ -44,7 +44,40 @@ def test_replay_xfshear_matches_mqmas_51_four_planes(sx, reference_env, phase):
         preview = mixed[0, 0, :].squeeze().pk(phc0=-30.0, phc1=60.0, pivot=0)
         angle = np.deg2rad(-30.0 + 60.0 * np.arange(sx) / sx)
         np.testing.assert_allclose(preview.data, mixed_data[0, 0] * np.exp(1j * angle))
-    result = Experiment(mixed).replay_xfshear(spin=2.5, **phase)
+    legacy = Experiment(mixed).replay_xfshear(spin=2.5, **phase)
+    xf2 = Experiment(source).xf2(
+        size=sx, direct_points=2048, correct_digital_filter=False
+    )
+    phase_options = {key: value for key, value in phase.items() if key != "f1_shift"}
+    phased = Experiment(xf2).xf2p(**phase_options)
+    result = Experiment(phased).xfshear(
+        size=512, spin=2.5, f1_shift=phase.get("f1_shift", 0.0)
+    )
+    np.testing.assert_array_equal(result.data, legacy.data)
+    np.testing.assert_array_equal(xf2.data, mixed_data)
+    generic = source[..., :2048].fft(dim="x", size=sx, convention="topspin-xf2")
+    np.testing.assert_array_equal(generic.data, xf2.data)
+    np.testing.assert_array_equal(generic.x.data, xf2.x.data)
+    assert generic.meta.phc0[-2] == source.meta.phc0[-2]
+    assert generic.meta.phc1[-2] == source.meta.phc1[-2]
+    np.testing.assert_array_equal(xf2.pk(dim="x", **phase_options).data, phased.data)
+    previously_phased = mixed.pk(phc0=20.0, dim="x")
+    legacy_replayed = Experiment(previously_phased).replay_xfshear(spin=2.5)
+    expected_replay = Experiment(mixed).replay_xfshear(spin=2.5, phc0=20.0)
+    np.testing.assert_allclose(legacy_replayed.data, expected_replay.data, atol=1e-10)
+    with pytest.raises(ValueError, match="with xf2p"):
+        Experiment(xf2).xfshear(size=512, spin=2.5)
+    with pytest.raises(ValueError, match="already applied"):
+        Experiment(phased).xf2p()
+    preview = phased[0, 0, :].squeeze()
+    np.testing.assert_array_equal(preview.pk(**phase_options).data, preview.data)
+    rephased = phased.pk(
+        phc0=2 * phase_options.get("phc0", 0.0),
+        phc1=2 * phase_options.get("phc1", 0.0),
+        dim="x",
+    )
+    with pytest.raises(ValueError, match="processing history changed"):
+        Experiment(rephased).xfshear(size=512, spin=2.5)
     np.testing.assert_array_equal(mixed.data, mixed_data)
     np.testing.assert_array_equal(source.data, original)
     np.testing.assert_allclose(result.x.data, ref.x.data, rtol=0, atol=1e-7)
@@ -118,3 +151,44 @@ def test_xf2_without_decimation_has_zero_group_delay(echo_window, stored_delay):
         np.testing.assert_array_equal(xf2.data, expected.data)
     else:
         assert plan["echo_window"]["group_delay_points"] == 0.0
+
+
+def test_xf2_preserves_two_retained_points():
+    ser = os.environ.get("SCP_MQMAS_SER")
+    if not ser:
+        pytest.skip("requires the PST-5 SER")
+    raw = scp.nmr.read(ser, local_only=True)
+    result = Experiment(raw).xf2(size=4, direct_points=2, correct_digital_filter=False)
+    expected = np.fft.fftshift(np.fft.ifft(raw.data[..., :2], n=4, axis=-1), axes=-1)
+    np.testing.assert_array_equal(result.data, 4 * expected)
+    assert result.x.size == 4
+    phased = Experiment(result).xf2p(phc0=1e308)
+    assert np.isfinite(phased.data).all()
+
+
+def test_xf2p_keeps_phase_precision_for_numpy_scalars():
+    ser = os.environ.get("SCP_MQMAS_SER")
+    if not ser:
+        pytest.skip("requires the PST-5 SER")
+    raw = scp.nmr.read(ser, local_only=True)
+    xf2 = Experiment(raw).xf2(size=32, direct_points=16)
+    experiment = Experiment(xf2)
+    expected = experiment.xf2p(phc0=360000.0, phc1=22.5, pivot=3.5)
+    actual = experiment.xf2p(
+        phc0=np.float32(360000), phc1=np.float32(22.5), pivot=np.float32(3.5)
+    )
+    np.testing.assert_array_equal(actual.data, expected.data)
+
+
+def test_invalid_xf2_reference_is_rejected_before_inplace_fft():
+    ser = os.environ.get("SCP_MQMAS_SER")
+    if not ser:
+        pytest.skip("requires the PST-5 SER")
+    raw = scp.nmr.read(ser, local_only=True)[..., :128]
+    raw.meta.readonly = False
+    raw.meta.sf[-1] *= 0
+    samples = raw.data.copy()
+    with pytest.raises(ValueError, match="finite positive F2 reference"):
+        raw.fft(dim="x", size=256, convention="topspin-xf2", inplace=True)
+    np.testing.assert_array_equal(raw.data, samples)
+    assert raw.x.units.is_compatible_with(scp.ur.s)

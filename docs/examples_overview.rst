@@ -2,9 +2,9 @@
 Examples
 ========
 
-The gallery contains executable examples. See
-:doc:`userguide/qualification` for reference comparisons and supported
-interop profiles.
+The gallery contains executable examples for importing, processing and
+analyzing NMR data. See the :doc:`reader guide <userguide/reading_data>`
+to find the reader for your acquisition.
 
 .. toctree::
    :maxdepth: 2

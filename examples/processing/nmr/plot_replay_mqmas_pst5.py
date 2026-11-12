@@ -18,17 +18,16 @@ import spectrochempy as scp
 
 # sphinx_gallery_thumbnail_number = 2
 
-# Keep the acquired points intact at import. prepare_xfshear() will
+# Keep the acquired points intact at import. xf2() will
 # correct the digital group delay on the F2 frequency grid.
 raw = scp.nmr.read("nmrdata/bruker/tests/nmr/MQMAS_27AL_PST5/51/ser")
 
 # %%
 # Retain the first 2048 complex points in F2 and zero-fill to 4096 points
-# for a denser frequency grid before phase adjustment. XFSHEAR uses
-# a separate zero extension during Hilbert reconstruction. Aluminium-27 has
-# spin 5/2. For triple-quantum coherence, the signed slope is 19/12
-# and the F1 scale divisor is 17/12.
-xf2 = scp.nmr.Experiment(raw).prepare_xfshear(size=(512, 4096), direct_points=2048)
+# for a denser frequency grid before phase adjustment.
+xf2 = scp.nmr.Experiment(raw).xf2(
+    size=4096, direct_points=2048, correct_digital_filter=True
+)
 
 # %%
 # Inspect the first acquired row. Adjust the phase parameters on this
@@ -39,13 +38,13 @@ first_row = xf2[0, 0, :].squeeze()
 _ = first_row.pk(**phase).real[65.0:20.0].plot()
 
 # %%
-# Pass the same phase to XFSHEAR. It applies the correction to both
-# States branches and every F1 increment before the shear and Hilbert
-# reconstruction. XFSHEAR also performs the F1 FFT. The optional shift
-# moves the signal within the F1 window in isotropic ppm.
-spectrum = scp.nmr.Experiment(xf2).replay_xfshear(
-    spin=2.5, coherence_order=3, f1_shift=-20.0, **phase
-)
+# Apply the selected phase to both States branches at every F1 increment.
+phased = scp.nmr.Experiment(xf2).xf2p(**phase)
+
+# %%
+# XFSHEAR reconstructs the F2 quadrature and performs the F1 FFT. The
+# optional shift moves the signal within the F1 window in isotropic ppm.
+spectrum = scp.nmr.Experiment(phased).xfshear(size=512, spin=2.5, f1_shift=-20.0)
 
 # %%
 # The real part of the first channel is RR. Use the calibrated ppm axes
@@ -62,11 +61,12 @@ _ = region.plot(method="contour", start=0.08, nlevels=12)
 # Both States branches at a given t1 receive the same window. The
 # Gaussian standard deviation is 0.8 ms. Keep the phase and shear
 # settings identical to isolate the effect of the window.
-xf2_windowed = scp.nmr.Experiment(raw).prepare_xfshear(
-    size=(512, 4096), direct_points=2048, echo_window=(19 / 12, 0.0008)
+xf2_windowed = scp.nmr.Experiment(raw).xf2(
+    size=4096, direct_points=2048, echo_window=(19 / 12, 0.0008)
 )
-windowed = scp.nmr.Experiment(xf2_windowed).replay_xfshear(
-    spin=2.5, coherence_order=3, f1_shift=-20.0, **phase
+phased_windowed = scp.nmr.Experiment(xf2_windowed).xf2p(**phase)
+windowed = scp.nmr.Experiment(phased_windowed).xfshear(
+    size=512, spin=2.5, f1_shift=-20.0
 )
 windowed_rr = windowed[0, :, :].squeeze().real[52.0:25.0, 65.0:20.0]
 
@@ -80,7 +80,7 @@ baseline = scp.Baseline(
 baseline.fit(windowed_rr)
 corrected = windowed_rr - baseline.baseline
 
-peak = region.data.max()
+peak = float(scp.Quantity(region.max()).magnitude)
 positive_levels = [0.08 * peak * 1.3**i for i in range(10)]
 levels = [-level for level in reversed(positive_levels)] + positive_levels
 _ = scp.multiplot(

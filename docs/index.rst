@@ -54,3 +54,4 @@ Contents
    examples_overview
    about
    bibliography
+   devguide/index
