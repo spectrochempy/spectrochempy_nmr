@@ -34,7 +34,9 @@ processing parameters:
    experiment = scp.nmr.Experiment(fid)
    result = experiment.process(apodization="em", lb=5.0, phase=None)
 
-The supported apodization modes are ``em``, ``gm`` and ``sp``. Use
+The supported apodization modes are ``em``, ``gm`` and ``sp``. The
+:external+core:doc:`apodization guide <userguide/processing/apodization>`
+describes the corresponding window functions. Use
 ``result.history`` to inspect the steps recorded on the spectrum.
 Use ``phase="manual"`` with explicit angles. With core 1.2.1 and
 ``phase=None``, the transform leaves the phase untouched. The development

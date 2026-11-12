@@ -18,6 +18,10 @@ mixed-domain result after F2 before transforming F1.
    f2 = fid.fft(dim="x")
    spectrum = f2.fft(dim="y")
 
+See the
+:external+core:doc:`Fourier transformation guide <userguide/processing/fourier>`
+for the core FFT and phase correction operations.
+
 A direct FFT uses the supplied samples, including the original group delay
 when reading a Bruker SER without import correction. TopSpin XFB replay applies
 the recorded correction for supported acquisitions. For echo/anti-echo,
