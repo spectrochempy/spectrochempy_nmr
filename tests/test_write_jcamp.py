@@ -64,6 +64,18 @@ def test_write_jcamp_roundtrip_after_slicing(tmp_path, selection):
     np.testing.assert_allclose(restored.x.data, axis[selection], rtol=0, atol=1e-14)
 
 
+def test_write_jcamp_rejects_grid_made_irregular_by_coordinate_rounding(tmp_path):
+    rounded_axis = np.round(np.linspace(-1.0, 1.0, 1000)[200:499], 3)
+    data = scp.NDDataset(
+        np.arange(rounded_axis.size),
+        coordset=[scp.Coord(rounded_axis, units="ppm", linearize_below=0)],
+    )
+    with pytest.raises(ValueError, match="regularly spaced"):
+        scp.nmr.write_jcamp(
+            data, tmp_path / "rounded.jdx", observation_frequency=400, nucleus="^1H"
+        )
+
+
 @pytest.mark.parametrize(
     "invalid", ["irregular", "axis_units", "intensity_units", "mask", "complex", "time"]
 )

@@ -42,6 +42,11 @@ Reading NMR through ``scp.read_jcamp()`` requires a core version that
 includes the NMR routing introduced after SpectroChemPy 1.2.1.
 
 The writer uses the stored coordinate and preserves its units and direction.
+A slice can contain irregular coordinates if the core rounded the axis
+during slicing. For finely spaced grids, construct the coordinate with
+``rounding=False`` and ``sigdigits=15`` before slicing. The writer
+rejects irregular stored grids.
+
 The dataset title must be printable ASCII. If observation metadata are
 missing, pass ``observation_frequency`` in MHz (or as a compatible quantity)
 and ``nucleus`` as a string such as ``"^1H"``. Use ``overwrite=True`` to
