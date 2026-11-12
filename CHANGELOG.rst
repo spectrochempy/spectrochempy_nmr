@@ -11,6 +11,9 @@ Unreleased
 Added
 ~~~~~
 
+* Export real processed 1D NMR spectra with ``scp.nmr.write_jcamp()``
+  and read them back with ``scp.read_jcamp()``.
+
 * Add experimental PULSAR powder simulation with quadrupolar and CSA
   interactions, spinning bands, RF preparation sequences and secular
   isotropic J coupling. The tutorial fits a central transition with

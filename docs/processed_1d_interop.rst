@@ -26,6 +26,45 @@ an explicit additional phase without moving the axis. It does not replay phase
 parameters from raw vendor metadata. Inverse reconstruction of a source FID,
 especially from a real-only spectrum, is outside this qualification.
 
+Export a processed 1D spectrum
+------------------------------
+
+Use the NMR plugin writer for a real, unmasked spectrum with no assigned
+intensity unit (``spectrum.units is None``) and a regular Hz or ppm
+coordinate::
+
+   import spectrochempy as scp
+
+   spectrum = scp.read_jcamp("processed_proton.jdx")
+   path = scp.nmr.write_jcamp(spectrum, "export.jdx")
+   restored = scp.read_jcamp(path)
+
+Reading NMR through ``scp.read_jcamp()`` requires a core version that
+includes the NMR routing introduced after SpectroChemPy 1.2.1.
+
+The writer uses the stored coordinate and preserves its units and direction.
+A slice can contain irregular coordinates if the core rounded the axis
+during slicing. For finely spaced grids, construct the coordinate with
+``rounding=False`` and ``sigdigits=15`` before slicing. The writer
+rejects irregular stored grids.
+
+The dataset title must be printable ASCII. If observation metadata are
+missing, pass ``observation_frequency`` in MHz (or as a compatible quantity)
+and ``nucleus`` as a string such as ``"^1H"``. Use ``overwrite=True`` to
+replace an existing local file.
+
+Bruker TopSpin 4.5.0 can import the tested 1D files using ``fromjdx``.
+Its imported processed data use integer intensities. The small synthetic
+test lost fractional intensity on import, while the tested real Bruker
+spectrum preserved its integer values. TopSpin can misread scientific
+notation in the data table. The writer uses plain decimals when they fit
+and may still use scientific notation for very small or large values.
+JCAMP exports from TopSpin can also use a relative Hz axis with a separate
+chemical shift reference. Re-export preserves the relative Hz coordinates
+and omits the source ``.SHIFTREFERENCE`` record. To retain chemical shifts
+in the exported file, supply a spectrum with an explicitly referenced
+ppm coordinate.
+
 References and amplitudes
 -------------------------
 

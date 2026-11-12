@@ -639,6 +639,10 @@ def __getattr__(name: str):
         from .readers.read_simpson import read_simpson  # noqa: PLC0415
 
         return read_simpson
+    if name == "write_jcamp":
+        from .jcamp import write_jcamp
+
+        return write_jcamp
     if name == "read":
         return _resolve_read()
     if name == "set_nmr_context":
@@ -702,6 +706,7 @@ def __dir__() -> list[str]:
         "reference_interop_1d",
         "read_agilent_interop",
         "read",
+        "write_jcamp",
         "read_topspin",
         "read_agilent",
         "read_jeol",
