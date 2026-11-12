@@ -54,7 +54,10 @@ spectrum preserved its integer values. TopSpin can misread scientific
 notation in the data table. The writer uses plain decimals when they fit
 and may still use scientific notation for very small or large values.
 JCAMP exports from TopSpin can also use a relative Hz axis with a separate
-chemical shift reference.
+chemical shift reference. Re-export preserves the relative Hz coordinates
+and omits the source ``.SHIFTREFERENCE`` record. To retain chemical shifts
+in the exported file, supply a spectrum with an explicitly referenced
+ppm coordinate.
 
 References and amplitudes
 -------------------------

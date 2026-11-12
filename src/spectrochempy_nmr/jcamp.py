@@ -50,15 +50,19 @@ def _axis(dataset, size):
 
 def _declared_nucleus(dataset):
     """Resolve a single observed isotope from source metadata."""
-    source = dataset.meta.get("source_metadata") or {}
+    meta = dataset.meta
+    source = meta.get("source_metadata") or {}
     labels = source.get(".OBSERVENUCLEUS")
-    if not labels and dataset.origin == "agilent":
-        procpar = dataset.meta.get("source_procpar") or {}
-        labels = procpar.get("tn", {}).get("values")
-    elif not labels:
-        labels = dataset.meta.get("nucleus")
-        if labels is None and dataset.origin == "topspin":
-            labels = dataset.meta.get("nuc1")
+    if labels is None:
+        procpar = meta.get("source_procpar")
+        if procpar is None:
+            procpar = source.get("procpar")
+        if procpar is not None or "agilent" in (dataset.origin, meta.get("origin")):
+            labels = (procpar or {}).get("tn", {}).get("values")
+        else:
+            labels = meta.get("nucleus")
+            if labels is None:
+                labels = meta.get("nuc1")
     if isinstance(labels, (list, tuple)) and len(labels) == 1:
         label = labels[0]
         if isinstance(label, str):

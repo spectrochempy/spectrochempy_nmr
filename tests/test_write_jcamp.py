@@ -37,7 +37,7 @@ def test_write_jcamp_roundtrip(tmp_path, axis, unit):
     ):
         np.testing.assert_array_equal(restored.data, INTENSITIES)
         np.testing.assert_array_equal(restored.x.data, axis)
-        assert restored.x.units == unit
+        assert restored.x.units == ur.Unit(unit)
         assert restored.units is None
         assert restored.meta.data_domain == "frequency"
         assert restored.x.meta["acquisition_frequency"] == FREQUENCY * ur.MHz
@@ -101,20 +101,35 @@ def test_write_jcamp_rejects_invalid_observation(tmp_path, kwargs, message):
         scp.nmr.write_jcamp(spectrum(), tmp_path / "spectrum.jdx", **kwargs)
 
 
-@pytest.mark.parametrize("origin", ["jeol", "agilent", "topspin"])
-def test_write_jcamp_uses_declared_observed_nucleus(tmp_path, origin):
+@pytest.mark.parametrize(
+    "metadata",
+    [
+        {"nucleus": ["13C"]},
+        {"nuc1": ["13C"]},
+        {"nucleus": ["1H"], "source_procpar": {"tn": {"values": ["13C"]}}},
+        {
+            "nucleus": ["1H"],
+            "source_metadata": {"procpar": {"tn": {"values": ["13C"]}}},
+        },
+    ],
+)
+def test_write_jcamp_uses_declared_observed_nucleus(tmp_path, metadata):
     data = spectrum()
-    data.origin = origin
+    data.origin = "lab-assigned-origin"
     data.x.meta["acquisition_frequency"] = FREQUENCY * ur.MHz
-    if origin == "agilent":
-        data.meta.nucleus = ["1H"]
-        data.meta.source_procpar = {"tn": {"values": ["13C"]}}
-    elif origin == "topspin":
-        data.meta.nuc1 = ["13C"]
-    else:
-        data.meta.nucleus = ["13C"]
+    data.meta.update(metadata)
     restored = scp.read_jcamp(scp.nmr.write_jcamp(data, tmp_path / "native.dx"))
     assert restored.meta.source_metadata[".OBSERVENUCLEUS"] == ["^13C"]
+
+
+def test_write_jcamp_does_not_infer_observation_from_agilent_decoupler(tmp_path):
+    data = spectrum()
+    data.origin = "lab-assigned-origin"
+    data.x.meta["acquisition_frequency"] = FREQUENCY * ur.MHz
+    data.meta.nucleus = ["1H"]
+    data.meta.source_procpar = {"dn": {"values": ["1H"]}}
+    with pytest.raises(ValueError, match="nucleus"):
+        scp.nmr.write_jcamp(data, tmp_path / "native.dx")
 
 
 def test_write_jcamp_overwrite_is_atomic(tmp_path, monkeypatch):
@@ -153,7 +168,7 @@ def test_write_jcamp_epicatechin_roundtrip(tmp_path):
     assert restored.size == 104858
     np.testing.assert_array_equal(restored.data, data.data)
     np.testing.assert_array_equal(restored.x.data, data.x.data)
-    assert restored.x.units == "Hz"
+    assert restored.x.units == ur.Hz
     for key in ("FIRSTX", "LASTX"):
         assert float(restored.meta.source_metadata[key][0]) == float(
             data.meta.source_metadata[key][0]
