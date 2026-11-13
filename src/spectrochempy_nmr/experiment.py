@@ -505,6 +505,63 @@ class Experiment:
             normalize_scan_gain=normalize_scan_gain,
         )
 
+    def abs2(self, *, order=5, limits=None, ranges=None):
+        """Subtract a polynomial baseline from RR along each F2 row.
+
+        Set the degree with ``order`` (0–5). Give optional correction
+        ``limits=(low, high)`` and peak-free fit ``ranges`` in F2 axis units.
+        Without fit ranges, iteratively exclude peaks from the polynomial fit.
+        Return a new dataset.
+        """
+        return self._topspin_baseline("x", order=order, limits=limits, ranges=ranges)
+
+    def abs1(self, *, order=5, limits=None, ranges=None):
+        """Subtract a polynomial baseline from RR along each F1 column.
+
+        Options have the same meaning as for ``abs2()``, in F1 axis units.
+        """
+        return self._topspin_baseline("y", order=order, limits=limits, ranges=ranges)
+
+    def _topspin_baseline(self, dim, **options):
+        from .processing.topspin_commands import correct_baseline
+
+        if self.is_multi_dataset:
+            raise ValueError("Baseline correction requires a single 2D spectrum")
+        return correct_baseline(self.dataset, self.domains, dim, **options)
+
+    def rser(self, row):
+        """Return the raw FID numbered ``row`` in TopSpin's 1-based convention.
+
+        For an ordinary matrix, ``rser(1)`` is ``dataset[0, :].squeeze("y")``.
+        For paired acquisitions, consecutive FIDs are the two branches of
+        the same F1 increment.
+        """
+        return self._topspin_slice("rser", row)
+
+    def rsr(self, row):
+        """Return the F2 spectrum at a 1-based row number.
+
+        For an ordinary matrix, ``rsr(1)`` selects ``dataset[0, :]``.
+        For paired spectra, combine the F1-real components along F2.
+        """
+        return self._topspin_slice("rsr", row)
+
+    def rsc(self, column):
+        """Return the F1 trace at a 1-based column number.
+
+        For a real matrix, ``rsc(1)`` selects ``dataset[:, 0]``.
+        For paired spectra, combine the F2-real components along F1.
+        After F2-only processing, the F1 trace is still in the time domain.
+        """
+        return self._topspin_slice("rsc", column)
+
+    def _topspin_slice(self, command, number):
+        from .processing.topspin_commands import select_slice
+
+        if self.is_multi_dataset:
+            raise ValueError("Slice extraction requires a single 2D dataset")
+        return select_slice(self.dataset, self.domains, command, number)
+
     def xf2(
         self, *, size, direct_points=None, correct_digital_filter=True, echo_window=None
     ):

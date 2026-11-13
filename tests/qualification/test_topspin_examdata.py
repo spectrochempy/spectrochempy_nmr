@@ -58,6 +58,19 @@ def test_uniform_ser(examdata, monkeypatch, tmp_path, experiment, mode, size, nu
     divisor = x["NS"] * x["RG"]
     expected = traces if mode == 1 else np.stack((traces[::2], traces[1::2]))
     np.testing.assert_allclose(fid.data, expected / divisor, rtol=2e-14, atol=1e-12)
+    if experiment in {
+        "Menthyl-Anthranilate/20",
+        "Menthyl-Anthranilate/30",
+        "Menthyl-Anthranilate/40",
+    }:
+        extracted = Experiment(fid).rser(2)
+        np.testing.assert_allclose(extracted.data, traces[1] / divisor, rtol=2e-14)
+        transformed = extracted.fft()
+        xf2 = fid.fft(dim="x")
+        np.testing.assert_allclose(
+            transformed.data, xf2.data[1] if mode == 1 else xf2.data[1, 0]
+        )
+        np.testing.assert_array_equal(transformed.x.data, xf2.x.data)
     _check_filter(path, fid, x["GRPDLY"])
     _check_historical_phase(path, fid, monkeypatch)
 
