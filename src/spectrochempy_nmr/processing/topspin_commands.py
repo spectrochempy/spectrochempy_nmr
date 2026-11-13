@@ -28,34 +28,45 @@ def _real_plane_index(dataset, command):
     raise ValueError(f"{command} requires identifiable real-real spectral data")
 
 
-def _processed_slice(dataset, paired, command, number):
-    along_f2 = command == "rsr"
-    dim = "y" if along_f2 else "x"
+def _trace_channels(dataset, paired, along_f2, number, command, *, mixed=False):
+    """Return the array indices for the real and imaginary parts of a trace."""
     keys = (number, slice(None)) if along_f2 else (slice(None), number)
     complex_axis = dataset.meta.get("interop_complex_axis") or "F2"
-    # This Bruker profile packs 2rr + i*2ir in its first channel.
     if dataset.meta.get("normalization_profile") == "bruker-pdata-2d-public-v1":
         complex_axis = "F2"
     retained = "F2" if along_f2 else "F1"
     if not paired:
-        trace = dataset[keys].squeeze(dim)
-        return trace if complex_axis == retained else trace.real
+        return keys, keys if dataset.is_complex and complex_axis == retained else None
 
-    rr = _real_plane_index(dataset, command)
+    if mixed:
+        if not along_f2 and dataset.shape[0] != 2:
+            raise ValueError(f"{command} requires two acquisition branches after XF2")
+        return (0, *keys), ((0 if along_f2 else 1), *keys)
+
+    rr = (_real_plane_index(dataset, command), *keys)
     labels = tuple(dataset.meta.component_labels)
-    trace = dataset[rr, *keys].squeeze("c", dim)
     if labels in _PAIRED_SPECTRA:
-        if complex_axis == retained:
-            return trace
-        imag = dataset[1, *keys].squeeze("c", dim).real
-    else:
-        imag_label = "ri" if along_f2 else "ir"
-        if "2rr" in labels:
-            imag_label = "2ir" if along_f2 else "2ri"
-        if imag_label not in labels:
-            return trace
-        imag = dataset[labels.index(imag_label), *keys].squeeze("c", dim)
-    return trace.real + 1j * imag
+        return rr, rr if complex_axis == retained else (1, *keys)
+    imag_label = "ri" if along_f2 else "ir"
+    if "2rr" in labels:
+        imag_label = "2ir" if along_f2 else "2ri"
+    return rr, (labels.index(imag_label), *keys) if imag_label in labels else None
+
+
+def _processed_slice(dataset, paired, command, number, *, mixed=False):
+    along_f2 = command == "rsr"
+    dims = ("y" if along_f2 else "x",)
+    if paired:
+        dims = ("c", *dims)
+    real, imag = _trace_channels(
+        dataset, paired, along_f2, number, command, mixed=mixed
+    )
+    trace = dataset[real].squeeze(*dims)
+    if imag == real:
+        return trace
+    if imag is None:
+        return trace.real
+    return trace.real + 1j * dataset[imag].squeeze(*dims).real
 
 
 def _one_based(value, count, kind):
@@ -85,23 +96,13 @@ def select_slice(dataset, domains, command, number):
         if f2 != "frequency":
             raise ValueError("rsr requires frequency-domain F2 data")
         row = _one_based(number, dataset.shape[-2], "Row")
-        if paired and f1 == "time":
-            result = dataset[0, row, :].squeeze("c", "y")
-        else:
-            result = _processed_slice(dataset, paired, command, row)
+        result = _processed_slice(dataset, paired, command, row, mixed=f1 == "time")
         retained, frequency = "F2", True
     else:
         if f2 != "frequency" or f1 not in {"time", "frequency"}:
             raise ValueError("rsc requires F2-transformed data with a known F1 domain")
         column = _one_based(number, dataset.shape[-1], "Column")
-        if paired and f1 == "time":
-            if dataset.shape[0] != 2:
-                raise ValueError("rsc requires two F1 acquisition branches after XF2")
-            real = dataset[0, :, column].squeeze("c", "x").real
-            imag = dataset[1, :, column].squeeze("c", "x").real
-            result = real + 1j * imag
-        else:
-            result = _processed_slice(dataset, paired, command, column)
+        result = _processed_slice(dataset, paired, command, column, mixed=f1 == "time")
         retained, frequency = "F1", f1 == "frequency"
 
     direct_fft = (dataset.meta.get("fft_presentation") or {}).get("x")
@@ -252,4 +253,73 @@ def correct_baseline(dataset, domains, dim, *, order, limits, ranges):
     target[:, region] = corrected
     result.data = data
     result.history = f"Applied {command} polynomial baseline correction (order={order})"
+    return result
+
+
+def replace_slice(dataset, domains, command, number, trace):
+    """Replace the same channels exposed by the corresponding read command."""
+    from spectrochempy import NDDataset
+
+    paired = _plane_layout(dataset, command)
+    f1, f2 = domains[-2:]
+    along_f2 = command == "wsr"
+    if f2 != "frequency" or f1 not in {"time", "frequency"}:
+        raise ValueError(
+            f"{command} requires F2-transformed data with a known F1 domain"
+        )
+    axis, dimension = (-1, "x") if along_f2 else (-2, "y")
+    location = _one_based(
+        number, dataset.shape[-2 if along_f2 else -1], "Row" if along_f2 else "Column"
+    )
+    real, imag = _trace_channels(
+        dataset, paired, along_f2, location, command, mixed=f1 == "time"
+    )
+    if not isinstance(trace, NDDataset) or trace.shape != (dataset.shape[axis],):
+        raise ValueError(f"{command} requires a 1D NDDataset of matching length")
+    domain = "frequency" if along_f2 else f1
+    if trace.meta.get("data_domain") not in (None, domain):
+        raise ValueError("Trace and destination must have the same domain")
+    source_coord, target_coord = trace.coord(0), dataset.coord(dimension)
+    if (
+        source_coord is None
+        or target_coord is None
+        or source_coord.data is None
+        or target_coord.data is None
+        or source_coord.units != target_coord.units
+        or not np.allclose(source_coord.data, target_coord.data, rtol=1e-10, atol=0)
+    ):
+        raise ValueError(
+            "Trace and destination must share the same coordinate grid and units"
+        )
+    if trace.units != dataset.units:
+        raise ValueError("Trace and destination must have the same signal units")
+    if imag is None and trace.is_complex:
+        raise ValueError("Destination has no imaginary component for this trace")
+
+    mask = np.broadcast_to(dataset.mask, dataset.shape).copy()
+    trace_mask = np.broadcast_to(trace.mask, trace.shape)
+    channels = (real,) if imag is None or imag == real else (real, imag)
+    shares_mask = dataset.is_complex and imag != real
+    combined_mask = mask[real] if imag is None else mask[real] | mask[imag]
+    same_mask = np.array_equal(combined_mask, trace_mask)
+    if shares_mask and not same_mask:
+        raise ValueError("Cannot change a mask shared with an untouched component")
+    if not same_mask:
+        for key in channels:
+            mask[key] = trace_mask
+
+    values = trace.data if imag == real else trace.data.real
+    data = dataset.data.astype(np.result_type(dataset.dtype, values.dtype), copy=True)
+    if imag == real:
+        data[real] = values
+    else:
+        writable = ~trace_mask if same_mask and imag is not None else slice(None)
+        data.real[real][writable] = values[writable]
+        if imag is not None:
+            data.real[imag][writable] = trace.data.imag[writable]
+    result = dataset.copy()
+    result.data = data
+    result.remove_masks()
+    result.mask = mask
+    result.history = f"Replaced trace with {command}({number})"
     return result

@@ -86,6 +86,22 @@ components, ``rsr()`` keeps the complex F2 trace from the F1-real channel, and
 F2-only transform, ``rsc()`` returns an F1 time trace with the acquisition
 convention still encoded.
 
+Use ``wsr()`` or ``wsc()`` to replace a trace in a copy of the spectrum.
+The replacement must have the same coordinate grid and units.
+
+.. code-block:: python
+
+   row = experiment.rsr(1)
+   adjusted = row.pk(phc0=10.0)
+   updated = experiment.wsr(1, adjusted)
+
+On a real matrix the corresponding assignment is ``updated[0, :] = adjusted``
+or ``updated[:, 0] = adjusted``, using a copy of the original spectrum.
+On a Bruker four-component spectrum, ``wsr()`` replaces the selected row in
+``2rr`` and ``2ir``, and ``wsc()`` replaces the selected column in ``2rr``
+and ``2ri``.
+
+
 Use ``abs2()`` to fit a polynomial separately along each F2 row and
 ``abs1()`` to fit along each F1 column of a fully transformed spectrum.
 Both correct only the real-real plane, as in TopSpin. The default polynomial

@@ -161,3 +161,64 @@ def test_bruker_public_profile_keeps_native_topspin_slice_components():
     np.testing.assert_array_equal(exp.rsr(1).data, data[0, 0])
     expected = data[0, :, 0].real + 1j * data[1, :, 0].real
     np.testing.assert_array_equal(exp.rsc(1).data, expected)
+
+
+@pytest.mark.parametrize(
+    ("reader", "writer", "imaginary", "location"),
+    [("rsr", "wsr", 2, np.s_[0, :]), ("rsc", "wsc", 1, np.s_[:, 0])],
+)
+def test_replace_modified_topspin_trace(reader, writer, imaginary, location):
+    data = np.arange(4 * 8 * 10, dtype=float).reshape(4, 8, 10)
+    dataset = _dataset(data)
+    dataset.meta.component_labels = ("2rr", "2ri", "2ir", "2ii")
+    exp = Experiment(dataset)
+    trace = getattr(exp, reader)(1) * 1j
+    replace = getattr(exp, writer)
+    result = replace(1, trace)
+    expected = data.copy()
+    expected[0][location] = -data[imaginary][location]
+    expected[imaginary][location] = data[0][location]
+    np.testing.assert_array_equal(result.data, expected)
+    np.testing.assert_array_equal(dataset.data, data)
+    with pytest.raises(IndexError):
+        replace(0, trace)
+    with pytest.raises(ValueError, match="coordinate grid"):
+        shifted = trace.copy()
+        shifted.set_coordset(scp.Coord(trace.coord(0).data + 1, units="ppm"))
+        replace(1, shifted)
+
+
+def test_replace_column_preserves_unrelated_packed_imaginary_channels():
+    data = np.arange(24).reshape(2, 3, 4) * (1 + 3j)
+    dataset = _dataset(data)
+    exp = Experiment(dataset)
+    trace = exp.rsc(2) * 1j
+    result = exp.wsc(2, trace)
+    np.testing.assert_array_equal(result.data.imag, data.imag)
+    np.testing.assert_array_equal(Experiment(result).rsc(2).data, trace.data)
+
+
+def test_replace_row_replaces_mask_only_in_target_trace():
+    dataset = _dataset(np.arange(24, dtype=float).reshape(4, 6))
+    mask = np.zeros(dataset.shape, dtype=bool)
+    mask[0, 1] = mask[1, 2] = True
+    dataset.mask = mask
+    exp = Experiment(dataset)
+    trace = exp.rsr(1)
+    trace.remove_masks()
+    result = exp.wsr(1, trace)
+    expected = mask.copy()
+    expected[0] = False
+    np.testing.assert_array_equal(result.mask, expected)
+    np.testing.assert_array_equal(dataset.mask, mask)
+
+
+def test_replace_packed_column_preserves_individual_component_masks():
+    dataset = _dataset(np.arange(24).reshape(2, 3, 4) * (1 + 3j))
+    mask = np.zeros(dataset.shape, dtype=bool)
+    mask[0, 0, 1] = True
+    dataset.mask = mask
+    exp = Experiment(dataset)
+    result = exp.wsc(2, exp.rsc(2))
+    np.testing.assert_array_equal(result.mask, mask)
+    np.testing.assert_array_equal(result.data[~mask], dataset.data[~mask])
