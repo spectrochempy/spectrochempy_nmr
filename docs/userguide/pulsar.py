@@ -25,11 +25,10 @@
 # use `simulate_central_transition()`.
 
 # %%
-from spectrochempy_nmr.pulsar import Delay, IdealPulse
-from numpy import interp
-
 import spectrochempy as scp
 from spectrochempy.nmr import pulsar
+
+from spectrochempy_nmr.pulsar import Delay, IdealPulse
 
 spectrum = pulsar.simulate_central_transition(
     spin=2.5,
@@ -113,20 +112,20 @@ _ = scp.plot_multiple(
 # of 115 Hz FWHM applied by `pulsar.broaden()`.
 
 # %%
-simulation = dict(
-    spin=2.5,
-    larmor_hz=100e6,
-    spectral_width_hz=20e3,
-    spinning_hz=8e3,
-    points=4096,
-    accuracy=8,
-)
+simulation = {
+    "spin": 2.5,
+    "larmor_hz": 100e6,
+    "spectral_width_hz": 20e3,
+    "spinning_hz": 8e3,
+    "points": 4096,
+    "accuracy": 8,
+}
 simulated = pulsar.simulate_central_transition(
     cq_hz=2.6e6, eta=0.55, shift_hz=725, **simulation
 )
-step_hz = simulated.x.data[1] - simulated.x.data[0]
+half_bin = (simulated.x[1] - simulated.x[0]) / 2
 observed = pulsar.broaden(simulated, gaussian_fwhm_hz=115)
-observed.set_coordset(x=simulated.x + (step_hz / 2) * scp.ur.Hz)
+observed.set_coordset(x=simulated.x + half_bin)
 observed = observed[-4000.0:3500.0]
 
 
@@ -135,8 +134,8 @@ def central_transition(x, ampl, cq, eta, shift, fwhm):
         cq_hz=cq, eta=eta, shift_hz=shift, **simulation
     )
     spectrum = pulsar.broaden(spectrum, gaussian_fwhm_hz=fwhm)
-    centers = spectrum.x.data + step_hz / 2
-    return ampl * interp(x, centers, spectrum.data, left=0, right=0)
+    spectrum.x += half_bin
+    return ampl * spectrum.interpolate(dim="x", coord=x, fill_value=0).data
 
 
 fit = scp.Optimize(
