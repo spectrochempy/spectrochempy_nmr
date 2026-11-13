@@ -16,3 +16,11 @@ Guides
    ../concepts/hypercomplex
    pulsar
    czjzek
+
+See also
+--------
+
+* :external+core:doc:`NMR plugin in SpectroChemPy <userguide/plugins/nmr>`
+* :external+core:doc:`Core plotting guide <userguide/plotting/index>`
+* :external+core:doc:`Core processing guide <userguide/processing/index>`
+* :external+core:doc:`Core analysis guide <userguide/analysis/index>`

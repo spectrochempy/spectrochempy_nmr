@@ -6,3 +6,8 @@ Getting started
 
    installation
    quickstart
+
+See also
+--------
+
+* :external+core:doc:`SpectroChemPy documentation <index>`

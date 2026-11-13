@@ -40,14 +40,12 @@ body,
 
 .bd-header .navbar-brand .logo__title,
 .bd-header .navbar-nav > .nav-item > .nav-link,
-.bd-header .navbar-nav > .nav-item > .dropdown-toggle,
 .bd-header .navbar-icon-links a,
 .bd-header .theme-switch-button {
   color: #ffffff !important;
 }
 
 .bd-header .navbar-nav > .nav-item > .nav-link:hover,
-.bd-header .navbar-nav > .nav-item > .dropdown-toggle:hover,
 .bd-header .navbar-icon-links a:hover,
 .bd-header .theme-switch-button:hover {
   color: var(--scp-accent) !important;
@@ -74,22 +72,8 @@ body,
   white-space: nowrap;
 }
 
-.navbar-nav > .nav-item > .nav-link,
-.navbar-nav > .nav-item > .dropdown-toggle {
+.navbar-nav > .nav-item > .nav-link {
   font-weight: 650;
-}
-
-.nmr-navbar .dropdown-menu a.dropdown-item {
-  color: var(--pst-color-text-base);
-}
-
-.nmr-navbar .dropdown-menu a.dropdown-item:is(:hover, :focus, :active, .active) {
-  color: var(--pst-color-text-base);
-  background-color: var(--pst-color-surface);
-}
-
-.nmr-navbar .dropdown-menu a.dropdown-item[aria-current="page"] {
-  font-weight: 700;
 }
 
 .bd-sidebar-primary {
@@ -115,7 +99,7 @@ body,
 }
 
 /* PyData also renders the main navigation inside the mobile drawer. */
-.bd-sidebar-primary .sidebar-header-items .nmr-navbar .nav-item > :is(.nav-link, .dropdown-toggle) {
+.bd-sidebar-primary .sidebar-header-items .nmr-navbar .nav-item > .nav-link {
   display: block;
   width: 100%;
   padding: 0.4rem 0.6rem;
@@ -123,21 +107,11 @@ body,
   text-align: start;
 }
 
-.bd-sidebar-primary .sidebar-header-items .nmr-navbar .dropdown-menu {
-  background-color: var(--scp-sidebar);
-  border-color: rgba(255, 255, 255, 0.2);
-}
-
-.bd-sidebar-primary .sidebar-header-items .nmr-navbar .dropdown-divider {
-  border-color: rgba(255, 255, 255, 0.2);
-}
-
-.bd-sidebar-primary .sidebar-header-items .nmr-navbar .dropdown-menu a.dropdown-item,
 .bd-sidebar-primary .sidebar-header-items .theme-switch-button {
   color: #eceae7;
 }
 
-.bd-sidebar-primary .sidebar-header-items .nmr-navbar :is(.nav-link, .dropdown-toggle, .dropdown-item):is(:hover, :focus-visible, .active, [aria-expanded="true"]),
+.bd-sidebar-primary .sidebar-header-items .nmr-navbar .nav-link:is(:hover, :focus-visible, .active),
 .bd-sidebar-primary .sidebar-header-items .theme-switch-button:is(:hover, :focus-visible) {
   background-color: var(--scp-sidebar-hover);
   color: #ffffff;
