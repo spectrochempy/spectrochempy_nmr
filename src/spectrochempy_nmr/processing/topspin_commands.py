@@ -300,13 +300,11 @@ def replace_slice(dataset, domains, command, number, trace):
     trace_mask = np.broadcast_to(trace.mask, trace.shape)
     channels = (real,) if imag is None or imag == real else (real, imag)
     shares_mask = dataset.is_complex and imag != real
-    if shares_mask:
-        # A complex channel shares its mask between real and imaginary values.
-        if not np.array_equal(
-            mask[real] | mask[imag] if imag is not None else mask[real], trace_mask
-        ):
-            raise ValueError("Cannot change a mask shared with an untouched component")
-    else:
+    combined_mask = mask[real] if imag is None else mask[real] | mask[imag]
+    same_mask = np.array_equal(combined_mask, trace_mask)
+    if shares_mask and not same_mask:
+        raise ValueError("Cannot change a mask shared with an untouched component")
+    if not same_mask:
         for key in channels:
             mask[key] = trace_mask
 
@@ -315,7 +313,7 @@ def replace_slice(dataset, domains, command, number, trace):
     if imag == real:
         data[real] = values
     else:
-        writable = ~trace_mask if shares_mask else slice(None)
+        writable = ~trace_mask if same_mask and imag is not None else slice(None)
         data.real[real][writable] = values[writable]
         if imag is not None:
             data.real[imag][writable] = trace.data.imag[writable]
