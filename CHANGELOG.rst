@@ -11,6 +11,9 @@ Unreleased
 Added
 ~~~~~
 
+* Add ``Experiment.apk2d()`` for common F2 phase estimation on MQMAS XF2
+  data and common or individual phasing of complex spectral series.
+
 * Add ``Experiment.wsr()`` and ``wsc()`` to replace numbered 2D spectral traces.
 
 * Add TopSpin-style ``Experiment.abs1()``, ``abs2()``, ``rser()``,
