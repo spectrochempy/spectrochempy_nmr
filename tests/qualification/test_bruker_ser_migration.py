@@ -210,3 +210,28 @@ def test_synthetic_bruker_f2_allows_missing_direct_nucleus(tmp_path):
     assert f2.x.units == scp.ur.ppm
     with pytest.raises(NotImplementedError, match="Bruker F1.*quadrature"):
         f2.fft(dim="y")
+
+
+@pytest.mark.parametrize("width_hz", [None, 1000])
+def test_synthetic_bruker_ser_without_indirect_sfo1(tmp_path, width_hz):
+    path = _synthetic_ser(tmp_path, 1)
+    acqu2s = path / "acqu2s"
+    params = acqu2s.read_text().replace("##$SFO1= 125\n", "")
+    if width_hz is not None:
+        params = params.replace("##END=", f"##$SW_h= {width_hz}\n##END=")
+    acqu2s.write_text(params)
+
+    fid = scp.nmr.read_topspin(path / "ser")
+    f2 = fid.fft(dim="x")
+    assert f2.x.units == scp.ur.Hz
+    if width_hz is None:
+        np.testing.assert_array_equal(fid.y.data, np.arange(fid.shape[0]))
+        with pytest.raises(
+            ValueError, match="Bruker F1 FFT requires an acquisition spectral width"
+        ):
+            f2.fft(dim="y")
+    else:
+        np.testing.assert_allclose(
+            fid.y.to("s").data, np.arange(fid.shape[0]) / width_hz
+        )
+        assert f2.fft(dim="y").y.units == scp.ur.Hz

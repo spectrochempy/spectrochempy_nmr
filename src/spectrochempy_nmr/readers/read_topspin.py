@@ -303,7 +303,8 @@ nmr_valid_meta = [
     # ('subnam7', ''),
     # ('subnam8', ''),
     # ('subnam9', ''),
-    ("sw", "ppm"),  # ('sw_h', 'Hz'),
+    ("sw", "ppm"),
+    ("sw_h", "Hz"),
     # ('swibox', ''),
     ("td", ""),  # ('td0', ''),
     ("te", "K"),  # ('te2', ''),
@@ -1428,10 +1429,16 @@ def _read_topspin(*args, **kwargs):
     if normalized_fid:
         meta.sw_h = [normalized_dataset.meta.acquisition["spectral_width_hz"] * ur.Hz]
     else:
+        stored_widths = meta.sw_h or [None] * (parmode + 1)
         meta.sw_h = [
             (meta.sw[axis].m * meta.sfo1[axis] * 1e-6).to("Hz")
-            if meta.sw[axis] is not None and meta.sfo1[axis] is not None
-            else None
+            if (
+                meta.sw is not None
+                and meta.sw[axis] is not None
+                and meta.sfo1 is not None
+                and meta.sfo1[axis] is not None
+            )
+            else stored_widths[axis]
             for axis in range(parmode + 1)
         ]
 
@@ -1523,8 +1530,13 @@ def _read_topspin(*args, **kwargs):
         elif not meta.isfreq[axis]:
             if normalized_dataset is not None:
                 continue
-            # the axis is in time units
-            dw = (1.0 / meta.sw_h[axis]).to("us")
+            width = meta.sw_h[axis]
+            if datatype == "SER" and axis == 0 and width is None:
+                coord = Coord.arange(meta.td[axis], title="F1 increment index")
+                coord.meta["bruker_f1_width_missing"] = True
+                coords.append(coord)
+                continue
+            dw = (1.0 / width).to("us")
             coordpoints = np.arange(meta.td[axis])
             coord = Coord(
                 coordpoints * dw,

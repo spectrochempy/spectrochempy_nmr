@@ -49,6 +49,12 @@ def _fft_validate_input(dataset, *, dim, inv=False, **kwargs):
         if inv:
             raise NotImplementedError("Inverse channel reconstruction is not validated")
     if not inv:
+        coord = dataset.coordset[dim] if dataset.coordset is not None else None
+        if getattr(getattr(coord, "meta", None), "bruker_f1_width_missing", False):
+            raise ValueError(
+                "Bruker F1 FFT requires an acquisition spectral width. "
+                "Supply SW_h in Hz or restore SW and SFO1 in the indirect acquisition parameters."
+            )
         encodings = getattr(dataset.meta, "encoding", None)
         if encodings is not None:
             encoding = encodings[dataset.dims.index(dim)]

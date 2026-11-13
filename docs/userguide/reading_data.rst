@@ -77,6 +77,11 @@ This is useful when the spectrum was re-referenced after acquisition.
 Bruker F1 acquisition mode
 --------------------------
 
+If the indirect spectral width cannot be determined, the reader labels
+the F1 axis by increment index. F2 can still be transformed. To transform
+F1, supply the acquisition width in Hz (``SW_h``) or restore the indirect
+``SW`` and ``SFO1`` parameters.
+
 For a raw Bruker SER, the reader uses the indirect acquisition parameter
 ``FnMODE``. If it is missing or undefined, the reader uses ``MC2`` from
 the indirect processing parameters when available.

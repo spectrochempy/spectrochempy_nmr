@@ -332,7 +332,9 @@ def _fft_postprocess_result(new, dim=-1, inv=False, **kwargs):
     sfo1 = new.meta.sfo1[meta_idx]
     bf1 = new.meta.bf1[meta_idx] if new.meta.bf1 is not None else None
     sf = new.meta.sf[meta_idx] if new.meta.sf is not None else None
-    if not inv and (sf is None or (kwargs.get("ppm", True) and bf1 is None)):
+    if not inv and (
+        sfo1 is None or sf is None or (kwargs.get("ppm", True) and bf1 is None)
+    ):
         # Keep the core frequency grid when the vendor reference is unavailable.
         if new.meta.isfreq is not None:
             new.meta.isfreq[meta_idx] = True
