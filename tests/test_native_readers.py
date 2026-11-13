@@ -135,7 +135,10 @@ def test_unvalidated_inplace_fft_preserves_dataset(
     dataset.meta.encoding[1] = encoding
     dataset.meta.readonly = True
     before = dataset.copy()
-    with pytest.raises(NotImplementedError, match="UNVALIDATED"):
+    message = (
+        'quadrature="states"' if encoding == "UNVALIDATED:AGILENT-STATES" else encoding
+    )
+    with pytest.raises(NotImplementedError, match=message):
         if entry == "method":
             dataset.fft(axis=1, inplace=True, size=size)
         else:
@@ -205,7 +208,7 @@ def test_agilent_storage_decoding_does_not_claim_quadrature_normalization(
     np.testing.assert_array_equal(result.data[0], raw[0::2])
     np.testing.assert_array_equal(result.data[1], raw[1::2])
     assert result.meta.normalization_state == "storage-decoded"
-    with pytest.raises(NotImplementedError, match="UNVALIDATED"):
+    with pytest.raises(NotImplementedError, match='quadrature="states"'):
         result.fft(dim="x").fft(dim="y")
     annotated = scp.NDDataset(
         raw,
