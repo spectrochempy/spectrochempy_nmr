@@ -693,7 +693,7 @@ def __getattr__(name: str):
         from .interop import from_interop  # noqa: PLC0415
 
         return from_interop
-    if name == "autophase":
+    if name in {"apk", "autophase"}:
         from .processing.autophase import autophase
 
         return autophase
@@ -722,6 +722,7 @@ def __dir__() -> list[str]:
         "CzjzekDistribution",
         "CzjzekSamples",
         "simulate_czjzek",
+        "apk",
         "autophase",
         "process_agilent_noesy_states_tppi",
         "extract_noesy_components",

@@ -25,12 +25,17 @@ and the physical resolution are set by the retained samples.
 
    raw = scp.nmr.read("nmrdata/bruker/tests/nmr/MQMAS_27AL_PST5/51/ser")
    xf2 = scp.nmr.Experiment(raw).xf2(size=4096, direct_points=2048)
-   first_row = xf2[0, 0, :].squeeze()
-   phase = {"phc0": -58.0, "phc1": 0.0, "pivot": 0}
-   first_row.pk(**phase).real[65.0:20.0].plot()
+   first_row = scp.nmr.Experiment(xf2).rsr(1)
+   exclude = (first_row.x.data < 20.0) | (first_row.x.data > 65.0)
+   preview = scp.nmr.apk(first_row, order=0, exclude=exclude)
+   if not preview.estimate.success:
+       raise RuntimeError(preview.estimate.message)
+   phase = {"phc0": preview.estimate.p0, "phc1": preview.estimate.p1, "pivot": 0}
+   preview.phased.real[65.0:20.0].plot()
 
 By default, ``xf2()`` corrects the digital-filter delay before the phase
-preview. Adjust the phase on the first-row preview before running XFSHEAR.
+preview. The ``apk()`` alias for ``autophase()`` estimates the phase on
+the first row alone. Inspect the preview before running XFSHEAR.
 The phase angles are in degrees and the pivot is an F2 sample index.
 The sign convention matches SpectroChemPy's ``pk()``. To reproduce
 TopSpin phase values with a pivot of zero, reverse the signs of PHC0

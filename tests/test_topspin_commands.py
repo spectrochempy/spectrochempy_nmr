@@ -1,0 +1,118 @@
+# ruff: noqa: S101
+"""In-memory TopSpin command equivalents."""
+
+import numpy as np
+import pytest
+
+import spectrochempy as scp
+from spectrochempy_nmr import Experiment
+
+
+def _dataset(data, *, frequency=(True, True)):
+    paired = data.ndim == 3
+    dataset = scp.NDDataset(data, dims=["c", "y", "x"] if paired else ["y", "x"])
+    dataset.set_coordset(
+        **({"c": scp.Coord(np.arange(data.shape[0]))} if paired else {}),
+        y=scp.Coord(np.arange(data.shape[-2], dtype=float), units="ppm"),
+        x=scp.Coord(np.arange(data.shape[-1], dtype=float)[::-1], units="ppm"),
+    )
+    dataset.meta.isfreq = ([False] if paired else []) + list(frequency)
+    if paired:
+        dataset.meta.component_labels = ("S_R", "S_I")
+    return dataset
+
+
+def test_numbered_slices_keep_the_correct_complex_components():
+    data = np.arange(24).reshape(2, 3, 4) * (1 + 3j)
+    dataset = _dataset(data)
+    exp = Experiment(dataset)
+    row, col = exp.rsr(1), exp.rsc(2)
+    np.testing.assert_array_equal(row.data, data[0, 0])
+    np.testing.assert_array_equal(
+        col.data, data[0, :, 1].real + 1j * data[1, :, 1].real
+    )
+    np.testing.assert_array_equal(row.coord(0).data, dataset.x.data)
+    np.testing.assert_array_equal(col.coord(0).data, dataset.y.data)
+    assert row.coord(0).units == col.coord(0).units == scp.ur.ppm
+    with pytest.raises(IndexError, match="between 1 and 3"):
+        exp.rsr(0)
+
+
+def test_rser_counts_both_branches_in_ser_order():
+    data = np.arange(24).reshape(2, 3, 4) * (1 + 3j)
+    exp = Experiment(_dataset(data, frequency=(False, False)))
+    for number, branch, row in [(1, 0, 0), (2, 1, 0), (3, 0, 1), (6, 1, 2)]:
+        np.testing.assert_array_equal(exp.rser(number).data, data[branch, row])
+    with pytest.raises(ValueError, match="frequency-domain F2"):
+        exp.rsr(1)
+
+
+@pytest.mark.parametrize("command", ["abs1", "abs2"])
+def test_baseline_corrects_only_rr_and_preserves_source(command):
+    rr = (np.arange(8)[:, None] + 2) * (np.arange(10)[None, :] + 3)
+    data = np.stack([rr + 3j, rr * (2 + 4j)])
+    dataset = _dataset(data)
+    corrected = getattr(Experiment(dataset), command)(order=1)
+    np.testing.assert_allclose(corrected.data[0].real, 0, atol=1e-12)
+    np.testing.assert_array_equal(corrected.data[0].imag, data[0].imag)
+    np.testing.assert_array_equal(corrected.data[1], data[1])
+    np.testing.assert_array_equal(dataset.data, data)
+
+
+def test_baseline_limits_and_fit_ranges_with_a_descending_axis():
+    values = np.arange(10)[::-1]
+    data = np.tile(2.0 * values + 3, (4, 1))
+    data[:, 4] += 7
+    dataset = _dataset(data)
+    corrected = Experiment(dataset).abs2(
+        order=1, limits=(2, 8), ranges=[(2, 4), (7, 8)]
+    )
+    expected = data.copy()
+    expected[:, 1:8] = 0
+    expected[:, 4] = 7
+    np.testing.assert_allclose(corrected.data, expected, atol=1e-12)
+    np.testing.assert_array_equal(dataset.data, data)
+
+
+@pytest.mark.parametrize("stored_names", [False, True])
+def test_four_plane_spectrum(stored_names):
+    data = np.arange(4 * 8 * 10, dtype=float).reshape(4, 8, 10)
+    dataset = _dataset(data)
+    labels = ("rr", "ri", "ir", "ii")
+    dataset.meta.component_labels = tuple(
+        "2" + label if stored_names else label for label in labels
+    )
+    exp = Experiment(dataset)
+    np.testing.assert_array_equal(exp.rsr(1).data, data[0, 0] + 1j * data[1, 0])
+    np.testing.assert_array_equal(exp.rsc(1).data, data[0, :, 0] + 1j * data[2, :, 0])
+    corrected = exp.abs1(order=1)
+    np.testing.assert_allclose(corrected.data[0], 0, atol=1e-12)
+    np.testing.assert_array_equal(corrected.data[1:], data[1:])
+
+
+def test_complex_axis_is_respected_for_a_paired_spectrum():
+    data = np.arange(24).reshape(2, 3, 4) * (1 + 3j)
+    dataset = _dataset(data)
+    dataset.meta.interop_complex_axis = "F1"
+    exp = Experiment(dataset)
+    np.testing.assert_array_equal(
+        exp.rsr(1).data, data[0, 0].real + 1j * data[1, 0].real
+    )
+    np.testing.assert_array_equal(exp.rsc(1).data, data[0, :, 0])
+
+
+@pytest.mark.parametrize("direction", ["abs1", "abs2"])
+def test_default_baseline_excludes_signed_peaks(direction):
+    axis = np.linspace(-1, 1, 100)
+    values = np.tile(3 + 2 * axis, (100, 1))
+    values[:, 30:33] += 60
+    values[:, 62:65] -= 50
+    expected = values - (3 + 2 * axis)
+    if direction == "abs1":
+        values, expected = values.T, expected.T
+    result = getattr(Experiment(_dataset(values)), direction)(order=1)
+    np.testing.assert_allclose(result.data, expected, atol=1e-12)
+
+
+def test_apk_is_the_public_autophase_alias():
+    assert scp.nmr.apk is scp.nmr.autophase

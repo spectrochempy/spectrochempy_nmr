@@ -11,6 +11,10 @@ Unreleased
 Added
 ~~~~~
 
+* Add TopSpin-style ``Experiment.abs1()``, ``abs2()``, ``rser()``,
+  ``rsr()``, and ``rsc()`` for 2D data. Add ``scp.nmr.apk()`` as an alias
+  for ``autophase()`` and show first-row phase estimation in the MQMAS example.
+
 * Export real processed 1D NMR spectra with ``scp.nmr.write_jcamp()``
   and read them back with ``scp.read_jcamp()``.
 

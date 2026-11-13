@@ -60,3 +60,47 @@ applies SpectroChemPy's processing sequence to supported acquisitions.
 For the underlying dataset, plotting, and general processing API, see
 the `NMR plugin overview in the SpectroChemPy core documentation
 <https://www.spectrochempy.fr/latest/userguide/plugins/nmr.html>`_.
+
+.. _topspin-slice-and-baseline:
+
+TopSpin-style slice and baseline commands
+----------------------------------------
+
+Wrap a single dataset in :class:`~spectrochempy_nmr.Experiment`. These
+commands return new datasets in memory. They use TopSpin numbering, so row
+or column **1** corresponds to index **0** in SpectroChemPy.
+
+.. code-block:: python
+
+   fid = scp.nmr.Experiment(raw).rser(1)
+   experiment = scp.nmr.Experiment(spectrum)
+   row = experiment.rsr(1)
+   column = experiment.rsc(1)
+
+For a plain F1 × F2 matrix, ``rser(1)`` and ``rsr(1)`` select
+``dataset[0, :].squeeze("y")``. For a real spectrum, ``rsc(1)`` selects
+``dataset[:, 0].squeeze("x")``. In a paired acquisition, ``rser()`` numbers the
+two stored traces of each F1 increment consecutively. With four spectral
+components, ``rsr()`` keeps the complex F2 trace from the F1-real channel, and
+``rsc()`` builds a complex F1 trace from the F2-real components. After an
+F2-only transform, ``rsc()`` returns an F1 time trace with the acquisition
+convention still encoded.
+
+Use ``abs2()`` to fit a polynomial separately along each F2 row and
+``abs1()`` to fit along each F1 column of a fully transformed spectrum.
+Both correct only the real-real plane, as in TopSpin. The default polynomial
+degree is 5. Set ``limits`` to correct a specific interval and ``ranges`` to
+identify peak-free regions for the fit. Both take values in the units of
+the selected axis. By default the fit iteratively excludes positive and negative peaks
+using each trace's residual noise estimate.
+
+.. code-block:: python
+
+   corrected = experiment.abs2(
+       order=1, limits=(20.0, 65.0), ranges=[(21.0, 24.0), (61.0, 64.0)]
+   )
+   corrected = scp.nmr.Experiment(corrected).abs1(order=1)
+
+With explicit ranges the fit uses SpectroChemPy's
+:class:`~spectrochempy.Baseline` polynomial processor. Automatic fit-point
+selection can differ from TopSpin's peak-region selection.

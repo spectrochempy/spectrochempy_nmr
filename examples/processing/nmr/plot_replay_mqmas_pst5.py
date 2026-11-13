@@ -3,7 +3,7 @@ Processing an MQMAS spectrum
 ============================
 
 This example processes an aluminium-27 Bruker States acquisition of PST-5.
-It follows the TopSpin XFSHEAR workflow with manual F2 phasing and
+It follows the TopSpin XFSHEAR workflow with automatic F2 phase estimation and
 compares the effects of apodization and baseline correction. It reconstructs
 the direct quadrature with a Hilbert transform and rescales F1 to the
 isotropic chemical-shift axis.
@@ -30,16 +30,20 @@ xf2 = scp.nmr.Experiment(raw).xf2(
 )
 
 # %%
-# Inspect the first acquired row. Adjust the phase parameters on this
-# preview. XF2 has already compensated the digital group delay on the
-# F2 frequency grid. The pivot is a sample index counted from the start of F2.
-phase = {"phc0": -58.0, "phc1": 0.0, "pivot": 0}
-first_row = xf2[0, 0, :].squeeze()
-_ = first_row.pk(**phase).real[65.0:20.0].plot()
+# Estimate the zero-order phase on the first complex F2 row alone.
+# The rest of the XF2 dataset is unchanged by this estimate.
+experiment = scp.nmr.Experiment(xf2)
+first_row = experiment.rsr(1)
+exclude = (first_row.x.data < 20.0) | (first_row.x.data > 65.0)
+preview = scp.nmr.apk(first_row, order=0, exclude=exclude)
+if not preview.estimate.success:
+    raise RuntimeError(preview.estimate.message)
+_ = preview.phased.real[65.0:20.0].plot()
 
 # %%
-# Apply the selected phase to both States branches at every F1 increment.
-phased = scp.nmr.Experiment(xf2).xf2p(**phase)
+# Apply those same angles to both States branches at every F1 increment.
+phase = {"phc0": preview.estimate.p0, "phc1": preview.estimate.p1, "pivot": 0}
+phased = experiment.xf2p(**phase)
 
 # %%
 # XFSHEAR reconstructs the F2 quadrature and performs the F1 FFT. The
@@ -74,11 +78,10 @@ windowed_rr = windowed[0, :, :].squeeze().real[52.0:25.0, 65.0:20.0]
 # Fit a linear baseline along F2 for each row of the real RR map, using
 # regions on either side of the resonances. All three maps use the same
 # contour levels so changes in intensity remain visible.
-baseline = scp.Baseline(
-    model="polynomial", order=1, ranges=[(21.0, 24.0), (61.0, 64.0)]
+corrected_spectrum = scp.nmr.Experiment(windowed).abs2(
+    order=1, limits=(20.0, 65.0), ranges=[(21.0, 24.0), (61.0, 64.0)]
 )
-baseline.fit(windowed_rr)
-corrected = windowed_rr - baseline.baseline
+corrected = corrected_spectrum[0, :, :].squeeze().real[52.0:25.0, 65.0:20.0]
 
 peak = float(scp.Quantity(region.max()).magnitude)
 positive_levels = [0.08 * peak * 1.3**i for i in range(10)]
