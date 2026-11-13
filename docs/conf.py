@@ -27,6 +27,11 @@ github_ref = os.environ.get("NMR_DOCS_GITHUB_REF", "").strip() or (
 )
 version = spectrochempy_nmr.NMRPlugin.version if _release_build else "Unreleased"
 release = version
+_header_version = (
+    "dev"
+    if os.environ.get("READTHEDOCS_VERSION") == "latest" or not _release_build
+    else version
+)
 language = "en"
 master_doc = "index"
 source_suffix = ".rst"
@@ -113,7 +118,7 @@ html_css_files = ["css/nmr.css"]
 html_sidebars = {"index": ["sidebar-home.html"]}
 html_theme_options = {
     "navbar_align": "left",
-    "logo": {"text": "SpectroChemPy NMR"},
+    "logo": {"text": f"NMR {_header_version}"},
     "navbar_start": ["navbar-logo"],
     "navbar_end": ["theme-switcher", "navbar-icon-links"],
     "navbar_persistent": ["search-button-field"],

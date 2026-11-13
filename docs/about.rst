@@ -6,3 +6,5 @@ About
 
    compatibility
    changelog
+   bibliography
+   devguide/index
