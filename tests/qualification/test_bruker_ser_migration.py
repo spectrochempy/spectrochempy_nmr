@@ -65,14 +65,7 @@ def _check_parity(path, monkeypatch, *, storage, rows, points, filtered, dc):
         )
 
 
-@pytest.mark.parametrize(
-    ("mode", "complete", "nus", "floating"),
-    [(mode, complete, False, False) for mode in (1, 5, 6) for complete in (True, False)]
-    + [(5, True, True, False), (1, True, False, True)],
-)
-def test_synthetic_public_ser_parity(
-    tmp_path, monkeypatch, mode, complete, nus, floating
-):
+def _synthetic_ser(tmp_path, mode, complete=True, nus=False, floating=False):
     path = tmp_path / "bruker" / "1"
     path.mkdir(parents=True)
     td = 120 if floating else (240 if complete else 256)
@@ -87,7 +80,8 @@ def test_synthetic_public_ser_parity(
     (path / "acqu2s").write_text(
         "##TITLE= Synthetic Bruker indirect acquisition\n"
         f"##$TD= {8 if complete else 6}\n##$SW= 8\n##$SFO1= 125\n"
-        f"##$FnMODE= {mode}\n##$NUC1= <13C>\n##END=\n"
+        + (f"##$FnMODE= {mode}\n" if mode is not None else "")
+        + "##$NUC1= <13C>\n##END=\n"
     )
     samples = np.arange(8 * (128 if floating else 256), dtype=np.int32)
     dtype = ">f8" if floating else ">i4"
@@ -95,6 +89,19 @@ def test_synthetic_public_ser_parity(
     if nus:
         # The legacy path ignores this directory, while nmrglue-ng opens it.
         (path / "nuslist").mkdir()
+    return path
+
+
+@pytest.mark.parametrize(
+    ("mode", "complete", "nus", "floating"),
+    [(mode, complete, False, False) for mode in (1, 5, 6) for complete in (True, False)]
+    + [(5, True, True, False), (1, True, False, True)],
+)
+def test_synthetic_public_ser_parity(
+    tmp_path, monkeypatch, mode, complete, nus, floating
+):
+    path = _synthetic_ser(tmp_path, mode, complete, nus, floating)
+    dtype = ">f8" if floating else ">i4"
     _check_parity(
         path,
         monkeypatch,
@@ -159,3 +166,32 @@ def test_synthetic_experiment_folder_with_auxiliary_files(paired_ser, monkeypatc
     for path in (paired_ser, paired_ser.relative_to(Path.cwd())):
         actual = scp.read_topspin(path, **options)
         np.testing.assert_array_equal(actual.data, expected.data)
+
+
+@pytest.mark.parametrize("mode", [None, 0, 99])
+def test_synthetic_unknown_bruker_f1_is_only_required_for_f1(tmp_path, mode):
+    path = _synthetic_ser(tmp_path, mode) / "ser"
+    fid = scp.nmr.read_topspin(path)
+    assert fid.dims == ["y", "x"]
+    f2 = fid.fft(dim="x")
+    assert f2.x.units == scp.ur.Hz
+    with pytest.raises(NotImplementedError, match="Bruker F1.*quadrature"):
+        f2.fft(dim="y")
+    with pytest.raises(NotImplementedError, match="Bruker F1.*quadrature"):
+        scp.nmr.Experiment(fid).process()
+
+    resolved = scp.nmr.read_topspin(path, quadrature="qf")
+    np.testing.assert_array_equal(resolved.data, fid.data)
+    assert resolved.fft(dim="x").fft(dim="y").shape == fid.shape
+
+
+@pytest.mark.parametrize(("fnmode", "expected"), [(None, "STATES-TPPI"), (4, "STATES")])
+def test_synthetic_bruker_f1_prefers_fnmode_to_mc2(tmp_path, fnmode, expected):
+    path = _synthetic_ser(tmp_path, fnmode)
+    status = path / "pdata" / "1" / "proc2s"
+    status.parent.mkdir(parents=True)
+    status.write_text("##TITLE= Processing status\n##END=\n")
+    status.with_name("proc2").write_text("##TITLE= Processing\n##$MC2= 4\n##END=\n")
+    fid = scp.nmr.read_topspin(path / "ser")
+    assert fid.meta.acquisition_encoding[0] == expected
+    assert fid.fft(dim="x").fft(dim="y").shape == fid.shape

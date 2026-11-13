@@ -31,6 +31,7 @@ from spectrochempy.core.readers.importer import Importer
 from spectrochempy.core.readers.importer import _importer_method
 from spectrochempy.core.units import ur
 from spectrochempy.utils._logging import warning_
+from spectrochempy.utils.exceptions import SpectroChemPyError
 from spectrochempy.utils.meta import Meta
 from spectrochempy_nmr import _check_nmrglue_installation
 from spectrochempy_nmr.readers._channels import pad_channel_metadata
@@ -752,6 +753,9 @@ def read_topspin(*paths, **kwargs):
         removal. This subtracts the mean of each row along the last axis,
         which removes the spike at the centre of the spectrum caused by the
         receiver DC offset.
+    quadrature : {"qf", "states", "states-tppi", "echo-antiecho"}, optional
+        Supply the F1 acquisition mode for a SER with missing or undefined
+        acquisition and processing mode parameters.
     use_list : bool or str, optional, default: False
         Use a list of values in seconds for the indirect coordinate of
         pseudo-2D data. Set to ``True`` for ``vdlist`` or give the list filename
@@ -795,6 +799,14 @@ def read_topspin(*paths, **kwargs):
     253.0909 ppm
 
     """
+    quadrature = kwargs.get("quadrature")
+    if quadrature is not None and quadrature not in (
+        "qf",
+        "states",
+        "states-tppi",
+        "echo-antiecho",
+    ):
+        raise ValueError("quadrature must be qf, states, states-tppi or echo-antiecho")
     kwargs["filetypes"] = ["TopSpin files (1r, 1i, *dir/*, 1r/*)"]
     kwargs["protocol"] = ["topspin"]
     importer = Importer()
@@ -1363,38 +1375,37 @@ def _read_topspin(*args, **kwargs):
     if datatype in ["SER"]:
         meta.isfreq.insert(0, False)
 
-        # Explicitly read indirect dimension encoding from acqu2s.
-        # The generic metadata loop places acqus FnMODE at the direct
-        # dimension, but for SER data it describes indirect dimension encoding.
-        _acqu2s = dic.get("acqu2s", {})
-        _fnmode_val = (
-            _acqu2s.get("FnMODE")
-            if _acqu2s.get("FnMODE") is not None
-            else _acqu2s.get("fnmode")
-        )
-        if _fnmode_val is None:
-            _fnmode_val = meta.fnmode[-2]
+        indirect = dic.get("acqu2s", dic.get("acqu2", {}))
+        fnmode = indirect.get("FnMODE", indirect.get("fnmode"))
+        if fnmode is None and meta.fnmode is not None:
+            fnmode = meta.fnmode[-2]
+        if not isinstance(fnmode, (int, np.integer)) or not 0 < fnmode < len(FnMODE):
+            fnmode = None
+            for parameters in (dic.get("proc2s", {}), dic.get("proc2", {}), indirect):
+                mc2 = parameters.get("MC2", parameters.get("mc2"))
+                if isinstance(mc2, (int, np.integer)) and 0 <= mc2 < len(FnMODE) - 1:
+                    fnmode = mc2 + 1
+                    break
+        quadrature = kwargs.get("quadrature")
+        if quadrature is not None:
+            requested = FnMODE.index(quadrature.upper())
+            if fnmode not in (None, 0, requested):
+                raise SpectroChemPyError(
+                    "quadrature conflicts with the recorded TopSpin F1 mode"
+                )
+            fnmode = requested
 
-        _mc2_val = None
-        if meta.mc2 is not None:
-            _mc2_val = (
-                _acqu2s.get("MC2")
-                if _acqu2s.get("MC2") is not None
-                else _acqu2s.get("mc2")
+        if isinstance(fnmode, (int, np.integer)) and 0 < fnmode < len(FnMODE):
+            if meta.fnmode is None:
+                meta.fnmode = [None] * data.ndim
+            meta.fnmode[-2] = fnmode
+            mode = FnMODE[fnmode]
+            meta.encoding[-2] = (
+                f"UNVALIDATED:BRUKER-{mode}" if mode in ("TPPI", "QSEQ") else mode
             )
-            if _mc2_val is None:
-                _mc2_val = meta.mc2[-2]
-
-        # For historical reasons,
-        # MC2 is interpreted when the acquisition status
-        # parameter FnMODE has the value undefined, i.e. 0
-        if _fnmode_val == 0 and _mc2_val is not None:
-            _fnmode_val = _mc2_val + 1
-
-        if _fnmode_val is not None:
-            meta.fnmode[-2] = _fnmode_val
-            meta.encoding[-2] = FnMODE[_fnmode_val]
-            meta.iscomplex[-2] = _fnmode_val > 1
+            meta.iscomplex[-2] = mode in ("STATES", "STATES-TPPI", "ECHO-ANTIECHO")
+        else:
+            meta.encoding[-2] = "UNVALIDATED:BRUKER-F1"
 
     # correct TD, so it is the number of complex points, not the number of data
     # not for the last dimension which is already correct
@@ -1406,10 +1417,6 @@ def _read_topspin(*args, **kwargs):
 
     paired_ser = datatype == "SER" and meta.iscomplex[0]
     if paired_ser:
-        if meta.encoding[0] not in ("STATES", "STATES-TPPI", "ECHO-ANTIECHO"):
-            raise NotImplementedError(
-                f"TopSpin indirect encoding {meta.encoding[0]!r} has no validated channel profile"
-            )
         if not normalized_ser:
             if data.shape[0] % 2:
                 raise ValueError("TopSpin States SER requires an even number of traces")

@@ -13,6 +13,20 @@ def _require_fft_prevalidation():
         )
 
 
+def _require_known_f1_quadrature(encoding):
+    if encoding == "UNVALIDATED:AGILENT-STATES":
+        raise NotImplementedError(
+            "Agilent F1 acquisition mode is ambiguous. Reopen with "
+            'read_agilent(..., quadrature="states") or quadrature="states-tppi".'
+        )
+    if encoding == "UNVALIDATED:BRUKER-F1":
+        raise NotImplementedError(
+            "Bruker F1 acquisition mode is undefined. Reopen with "
+            'read_topspin(..., quadrature=mode), where mode is "qf", "states", "states-tppi", or '
+            '"echo-antiecho".'
+        )
+
+
 def _fft_validate_input(dataset, *, dim, inv=False, **kwargs):
     """Reject unsupported transforms without modifying the original dataset."""
     if kwargs.get("convention") == "topspin-xf2":
@@ -38,6 +52,7 @@ def _fft_validate_input(dataset, *, dim, inv=False, **kwargs):
         encodings = getattr(dataset.meta, "encoding", None)
         if encodings is not None:
             encoding = encodings[dataset.dims.index(dim)]
+            _require_known_f1_quadrature(encoding)
             if isinstance(encoding, str) and (
                 encoding.startswith(("UNVALIDATED:", "PENDING-F2:"))
                 or encoding == "CHANNELS"

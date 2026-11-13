@@ -74,6 +74,19 @@ analyzed directly.
 Use ``proc_axis=True`` to use the reference saved during TopSpin processing.
 This is useful when the spectrum was re-referenced after acquisition.
 
+Bruker F1 acquisition mode
+--------------------------
+
+For a raw Bruker SER, the reader uses the indirect acquisition parameter
+``FnMODE``. If it is missing or undefined, the reader uses ``MC2`` from
+the indirect processing parameters when available.
+
+When the mode is still unknown, you can read the traces and transform F2.
+If you need F1, reopen the acquisition with its known mode, for example
+``scp.nmr.read_topspin(path, quadrature="states-tppi")``, then apply the
+F2 and F1 transforms in order. The accepted choices are ``"qf"``,
+``"states"``, ``"states-tppi"`` and ``"echo-antiecho"``.
+
 Agilent/Varian States quadrature
 --------------------------------
 
