@@ -195,3 +195,18 @@ def test_synthetic_bruker_f1_prefers_fnmode_to_mc2(tmp_path, fnmode, expected):
     fid = scp.nmr.read_topspin(path / "ser")
     assert fid.meta.acquisition_encoding[0] == expected
     assert fid.fft(dim="x").fft(dim="y").shape == fid.shape
+
+
+def test_synthetic_bruker_f2_allows_missing_direct_nucleus(tmp_path):
+    path = _synthetic_ser(tmp_path, None)
+    acqus = path / "acqus"
+    acqus.write_text(acqus.read_text().replace("##$NUC1= <13C>\n", ""))
+    status = path / "pdata" / "1" / "procs"
+    status.parent.mkdir(parents=True)
+    status.write_text("##TITLE= Processing status\n##$SF= 125\n##END=\n")
+
+    fid = scp.nmr.read_topspin(path / "ser")
+    f2 = fid.fft(dim="x")
+    assert f2.x.units == scp.ur.ppm
+    with pytest.raises(NotImplementedError, match="Bruker F1.*quadrature"):
+        f2.fft(dim="y")

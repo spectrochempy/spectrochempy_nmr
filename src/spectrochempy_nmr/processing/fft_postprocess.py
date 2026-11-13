@@ -339,8 +339,8 @@ def _fft_postprocess_result(new, dim=-1, inv=False, **kwargs):
         return new
     sw = new.meta.sw_h[meta_idx]
 
-    if new.meta.nuc1 is not None:
-        nuc1 = new.meta.nuc1[meta_idx]
+    nuc1 = new.meta.nuc1[meta_idx] if new.meta.nuc1 is not None else None
+    if nuc1:
         m = re.match(r"([^a-zA-Z]+)([a-zA-Z]+)", nuc1)
         nucleus = "^{" + m[1] + "}" + m[2] if m is not None else ""
     else:
