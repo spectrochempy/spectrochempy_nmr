@@ -353,6 +353,15 @@ class Experiment:
         )
 
     @property
+    def _supports_agilent_tppi_fft(self) -> bool:
+        return (
+            self.ndim == 2
+            and self.is_time_domain
+            and self._meta().get("normalization_profile") == "agilent-tppi-2d-v1"
+            and self.encoding == ("UNVALIDATED:AGILENT-TPPI", "QSIM")
+        )
+
+    @property
     def _supports_states_fft(self) -> bool:
         return (
             self.ndim == 3
@@ -441,7 +450,9 @@ class Experiment:
             report.add_info("Raw 1D FID detected.")
         elif self.source_kind == "ser":
             report.add_info("Raw 2D SER detected.")
-            if self._supports_qf_fft:
+            if self._supports_agilent_tppi_fft:
+                report.add_info("Native Agilent TPPI FFT processing is available.")
+            elif self._supports_qf_fft:
                 report.add_info("Normalized 2D QF FFT processing is available.")
             elif self._supports_states_fft:
                 report.add_info(
@@ -683,6 +694,7 @@ class Experiment:
         digital_filter: str | None = None,
         bruker_group_delay: float | None = None,
         replay: str | None = None,
+        tppi_reference: tuple[tuple[float, float], tuple[float, float]] | None = None,
     ) -> NDDataset:
         """
         State-aware NMR processing.
@@ -691,7 +703,8 @@ class Experiment:
         current data domain.  Never modifies the source dataset.
 
         Processing covers validated 1D experiments and FFT-only processing
-        of explicitly normalized raw 2D QF, States, States-TPPI and echo/anti-echo acquisitions.
+        of explicitly normalized raw 2D QF, States, States-TPPI and echo/anti-echo acquisitions,
+        as well as native Agilent TPPI.
 
         Parameters
         ----------
@@ -753,6 +766,10 @@ class Experiment:
             Read the uncorrected acquisition. Replay uses the
             processing ppm grid and retains the FID's scan/gain normalization.
             Other processing options cannot be combined with replay.
+
+        tppi_reference : tuple, optional
+            Two (observation MHz, carrier ppm) pairs in F1, F2 order for
+            native Agilent TPPI. The default returns carrier-relative Hz.
 
         Returns
         -------
@@ -870,6 +887,53 @@ class Experiment:
         if bruker_group_delay is not None and not supports_echo:
             raise ValueError(
                 "bruker_group_delay requires an imported raw echo/anti-echo FID"
+            )
+        if tppi_reference is not None and not self._supports_agilent_tppi_fft:
+            raise ValueError(
+                "tppi_reference requires a native Agilent TPPI acquisition"
+            )
+        if self._supports_agilent_tppi_fft:
+            if (
+                any(
+                    value is not None
+                    for value in (
+                        apodization,
+                        lb,
+                        gb,
+                        ssb,
+                        pow,
+                        size,
+                        phase,
+                        reference,
+                        replay,
+                    )
+                )
+                or phc0
+                or phc1
+            ):
+                raise ValueError(
+                    "Agilent TPPI processing supports FFT and referencing only"
+                )
+            from .processing.agilent_tppi import process_agilent_tppi  # noqa: PLC0415
+
+            result = process_agilent_tppi(ds, tppi_reference)
+            requested = (
+                {} if tppi_reference is None else {"tppi_reference": tppi_reference}
+            )
+            return self._attach_scp_processing_trace(
+                result,
+                requested=requested,
+                applied={
+                    "fft": True,
+                    "fft_order": ("F2", "F1"),
+                    "fft_convention": (
+                        "var2pipe -noaswap",
+                        "FT -nodf",
+                        "ZF 2N",
+                        "FT -real",
+                    ),
+                    **requested,
+                },
             )
         if self._supports_qf_fft or self._supports_states_fft or supports_echo:
             if (
@@ -1690,7 +1754,9 @@ class Experiment:
         if self.encoding:
             lines.append(f"  encoding: {' × '.join(self.encoding)}")
         lines.append(f"  processable: {'yes' if self.is_processable else 'no'}")
-        if self._supports_qf_fft:
+        if self._supports_agilent_tppi_fft:
+            lines.append("  public processing: native Agilent TPPI FFT")
+        elif self._supports_qf_fft:
             lines.append("  public processing: normalized 2D QF FFT only")
         elif self._supports_states_fft:
             lines.append(
