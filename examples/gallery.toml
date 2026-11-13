@@ -73,6 +73,16 @@ section = "NMR simulation"
 section_ref = "examples-processing-nmr-index"
 
 [[examples]]
+path = "simulation/plot_simulate_central_transition.py"
+section = "NMR simulation"
+section_ref = "examples-simulation-index"
+
+[[examples]]
+path = "simulation/plot_fit_central_transition.py"
+section = "NMR simulation"
+section_ref = "examples-simulation-index"
+
+[[examples]]
 path = "processing/nmr/plot_replay_mqmas_pst5.py"
 section = "NMR processing"
 section_ref = "examples-processing-nmr-index"

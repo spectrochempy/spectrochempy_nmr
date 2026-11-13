@@ -18,9 +18,6 @@ are illustrative and the plot uses peak-normalized intensities.
 import os
 from pathlib import Path
 
-import matplotlib.pyplot as plt
-import numpy as np
-
 import spectrochempy as scp
 
 # %%
@@ -45,8 +42,8 @@ models = (
     ),
 )
 
-fig, ax = plt.subplots(figsize=(8, 3.8), constrained_layout=True)
 profiles = []
+labels = []
 for label, distribution in models:
     spectrum = scp.nmr.czjzek.simulate_czjzek(
         distribution,
@@ -60,56 +57,57 @@ for label, distribution in models:
         accuracy=4,
         transitions="central",
     )
-    frequency_hz = spectrum.x.data
-    profiles.append(spectrum.data.real)
-    ax.plot(
-        frequency_hz / larmor_hz * 1e6,
-        profiles[-1] / profiles[-1].max(),
-        alpha=0.65,
-        label=label,
-    )
+    spectrum.x.meta["acquisition_frequency"] = larmor_hz * scp.ur.Hz
+    spectrum.x.ito("ppm")
+    profiles.append(spectrum.real)
+    labels.append(label)
 
 mixture = 0.75 * profiles[0] + 0.25 * profiles[1]
-ax.plot(
-    frequency_hz / larmor_hz * 1e6,
-    mixture / mixture.max(),
-    color="black",
-    linewidth=1.5,
-    label="Illustrative mixture",
-)
+spectra = [profile.normalize() for profile in (*profiles, mixture)]
+labels.append("Illustrative mixture")
+colors = ["C0", "C1", "black"]
+widths = [1.5, 1.5, 1.5]
+alphas = [0.65, 0.65, 1.0]
 
 # %%
 # Optionally inspect the locally supplied experimental central region
 # -------------------------------------------------------------------
 experiment_path = os.environ.get("SCPY_NMR_ALUMINA_EXPERIMENT")
+title = "Illustrative alumina model"
 if experiment_path:
-    import nmrglue as ng
-
     experiment = Path(experiment_path).expanduser()
-    metadata, observed = ng.bruker.read_pdata(str(experiment / "pdata" / "1"))
-    acqu, proc = metadata["acqus"], metadata["procs"]
-    if acqu["NUC1"] != "27Al" or observed.ndim != 1:
+    observed = scp.nmr.read_topspin(experiment / "pdata" / "1" / "1r", proc_axis=True)
+    if observed is None:
         raise ValueError("Expected a processed one-dimensional 27Al experiment.")
-    ppm = proc["OFFSET"] - np.arange(observed.size) * (
-        proc["SW_p"] / proc["SF"] / observed.size
-    )
+    observed = observed.squeeze().real
+    if observed.ndim != 1 or observed.meta.nuc1[-1] != "27Al":
+        raise ValueError("Expected a processed one-dimensional 27Al experiment.")
+    ppm = observed.x.data
     center = (ppm > -35) & (ppm < 100)
-    if not center.any() or observed[center].max() <= 0:
+    if not center.any():
         raise ValueError("The central 27Al region must have positive signal.")
-    ax.plot(
-        ppm,
-        observed / observed[center].max(),
-        color="C3",
-        linewidth=1,
-        label="Archived alumina, peak normalized",
-    )
-    ax.set_title("Alumine 800 °C, illustrative model overlay")
-else:
-    ax.set_title("Illustrative alumina model")
-ax.set(
+    peak = observed[center].max()
+    if peak.magnitude <= 0:
+        raise ValueError("The central 27Al region must have positive signal.")
+    spectra.append(observed / peak)
+    labels.append("Archived alumina, peak normalized")
+    colors.append("C3")
+    widths.append(1)
+    alphas.append(1.0)
+    title = "Alumine 800 °C, illustrative model overlay"
+
+_ = scp.plot_multiple(
+    spectra,
+    method="pen",
+    labels=labels,
+    color=colors,
+    lw=widths,
+    alpha=alphas,
+    legend="best",
+    figsize=(8, 3.8),
     xlabel="Chemical shift / ppm",
     ylabel="Peak-normalized intensity",
-    xlim=(100, -35),
+    xlim=(-35, 100),
+    reverse=True,
+    title=title,
 )
-ax.legend(fontsize="small")
-plt.show()

@@ -10,8 +10,6 @@ spin-5/2 central-transition spectra with the same isotropic shift.
 
 # %%
 import matplotlib.pyplot as plt
-import numpy as np
-
 import spectrochempy as scp
 
 # %%
@@ -31,24 +29,36 @@ extended = scp.nmr.czjzek.CzjzekDistribution(
 fig, axes = plt.subplots(1, 2, figsize=(9, 3.4), constrained_layout=True)
 for label, distribution in (("Czjzek", standard), ("Extended Czjzek", extended)):
     nodes = distribution.sample(size=4096, seed=0)
-    axes[0].hist(
-        np.abs(nodes.cq_hz) / 1e6,
+    coupling = scp.NDDataset(abs(nodes.cq_hz), units="Hz", title=r"$|C_Q|$")
+    coupling.ito("MHz")
+    asymmetry = scp.NDDataset(nodes.eta, title=r"$\eta$")
+    _ = coupling.plot(
+        method="hist",
+        ax=axes[0],
         bins=45,
         density=True,
         histtype="step",
         label=label,
+        show=False,
     )
-    axes[1].hist(nodes.eta, bins=30, density=True, histtype="step", label=label)
-axes[0].set(xlabel=r"$|C_Q|$ / MHz", ylabel="Probability density / MHz⁻¹")
-axes[1].set(xlabel=r"$\eta$", ylabel="Probability density")
-axes[1].legend()
+    _ = asymmetry.plot(
+        method="hist",
+        ax=axes[1],
+        bins=30,
+        density=True,
+        histtype="step",
+        label=label,
+        show=False,
+    )
+_ = axes[1].legend()
 
 # %%
 # Average the spectra over the distribution
 # -----------------------------------------
 # This small node count keeps the example quick. Increase both ``samples``
 # and powder ``accuracy`` when checking convergence for an actual fit.
-fig, ax = plt.subplots(figsize=(8, 3.4), constrained_layout=True)
+spectra = []
+labels = []
 for label, distribution in (("Czjzek", standard), ("Extended Czjzek", extended)):
     spectrum = scp.nmr.czjzek.simulate_czjzek(
         distribution,
@@ -62,7 +72,16 @@ for label, distribution in (("Czjzek", standard), ("Extended Czjzek", extended))
         accuracy=4,
         transitions="central",
     )
-    ax.plot(spectrum.x.data / 1000, spectrum.data.real, label=label)
-ax.set(xlabel="Frequency offset / kHz", ylabel="Bin mass", xlim=(1, 7))
-ax.legend()
-plt.show()
+    spectrum.x.ito("kHz")
+    spectra.append(spectrum.real)
+    labels.append(label)
+
+_ = scp.plot_multiple(
+    spectra,
+    method="pen",
+    labels=labels,
+    legend="best",
+    figsize=(8, 3.4),
+    xlim=(1, 7),
+    ylabel="Bin mass",
+)
