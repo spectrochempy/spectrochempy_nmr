@@ -10,8 +10,18 @@ See :doc:`../userguide/pulsar` for the coordinate and intensity conventions.
 .. raw:: html
 
    <span id="czjzek-distributions"></span>
+   <span id="module-spectrochempy_nmr.czjzek"></span>
    <span id="spectrochempy_nmr.czjzek.CzjzekSamples"></span>
+   <span id="spectrochempy_nmr.czjzek.CzjzekSamples.cq_hz"></span>
+   <span id="spectrochempy_nmr.czjzek.CzjzekSamples.eta"></span>
+   <span id="spectrochempy_nmr.czjzek.CzjzekSamples.shift_hz"></span>
+   <span id="spectrochempy_nmr.czjzek.CzjzekSamples.weights"></span>
    <span id="spectrochempy_nmr.czjzek.CzjzekDistribution"></span>
+   <span id="spectrochempy_nmr.czjzek.CzjzekDistribution.sigma_hz"></span>
+   <span id="spectrochempy_nmr.czjzek.CzjzekDistribution.cq_hz"></span>
+   <span id="spectrochempy_nmr.czjzek.CzjzekDistribution.eta"></span>
+   <span id="spectrochempy_nmr.czjzek.CzjzekDistribution.shift_hz"></span>
+   <span id="spectrochempy_nmr.czjzek.CzjzekDistribution.shift_sigma_hz"></span>
    <span id="spectrochempy_nmr.czjzek.CzjzekDistribution.sample"></span>
    <span id="spectrochempy_nmr.czjzek.simulate_czjzek"></span>
 
