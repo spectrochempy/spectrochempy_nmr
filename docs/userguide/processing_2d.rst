@@ -64,7 +64,7 @@ the `NMR plugin overview in the SpectroChemPy core documentation
 .. _topspin-slice-and-baseline:
 
 TopSpin-style slice and baseline commands
-----------------------------------------
+-----------------------------------------
 
 Wrap a single dataset in :class:`~spectrochempy_nmr.Experiment`. These
 commands return new datasets in memory. They use TopSpin numbering, so row
@@ -101,6 +101,6 @@ using each trace's residual noise estimate.
    )
    corrected = scp.nmr.Experiment(corrected).abs1(order=1)
 
-With explicit ranges the fit uses SpectroChemPy's
-:class:`~spectrochempy.Baseline` polynomial processor. Automatic fit-point
+The fit excludes masked points, including when fit ranges are supplied.
+A correction interval requires a strictly monotonic axis. Automatic fit-point
 selection can differ from TopSpin's peak-region selection.

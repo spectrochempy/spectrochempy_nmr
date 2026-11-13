@@ -511,7 +511,7 @@ class Experiment:
         Set the degree with ``order`` (0–5). Give optional correction
         ``limits=(low, high)`` and peak-free fit ``ranges`` in F2 axis units.
         Without fit ranges, iteratively exclude peaks from the polynomial fit.
-        Return a new dataset. See also the core ``Baseline`` processor.
+        Return a new dataset.
         """
         return self._topspin_baseline("x", order=order, limits=limits, ranges=ranges)
 

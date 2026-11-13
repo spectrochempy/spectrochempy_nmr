@@ -4,8 +4,6 @@ from operator import index
 
 import numpy as np
 
-from spectrochempy import Baseline
-
 _PAIRED_SPECTRA = {("S_R", "S_I"), ("F1_R", "F1_I")}
 
 
@@ -35,6 +33,9 @@ def _processed_slice(dataset, paired, command, number):
     dim = "y" if along_f2 else "x"
     keys = (number, slice(None)) if along_f2 else (slice(None), number)
     complex_axis = dataset.meta.get("interop_complex_axis") or "F2"
+    # This Bruker profile packs 2rr + i*2ir in its first channel.
+    if dataset.meta.get("normalization_profile") == "bruker-pdata-2d-public-v1":
+        complex_axis = "F2"
     retained = "F2" if along_f2 else "F1"
     if not paired:
         trace = dataset[keys].squeeze(dim)
@@ -50,7 +51,7 @@ def _processed_slice(dataset, paired, command, number):
     else:
         imag_label = "ri" if along_f2 else "ir"
         if "2rr" in labels:
-            imag_label = "2" + imag_label
+            imag_label = "2ir" if along_f2 else "2ri"
         if imag_label not in labels:
             return trace
         imag = dataset[labels.index(imag_label), *keys].squeeze("c", dim)
@@ -122,6 +123,7 @@ def select_slice(dataset, domains, command, number):
         "branch_order",
         "fft_presentation",
         "fft_presentation_transformed",
+        "mqmas_xf2",
     ):
         if key in result.meta:
             result.meta.data.pop(key)
@@ -131,7 +133,9 @@ def select_slice(dataset, domains, command, number):
     for key in (
         "bf1",
         "encoding",
+        "exptc",
         "nuc1",
+        "physical_pivots",
         "phased",
         "phc0",
         "phc1",
@@ -157,9 +161,8 @@ def select_slice(dataset, domains, command, number):
     return result
 
 
-def _peak_excluding_residual(section, dim, order):
-    """Fit each trace independently, excluding both positive and negative peaks."""
-    coordinates = section.coord(dim).data
+def _baseline_residual(section, coordinates, order, ranges):
+    """Fit each trace on valid samples, with automatic or explicit support."""
     span = np.ptp(coordinates)
     if not np.isfinite(coordinates).all() or (order > 0 and span == 0):
         raise ValueError("Polynomial baseline requires finite, distinct coordinates")
@@ -171,10 +174,18 @@ def _peak_excluding_residual(section, dim, order):
     design = np.polynomial.legendre.legvander(grid, order)
     corrected = section.data.astype(float, copy=True)
     masks = np.broadcast_to(section.mask, section.shape)
+    selected = np.ones(coordinates.size, dtype=bool)
+    if ranges is not None:
+        selected[:] = False
+        for pair in ranges:
+            lower, upper = sorted(map(float, pair))
+            selected |= (coordinates >= lower) & (coordinates <= upper)
     for trace, masked in zip(corrected, masks, strict=True):
         valid = ~masked & np.isfinite(trace)
-        support = valid
-        for iteration in range(6):
+        if not valid.any():
+            continue
+        support = valid & selected
+        for iteration in range(6 if ranges is None else 1):
             coeff, _, rank, _ = np.linalg.lstsq(
                 design[support], trace[support], rcond=None
             )
@@ -185,6 +196,8 @@ def _peak_excluding_residual(section, dim, order):
                     )
                 break
             residual = trace[valid] - design[valid] @ coeff
+            if ranges is not None:
+                break
             center = np.median(residual)
             sigma = 1.4826 * np.median(np.abs(residual - center))
             floor = 32 * np.finfo(float).eps * np.max(np.abs(trace[valid]))
@@ -209,27 +222,25 @@ def correct_baseline(dataset, domains, dim, *, order, limits, ranges):
     rr_index = _real_plane_index(dataset, command) if paired else None
     rr = dataset[rr_index, :, :].squeeze("c").real if paired else dataset.real
     oriented = rr if dim == "x" else rr.T
-    section = oriented
+    coord = oriented.coord(dim)
+    if coord is None or coord.data is None:
+        raise ValueError("Polynomial baseline requires a numerical coordinate")
+    coordinates = coord.data
+    region = slice(None)
     if limits is not None:
-        coord = oriented.coord(dim)
+        steps = np.diff(coordinates)
+        if not (np.all(steps > 0) or np.all(steps < 0)):
+            raise ValueError(
+                "Baseline correction limits require a strictly monotonic axis"
+            )
         lower, upper = sorted(float(value) for value in limits)
-        selected = np.flatnonzero((coord.data >= lower) & (coord.data <= upper))
+        selected = np.flatnonzero((coordinates >= lower) & (coordinates <= upper))
         if not selected.size:
             raise ValueError("Baseline correction limits contain no samples")
         region = slice(selected[0], selected[-1] + 1)
-        section = oriented[:, region]
-
-    if ranges is None:
-        corrected = _peak_excluding_residual(section, dim, order)
-    else:
-        baseline = Baseline(
-            model="polynomial",
-            order=order,
-            ranges=[tuple(map(float, pair)) for pair in ranges],
-            include_limits=False,
-        )
-        baseline.fit(section)
-        corrected = section.data - baseline.baseline.data
+    corrected = _baseline_residual(
+        oriented[:, region], coordinates[region], order, ranges
+    )
     result = dataset.copy()
     # Promote integer spectra before subtraction and preserve other components.
     data = dataset.data.astype(
@@ -238,10 +249,7 @@ def correct_baseline(dataset, domains, dim, *, order, limits, ranges):
     target = data[rr_index].real if paired else data.real
     if dim == "y":
         target = target.T
-    if limits is None:
-        target[:] = corrected
-    else:
-        target[:, region] = corrected
+    target[:, region] = corrected
     result.data = data
     result.history = f"Applied {command} polynomial baseline correction (order={order})"
     return result

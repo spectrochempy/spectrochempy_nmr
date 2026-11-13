@@ -83,8 +83,9 @@ def test_four_plane_spectrum(stored_names):
         "2" + label if stored_names else label for label in labels
     )
     exp = Experiment(dataset)
-    np.testing.assert_array_equal(exp.rsr(1).data, data[0, 0] + 1j * data[1, 0])
-    np.testing.assert_array_equal(exp.rsc(1).data, data[0, :, 0] + 1j * data[2, :, 0])
+    f2, f1 = (2, 1) if stored_names else (1, 2)
+    np.testing.assert_array_equal(exp.rsr(1).data, data[0, 0] + 1j * data[f2, 0])
+    np.testing.assert_array_equal(exp.rsc(1).data, data[0, :, 0] + 1j * data[f1, :, 0])
     corrected = exp.abs1(order=1)
     np.testing.assert_allclose(corrected.data[0], 0, atol=1e-12)
     np.testing.assert_array_equal(corrected.data[1:], data[1:])
@@ -116,3 +117,47 @@ def test_default_baseline_excludes_signed_peaks(direction):
 
 def test_apk_is_the_public_autophase_alias():
     assert scp.nmr.apk is scp.nmr.autophase
+
+
+def test_explicit_baseline_ranges_exclude_masked_values():
+    axis = np.arange(10)
+    data = np.tile(2.0 * axis[::-1] + 3, (4, 1))
+    data[0, 2] = 1000
+    dataset = _dataset(data)
+    mask = np.zeros(data.shape, dtype=bool)
+    mask[0, 2] = True
+    dataset.mask = mask
+    result = Experiment(dataset).abs2(order=1, ranges=[(0, 3), (6, 9)])
+    np.testing.assert_allclose(result.data[~mask], 0, atol=1e-12)
+    np.testing.assert_array_equal(result.mask, mask)
+
+
+def test_baseline_limits_reject_nonmonotonic_axes():
+    dataset = _dataset(np.tile([3.0, 9.0, 19.0, 11.0, 21.0], (4, 1)))
+    dataset.x = scp.Coord([0.0, 3.0, 8.0, 4.0, 9.0], units="ppm")
+    with pytest.raises(ValueError, match="strictly monotonic"):
+        Experiment(dataset).abs2(order=1, limits=(3, 4))
+
+
+def test_column_preserves_f1_phase_metadata():
+    data = np.arange(24).reshape(2, 3, 4) * (1 + 3j)
+    dataset = _dataset(data)
+    dataset.meta.interop_complex_axis = "F1"
+    dataset.meta.exptc = [0, 1, 2]
+    dataset.meta.physical_pivots = [False, True, False]
+    exp = Experiment(dataset)
+    col = exp.rsc(1)
+    np.testing.assert_array_equal(col.data, data[0, :, 0])
+    assert col.meta.exptc == [1]
+    assert col.meta.physical_pivots == [True]
+
+
+def test_bruker_public_profile_keeps_native_topspin_slice_components():
+    data = np.arange(24).reshape(2, 3, 4) * (1 + 3j)
+    dataset = _dataset(data)
+    dataset.meta.normalization_profile = "bruker-pdata-2d-public-v1"
+    dataset.meta.interop_complex_axis = "F1"
+    exp = Experiment(dataset)
+    np.testing.assert_array_equal(exp.rsr(1).data, data[0, 0])
+    expected = data[0, :, 0].real + 1j * data[1, :, 0].real
+    np.testing.assert_array_equal(exp.rsc(1).data, expected)
