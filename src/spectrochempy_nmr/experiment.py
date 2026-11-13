@@ -595,22 +595,18 @@ class Experiment:
         apply it to the whole dataset. For a series of complex spectra,
         use ``per_row=True`` to estimate each row independently. Pass the
         same exclusion mask and estimator options as to ``scp.nmr.apk()``.
-        The output records the relative phase angles in its history.
+        For spectral series, the output records relative phase angles in
+        its history and retains the input phase metadata as provenance.
         """
-        from .processing.autophase import autophase
-        from .processing.topspin_commands import phase_f2_rows
+        from .processing.topspin_commands import estimate_f2_phase, phase_f2_rows
 
         if self.is_multi_dataset or self.domains[-1:] != ("frequency",):
             raise ValueError("apk2d requires one dataset with frequency-domain F2")
         mqmas = self.dataset.meta.get("stage") == "mqmas_xf2"
         if mqmas and not per_row:
-            estimate = autophase(
-                self.rsr(reference_row), exclude=exclude, apply=False, **options
-            ).estimate
-            if not estimate.success:
-                raise ValueError(
-                    f"Phase estimation failed on row {reference_row}: {estimate.message}"
-                )
+            estimate = estimate_f2_phase(
+                self.rsr(reference_row), reference_row, exclude, options
+            )
             return self.xf2p(phc0=estimate.p0, phc1=estimate.p1, pivot=0)
         return phase_f2_rows(
             self.dataset, self.rsr, reference_row, per_row, exclude, options

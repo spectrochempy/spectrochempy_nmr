@@ -325,25 +325,35 @@ def replace_slice(dataset, domains, command, number, trace):
     return result
 
 
-def phase_f2_rows(dataset, read_row, reference_row, per_row, exclude, options):
-    """Phase a matrix of complex F2 traces using the 1D estimator."""
+def estimate_f2_phase(trace, row, exclude, options):
+    """Estimate the relative phase and identify the row on failure."""
     from .autophase import autophase
 
+    try:
+        estimate = autophase(trace, exclude=exclude, apply=False, **options).estimate
+    except ValueError as exc:
+        raise ValueError(f"Phase estimation failed on row {row}: {exc}") from exc
+    if not estimate.success:
+        raise ValueError(f"Phase estimation failed on row {row}: {estimate.message}")
+    return estimate
+
+
+def phase_f2_rows(dataset, read_row, reference_row, per_row, exclude, options):
+    """Phase a matrix of complex F2 traces using the 1D estimator."""
     if tuple(dataset.dims) != ("y", "x") or not dataset.is_complex:
         raise ValueError("apk2d requires a matrix of complex F2 traces or MQMAS XF2")
     if dataset.meta.get("interop_complex_axis") not in (None, "F2"):
         raise ValueError("apk2d requires complex quadrature along F2")
     count, size = dataset.shape
     rows = range(1, count + 1) if per_row else (reference_row,)
+    if per_row and "references" in options:
+        options = {
+            **options,
+            "references": tuple(tuple(ref) for ref in options["references"]),
+        }
     angles = []
     for row in rows:
-        estimate = autophase(
-            read_row(row), exclude=exclude, apply=False, **options
-        ).estimate
-        if not estimate.success:
-            raise ValueError(
-                f"Phase estimation failed on row {row}: {estimate.message}"
-            )
+        estimate = estimate_f2_phase(read_row(row), row, exclude, options)
         angles.append((estimate.p0, estimate.p1))
 
     p0, p1 = np.asarray(angles).T

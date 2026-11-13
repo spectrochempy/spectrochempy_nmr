@@ -232,7 +232,10 @@ def test_apk2d_applies_reference_or_individual_phase(per_row):
     raw = line * np.exp(1j * np.deg2rad(injected[:, None]))
     dataset = _dataset(raw, frequency=(False, True))
     result = Experiment(dataset).apk2d(
-        reference_row=2, per_row=per_row, method="dispa", references=[(150, 211, 1)]
+        reference_row=2,
+        per_row=per_row,
+        method="dispa",
+        references=iter([(150, 211, 1)]),
     )
     expected = (
         line if per_row else line * np.exp(1j * np.deg2rad(injected[:, None] + 43))
@@ -242,3 +245,14 @@ def test_apk2d_applies_reference_or_individual_phase(per_row):
     )
     np.testing.assert_array_equal(dataset.data, raw)
     np.testing.assert_array_equal(result.x.data, dataset.x.data)
+
+
+def test_apk2d_identifies_the_failing_row():
+    x = np.arange(512)
+    line = 1 / (1 + 1j * (x - 180) / 8)
+    dataset = _dataset(np.stack([line, np.zeros_like(line)]), frequency=(False, True))
+
+    with pytest.raises(ValueError, match="row 2: spectrum has no signal"):
+        Experiment(dataset).apk2d(
+            per_row=True, method="dispa", references=[(150, 211, 1)]
+        )

@@ -81,7 +81,7 @@ For the MQMAS conventions and broader context, see
 :cite:t:`fernandez2011quadrupolar`.
 
 Estimate and apply the common phase in one call
-----------------------------------------------
+------------------------------------------------
 
 Use ``apk2d()`` on the complex XF2 dataset when you want to estimate the
 phase from one row and apply it to every increment and both States branches.
