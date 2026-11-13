@@ -68,6 +68,16 @@ the digital group delay. Choose the slope for the acquisition and give
 ``sigma`` in seconds. For baseline correction, fit the selected real plane
 along F2 using signal-free regions.
 
+Use ``mqecho=(slope, lb_hz)`` in ``xf2()`` or ``prepare_xfshear()`` to
+average two exponential windows centered at opposite slopes in the
+group-delay-corrected time grid. For PST-5, use
+``xf2(size=4096, direct_points=2048, mqecho=(19 / 12, 40))``.
+Supply either window option. Both States branches receive the same
+weights on the raw sample grid, which begins at the negative group
+delay. When the mirrored center lies outside that grid, only its tail
+overlaps the samples. See the
+:ref:`mqecho-pst5-rbno3-comparison` for the peak measurements.
+
 The returned channels pack RR and IR in ``S_R``, and RI and II in
 ``S_I``. The F2 axis retains the acquisition reference. The F1 axis
 uses the isotropic scaling and any requested F1 shift.
