@@ -6,6 +6,13 @@ The gallery contains executable examples for importing, processing and
 analyzing NMR data. See the :doc:`reader guide <userguide/reading_data>`
 to find the reader for your acquisition.
 
+.. warning::
+
+   The NMR gallery is under active development, and examples may change
+   frequently. If an example fails or gives an unexpected result, please
+   report it in the `NMR plugin issue tracker
+   <https://github.com/spectrochempy/spectrochempy_nmr/issues>`_.
+
 .. toctree::
    :maxdepth: 2
    :hidden:

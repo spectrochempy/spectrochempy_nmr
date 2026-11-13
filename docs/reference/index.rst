@@ -1,10 +1,20 @@
 API
 ===
 
-.. toctree::
-   :maxdepth: 2
+Import SpectroChemPy as ``import spectrochempy as scp`` and use the
+plugin through ``scp.nmr``. The reference is grouped by task. Each
+entry in the API tables opens the signature and documentation of
+one function or class.
 
-   nmr_api
+.. toctree::
+   :maxdepth: 1
+
+   readers
+   experiment
+   interop
+   core_operations
+   simulation
+   czjzek
 
 See also
 --------
