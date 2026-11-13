@@ -39,7 +39,7 @@ def _trace_channels(dataset, paired, along_f2, number, command, *, mixed=False):
         return keys, keys if dataset.is_complex and complex_axis == retained else None
 
     if mixed:
-        if dataset.shape[0] != 2:
+        if not along_f2 and dataset.shape[0] != 2:
             raise ValueError(f"{command} requires two acquisition branches after XF2")
         return (0, *keys), ((0 if along_f2 else 1), *keys)
 
