@@ -613,14 +613,23 @@ class Experiment:
         )
 
     def xf2(
-        self, *, size, direct_points=None, correct_digital_filter=True, echo_window=None
+        self,
+        *,
+        size,
+        direct_points=None,
+        correct_digital_filter=True,
+        echo_window=None,
+        mqecho=None,
     ):
         """Transform F2 of a Bruker States MQMAS acquisition.
 
         Supply the F2 FFT size and optionally the number of acquired F2
         points to retain. By default, compensate the digital group delay
         on the frequency grid. For shifted echoes, pass
-        ``echo_window=(slope, sigma)`` with ``sigma`` in seconds.
+        ``echo_window=(slope, sigma)`` with ``sigma`` in seconds. Alternatively,
+        ``mqecho=(slope, lb_hz)`` averages exponential windows centered at
+        ±slope × t1 relative to the group-delay-corrected time origin.
+        The same weights apply to both States branches on the acquired grid.
         """
         from .processing.mqmas import xf2  # noqa: PLC0415
 
@@ -632,6 +641,7 @@ class Experiment:
             direct_points=direct_points,
             correct_digital_filter=correct_digital_filter,
             echo_window=echo_window,
+            mqecho=mqecho,
         )
 
     def xf2p(self, *, phc0=0.0, phc1=0.0, pivot=0):
@@ -665,7 +675,13 @@ class Experiment:
         )
 
     def prepare_xfshear(
-        self, *, size, direct_points=None, correct_digital_filter=True, echo_window=None
+        self,
+        *,
+        size,
+        direct_points=None,
+        correct_digital_filter=True,
+        echo_window=None,
+        mqecho=None,
     ):
         """Transform F2 and retain both complex States branches for inspection.
 
@@ -678,6 +694,8 @@ class Experiment:
         For a shifted-echo acquisition, ``echo_window=(slope, sigma)``
         applies a Gaussian along F2 centered at the group delay plus
         ``slope * t1`` for each increment. Supply ``sigma`` in seconds.
+        Alternatively, pass ``mqecho=(slope, lb_hz)`` for the symmetric
+        exponential window described in ``xf2()``.
         """
         from .processing.mqmas import prepare_xfshear  # noqa: PLC0415
 
@@ -689,6 +707,7 @@ class Experiment:
             direct_points=direct_points,
             correct_digital_filter=correct_digital_filter,
             echo_window=echo_window,
+            mqecho=mqecho,
         )
 
     def replay_xfshear(

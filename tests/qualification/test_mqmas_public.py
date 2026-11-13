@@ -192,3 +192,43 @@ def test_invalid_xf2_reference_is_rejected_before_inplace_fft():
         raw.fft(dim="x", size=256, convention="topspin-xf2", inplace=True)
     np.testing.assert_array_equal(raw.data, samples)
     assert raw.x.units.is_compatible_with(scp.ur.s)
+
+
+def test_mqecho_matches_independent_time_domain_weighting():
+    ser = os.environ.get("SCP_MQMAS_SER")
+    if not ser:
+        pytest.skip("requires the PST-5 SER")
+    raw = scp.nmr.read(ser, local_only=True)
+    original = raw.data.copy()
+    sw1, sw2 = (float(value.to("Hz").magnitude) for value in raw.meta.sw_h[-2:])
+    t1 = np.arange(raw.shape[-2])[:, None] / sw1
+    t2 = (np.arange(raw.shape[-1]) - 76) / sw2
+    exponent = -np.pi * 40
+    echo = np.exp(exponent * np.abs(t2 - (19 / 12) * t1))
+    antiecho = np.exp(exponent * np.abs(t2 + (19 / 12) * t1))
+    weighted = raw.copy()
+    weighted.data = original * (echo + antiecho) / 2
+
+    experiment = Experiment(raw)
+    options = {"direct_points": 2048}
+    expected = Experiment(weighted).xf2(size=4096, **options)
+    actual = experiment.xf2(size=4096, mqecho=(19 / 12, 40), **options)
+    prepared = experiment.prepare_xfshear(
+        size=(512, 4096), mqecho=(-19 / 12, 40), **options
+    )
+    np.testing.assert_allclose(actual.data, expected.data, rtol=1e-12, atol=1e-8)
+    np.testing.assert_array_equal(prepared.data, actual.data)
+    np.testing.assert_array_equal(raw.data, original)
+    assert actual.meta.mqmas_xf2["echo_window"]["lb_hz"] == 40
+    extreme = experiment.xf2(size=4096, mqecho=(0, 1e308), **options)
+    assert np.isfinite(extreme.data).all()
+    at_origin = raw.copy()
+    at_origin.data[..., :76] = 0
+    at_origin.data[..., 77:] = 0
+    expected_extreme = Experiment(at_origin).xf2(size=4096, **options)
+    np.testing.assert_array_equal(extreme.data, expected_extreme.data)
+    for invalid in ((1, 0), (1, True), (float("nan"), 40), (10**400, 40)):
+        with pytest.raises(ValueError, match="positive LB"):
+            experiment.xf2(size=4096, mqecho=invalid, **options)
+    with pytest.raises(ValueError, match="either"):
+        experiment.xf2(size=4096, mqecho=(1, 40), echo_window=(1, 0.001), **options)
