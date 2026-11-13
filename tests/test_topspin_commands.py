@@ -196,3 +196,29 @@ def test_replace_column_preserves_unrelated_packed_imaginary_channels():
     result = exp.wsc(2, trace)
     np.testing.assert_array_equal(result.data.imag, data.imag)
     np.testing.assert_array_equal(Experiment(result).rsc(2).data, trace.data)
+
+
+def test_replace_row_replaces_mask_only_in_target_trace():
+    dataset = _dataset(np.arange(24, dtype=float).reshape(4, 6))
+    mask = np.zeros(dataset.shape, dtype=bool)
+    mask[0, 1] = mask[1, 2] = True
+    dataset.mask = mask
+    exp = Experiment(dataset)
+    trace = exp.rsr(1)
+    trace.remove_masks()
+    result = exp.wsr(1, trace)
+    expected = mask.copy()
+    expected[0] = False
+    np.testing.assert_array_equal(result.mask, expected)
+    np.testing.assert_array_equal(dataset.mask, mask)
+
+
+def test_replace_packed_column_preserves_individual_component_masks():
+    dataset = _dataset(np.arange(24).reshape(2, 3, 4) * (1 + 3j))
+    mask = np.zeros(dataset.shape, dtype=bool)
+    mask[0, 0, 1] = True
+    dataset.mask = mask
+    exp = Experiment(dataset)
+    result = exp.wsc(2, exp.rsc(2))
+    np.testing.assert_array_equal(result.mask, mask)
+    np.testing.assert_array_equal(result.data[~mask], dataset.data[~mask])
