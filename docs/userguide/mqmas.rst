@@ -79,3 +79,20 @@ for the TopSpin comparisons.
 
 For the MQMAS conventions and broader context, see
 :cite:t:`fernandez2011quadrupolar`.
+
+Estimate and apply the common phase in one call
+------------------------------------------------
+
+Use ``apk2d()`` on the complex XF2 dataset when you want to estimate the
+phase from one row and apply it to every increment and both States branches.
+The following call uses the first row and the same 20–65 ppm window as the
+preview above.
+
+.. code-block:: python
+
+   phased = scp.nmr.Experiment(xf2).apk2d(
+       reference_row=1, order=0, exclude=exclude
+   )
+   spectrum = scp.nmr.Experiment(phased).xfshear(
+       size=512, spin=2.5, coherence_order=3, f1_shift=-20.0
+   )

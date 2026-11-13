@@ -588,6 +588,30 @@ class Experiment:
             raise ValueError("Slice extraction requires a single 2D dataset")
         return select_slice(self.dataset, self.domains, command, number)
 
+    def apk2d(self, *, reference_row=1, per_row=False, exclude=None, **options):
+        """Estimate and apply automatic phase along F2.
+
+        By default, estimate the phase on one 1-based reference row and
+        apply it to the whole dataset. For a series of complex spectra,
+        use ``per_row=True`` to estimate each row independently. Pass the
+        same exclusion mask and estimator options as to ``scp.nmr.apk()``.
+        For spectral series, the output records relative phase angles in
+        its history and retains the input phase metadata as provenance.
+        """
+        from .processing.topspin_commands import estimate_f2_phase, phase_f2_rows
+
+        if self.is_multi_dataset or self.domains[-1:] != ("frequency",):
+            raise ValueError("apk2d requires one dataset with frequency-domain F2")
+        mqmas = self.dataset.meta.get("stage") == "mqmas_xf2"
+        if mqmas and not per_row:
+            estimate = estimate_f2_phase(
+                self.rsr(reference_row), reference_row, exclude, options
+            )
+            return self.xf2p(phc0=estimate.p0, phc1=estimate.p1, pivot=0)
+        return phase_f2_rows(
+            self.dataset, self.rsr, reference_row, per_row, exclude, options
+        )
+
     def xf2(
         self, *, size, direct_points=None, correct_digital_filter=True, echo_window=None
     ):

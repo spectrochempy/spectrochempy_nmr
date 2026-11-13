@@ -149,3 +149,20 @@ dimension, in F1 then F2 order. For the historical Agilent
 
 Use the values from the reference for your acquisition. The Agilent
 reader can lack the F1 observation frequency.
+
+Automatic phase correction along F2
+-----------------------------------
+
+For a series of complex F2 spectra, ``apk2d()`` estimates a common phase
+from the first row by default. Pass ``reference_row`` to select another row
+using TopSpin's 1-based numbering. Use ``per_row=True`` when the phase varies
+across the series. Inspect individual estimates when the signal becomes
+weak, especially at high diffusion weightings. The estimator uses the same options as ``scp.nmr.apk()``.
+
+.. code-block:: python
+
+   phased = scp.nmr.Experiment(series).apk2d(reference_row=1, order=0)
+
+For MQMAS, pass the complex result of ``xf2()``. The common phase applies
+to both States branches. The output can go directly to ``xfshear()``.
+An unsuccessful estimate raises an error identifying the row.
