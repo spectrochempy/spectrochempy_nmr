@@ -1,47 +1,17 @@
-{% from "nmr-navigation.html" import menus %}
-{% set core_pages = {
-  'Getting started': [
-    ('index.html', 'SpectroChemPy documentation')
-  ],
-  'Guides': [
-    ('userguide/plugins/nmr.html', 'NMR plugin in SpectroChemPy'),
-    ('userguide/plotting/index.html', 'Core plotting guide'),
-    ('userguide/processing/index.html', 'Core processing guide'),
-    ('userguide/analysis/index.html', 'Core analysis guide')
-  ],
-  'API': [
-    ('reference/index.html', 'SpectroChemPy Core API')
-  ]
-} %}
-{% set active_group = section_title %}
+{% set sections = [
+  ('Getting started', 'getting_started/index'),
+  ('Guides', 'userguide/index'),
+  ('API', 'reference/index'),
+  ('Examples', 'examples_overview'),
+  ('About', 'about')
+] %}
 <nav class="nmr-navbar" aria-label="{{ _('Main navigation') }}">
   <ul class="bd-navbar-elements navbar-nav">
-    {% for label, pages in menus %}
-      {% if label == 'Examples' %}
-      <li class="nav-item{% if active_group == label %} current active{% endif %}">
-        <a class="nav-link" href="{{ pathto('examples_overview') }}"{% if pagename == 'examples_overview' %} aria-current="page"{% endif %}>{{ label }}</a>
-      </li>
-      {% else %}
-      {% set menu_id = unique_html_id('nmr-nav-menu') %}
-      <li class="nav-item dropdown{% if active_group == label %} current active{% endif %}">
-        <button class="btn dropdown-toggle nav-item" type="button"
-                data-bs-toggle="dropdown" aria-expanded="false"
-                aria-controls="{{ menu_id }}">{{ label }}</button>
-        <ul id="{{ menu_id }}" class="dropdown-menu">
-          {% for target, title in pages %}
-            {% if hasdoc(target) %}
-              <li><a class="dropdown-item{% if pagename == target %} active{% endif %}"
-                     href="{{ pathto(target) }}"{% if pagename == target %} aria-current="page"{% endif %}>{{ title }}</a></li>
-            {% endif %}
-          {% endfor %}
-          {% if core_pages.get(label) %}
-            <li><hr class="dropdown-divider"></li>
-            {% for target, title in core_pages[label] %}
-              <li><a class="dropdown-item" href="{{ core_docs_url }}/{{ target }}">{{ title }}</a></li>
-            {% endfor %}
-          {% endif %}
-        </ul>
-      </li>
+    {% for label, target in sections %}
+      {% if hasdoc(target) %}
+        <li class="nav-item{% if section_title == label %} current active{% endif %}">
+          <a class="nav-link{% if section_title == label %} active{% endif %}" href="{{ pathto(target) }}"{% if pagename == target %} aria-current="page"{% endif %}>{{ label }}</a>
+        </li>
       {% endif %}
     {% endfor %}
   </ul>
