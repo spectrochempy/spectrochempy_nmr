@@ -104,3 +104,32 @@ using each trace's residual noise estimate.
 The fit excludes masked points, including when fit ranges are supplied.
 A correction interval requires a strictly monotonic axis. Automatic fit-point
 selection can differ from TopSpin's peak-region selection.
+
+Agilent TPPI
+------------
+
+For a native Agilent acquisition identified as TPPI, use
+``Experiment(fid).process()``. The result contains four planes in F1, F2
+component order (``rr``, ``ri``, ``ir``, ``ii``). The direct transform
+uses the sample convention of ``var2pipe -noaswap`` followed by
+``FT -nodf``. In F1 the real and imaginary parts of F2 each form a
+real sequence. Each sequence is zero-filled from N to 2N, transformed,
+and reduced to bins 0 through N−1. This retains DC and excludes Nyquist.
+The F1 bin spacing is the acquisition width divided by 2N. The displayed
+half-band follows the carrier convention of NMRPipe
+``TP → ZF -size 2N → FT -real``, with the carrier halfway between its
+two central bins.
+
+The default axes are carrier-relative Hz. To obtain ppm, pass the
+observation frequency in MHz and carrier in ppm explicitly for each
+dimension, in F1 then F2 order. For the historical Agilent
+``agilent_2d_tppi`` NMRPipe conversion the values are:
+
+.. code-block:: python
+
+   spectrum = scp.nmr.Experiment(fid).process(
+       tppi_reference=((125.681, 101.274), (125.681, 101.274))
+   )
+
+Use the values from the reference for your acquisition. The Agilent
+reader can lack the F1 observation frequency.
