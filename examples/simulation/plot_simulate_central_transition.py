@@ -4,7 +4,8 @@ Simulate a quadrupolar powder line shape with PULSAR
 
 Simulate the central transition of a spin-5/2 nucleus under magic-angle
 spinning and compare the spectrum before and after Gaussian broadening.
-See :doc:`/userguide/pulsar` for the simulation conventions.
+See the `PULSAR tutorial
+<https://www.spectrochempy.fr/projects/nmr/latest/userguide/pulsar.html>`__ for the simulation conventions.
 """
 
 import spectrochempy as scp

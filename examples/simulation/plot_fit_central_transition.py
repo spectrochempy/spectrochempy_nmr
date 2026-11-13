@@ -4,7 +4,9 @@ Fit a quadrupolar powder line shape with PULSAR
 
 Fit a synthetic spin-5/2 central transition using a PULSAR simulation as
 a custom model in SpectroChemPy. Compare the fit with the input and inspect
-the residuals. See :doc:`/userguide/pulsar` for the frequency grid conventions.
+the residuals.
+See the `PULSAR tutorial
+<https://www.spectrochempy.fr/projects/nmr/latest/userguide/pulsar.html>`__ for the frequency grid conventions.
 """
 
 from numpy import interp
