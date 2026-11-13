@@ -11,6 +11,8 @@ Unreleased
 Added
 ~~~~~
 
+* Add ``Experiment.wsr()`` and ``wsc()`` to replace numbered 2D spectral traces.
+
 * Add TopSpin-style ``Experiment.abs1()``, ``abs2()``, ``rser()``,
   ``rsr()``, and ``rsc()`` for 2D data. Add ``scp.nmr.apk()`` as an alias
   for ``autophase()`` and show first-row phase estimation in the MQMAS example.

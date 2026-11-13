@@ -566,6 +566,21 @@ class Experiment:
         """
         return self._topspin_slice("rsc", column)
 
+    def wsr(self, row, trace):
+        """Replace a 1-based F2 row with a modified ``rsr()`` trace in a copy."""
+        return self._replace_topspin_slice("wsr", row, trace)
+
+    def wsc(self, column, trace):
+        """Replace a 1-based F1 column with a modified ``rsc()`` trace in a copy."""
+        return self._replace_topspin_slice("wsc", column, trace)
+
+    def _replace_topspin_slice(self, command, number, trace):
+        from .processing.topspin_commands import replace_slice
+
+        if self.is_multi_dataset:
+            raise ValueError("Trace replacement requires a single 2D dataset")
+        return replace_slice(self.dataset, self.domains, command, number, trace)
+
     def _topspin_slice(self, command, number):
         from .processing.topspin_commands import select_slice
 
