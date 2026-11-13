@@ -33,6 +33,11 @@ JEOL_DATA = {
 
 
 def _has_nmr_example_data(example: Path) -> bool:
+    if example.stem in {
+        "plot_fit_central_transition",
+        "plot_simulate_central_transition",
+    }:
+        return True
     root = Path(scp.preferences.datadir) / "nmrdata"
     if example.stem in JEOL_DATA:
         return (root / "jeol" / JEOL_DATA[example.stem]).is_file()

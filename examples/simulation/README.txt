@@ -1,4 +1,5 @@
 NMR simulation
 ==============
 
-Quadrupolar powder spectra and EFG disorder in the NMR plugin.
+Simulate quadrupolar powder line shapes, fit spectra with PULSAR, and
+explore electric-field-gradient disorder with Czjzek distributions.
