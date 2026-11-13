@@ -1531,10 +1531,15 @@ def _read_topspin(*args, **kwargs):
             if normalized_dataset is not None:
                 continue
             width = meta.sw_h[axis]
+            magnitude = getattr(width, "m", None)
             if (
                 datatype == "SER"
                 and axis == 0
-                and (width is None or not np.isfinite(width.m) or width.m <= 0)
+                and (
+                    not isinstance(magnitude, (int, float, np.integer, np.floating))
+                    or not np.isfinite(magnitude)
+                    or magnitude <= 0
+                )
             ):
                 coord = Coord.arange(meta.td[axis], title="F1 increment index")
                 coord.meta["bruker_f1_width_missing"] = True
