@@ -797,9 +797,12 @@ def read_topspin(*paths, **kwargs):
 
     Selecting processing-parameter axes for a processed spectrum
 
-    >>> nd = scp.nmr.read('irdata/topspin/1/pdata/1/1r', proc_axis=True)
-    >>> nd.x[0]  # doctest: +SKIP
-    253.0909 ppm
+    .. code-block:: python
+
+        nd = scp.nmr.read("irdata/topspin/1/pdata/1/1r", proc_axis=True)
+        nd.x[0]
+
+    The first coordinate is 253.0909 ppm.
 
     """
     quadrature = kwargs.get("quadrature")

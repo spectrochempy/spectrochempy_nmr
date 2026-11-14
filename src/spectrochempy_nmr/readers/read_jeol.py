@@ -86,7 +86,9 @@ def read_jeol(*paths, **kwargs):
     --------
     Reading a single JEOL JDF file:
 
-    >>> scp.nmr.read('path/to/experiment.jdf')  # doctest: +SKIP
+    .. code-block:: python
+
+        scp.nmr.read("path/to/experiment.jdf")
 
     """
     kwargs["filetypes"] = ["JEOL JDF files (*.jdf)"]
