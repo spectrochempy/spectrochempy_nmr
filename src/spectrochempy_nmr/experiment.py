@@ -780,7 +780,7 @@ class Experiment:
         echo_window=None,
         mqecho=None,
     ):
-        """Transform F2 of a Bruker States MQMAS acquisition.
+        """Transform F2 of a calibrated Bruker States MQMAS or STMAS acquisition.
 
         Supply the F2 FFT size and optionally the number of acquired F2
         points to retain. By default, compensate the digital group delay
@@ -882,6 +882,18 @@ class Experiment:
             coherence_order=coherence_order,
             f1_shift=f1_shift,
         )
+
+    def stmas_shear(self, *, size, f1_shift=0.0):
+        """Shear phased States XF2 for spin-3/2 DQF-STMAS.
+
+        Select the F1 FFT size and an isotropic shift in ppm. The output
+        is a complex 2D spectrum with the F1 quadrature combined.
+        """
+        from .processing.mqmas import stmas_shear
+
+        if self.is_multi_dataset:
+            raise ValueError("STMAS shear requires one phased XF2 dataset")
+        return stmas_shear(self.dataset, size=size, f1_shift=f1_shift)
 
     def prepare_xfshear(
         self,

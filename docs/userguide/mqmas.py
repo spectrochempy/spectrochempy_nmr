@@ -166,7 +166,12 @@ _ = axes[0].plot(line_x, f1_peak + shear * (line_x - f2_peak), "--", color="0.3"
 # Supply either window option. Both States branches receive the same
 # weights on the raw sample grid, which begins at the negative group
 # delay. When the mirrored center lies outside that grid, only its tail
-# overlaps the samples. See the [exponential-window comparison](stmas_multiplex.rst).
+# overlaps the samples.
+
+# %% [raw] raw_mimetype="text/restructuredtext"
+# See the :ref:`exponential-window comparison <mqecho-pst5-rbno3-comparison>`.
+
+# %% [markdown]
 #
 # The returned channels pack RR and IR in `S_R`, and RI and II in
 # `S_I`. The F2 axis retains the acquisition reference. The F1 axis

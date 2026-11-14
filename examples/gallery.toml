@@ -88,6 +88,11 @@ section = "NMR processing"
 section_ref = "examples-processing-nmr-index"
 
 [[examples]]
-path = "processing/nmr/plot_rbno3_mqmas_multiplex.py"
+path = "processing/nmr/plot_multiplex_spam.py"
+section = "NMR processing"
+section_ref = "examples-processing-nmr-index"
+
+[[examples]]
+path = "processing/nmr/plot_stmas.py"
 section = "NMR processing"
 section_ref = "examples-processing-nmr-index"
