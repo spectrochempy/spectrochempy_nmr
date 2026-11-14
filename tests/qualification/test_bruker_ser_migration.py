@@ -175,14 +175,52 @@ def test_synthetic_unknown_bruker_f1_is_only_required_for_f1(tmp_path, mode):
     assert fid.dims == ["y", "x"]
     f2 = fid.fft(dim="x")
     assert f2.x.units == scp.ur.Hz
+    before = f2.copy()
     with pytest.raises(NotImplementedError, match="Bruker F1.*quadrature"):
-        f2.fft(dim="y")
+        f2.fft(dim="y", inplace=True, size=12)
+    assert f2.dims == before.dims
+    np.testing.assert_array_equal(f2.data, before.data)
     with pytest.raises(NotImplementedError, match="Bruker F1.*quadrature"):
         scp.nmr.Experiment(fid).process()
 
     resolved = scp.nmr.read_topspin(path, quadrature="qf")
     np.testing.assert_array_equal(resolved.data, fid.data)
     assert resolved.fft(dim="x").fft(dim="y").shape == fid.shape
+
+
+@pytest.mark.parametrize(
+    ("fnmode", "sw", "quadrature"),
+    [(None, 8, None), (1, 0, None), (None, 8, "qf"), (1, 8, None)],
+)
+def test_synthetic_bruker_ser_on_core_without_prevalidation(
+    tmp_path, monkeypatch, fnmode, sw, quadrature
+):
+    from spectrochempy.utils.exceptions import SpectroChemPyError
+
+    core_fft = import_module("spectrochempy.processing.fft.fft")
+    monkeypatch.setattr(core_fft, "FFT_PREVALIDATION_API", 0, raising=False)
+    path = _synthetic_ser(tmp_path, fnmode)
+    acqu2s = path / "acqu2s"
+    acqu2s.write_text(acqu2s.read_text().replace("##$SW= 8", f"##$SW= {sw}"))
+
+    if (fnmode is None and quadrature is None) or sw == 0:
+        with pytest.raises(SpectroChemPyError, match="Bruker SER.*1.2.0"):
+            scp.nmr.read_topspin(path / "ser", quadrature=quadrature)
+    else:
+        fid = scp.nmr.read_topspin(path / "ser", quadrature=quadrature)
+        assert fid.fft(dim="x").fft(dim="y").shape == fid.shape
+
+
+@pytest.mark.parametrize("invalid_sw", ["0", "<BAD>", "(0..1)\n1 2"])
+def test_synthetic_bruker_ser_uses_stored_width_if_sw_invalid(tmp_path, invalid_sw):
+    path = _synthetic_ser(tmp_path, 1)
+    acqu2s = path / "acqu2s"
+    acqu2s.write_text(
+        acqu2s.read_text().replace("##$SW= 8", f"##$SW= {invalid_sw}\n##$SW_h= 2000")
+    )
+    fid = scp.nmr.read_topspin(path / "ser")
+    np.testing.assert_allclose(fid.y.to("s").data, np.arange(fid.shape[0]) / 2000)
+    assert fid.fft(dim="x").fft(dim="y").shape == fid.shape
 
 
 @pytest.mark.parametrize(("fnmode", "expected"), [(None, "STATES-TPPI"), (4, "STATES")])

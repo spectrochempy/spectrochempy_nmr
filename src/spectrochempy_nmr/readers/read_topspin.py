@@ -34,6 +34,7 @@ from spectrochempy.utils._logging import warning_
 from spectrochempy.utils.exceptions import SpectroChemPyError
 from spectrochempy.utils.meta import Meta
 from spectrochempy_nmr import _check_nmrglue_installation
+from spectrochempy_nmr.processing.fft_validation import _require_fft_prevalidation
 from spectrochempy_nmr.readers._channels import pad_channel_metadata
 from spectrochempy_nmr.readers._channels import pair_traces
 from spectrochempy_nmr.readers._channels import set_channel_data
@@ -1080,9 +1081,6 @@ def _read_normalized_ser(
     from nmrglue import interop  # noqa: PLC0415
 
     from spectrochempy_nmr.interop import from_interop  # noqa: PLC0415
-    from spectrochempy_nmr.processing.fft_validation import (  # noqa: PLC0415
-        _require_fft_prevalidation,
-    )
 
     if not any(path.name in ("proc", "procs") for path in procs_files) or not any(
         path.name in ("proc2", "proc2s") for path in procs_files
@@ -1150,6 +1148,35 @@ def _read_normalized_ser(
         )
         return stored.metadata, dataset
     return None
+
+
+def _positive_scalar(value):
+    magnitude = getattr(value, "m", None)
+    return (
+        isinstance(magnitude, (int, float, np.integer, np.floating))
+        and np.isfinite(magnitude)
+        and magnitude > 0
+    )
+
+
+def _acquisition_width(meta, axis, stored_width):
+    width = meta.sw[axis] if meta.sw is not None else None
+    frequency = meta.sfo1[axis] if meta.sfo1 is not None else None
+    if _positive_scalar(width) and _positive_scalar(frequency):
+        calculated = (width.m * frequency * 1e-6).to("Hz")
+        if _positive_scalar(calculated):
+            return calculated
+    return stored_width
+
+
+def _require_guarded_ser_core():
+    try:
+        _require_fft_prevalidation()
+    except NotImplementedError:
+        raise SpectroChemPyError(
+            "Reading a Bruker SER with unsupported or undetermined F1 quadrature or missing "
+            "F1 spectral width requires SpectroChemPy 1.2.0 or later."
+        ) from None
 
 
 def _read_raw_data(directory, filename, acqus_files, procs_files):
@@ -1408,6 +1435,9 @@ def _read_topspin(*args, **kwargs):
         else:
             meta.encoding[-2] = "UNVALIDATED:BRUKER-F1"
 
+        if meta.encoding[-2].startswith("UNVALIDATED:"):
+            _require_guarded_ser_core()
+
     # correct TD, so it is the number of complex points, not the number of data
     # not for the last dimension which is already correct
     if normalized_fid:
@@ -1431,14 +1461,7 @@ def _read_topspin(*args, **kwargs):
     else:
         stored_widths = meta.sw_h or [None] * (parmode + 1)
         meta.sw_h = [
-            (meta.sw[axis].m * meta.sfo1[axis] * 1e-6).to("Hz")
-            if (
-                meta.sw is not None
-                and meta.sw[axis] is not None
-                and meta.sfo1 is not None
-                and meta.sfo1[axis] is not None
-            )
-            else stored_widths[axis]
+            _acquisition_width(meta, axis, stored_widths[axis])
             for axis in range(parmode + 1)
         ]
 
@@ -1531,16 +1554,8 @@ def _read_topspin(*args, **kwargs):
             if normalized_dataset is not None:
                 continue
             width = meta.sw_h[axis]
-            magnitude = getattr(width, "m", None)
-            if (
-                datatype == "SER"
-                and axis == 0
-                and (
-                    not isinstance(magnitude, (int, float, np.integer, np.floating))
-                    or not np.isfinite(magnitude)
-                    or magnitude <= 0
-                )
-            ):
+            if datatype == "SER" and axis == 0 and not _positive_scalar(width):
+                _require_guarded_ser_core()
                 coord = Coord.arange(meta.td[axis], title="F1 increment index")
                 coord.meta["bruker_f1_width_missing"] = True
                 coords.append(coord)
@@ -1552,7 +1567,9 @@ def _read_topspin(*args, **kwargs):
                 title=f"F{axis + 1} acquisition time",
             )
 
-            coord.meta["acquisition_frequency"] = meta.sfo1[axis]
+            frequency = meta.sfo1[axis] if meta.sfo1 is not None else None
+            if _positive_scalar(frequency):
+                coord.meta["acquisition_frequency"] = frequency
             coords.append(coord)
         else:
             size = meta.si[axis]
