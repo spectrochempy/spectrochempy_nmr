@@ -9,12 +9,11 @@ pathway. See :doc:`mqmas` for the staged processing of a conventional
 Bruker States MQMAS acquisition.
 
 The :doc:`RbNO₃ gallery example
-</examples/gallery/nmr/plot_rbno3_mqmas_multiplex>` shows how to process two ⁸⁷Rb acquisitions.
+</examples/gallery/nmr/plot_rbno3_mqmas_multiplex>` shows how to process the ⁸⁷Rb multiplex acquisition.
 The multiplex acquisition requires coherence selection before either
-Fourier transform. Use local copies of the RbNO₃ experiment
-directories and set ``SCP_RBNO3_DATA`` to their parent directory before
-running the example. Keep the acquisition parameters and ``pdata/1``
-processing parameters alongside each ``ser``.
+Fourier transform. Set ``SCP_RBNO3_DATA`` to the directory containing the local copy of
+experiment 206 to replay the gallery example. Keep its acquisition
+parameters and ``pdata/1/procs`` alongside the ``ser``.
 
 STMAS with States pairs
 -----------------------
@@ -53,8 +52,8 @@ coefficient is −7/9. The F1 dwell is taken from the pulse-program
 increment (``IN[0]``), rather than the nominal width of the phase-cycle
 storage axis.
 
-The original RbNO₃ acquisitions are local inputs for the executable
-example. The rendered figure shows the output with those inputs.
+The RbNO₃ acquisition used by the gallery example is a local input.
+The comparison below uses the original MQMAS and STMAS acquisitions.
 For the early application of 3Q MAS to rubidium nitrate, see
 `Fernandez and Amoureux (1996) <https://doi.org/10.1016/0926-2040(95)01197-8>`_.
 The archived acquisition used here was recorded in 2014.

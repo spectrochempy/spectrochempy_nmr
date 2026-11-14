@@ -52,7 +52,12 @@ spectrum = scp.nmr.Experiment(phased).xfshear(size=512, spin=2.5, f1_shift=-20.0
 
 # %%
 # Extract the RR plane. Use the calibrated ppm axes
-# to select the region around the main resonances.
+# to select the region around the main resonances. Use closer contour
+# levels at low intensity to show the broad feature near 47 ppm in F1.
 rr = scp.nmr.Experiment(spectrum).rr()
 region = rr[52.0:25.0, 65.0:20.0]
-_ = region.plot(method="contour", start=0.08, nlevels=12)
+peak = float(scp.Quantity(region.max()).magnitude)
+levels = [
+    peak * fraction for fraction in (0.06, 0.09, 0.13, 0.18, 0.25, 0.35, 0.5, 0.7, 0.9)
+]
+_ = region.plot(method="contour", levels=levels, cmap="magma_r")
