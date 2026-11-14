@@ -10,7 +10,9 @@ from .states_fids import states_fids
 
 
 def read_stmas(path, *, procno=1, use_tdeff=False):
-    """Read a 2D Bruker States STMAS experiment or its SER.
+    """Read a spin-3/2 Bruker DQF-STMAS experiment or its SER.
+
+    The supported pulse program is dqf-stmas-old.av.
 
     Set use_tdeff=True to use the number of traces in the processing
     status (proc2s TDeff), for example to omit a final unpaired trace.
@@ -41,6 +43,8 @@ def read_stmas(path, *, procno=1, use_tdeff=False):
         or stored.dimensions.get("higher_dimension_files")
     ):
         raise ValueError("STMAS requires a uniform 2D Bruker States acquisition")
+    if direct.get("PULPROG") != "dqf-stmas-old.av":
+        raise ValueError("STMAS requires the qualified dqf-stmas-old.av pulse program")
     declared = indirect.get("TD")
     words = stored.dimensions["declared_td"]
     count = stored.metadata["proc2s"].get("TDeff") if use_tdeff else declared

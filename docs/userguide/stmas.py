@@ -24,7 +24,7 @@
 # Acquisition and States pairs
 # -----------------------------
 #
-# The spin-3/2 ⁸⁷Rb example uses the ``dqf-stmas-old.av`` pulse program.
+# The spin-3/2 ⁸⁷Rb example uses the ``dqf-stmas-old.av`` pulse program supported by the reader.
 # The double-quantum filter selects the transfer pathway, and States
 # phase cycling records two adjacent FIDs for each indirect increment.
 # The archived experiment RbNO₃/15 has 111 acquired traces in 128 stored

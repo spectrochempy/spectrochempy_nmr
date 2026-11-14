@@ -374,7 +374,10 @@ def xfshear(dataset, *, size, spin, coherence_order, f1_shift):
 
     order, ratio, scale = _mqmas_geometry(spin, coherence_order)
     plan = _validated_xf2(dataset)
-    selection = dataset.meta.get("acquisition", {}).get("multiplex_spam")
+    acquisition = dataset.meta.get("acquisition", {})
+    if "stmas" in acquisition:
+        raise ValueError("Use stmas_shear() for STMAS States data")
+    selection = acquisition.get("multiplex_spam")
     if selection is not None and (
         order != selection["coherence_order"]
         or spin != (selection["phase_count"] - 1) / 4
@@ -498,8 +501,8 @@ def stmas_shear(dataset, *, size, f1_shift):
 
     plan = _validated_xf2(dataset)
     acquisition = dataset.meta.get("acquisition", {})
-    if "multiplex_spam" in acquisition:
-        raise ValueError("STMAS shear requires STMAS States data")
+    if "stmas" not in acquisition:
+        raise ValueError("STMAS shear requires States data from read_stmas()")
     if "f2_phase" not in plan:
         raise ValueError("Apply a common F2 phase with xf2p() before STMAS shear")
     _, ny, nx = dataset.shape
