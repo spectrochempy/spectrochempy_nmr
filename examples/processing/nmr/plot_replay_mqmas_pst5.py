@@ -13,8 +13,8 @@ under `CC BY 4.0 <https://creativecommons.org/licenses/by/4.0/>`_.
 """
 
 # %%
-# sphinx_gallery_thumbnail_number = 2
 import spectrochempy as scp
+# sphinx_gallery_thumbnail_number = 2
 
 # Keep the acquired points intact at import. xf2() will
 # correct the digital group delay on the F2 frequency grid.
