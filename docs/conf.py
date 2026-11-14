@@ -77,8 +77,8 @@ extensions = [
     "sphinx.ext.napoleon",
     "sphinx.ext.viewcode",
     "sphinx.ext.githubpages",
-    "sphinx_codeautolink",
     "sphinx_gallery.gen_gallery",
+    "sphinx_codeautolink",
     "nbsphinx",
     "sphinxcontrib.bibtex",
 ]
