@@ -74,7 +74,10 @@ def _check_public_2d(path, monkeypatch, profile="states"):
         assert experiment.source_kind == previous.source_kind
     if profile != "series":
         with pytest.raises(
-            NotImplementedError, match=f"UNVALIDATED:AGILENT-{profile.upper()}"
+            NotImplementedError,
+            match='quadrature="states-tppi"'
+            if profile == "states"
+            else f"UNVALIDATED:AGILENT-{profile.upper()}",
         ):
             direct.fft(dim="y")
     if profile == "tppi":
@@ -174,8 +177,10 @@ def test_synthetic_states_quadrature_auto_and_manual(synthetic_states, monkeypat
     unresolved = scp.nmr.read_agilent(path)
     assert unresolved.meta.acquisition["quadrature_selection"]["mode"] is None
     np.testing.assert_array_equal(unresolved.data, auto.data)
-    with pytest.raises(NotImplementedError, match="UNVALIDATED"):
+    with pytest.raises(NotImplementedError, match='quadrature="states"'):
         unresolved.fft(dim="y")
+    with pytest.raises(NotImplementedError, match='quadrature="states-tppi"'):
+        scp.nmr.Experiment(unresolved).process()
 
     source.write_bytes(bytes(256 * 1024 + 1))
     unresolved = scp.nmr.read_agilent(path)

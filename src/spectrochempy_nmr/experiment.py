@@ -1076,6 +1076,12 @@ class Experiment:
             )
 
         if self.ndim > 1:
+            from .processing.fft_validation import (  # noqa: PLC0415
+                _require_known_f1_quadrature,
+            )
+
+            for encoding in self.encoding or ():
+                _require_known_f1_quadrature(encoding)
             msg = (
                 "Outside supported normalized raw 2D profiles, public NMR processing supports "
                 "only validated 1D experiments."

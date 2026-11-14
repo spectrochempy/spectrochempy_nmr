@@ -8,6 +8,9 @@ distribution. The sections below describe changes in each plugin release.
 Unreleased
 ----------
 
+* Read Bruker SER traces and transform F2 when the F1 acquisition mode
+  is unknown. Ask for the mode when processing F1.
+
 Added
 ~~~~~
 

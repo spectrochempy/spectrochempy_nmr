@@ -31,8 +31,11 @@ from spectrochempy.core.readers.importer import Importer
 from spectrochempy.core.readers.importer import _importer_method
 from spectrochempy.core.units import ur
 from spectrochempy.utils._logging import warning_
+from spectrochempy.utils.exceptions import SpectroChemPyError
 from spectrochempy.utils.meta import Meta
 from spectrochempy_nmr import _check_nmrglue_installation
+from spectrochempy_nmr.processing.fft_validation import _positive_scalar
+from spectrochempy_nmr.processing.fft_validation import _require_fft_prevalidation
 from spectrochempy_nmr.readers._channels import pad_channel_metadata
 from spectrochempy_nmr.readers._channels import pair_traces
 from spectrochempy_nmr.readers._channels import set_channel_data
@@ -302,7 +305,8 @@ nmr_valid_meta = [
     # ('subnam7', ''),
     # ('subnam8', ''),
     # ('subnam9', ''),
-    ("sw", "ppm"),  # ('sw_h', 'Hz'),
+    ("sw", "ppm"),
+    ("sw_h", "Hz"),
     # ('swibox', ''),
     ("td", ""),  # ('td0', ''),
     ("te", "K"),  # ('te2', ''),
@@ -752,6 +756,9 @@ def read_topspin(*paths, **kwargs):
         removal. This subtracts the mean of each row along the last axis,
         which removes the spike at the centre of the spectrum caused by the
         receiver DC offset.
+    quadrature : {"qf", "states", "states-tppi", "echo-antiecho"}, optional
+        Supply the F1 acquisition mode for a SER with missing or undefined
+        acquisition and processing mode parameters.
     use_list : bool or str, optional, default: False
         Use a list of values in seconds for the indirect coordinate of
         pseudo-2D data. Set to ``True`` for ``vdlist`` or give the list filename
@@ -795,6 +802,14 @@ def read_topspin(*paths, **kwargs):
     253.0909 ppm
 
     """
+    quadrature = kwargs.get("quadrature")
+    if quadrature is not None and quadrature not in (
+        "qf",
+        "states",
+        "states-tppi",
+        "echo-antiecho",
+    ):
+        raise ValueError("quadrature must be qf, states, states-tppi or echo-antiecho")
     kwargs["filetypes"] = ["TopSpin files (1r, 1i, *dir/*, 1r/*)"]
     kwargs["protocol"] = ["topspin"]
     importer = Importer()
@@ -1067,9 +1082,6 @@ def _read_normalized_ser(
     from nmrglue import interop  # noqa: PLC0415
 
     from spectrochempy_nmr.interop import from_interop  # noqa: PLC0415
-    from spectrochempy_nmr.processing.fft_validation import (  # noqa: PLC0415
-        _require_fft_prevalidation,
-    )
 
     if not any(path.name in ("proc", "procs") for path in procs_files) or not any(
         path.name in ("proc2", "proc2s") for path in procs_files
@@ -1132,11 +1144,38 @@ def _read_normalized_ser(
             )
         except (OSError, ValueError):
             continue
+        indirect = stored.metadata.get("acqu2s", stored.metadata.get("acqu2", {}))
+        if not _is_bruker_mode_integer(indirect.get("FnMODE")):
+            return None
         dataset.meta.acquisition_encoding = (
             tuple(stored.encoding) if profile is None else (profile.upper(), "DQD")
         )
         return stored.metadata, dataset
     return None
+
+
+def _is_bruker_mode_integer(mode):
+    return isinstance(mode, (int, np.integer)) and not isinstance(mode, bool)
+
+
+def _acquisition_width(meta, axis, stored_width):
+    width = meta.sw[axis] if meta.sw is not None else None
+    frequency = meta.sfo1[axis] if meta.sfo1 is not None else None
+    if _positive_scalar(width) and _positive_scalar(frequency):
+        calculated = (width.m * frequency * 1e-6).to("Hz")
+        if _positive_scalar(calculated):
+            return calculated
+    return stored_width
+
+
+def _require_guarded_ser_core():
+    try:
+        _require_fft_prevalidation()
+    except NotImplementedError:
+        raise SpectroChemPyError(
+            "Reading a Bruker SER with unsupported or undetermined F1 quadrature or missing "
+            "F1 spectral width requires SpectroChemPy 1.2.0 or later."
+        ) from None
 
 
 def _read_raw_data(directory, filename, acqus_files, procs_files):
@@ -1324,13 +1363,24 @@ def _read_topspin(*args, **kwargs):
                 if key.startswith("_") or key.lower() not in valid_keys:
                     continue
 
+                if (
+                    datatype == "SER"
+                    and item.startswith("proc")
+                    and key.lower() in ("sw", "sw_h", "sfo1", "bf1", "fnmode")
+                ):
+                    continue
+
                 value = dic[item][key]
                 units = ur(keys_units[key.lower()]) if keys_units[key.lower()] else None
 
                 if units is not None:
-                    if isinstance(value, float | int):
+                    if type(value) in (float, int):
                         value = value * units  # make a quantity
-                    elif isinstance(value, list) and isinstance(value[0], float | int):
+                    elif (
+                        isinstance(value, list)
+                        and value
+                        and isinstance(value[0], float | int)
+                    ):
                         value = np.array(value) * units
 
                 if key.lower() not in meta:
@@ -1363,38 +1413,40 @@ def _read_topspin(*args, **kwargs):
     if datatype in ["SER"]:
         meta.isfreq.insert(0, False)
 
-        # Explicitly read indirect dimension encoding from acqu2s.
-        # The generic metadata loop places acqus FnMODE at the direct
-        # dimension, but for SER data it describes indirect dimension encoding.
-        _acqu2s = dic.get("acqu2s", {})
-        _fnmode_val = (
-            _acqu2s.get("FnMODE")
-            if _acqu2s.get("FnMODE") is not None
-            else _acqu2s.get("fnmode")
-        )
-        if _fnmode_val is None:
-            _fnmode_val = meta.fnmode[-2]
+        indirect = dic.get("acqu2s", dic.get("acqu2", {}))
+        fnmode = indirect.get("FnMODE", indirect.get("fnmode"))
+        if fnmode is None and meta.fnmode is not None:
+            fnmode = meta.fnmode[-2]
+        if not _is_bruker_mode_integer(fnmode) or not 0 < fnmode < len(FnMODE):
+            fnmode = None
+            for parameters in (dic.get("proc2s", {}), dic.get("proc2", {})):
+                mc2 = parameters.get("MC2", parameters.get("mc2"))
+                if _is_bruker_mode_integer(mc2) and 0 <= mc2 < len(FnMODE) - 1:
+                    fnmode = mc2 + 1
+                    break
+        quadrature = kwargs.get("quadrature")
+        if quadrature is not None:
+            requested = FnMODE.index(quadrature.upper())
+            if fnmode not in (None, 0, requested):
+                raise SpectroChemPyError(
+                    "quadrature conflicts with the recorded TopSpin F1 mode"
+                )
+            fnmode = requested
 
-        _mc2_val = None
-        if meta.mc2 is not None:
-            _mc2_val = (
-                _acqu2s.get("MC2")
-                if _acqu2s.get("MC2") is not None
-                else _acqu2s.get("mc2")
+        if fnmode is not None:
+            if meta.fnmode is None:
+                meta.fnmode = [None] * data.ndim
+            meta.fnmode[-2] = fnmode
+            mode = FnMODE[fnmode]
+            meta.encoding[-2] = (
+                f"UNVALIDATED:BRUKER-{mode}" if mode in ("TPPI", "QSEQ") else mode
             )
-            if _mc2_val is None:
-                _mc2_val = meta.mc2[-2]
+            meta.iscomplex[-2] = mode in ("STATES", "STATES-TPPI", "ECHO-ANTIECHO")
+        else:
+            meta.encoding[-2] = "UNVALIDATED:BRUKER-F1"
 
-        # For historical reasons,
-        # MC2 is interpreted when the acquisition status
-        # parameter FnMODE has the value undefined, i.e. 0
-        if _fnmode_val == 0 and _mc2_val is not None:
-            _fnmode_val = _mc2_val + 1
-
-        if _fnmode_val is not None:
-            meta.fnmode[-2] = _fnmode_val
-            meta.encoding[-2] = FnMODE[_fnmode_val]
-            meta.iscomplex[-2] = _fnmode_val > 1
+        if meta.encoding[-2].startswith("UNVALIDATED:"):
+            _require_guarded_ser_core()
 
     # correct TD, so it is the number of complex points, not the number of data
     # not for the last dimension which is already correct
@@ -1406,10 +1458,6 @@ def _read_topspin(*args, **kwargs):
 
     paired_ser = datatype == "SER" and meta.iscomplex[0]
     if paired_ser:
-        if meta.encoding[0] not in ("STATES", "STATES-TPPI", "ECHO-ANTIECHO"):
-            raise NotImplementedError(
-                f"TopSpin indirect encoding {meta.encoding[0]!r} has no validated channel profile"
-            )
         if not normalized_ser:
             if data.shape[0] % 2:
                 raise ValueError("TopSpin States SER requires an even number of traces")
@@ -1421,10 +1469,9 @@ def _read_topspin(*args, **kwargs):
     if normalized_fid:
         meta.sw_h = [normalized_dataset.meta.acquisition["spectral_width_hz"] * ur.Hz]
     else:
+        stored_widths = meta.sw_h or [None] * (parmode + 1)
         meta.sw_h = [
-            (meta.sw[axis].m * meta.sfo1[axis] * 1e-6).to("Hz")
-            if meta.sw[axis] is not None and meta.sfo1[axis] is not None
-            else None
+            _acquisition_width(meta, axis, stored_widths[axis])
             for axis in range(parmode + 1)
         ]
 
@@ -1496,6 +1543,11 @@ def _read_topspin(*args, **kwargs):
         use_proc_axis = [False] * (parmode + 1)
 
     for axis in axe_range:
+        missing_f1_width = (
+            datatype == "SER" and axis == 0 and not _positive_scalar(meta.sw_h[axis])
+        )
+        if missing_f1_width:
+            _require_guarded_ser_core()
         if parmode > 0 and use_list and axis == 0:
             # we use the vd or other list to make the axis
             # this is useful for pseudo 2D data such as relaxation, etc...
@@ -1511,20 +1563,30 @@ def _read_topspin(*args, **kwargs):
                 )
                 vd = []
             coord = Coord(vd, title="time", units="s")
+            coord.meta["bruker_delay_list"] = True
+            if missing_f1_width:
+                coord.meta["bruker_f1_width_missing"] = True
             coords.append(coord)
 
         elif not meta.isfreq[axis]:
             if normalized_dataset is not None:
                 continue
-            # the axis is in time units
-            dw = (1.0 / meta.sw_h[axis]).to("us")
+            width = meta.sw_h[axis]
+            if missing_f1_width:
+                coord = Coord.arange(meta.td[axis], title="F1 increment index")
+                coord.meta["bruker_f1_width_missing"] = True
+                coords.append(coord)
+                continue
+            dw = (1.0 / width).to("us")
             coordpoints = np.arange(meta.td[axis])
             coord = Coord(
                 coordpoints * dw,
                 title=f"F{axis + 1} acquisition time",
             )
 
-            coord.meta["acquisition_frequency"] = meta.sfo1[axis]
+            frequency = meta.sfo1[axis] if meta.sfo1 is not None else None
+            if _positive_scalar(frequency):
+                coord.meta["acquisition_frequency"] = frequency
             coords.append(coord)
         else:
             size = meta.si[axis]

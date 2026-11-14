@@ -74,6 +74,29 @@ analyzed directly.
 Use ``proc_axis=True`` to use the reference saved during TopSpin processing.
 This is useful when the spectrum was re-referenced after acquisition.
 
+Bruker F1 acquisition mode
+--------------------------
+
+With SpectroChemPy 1.2.0 or later, if the indirect spectral width cannot
+be determined, the reader labels
+the F1 axis by increment index. F2 can still be transformed. To transform
+F1, supply the acquisition width in Hz (``SW_h``) or restore the indirect
+``SW`` and ``SFO1`` parameters.
+
+For a raw Bruker SER, the reader uses the indirect acquisition parameter
+``FnMODE``. If it is missing or undefined, the reader uses ``MC2`` from
+the indirect processing parameters when available.
+
+With SpectroChemPy 1.2.0 or later, you can read the traces and transform F2
+when the mode is still unknown.
+If you need F1, reopen the acquisition with its known mode, for example
+``scp.nmr.read_topspin(path, quadrature="states-tppi")``, then apply the
+F2 and F1 transforms in order. The accepted choices are ``"qf"``,
+``"states"``, ``"states-tppi"`` and ``"echo-antiecho"``.
+Older core versions require a supported mode and valid F1 width at import.
+For an undetermined mode with a valid width, supply ``quadrature="qf"``
+if the acquisition used QF.
+
 Agilent/Varian States quadrature
 --------------------------------
 

@@ -10,6 +10,8 @@ import numpy as np
 from spectrochempy.core.dataset.coord import Coord  # noqa: PLC0415
 from spectrochempy.core.units import ur
 
+from .fft_validation import _positive_scalar
+
 
 def _meta_dim_index(new, dim):
     """Resolve the metadata index matching the target dataset dimension."""
@@ -330,12 +332,21 @@ def _fft_postprocess_result(new, dim=-1, inv=False, **kwargs):
     meta_idx = _meta_dim_index(new, dim)
 
     sfo1 = new.meta.sfo1[meta_idx]
-    bf1 = new.meta.bf1[meta_idx]
-    sf = new.meta.sf[meta_idx]
+    bf1 = new.meta.bf1[meta_idx] if new.meta.bf1 is not None else None
+    sf = new.meta.sf[meta_idx] if new.meta.sf is not None else None
+    if not inv and (
+        not _positive_scalar(sfo1)
+        or not _positive_scalar(sf)
+        or (kwargs.get("ppm", True) and not _positive_scalar(bf1))
+    ):
+        # Keep the core frequency grid when the vendor reference is unavailable.
+        if new.meta.isfreq is not None:
+            new.meta.isfreq[meta_idx] = True
+        return new
     sw = new.meta.sw_h[meta_idx]
 
-    if new.meta.nuc1 is not None:
-        nuc1 = new.meta.nuc1[meta_idx]
+    nuc1 = new.meta.nuc1[meta_idx] if new.meta.nuc1 is not None else None
+    if nuc1:
         m = re.match(r"([^a-zA-Z]+)([a-zA-Z]+)", nuc1)
         nucleus = "^{" + m[1] + "}" + m[2] if m is not None else ""
     else:
@@ -354,7 +365,8 @@ def _fft_postprocess_result(new, dim=-1, inv=False, **kwargs):
         newcoord.ito("Hz")
 
         # Store acquisition frequency for ppm conversion context
-        newcoord.meta["acquisition_frequency"] = bf1
+        if _positive_scalar(bf1):
+            newcoord.meta["acquisition_frequency"] = bf1
 
         ppm = kwargs.get("ppm", True)
         if ppm:
