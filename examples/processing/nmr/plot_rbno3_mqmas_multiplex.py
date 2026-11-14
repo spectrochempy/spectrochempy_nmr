@@ -1,6 +1,6 @@
 """
 Process an RbNO₃ MQMAS acquisition
-=================================
+=======================================
 
 Process the ⁸⁷Rb three-quantum signal from a Bruker multiplex acquisition of
 rubidium nitrate. Select the 3Q coherence, phase F2, shear and transform F1,
