@@ -223,6 +223,43 @@ def test_synthetic_bruker_ser_uses_stored_width_if_sw_invalid(tmp_path, invalid_
     assert fid.fft(dim="x").fft(dim="y").shape == fid.shape
 
 
+@pytest.mark.parametrize("fnmode", ["yes", "1.0"])
+def test_synthetic_invalid_fnmode_with_processing_parameters(tmp_path, fnmode):
+    path = _synthetic_ser(tmp_path, fnmode)
+    acqu2s = path / "acqu2s"
+    acqu2s.write_text(acqu2s.read_text().replace("##END=", "##$O1= 0\n##END="))
+    status = path / "pdata" / "1"
+    status.mkdir(parents=True)
+    for name, width, size in (("procs", 2000, 128), ("proc2s", 1000, 8)):
+        (status / name).write_text(
+            f"##TITLE= Processing status\n##$SF= 125\n##$SW_p= {width}\n"
+            f"##$OFFSET= 4\n##$SI= {size}\n##END=\n"
+        )
+
+    fid = scp.nmr.read_topspin(path / "ser")
+    with pytest.raises(NotImplementedError, match="Bruker F1.*quadrature"):
+        fid.fft(dim="x").fft(dim="y")
+
+
+@pytest.mark.parametrize("sfo1", ["yes", "<BAD>", "NaN", "0", "1e999"])
+def test_synthetic_bruker_f1_fft_with_invalid_reference(tmp_path, sfo1):
+    path = _synthetic_ser(tmp_path, 1)
+    acqu2s = path / "acqu2s"
+    acqu2s.write_text(
+        acqu2s.read_text().replace(
+            "##$SFO1= 125", f"##$SFO1= {sfo1}\n##$BF1= 125\n##$SW_h= 2000"
+        )
+    )
+    status = path / "pdata" / "1" / "proc2s"
+    status.parent.mkdir(parents=True)
+    status.write_text("##TITLE= Processing status\n##$SF= 125\n##END=\n")
+
+    spectrum = scp.nmr.read_topspin(path / "ser").fft(dim="x").fft(dim="y")
+    assert spectrum.y.units == scp.ur.Hz
+    assert np.isfinite(spectrum.y.data).all()
+    assert spectrum.meta.isfreq == [True, True]
+
+
 def test_synthetic_bruker_ser_ignores_boolean_mc2(tmp_path):
     path = _synthetic_ser(tmp_path, None)
     status = path / "pdata" / "1" / "proc2s"

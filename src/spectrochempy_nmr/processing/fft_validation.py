@@ -2,6 +2,17 @@
 
 from importlib import import_module
 
+import numpy as np
+
+
+def _positive_scalar(value):
+    magnitude = getattr(value, "m", None)
+    return (
+        isinstance(magnitude, (int, float, np.integer, np.floating))
+        and np.isfinite(magnitude)
+        and magnitude > 0
+    )
+
 
 def _require_fft_prevalidation():
     module = import_module("spectrochempy.processing.fft.fft")

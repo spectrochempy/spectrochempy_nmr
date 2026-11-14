@@ -34,6 +34,7 @@ from spectrochempy.utils._logging import warning_
 from spectrochempy.utils.exceptions import SpectroChemPyError
 from spectrochempy.utils.meta import Meta
 from spectrochempy_nmr import _check_nmrglue_installation
+from spectrochempy_nmr.processing.fft_validation import _positive_scalar
 from spectrochempy_nmr.processing.fft_validation import _require_fft_prevalidation
 from spectrochempy_nmr.readers._channels import pad_channel_metadata
 from spectrochempy_nmr.readers._channels import pair_traces
@@ -1144,7 +1145,7 @@ def _read_normalized_ser(
         except (OSError, ValueError):
             continue
         indirect = stored.metadata.get("acqu2s", stored.metadata.get("acqu2", {}))
-        if isinstance(indirect.get("FnMODE"), bool):
+        if not _is_bruker_mode_integer(indirect.get("FnMODE")):
             return None
         dataset.meta.acquisition_encoding = (
             tuple(stored.encoding) if profile is None else (profile.upper(), "DQD")
@@ -1153,13 +1154,8 @@ def _read_normalized_ser(
     return None
 
 
-def _positive_scalar(value):
-    magnitude = getattr(value, "m", None)
-    return (
-        isinstance(magnitude, (int, float, np.integer, np.floating))
-        and np.isfinite(magnitude)
-        and magnitude > 0
-    )
+def _is_bruker_mode_integer(mode):
+    return isinstance(mode, (int, np.integer)) and not isinstance(mode, bool)
 
 
 def _acquisition_width(meta, axis, stored_width):
@@ -1414,19 +1410,11 @@ def _read_topspin(*args, **kwargs):
         fnmode = indirect.get("FnMODE", indirect.get("fnmode"))
         if fnmode is None and meta.fnmode is not None:
             fnmode = meta.fnmode[-2]
-        if (
-            isinstance(fnmode, bool)
-            or not isinstance(fnmode, (int, np.integer))
-            or not 0 < fnmode < len(FnMODE)
-        ):
+        if not _is_bruker_mode_integer(fnmode) or not 0 < fnmode < len(FnMODE):
             fnmode = None
             for parameters in (dic.get("proc2s", {}), dic.get("proc2", {}), indirect):
                 mc2 = parameters.get("MC2", parameters.get("mc2"))
-                if (
-                    isinstance(mc2, (int, np.integer))
-                    and not isinstance(mc2, bool)
-                    and 0 <= mc2 < len(FnMODE) - 1
-                ):
+                if _is_bruker_mode_integer(mc2) and 0 <= mc2 < len(FnMODE) - 1:
                     fnmode = mc2 + 1
                     break
         quadrature = kwargs.get("quadrature")
@@ -1438,7 +1426,7 @@ def _read_topspin(*args, **kwargs):
                 )
             fnmode = requested
 
-        if isinstance(fnmode, (int, np.integer)) and 0 < fnmode < len(FnMODE):
+        if fnmode is not None:
             if meta.fnmode is None:
                 meta.fnmode = [None] * data.ndim
             meta.fnmode[-2] = fnmode
