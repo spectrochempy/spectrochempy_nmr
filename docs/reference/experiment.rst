@@ -7,6 +7,8 @@ processing workflow. See :doc:`/userguide/processing_1d` and
 For the Bruker States MQMAS workflow, see :doc:`/userguide/mqmas`.
 Use ``Experiment.xf2()`` to transform F2, ``Experiment.xf2p()`` to apply
 the common phase, and ``Experiment.xfshear()`` to produce the final spectrum.
+For spin-3/2 DQF-STMAS, use ``Experiment.stmas_shear()`` after the common
+phase. See :doc:`/userguide/stmas`.
 For polynomial baseline correction along F1 or F2 and numbered trace
 extraction, see :ref:`topspin-slice-and-baseline`.
 
