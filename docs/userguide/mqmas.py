@@ -85,7 +85,7 @@ rr[52.0:25.0, 65.0:20.0].plot(method="contour")
 # Supply either window option. Both States branches receive the same
 # weights on the raw sample grid, which begins at the negative group
 # delay. When the mirrored center lies outside that grid, only its tail
-# overlaps the samples. See the [exponential-window comparison](stmas_multiplex.rst#mqecho-pst5-rbno3-comparison).
+# overlaps the samples. See the [exponential-window comparison](stmas_multiplex.rst).
 #
 # The returned channels pack RR and IR in `S_R`, and RI and II in
 # `S_I`. The F2 axis retains the acquisition reference. The F1 axis
