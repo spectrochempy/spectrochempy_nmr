@@ -1,12 +1,14 @@
 """
-Processing an MQMAS spectrum
-============================
+Process a ²⁷Al MQMAS acquisition
+================================
 
 This example processes an aluminium-27 Bruker States acquisition of PST-5.
-It follows the TopSpin XFSHEAR workflow with automatic F2 phase estimation and
-compares the effects of apodization and baseline correction. It reconstructs
-the direct quadrature with a Hilbert transform and rescales F1 to the
-isotropic chemical-shift axis.
+Estimate a common F2 phase, apply XFSHEAR and display the RR map on
+isotropic F1 and direct F2 axes. The :doc:`MQMAS tutorial </userguide/mqmas>`
+compares apodization and baseline correction on the same data.
+
+This example requires the development plugin for ``Experiment.rr()``.
+See the :doc:`installation guide </getting_started/installation>`.
 
 Data: Christian Fernandez, LCS, distributed through
 `spectrochempy_data <https://github.com/spectrochempy/spectrochempy_data>`_
@@ -15,7 +17,6 @@ under `CC BY 4.0 <https://creativecommons.org/licenses/by/4.0/>`_.
 
 # %%
 import spectrochempy as scp
-
 # sphinx_gallery_thumbnail_number = 2
 
 # Keep the acquired points intact at import. xf2() will
@@ -30,15 +31,14 @@ xf2 = scp.nmr.Experiment(raw).xf2(
 )
 
 # %%
-# Estimate the zero-order phase on the first complex F2 row alone.
-# The rest of the XF2 dataset is unchanged by this estimate.
+# Estimate the zero-order phase from the 65–20 ppm region of the first
+# complex F2 row.
 experiment = scp.nmr.Experiment(xf2)
 first_row = experiment.rsr(1)
-exclude = (first_row.x.data < 20.0) | (first_row.x.data > 65.0)
-preview = scp.nmr.apk(first_row, order=0, exclude=exclude)
+preview = scp.nmr.apk(first_row[65.0:20.0], order=0)
 if not preview.estimate.success:
     raise RuntimeError(preview.estimate.message)
-_ = preview.phased.real[65.0:20.0].plot()
+_ = preview.phased.real.plot()
 
 # %%
 # Apply those same angles to both States branches at every F1 increment.
@@ -51,46 +51,11 @@ phased = experiment.xf2p(**phase)
 spectrum = scp.nmr.Experiment(phased).xfshear(size=512, spin=2.5, f1_shift=-20.0)
 
 # %%
-# The real part of the first channel is RR. Use the calibrated ppm axes
-# to select the region around the main resonances.
-rr = spectrum[0, :, :].squeeze().real
+# Extract the RR plane. Use the calibrated ppm axes
+# to select the region around the main resonances. Use closer contour
+# levels at low intensity to show the broad feature near 47 ppm in F1.
+rr = scp.nmr.Experiment(spectrum).rr()
 region = rr[52.0:25.0, 65.0:20.0]
-_ = region.plot(method="contour", start=0.08, nlevels=12)
-
-
-# %%
-# Apply a Gaussian before the F2 FFT, centered on the expected echo
-# in each row. In this shifted-echo experiment the echo moves by
-# (19/12) × t1 along F2, in addition to the digital group delay.
-# Both States branches at a given t1 receive the same window. The
-# Gaussian standard deviation is 0.8 ms. Keep the phase and shear
-# settings identical to isolate the effect of the window.
-xf2_windowed = scp.nmr.Experiment(raw).xf2(
-    size=4096, direct_points=2048, echo_window=(19 / 12, 0.0008)
-)
-phased_windowed = scp.nmr.Experiment(xf2_windowed).xf2p(**phase)
-windowed = scp.nmr.Experiment(phased_windowed).xfshear(
-    size=512, spin=2.5, f1_shift=-20.0
-)
-windowed_rr = windowed[0, :, :].squeeze().real[52.0:25.0, 65.0:20.0]
-
-# %%
-# Fit a linear baseline along F2 for each row of the real RR map, using
-# regions on either side of the resonances. All three maps use the same
-# contour levels so changes in intensity remain visible.
-corrected_spectrum = scp.nmr.Experiment(windowed).abs2(
-    order=1, limits=(20.0, 65.0), ranges=[(21.0, 24.0), (61.0, 64.0)]
-)
-corrected = corrected_spectrum[0, :, :].squeeze().real[52.0:25.0, 65.0:20.0]
-
-peak = float(scp.Quantity(region.max()).magnitude)
-positive_levels = [0.08 * peak * 1.3**i for i in range(10)]
-levels = [-level for level in reversed(positive_levels)] + positive_levels
-_ = scp.multiplot(
-    [region, windowed_rr, corrected],
-    ncol=3,
-    method="contour",
-    labels=["Reference", "F2 apodization", "F2 apodization and baseline correction"],
-    levels=levels,
-    figsize=(13, 4),
-)
+peak = region.max().magnitude
+levels = [peak * fraction for fraction in (0.09, 0.13, 0.18, 0.25, 0.35, 0.5, 0.7, 0.9)]
+_ = region.plot(method="contour", levels=levels, cmap="magma_r")

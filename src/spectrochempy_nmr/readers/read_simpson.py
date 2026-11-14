@@ -86,7 +86,9 @@ def read_simpson(*paths, **kwargs):
     --------
     Reading a single SIMPSON file:
 
-    >>> scp.nmr.read('path/to/experiment.spe')  # doctest: +SKIP
+    .. code-block:: python
+
+        scp.nmr.read("path/to/experiment.spe")
 
     """
     kwargs["filetypes"] = ["SIMPSON files (*.spe *.fid)"]

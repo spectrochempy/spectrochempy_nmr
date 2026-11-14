@@ -22,11 +22,10 @@ for installation, readers, processing and supported acquisition profiles.
 
 ## Installation
 
-Install the core and plugin directly for this release. The NMR extra in
-SpectroChemPy 1.3.0 selects plugin versions below 0.4.
+Install SpectroChemPy 1.3.1 with the NMR extra.
 
 ```bash
-python -m pip install "spectrochempy==1.3.0" "spectrochempy-nmr==0.4.0"
+python -m pip install "spectrochempy[nmr]==1.3.1"
 ```
 
 The plugin installs `nmrglue-ng`. If you use the original `nmrglue`, install

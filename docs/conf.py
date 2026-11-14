@@ -78,9 +78,33 @@ extensions = [
     "sphinx.ext.viewcode",
     "sphinx.ext.githubpages",
     "sphinx_gallery.gen_gallery",
+    "sphinx_codeautolink",
     "nbsphinx",
     "sphinxcontrib.bibtex",
 ]
+
+codeautolink_concat_default = True
+# The public reference documents Experiment under its re-exported name.
+codeautolink_inventory_map = {
+    f"spectrochempy_nmr.experiment.Experiment.{method}": f"spectrochempy_nmr.Experiment.{method}"
+    for method in vars(spectrochempy_nmr.Experiment)
+    if not method.startswith("_")
+}
+codeautolink_inventory_map.update(
+    {
+        "spectrochempy_nmr._resolve_read.<locals>.read": "spectrochempy_nmr.read",
+        **{
+            alias: f"spectrochempy_nmr.{name}"
+            for name in ("read_agilent", "read_jeol", "read_simpson", "read_topspin")
+            for alias in (
+                f"spectrochempy.nmr.{name}",
+                f"spectrochempy_nmr.readers.{name}.{name}",
+            )
+        },
+        "spectrochempy.core.dataset.nddataset.NDDataset.plot": "spectrochempy.NDDataset.plot",
+        "spectrochempy_nmr.processing.autophase.autophase": "spectrochempy_nmr.autophase",
+    }
+)
 
 bibtex_bibfiles = ["bibliography.bib"]
 bibtex_default_style = "plain"
@@ -179,7 +203,6 @@ sphinx_gallery_conf = {
     "only_warn_on_example_error": False,
     "download_all_examples": False,
     "remove_config_comments": True,
-    "reference_url": {"spectrochempy": core_docs_url + "/"},
 }
 
 if os.environ.get("NMR_DOCS_EXECUTE") == "1":
@@ -206,5 +229,25 @@ def _set_section_title(app, pagename, templatename, context, doctree):
             break
 
 
+def _refresh_gallery_sources(app):
+    app.env.find_files(app.config, app.builder)
+
+
 def setup(app):
+    from sphinx_gallery.docs_resolv import embed_code_links
+    from sphinx_gallery.gen_gallery import generate_gallery_rst
+
+    # Let codeautolink handle both galleries and notebooks. The gallery's
+    # HTML substitution can otherwise wrap existing links in a second anchor.
+    for listener in tuple(app.events.listeners["build-finished"]):
+        if listener.handler is embed_code_links:
+            app.disconnect(listener.id)
+
+    # Discover the generated pages before codeautolink snapshots the source list.
+    for listener in tuple(app.events.listeners["builder-inited"]):
+        if listener.handler is generate_gallery_rst:
+            app.disconnect(listener.id)
+            app.connect("builder-inited", generate_gallery_rst, priority=490)
+            break
+    app.connect("builder-inited", _refresh_gallery_sources, priority=495)
     app.connect("html-page-context", _set_section_title)

@@ -500,6 +500,20 @@ class Experiment:
         Select complex-mean subtraction, the provider's time-domain digital
         filter, and scan/gain normalization explicitly. Existing corrections
         are retained and never repeated.
+
+        Parameters
+        ----------
+        remove_dc_offset : bool
+            Subtract the complex mean of the FID.
+        digital_filter : {"time", None}
+            Use "time" for provider time-domain correction or None to skip this step.
+        normalize_scan_gain : bool
+            Normalize by the recorded scan count and receiver gain.
+
+        Returns
+        -------
+        NDDataset
+            The resulting dataset.
         """
         if (
             self.is_multi_dataset
@@ -523,6 +537,21 @@ class Experiment:
         ``limits=(low, high)`` and peak-free fit ``ranges`` in F2 axis units.
         Without fit ranges, iteratively exclude peaks from the polynomial fit.
         Return a new dataset.
+
+        Parameters
+        ----------
+        order : int
+            Polynomial degree from 0 to 5.
+        limits : tuple of float, optional
+            Optional (low, high) interval to correct, in the selected axis units.
+        ranges : sequence of pairs, optional
+            Optional peak-free fit intervals in the selected axis units. By default,
+            exclude peaks automatically.
+
+        Returns
+        -------
+        NDDataset
+            The resulting dataset.
         """
         return self._topspin_baseline("x", order=order, limits=limits, ranges=ranges)
 
@@ -530,6 +559,21 @@ class Experiment:
         """Subtract a polynomial baseline from RR along each F1 column.
 
         Options have the same meaning as for ``abs2()``, in F1 axis units.
+
+        Parameters
+        ----------
+        order : int
+            Polynomial degree from 0 to 5.
+        limits : tuple of float, optional
+            Optional (low, high) interval to correct, in the selected axis units.
+        ranges : sequence of pairs, optional
+            Optional peak-free fit intervals in the selected axis units. By default,
+            exclude peaks automatically.
+
+        Returns
+        -------
+        NDDataset
+            The resulting dataset.
         """
         return self._topspin_baseline("y", order=order, limits=limits, ranges=ranges)
 
@@ -540,12 +584,65 @@ class Experiment:
             raise ValueError("Baseline correction requires a single 2D spectrum")
         return correct_baseline(self.dataset, self.domains, dim, **options)
 
+    def rr(self):
+        """Return the TopSpin RR plane as a real 2D dataset."""
+        return self._spectral_component("rr")
+
+    def ri(self):
+        """Return the TopSpin RI plane as a real 2D dataset."""
+        return self._spectral_component("ri")
+
+    def ir(self):
+        """Return the TopSpin IR plane as a real 2D dataset."""
+        return self._spectral_component("ir")
+
+    def ii(self):
+        """Return the TopSpin II plane as a real 2D dataset."""
+        return self._spectral_component("ii")
+
+    @property
+    def RR(self):
+        """Return the same plane as :meth:`rr`."""
+        return self.rr()
+
+    @property
+    def RI(self):
+        """Return the same plane as :meth:`ri`."""
+        return self.ri()
+
+    @property
+    def IR(self):
+        """Return the same plane as :meth:`ir`."""
+        return self.ir()
+
+    @property
+    def II(self):
+        """Return the same plane as :meth:`ii`."""
+        return self.ii()
+
+    def _spectral_component(self, component):
+        from .processing.topspin_commands import extract_component
+
+        if self.is_multi_dataset:
+            raise ValueError("Component extraction requires a single 2D spectrum")
+        return extract_component(self.dataset, self.domains, component)
+
     def rser(self, row):
         """Return the raw FID numbered ``row`` in TopSpin's 1-based convention.
 
         For an ordinary matrix, ``rser(1)`` is ``dataset[0, :].squeeze("y")``.
         For paired acquisitions, consecutive FIDs are the two branches of
         the same F1 increment.
+
+        Parameters
+        ----------
+        row : int
+            One-based index of the stored FID.
+
+        Returns
+        -------
+        NDDataset
+            The resulting dataset.
         """
         return self._topspin_slice("rser", row)
 
@@ -554,6 +651,16 @@ class Experiment:
 
         For an ordinary matrix, ``rsr(1)`` selects ``dataset[0, :]``.
         For paired spectra, combine the F1-real components along F2.
+
+        Parameters
+        ----------
+        row : int
+            One-based index of the F2 row.
+
+        Returns
+        -------
+        NDDataset
+            The resulting dataset.
         """
         return self._topspin_slice("rsr", row)
 
@@ -563,15 +670,51 @@ class Experiment:
         For a real matrix, ``rsc(1)`` selects ``dataset[:, 0]``.
         For paired spectra, combine the F2-real components along F1.
         After F2-only processing, the F1 trace is still in the time domain.
+
+        Parameters
+        ----------
+        column : int
+            One-based index of the F1 column.
+
+        Returns
+        -------
+        NDDataset
+            The resulting dataset.
         """
         return self._topspin_slice("rsc", column)
 
     def wsr(self, row, trace):
-        """Replace a 1-based F2 row with a modified ``rsr()`` trace in a copy."""
+        """Replace a 1-based F2 row with a modified ``rsr()`` trace in a copy.
+
+        Parameters
+        ----------
+        row : int
+            One-based index of the F2 row to replace.
+        trace : NDDataset
+            Replacement 1D dataset with matching coordinates and units.
+
+        Returns
+        -------
+        NDDataset
+            The resulting dataset.
+        """
         return self._replace_topspin_slice("wsr", row, trace)
 
     def wsc(self, column, trace):
-        """Replace a 1-based F1 column with a modified ``rsc()`` trace in a copy."""
+        """Replace a 1-based F1 column with a modified ``rsc()`` trace in a copy.
+
+        Parameters
+        ----------
+        column : int
+            One-based index of the F1 column to replace.
+        trace : NDDataset
+            Replacement 1D dataset with matching coordinates and units.
+
+        Returns
+        -------
+        NDDataset
+            The resulting dataset.
+        """
         return self._replace_topspin_slice("wsc", column, trace)
 
     def _replace_topspin_slice(self, command, number, trace):
@@ -597,6 +740,22 @@ class Experiment:
         same exclusion mask and estimator options as to ``scp.nmr.apk()``.
         For spectral series, the output records relative phase angles in
         its history and retains the input phase metadata as provenance.
+
+        Parameters
+        ----------
+        reference_row : int
+            One-based row used for a common F2 phase.
+        per_row : bool
+            Estimate phase separately for each row of a complex spectral series.
+        exclude : array-like of bool, optional
+            Boolean mask of samples to exclude from phase estimation.
+        **options : keyword arguments
+            Additional options for the phase estimator, such as order.
+
+        Returns
+        -------
+        NDDataset
+            The resulting dataset.
         """
         from .processing.topspin_commands import estimate_f2_phase, phase_f2_rows
 
@@ -630,6 +789,26 @@ class Experiment:
         ``mqecho=(slope, lb_hz)`` averages exponential windows centered at
         ±slope × t1 relative to the group-delay-corrected time origin.
         The same weights apply to both States branches on the acquired grid.
+
+        Parameters
+        ----------
+        size : int
+            F2 FFT size in points.
+        direct_points : int, optional
+            Number of acquired complex F2 samples to retain. By default, retain the
+            available samples up to the FFT size.
+        correct_digital_filter : bool
+            Compensate the Bruker digital group delay on the F2 frequency grid.
+        echo_window : tuple of float, optional
+            Shifted Gaussian window as (slope, sigma), with sigma in seconds.
+        mqecho : tuple of float, optional
+            Symmetric exponential window as (slope, line broadening in Hz). Supply only
+            one window option.
+
+        Returns
+        -------
+        NDDataset
+            The resulting dataset.
         """
         from .processing.mqmas import xf2  # noqa: PLC0415
 
@@ -649,6 +828,20 @@ class Experiment:
 
         Use the SpectroChemPy phase sign convention and an F2 pivot in
         sample indices. Pass the returned dataset to ``xfshear()``.
+
+        Parameters
+        ----------
+        phc0 : float
+            Zero-order F2 phase in degrees.
+        phc1 : float
+            First-order F2 phase in degrees.
+        pivot : int
+            Pivot as a zero-based F2 sample index.
+
+        Returns
+        -------
+        NDDataset
+            The resulting dataset.
         """
         from .processing.mqmas import xf2p  # noqa: PLC0415
 
@@ -661,6 +854,22 @@ class Experiment:
 
         Supply the F1 FFT size and the nuclear spin. The optional F1 shift
         uses isotropic ppm. The result contains all four spectral components.
+
+        Parameters
+        ----------
+        size : int
+            F1 FFT size in points.
+        spin : float
+            Nuclear spin, for example 2.5 for aluminium-27.
+        coherence_order : int
+            Multiple-quantum coherence order. The default is 3.
+        f1_shift : float
+            Shift of the spectrum within the F1 window, in isotropic ppm.
+
+        Returns
+        -------
+        NDDataset
+            The resulting dataset.
         """
         from .processing.mqmas import xfshear  # noqa: PLC0415
 
@@ -696,6 +905,26 @@ class Experiment:
         ``slope * t1`` for each increment. Supply ``sigma`` in seconds.
         Alternatively, pass ``mqecho=(slope, lb_hz)`` for the symmetric
         exponential window described in ``xf2()``.
+
+        Parameters
+        ----------
+        size : tuple of int
+            Final FFT sizes as (F1, F2), in points.
+        direct_points : int, optional
+            Number of acquired complex F2 samples to retain. By default, retain the
+            available samples up to the FFT size.
+        correct_digital_filter : bool
+            Compensate the Bruker digital group delay on the F2 frequency grid.
+        echo_window : tuple of float, optional
+            Shifted Gaussian window as (slope, sigma), with sigma in seconds.
+        mqecho : tuple of float, optional
+            Symmetric exponential window as (slope, line broadening in Hz). Supply only
+            one window option.
+
+        Returns
+        -------
+        NDDataset
+            The resulting dataset.
         """
         from .processing.mqmas import prepare_xfshear  # noqa: PLC0415
 
@@ -720,6 +949,26 @@ class Experiment:
         sample index. The optional F1 shift in isotropic ppm moves signal
         within the window with the AU reference adjustment. This method
         includes the F1 FFT and returns all four spectral components.
+
+        Parameters
+        ----------
+        spin : float
+            Nuclear spin, for example 2.5 for aluminium-27.
+        coherence_order : int
+            Multiple-quantum coherence order. The default is 3.
+        f1_shift : float
+            Shift of the spectrum within the F1 window, in isotropic ppm.
+        phc0 : float
+            Zero-order F2 phase in degrees.
+        phc1 : float
+            First-order F2 phase in degrees.
+        pivot : int
+            Pivot as a zero-based F2 sample index.
+
+        Returns
+        -------
+        NDDataset
+            The resulting dataset.
         """
         from .processing.mqmas import replay_xfshear  # noqa: PLC0415
 

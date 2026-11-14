@@ -9,7 +9,6 @@ spin-5/2 central-transition spectra with the same isotropic shift.
 """
 
 # %%
-import matplotlib.pyplot as plt
 import spectrochempy as scp
 
 # %%
@@ -26,31 +25,32 @@ extended = scp.nmr.czjzek.CzjzekDistribution(
     shift_sigma_hz=250,
 )
 
-fig, axes = plt.subplots(1, 2, figsize=(9, 3.4), constrained_layout=True)
-for label, distribution in (("Czjzek", standard), ("Extended Czjzek", extended)):
+labels = ["Czjzek", "Extended Czjzek"]
+couplings = []
+asymmetries = []
+for distribution in (standard, extended):
     nodes = distribution.sample(size=4096, seed=0)
-    coupling = scp.NDDataset(abs(nodes.cq_hz), units="Hz", title=r"$|C_Q|$")
-    coupling.ito("MHz")
-    asymmetry = scp.NDDataset(nodes.eta, title=r"$\eta$")
-    _ = coupling.plot(
-        method="hist",
-        ax=axes[0],
-        bins=45,
-        density=True,
-        histtype="step",
-        label=label,
-        show=False,
+    couplings.append(
+        scp.NDDataset(abs(nodes.cq_hz), units="Hz", title=r"$|C_Q|$").to("MHz")
     )
-    _ = asymmetry.plot(
-        method="hist",
-        ax=axes[1],
-        bins=30,
-        density=True,
-        histtype="step",
-        label=label,
-        show=False,
-    )
-_ = axes[1].legend()
+    asymmetries.append(scp.NDDataset(nodes.eta, title=r"$\eta$"))
+
+# Overlay each pair of probability densities on a separate set of axes.
+for samples, bins in ((couplings, 45), (asymmetries, 30)):
+    ax = None
+    for sample, label in zip(samples, labels, strict=True):
+        ax = sample.plot(
+            method="hist",
+            ax=ax,
+            clear=ax is None,
+            bins=bins,
+            density=True,
+            histtype="step",
+            label=label,
+            show=False,
+        )
+    _ = ax.legend()
+scp.show()
 
 # %%
 # Average the spectra over the distribution

@@ -189,3 +189,11 @@ html[data-theme="dark"] {
 .bd-sidebar-primary #pst-collapse-sidebar-button .pst-collapse-sidebar-label {
   color: inherit;
 }
+
+/* Keep API links visible inside syntax-highlighted code. */
+.highlight a.sphinx-codeautolink-a,
+.highlight a.sphx-glr-backref-module {
+    text-decoration: underline;
+    text-decoration-color: var(--pst-color-link);
+    text-underline-offset: 0.2em;
+}

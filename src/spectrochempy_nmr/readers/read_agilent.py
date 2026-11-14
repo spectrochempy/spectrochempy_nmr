@@ -318,7 +318,9 @@ def read_agilent(*paths, **kwargs):
     --------
     Reading a single Agilent FID directory:
 
-    >>> scp.nmr.read('path/to/agilent_1d/')  # doctest: +SKIP
+    .. code-block:: python
+
+        scp.nmr.read("path/to/agilent_1d/")
 
     """
     if kwargs.get("quadrature", "auto") not in ("auto", "states", "states-tppi"):

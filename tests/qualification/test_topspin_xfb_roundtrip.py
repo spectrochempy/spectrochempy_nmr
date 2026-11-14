@@ -106,14 +106,9 @@ def _assert_xfb_roundtrip(root, tmp_path, mode, *, with_prediction):
     metadata, reference = ng.bruker.read_pdata(
         root / "pdata" / "1", bin_files=names, scale_data=True
     )
-    if mode == "qf":
-        planes = expected.data[None]
-        reference = reference[None]
-    else:
-        assert tuple(expected.c.labels) == ("S_R", "S_I")
-        first, second = expected.data
-        planes = np.stack((first.real, second.real, first.imag, second.imag))
-        reference = np.asarray(reference)
+    experiment = Experiment(expected)
+    planes = np.stack([getattr(experiment, name[1:])().data for name in names])
+    reference = reference[None] if mode == "qf" else np.asarray(reference)
     acqus = metadata["acqus"]
     scale = acqus["NS"] * acqus["RG"]
     if acqus["DTYPA"] == 0:
