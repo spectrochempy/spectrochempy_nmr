@@ -77,7 +77,6 @@ extensions = [
     "sphinx.ext.napoleon",
     "sphinx.ext.viewcode",
     "sphinx.ext.githubpages",
-    # Match the original highlighted code before Sphinx-Gallery adds links.
     "sphinx_codeautolink",
     "sphinx_gallery.gen_gallery",
     "nbsphinx",
@@ -194,7 +193,6 @@ sphinx_gallery_conf = {
     "only_warn_on_example_error": False,
     "download_all_examples": False,
     "remove_config_comments": True,
-    "reference_url": {"spectrochempy": core_docs_url + "/"},
 }
 
 if os.environ.get("NMR_DOCS_EXECUTE") == "1":
@@ -222,4 +220,12 @@ def _set_section_title(app, pagename, templatename, context, doctree):
 
 
 def setup(app):
+    from sphinx_gallery.docs_resolv import embed_code_links
+
+    # Let codeautolink handle both galleries and notebooks. The gallery's
+    # HTML substitution can otherwise wrap existing links in a second anchor.
+    for listener in tuple(app.events.listeners["build-finished"]):
+        if listener.handler is embed_code_links:
+            app.disconnect(listener.id)
+
     app.connect("html-page-context", _set_section_title)
