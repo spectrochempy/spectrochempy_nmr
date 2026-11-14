@@ -318,9 +318,9 @@ def test_remove_dc_offset_flag():
     nb = np.concatenate([sp_off[c - 5 : c - 1], sp_off[c + 2 : c + 6]])
     ratio_off = abs(sp_off[c]) / (np.abs(nb).mean() + 1e-30)
     ratio_on = abs(sp_on[c]) / (np.abs(nb).mean() + 1e-30)
-    assert ratio_on < ratio_off, (
-        f"DC spike not reduced: ratio_off={ratio_off:.3f}, ratio_on={ratio_on:.3f}"
-    )
+    assert (
+        ratio_on < ratio_off
+    ), f"DC spike not reduced: ratio_off={ratio_off:.3f}, ratio_on={ratio_on:.3f}"
 
 
 @pytest.mark.skipif(not NMRDATA.exists(), reason="NMR test data not available")
