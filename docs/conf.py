@@ -87,8 +87,14 @@ codeautolink_concat_default = True
 # The public reference documents Experiment under its re-exported name.
 codeautolink_inventory_map = {
     f"spectrochempy_nmr.experiment.Experiment.{method}": f"spectrochempy_nmr.Experiment.{method}"
-    for method in ("xf2", "xf2p", "xfshear", "rr", "rsr", "abs2")
+    for method in vars(spectrochempy_nmr.Experiment)
+    if not method.startswith("_")
 }
+
+# The lazy reader resolves to a function defined inside its factory.
+codeautolink_inventory_map["spectrochempy_nmr._resolve_read.<locals>.read"] = (
+    "spectrochempy_nmr.read"
+)
 
 bibtex_bibfiles = ["bibliography.bib"]
 bibtex_default_style = "plain"
