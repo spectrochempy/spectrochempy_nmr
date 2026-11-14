@@ -72,3 +72,12 @@ def test_stmas_removes_f2_dependent_f1_evolution(tmp_path):
     acqus.write_text(acqus.read_text().replace("dqf-stmas-old.av", "mp3qzqf"))
     with pytest.raises(ValueError, match="qualified dqf-stmas-old.av"):
         scp.nmr.read_stmas(tmp_path, use_tdeff=True)
+
+    original = acqus.read_text().replace("mp3qzqf", "dqf-stmas-old.av")
+    for nucleus in ("27Al", "99Xx"):
+        acqus.write_text(original.replace("87Rb", nucleus))
+        with pytest.raises(ValueError, match="known spin-3/2 nucleus"):
+            scp.nmr.read_stmas(tmp_path, use_tdeff=True)
+    acqus.write_text(original.replace("87Rb", "23Na"))
+    sodium = scp.nmr.read_stmas(tmp_path, use_tdeff=True)
+    assert sodium.meta.nuc1[-1] == "23Na"
