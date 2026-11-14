@@ -849,19 +849,18 @@ class Experiment:
             raise ValueError("XF2 phase requires one complex XF2 dataset")
         return xf2p(self.dataset, phc0=phc0, phc1=phc1, pivot=pivot)
 
-    def xfshear(self, *, size, spin, coherence_order=3, f1_shift=0.0):
+    def xfshear(self, *, size, spin=None, coherence_order=3, f1_shift=0.0):
         """Shear phased MQMAS data, reconstruct F2 quadrature, and transform F1.
 
-        Supply the F1 FFT size and the spin of the recorded isotope.
-        The optional F1 shift
-        uses isotropic ppm. The result contains all four spectral components.
+        Supply the F1 FFT size. The optional F1 shift uses isotropic ppm. The result contains all four spectral components.
 
         Parameters
         ----------
         size : int
             F1 FFT size in points.
-        spin : float
-            Nuclear spin, for example 2.5 for aluminium-27.
+        spin : float, optional
+            Defaults to the spin of the recorded isotope. An explicit value
+            must agree with the isotope table.
         coherence_order : int
             Multiple-quantum coherence order. The default is 3.
         f1_shift : float
@@ -953,7 +952,7 @@ class Experiment:
         )
 
     def replay_xfshear(
-        self, *, spin, coherence_order=3, phc0=0.0, phc1=0.0, pivot=0, f1_shift=0.0
+        self, *, spin=None, coherence_order=3, phc0=0.0, phc1=0.0, pivot=0, f1_shift=0.0
     ):
         """Complete XFSHEAR on the complex result of prepare_xfshear().
 
@@ -965,8 +964,9 @@ class Experiment:
 
         Parameters
         ----------
-        spin : float
-            Nuclear spin, for example 2.5 for aluminium-27.
+        spin : float, optional
+            Defaults to the spin of the recorded isotope. An explicit value
+            must agree with the isotope table.
         coherence_order : int
             Multiple-quantum coherence order. The default is 3.
         f1_shift : float

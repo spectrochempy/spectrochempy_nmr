@@ -1,5 +1,6 @@
 """Hybrid-domain TopSpin XFSHEAR for Bruker States acquisitions."""
 
+from math import isfinite
 from numbers import Integral
 from numbers import Real
 
@@ -12,7 +13,7 @@ def _mqmas_geometry(spin, coherence_order):
     if (
         isinstance(spin, (bool, np.bool_))
         or not isinstance(spin, Real)
-        or not np.isfinite(spin)
+        or not isfinite(spin)
         or spin < 1.5
         or not float(2 * spin).is_integer()
         or int(2 * spin) % 2 == 0
@@ -26,6 +27,7 @@ def _mqmas_geometry(spin, coherence_order):
         or coherence_order > 2 * spin
     ):
         raise ValueError("MQMAS requires an odd coherence order from 3 to 2*spin")
+    spin = float(spin)
     order = int(coherence_order)
     ratio = order * (-17 * order**2 + 36 * spin * (spin + 1) - 10)
     ratio /= 9 * (4 * spin * (spin + 1) - 3)
@@ -374,11 +376,19 @@ def xfshear(dataset, *, size, spin, coherence_order, f1_shift):
     from spectrochempy.core.units import ur  # noqa: PLC0415
     from spectrochempy_nmr.processing.topspin_xfb import _positive_fft  # noqa: PLC0415
 
-    order, ratio, scale = _mqmas_geometry(spin, coherence_order)
     plan = _validated_xf2(dataset)
     acquisition = dataset.meta.get("acquisition", {})
     if "stmas" in acquisition:
         raise ValueError("Use stmas_shear() for STMAS States data")
+    source = dataset.meta.get("source_metadata") or {}
+    nuclei = dataset.meta.get("nuc1")
+    nucleus = source.get("acqus", {}).get("NUC1") or (nuclei[-1] if nuclei else None)
+    acquired_spin = nuclear_spin(nucleus)
+    if acquired_spin is None:
+        raise ValueError(f"XFSHEAR requires a known observed isotope; got {nucleus!r}")
+    if spin is None:
+        spin = acquired_spin
+    order, ratio, scale = _mqmas_geometry(spin, coherence_order)
     selection = acquisition.get("multiplex_spam")
     if selection is not None and (
         order != selection["coherence_order"]
@@ -387,12 +397,6 @@ def xfshear(dataset, *, size, spin, coherence_order, f1_shift):
         raise ValueError(
             "XFSHEAR spin and coherence order must match the Multiplex SPAM reconstruction"
         )
-    source = dataset.meta.get("source_metadata") or {}
-    nuclei = dataset.meta.get("nuc1")
-    nucleus = source.get("acqus", {}).get("NUC1") or (nuclei[-1] if nuclei else None)
-    acquired_spin = nuclear_spin(nucleus)
-    if acquired_spin is None:
-        raise ValueError(f"XFSHEAR requires a known observed isotope; got {nucleus!r}")
     if spin != acquired_spin:
         raise ValueError(
             f"XFSHEAR spin {spin} does not match {nucleus} (spin {acquired_spin})"
