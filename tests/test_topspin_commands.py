@@ -295,3 +295,20 @@ def test_component_extraction_finds_named_topspin_planes():
         np.testing.assert_array_equal(
             getattr(Experiment(dataset), name)().data, data[idx]
         )
+
+
+@pytest.mark.parametrize(("axis", "name"), [("F1", "ri"), ("F2", "ir")])
+def test_singly_complex_component(axis, name):
+    data = np.arange(12).reshape(3, 4) * (1 + 3j)
+    dataset = _dataset(data)
+    dataset.meta.interop_complex_axis = axis
+    experiment = Experiment(dataset)
+    np.testing.assert_array_equal(getattr(experiment, name)().data, data.imag)
+
+
+def test_bare_interop_component_labels_use_physical_axis_order():
+    data = np.arange(48, dtype=float).reshape(4, 3, 4)
+    dataset = _dataset(data)
+    dataset.meta.component_labels = ("rr", "ri", "ir", "ii")
+    np.testing.assert_array_equal(Experiment(dataset).IR.data, data[1])
+    np.testing.assert_array_equal(Experiment(dataset).RI.data, data[2])
