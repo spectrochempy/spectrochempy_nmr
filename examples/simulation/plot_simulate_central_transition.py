@@ -27,10 +27,13 @@ broadened = pulsar.broaden(spectrum, gaussian_fwhm_hz=300)
 spectrum.x.ito("kHz")
 broadened.x.ito("kHz")
 
+# At 100 MHz, a frequency offset of 1 kHz corresponds to 10 ppm.
+# The two axes share the simulation's zero-frequency reference.
 _ = scp.plot_multiple(
     [spectrum, broadened],
     method="pen",
     labels=["Simulation", "Gaussian broadening (300 Hz FWHM)"],
     legend="best",
     ylabel="Intensity per bin",
+    secondary_x=("Chemical shift / ppm", lambda khz: 10 * khz, lambda ppm: ppm / 10),
 )

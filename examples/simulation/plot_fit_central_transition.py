@@ -9,8 +9,6 @@ See the `PULSAR tutorial
 <https://www.spectrochempy.fr/projects/nmr/latest/userguide/pulsar.html>`__ for the frequency grid conventions.
 """
 
-from numpy import interp
-
 import spectrochempy as scp
 from spectrochempy.nmr import pulsar
 
@@ -39,8 +37,8 @@ def central_transition(x, ampl, cq, eta, shift, fwhm):
         cq_hz=cq, eta=eta, shift_hz=shift, **simulation
     )
     spectrum = pulsar.broaden(spectrum, gaussian_fwhm_hz=fwhm)
-    centers = spectrum.x.data + step_hz / 2
-    return ampl * interp(x, centers, spectrum.data, left=0, right=0)
+    spectrum.set_coordset(x=spectrum.x + (step_hz / 2) * scp.ur.Hz)
+    return ampl * spectrum.interpolate(coord=x, fill_value=0).data
 
 
 fit = scp.Optimize(

@@ -1,12 +1,12 @@
 Installation
 ============
 
-Install the core and plugin directly for this release. The NMR extra in
-SpectroChemPy 1.3.0 selects plugin versions below 0.4.
+Install SpectroChemPy 1.3.1 with the NMR extra to use the workflows
+in this documentation.
 
 .. code-block:: console
 
-   python -m pip install "spectrochempy==1.3.0" "spectrochempy-nmr==0.4.0"
+   python -m pip install "spectrochempy[nmr]==1.3.1"
 
 The NMR plugin installs ``nmrglue-ng``, which provides the same Python
 package (``import nmrglue``) as the original ``nmrglue`` distribution.
@@ -23,7 +23,7 @@ lets pip restore any shared files removed during uninstallation.
 .. code-block:: console
 
    python -m pip uninstall nmrglue nmrglue-ng
-   python -m pip install "spectrochempy==1.3.0" "spectrochempy-nmr==0.4.0"
+   python -m pip install "spectrochempy[nmr]==1.3.1"
 
 If you use SpectroChemPy 1.2.0, install ``spectrochempy-nmr`` directly.
 The ``nmr`` extra in that version selects the plugin's 0.2 series.

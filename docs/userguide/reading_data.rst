@@ -120,6 +120,18 @@ in the reader's log. If the mode remains undetermined, you can read the
 traces and transform F2. Choose ``"states"`` or ``"states-tppi"`` explicitly
 before transforming F1, once you know the acquisition convention.
 
+Reading processed NMR JCAMP-DX
+------------------------------
+
+Use the core reader for supported processed 1D spectra and real 2D
+NTUPLES spectra. The 2D path requires nmrglue-ng 1.3 or later.
+
+.. code-block:: python
+
+   spectrum = scp.jcamp.read("spectrum.jdx", jcamp_kind="nmr")
+
+Omit ``jcamp_kind`` when the file identifies the technique unambiguously.
+
 .. _reading-exchange-formats-through-interop:
 
 Reading exchange formats through interop
@@ -130,7 +142,7 @@ with
 `nmrglue-ng <https://nmrglue-ng.readthedocs.io/latest/tutorials/interop.html>`_,
 then convert the result to an ``NDDataset``. NMRPipe profiles
 can be detected from the header. Supply an explicit provider profile for
-nmrML and NMR JCAMP-DX.
+nmrML and for the explicit NMR JCAMP-DX interop route.
 
 .. code-block:: python
 
@@ -154,7 +166,7 @@ missing convention choices raise the corresponding provider or converter
 error. The nmrML reader requires ``xmltodict``.
 
 The usual TopSpin, Agilent, JEOL and SIMPSON dispatch continues to apply
-outside this mode. Use the core's ``scp.read_jcamp()`` for infrared JCAMP-DX.
+outside this mode.
 See :doc:`../nmrpipe_interop` and :doc:`../nmrml_interop` for the underlying
 profiles and their required convention choices.
 

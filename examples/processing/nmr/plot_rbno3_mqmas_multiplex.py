@@ -32,7 +32,6 @@ under `CC BY 4.0 <https://creativecommons.org/licenses/by/4.0/>`_.
 import os
 from pathlib import Path
 
-import matplotlib.pyplot as plt
 import numpy as np
 import spectrochempy as scp
 from nmrglue import bruker
@@ -204,18 +203,16 @@ if data_root:
         ("⁸⁷Rb RbNO₃/206\n3Q MQMAS from multiplex", multiplex[:, -10.0:-60.0]),
         ("⁸⁷Rb RbNO₃/15\nSTMAS", stmas[:, -10.0:-60.0]),
     )
-    fig, axes = plt.subplots(1, 3, figsize=(12, 4), layout="constrained")
-    for ax, (title, dataset) in zip(axes, panels, strict=True):
-        ax.contour(
-            dataset.x.data,
-            dataset.y.data,
-            dataset.data / dataset.data.max(),
-            levels=[0.10, 0.18, 0.30, 0.50, 0.70, 0.90],
-        )
-        ax.set(title=title, xlabel="F2 (ppm)", ylabel="Isotropic F1 (ppm)")
-        ax.invert_xaxis()
-        ax.invert_yaxis()
-    plt.show()
+    _ = scp.multiplot(
+        [dataset / dataset.max() for _, dataset in panels],
+        labels=[title for title, _ in panels],
+        ncol=3,
+        method="contour",
+        figsize=(12, 4),
+        levels=[0.10, 0.18, 0.30, 0.50, 0.70, 0.90],
+        xlabel="F2 (ppm)",
+        ylabel="Isotropic F1 (ppm)",
+    )
 else:
     print("Set SCP_RBNO3_DATA to the directory containing RbNO3/15 and RbNO3/206.")
 
@@ -287,19 +284,6 @@ def mqecho_window(shape, dwell1, sw2, delay, slope, lb, *, symmetric):
     return np.exp(-np.pi * lb * abs(t2 - slope * t1))
 
 
-def half_height_width(axis, signal, peak):
-    """Measure the contiguous half-height width around a local maximum."""
-    half = signal[peak] / 2
-    left = np.flatnonzero(signal[:peak] <= half)
-    right = np.flatnonzero(signal[peak + 1 :] <= half)
-    if not left.size or not right.size:
-        return np.nan
-    a, b = left[-1], peak + 1 + right[0]
-    lo = np.interp(half, signal[a : a + 2], axis[a : a + 2])
-    hi = np.interp(half, signal[b - 1 : b + 1][::-1], axis[b - 1 : b + 1][::-1])
-    return abs(hi - lo)
-
-
 def measure_peaks(dataset, centers):
     """Find the same resonances in each map and measure cuts through their maxima."""
     x, y, z = dataset.x.data, dataset.y.data, dataset.data
@@ -311,13 +295,19 @@ def measure_peaks(dataset, centers):
             z[np.ix_(rows, cols)].argmax(), (rows.size, cols.size)
         )
         row, col = rows[row], cols[col]
+        f1 = dataset[:, col].squeeze().characterize_peaks_1d(int(row)).rows[0]
+        f2 = dataset[row, :].squeeze().characterize_peaks_1d(int(col)).rows[0]
         peaks.append(
             (
                 x[col],
                 y[row],
                 z[row, col],
-                half_height_width(y, z[:, col], row),
-                half_height_width(x, z[row, :], col),
+                float(scp.Quantity(f1["fwhm"]).magnitude)
+                if f1["fwhm"] is not None
+                else float("nan"),
+                float(scp.Quantity(f2["fwhm"]).magnitude)
+                if f2["fwhm"] is not None
+                else float("nan"),
             )
         )
     return peaks
@@ -372,11 +362,10 @@ def compare_mqecho(root):
             )
         )
 
-    fig, axes = plt.subplots(2, 3, figsize=(12, 7), layout="constrained")
-    for axrow, name, maps, centers, xlim, ylim, lb in (
-        (axes[0], "PST-5", pst5_maps, [(36, 38), (40, 42)], (49, 30), (50, 33), 40),
+    panels, titles, limits, peaks = [], [], [], []
+    for name, maps, centers, xlim, ylim, lb in (
+        ("PST-5", pst5_maps, [(36, 38), (40, 42)], (49, 30), (50, 33), 40),
         (
-            axes[1],
             "RbNO₃/206",
             rb_maps,
             [(-27, -22.3), (-31.5, -26.3)],
@@ -387,32 +376,37 @@ def compare_mqecho(root):
     ):
         reference = measure_peaks(maps[0], centers)[0][2]
         labels = ("No window", f"Echo only ({lb} Hz)", f"Symmetric ({lb} Hz)")
-        for ax, dataset, label in zip(axrow, maps, labels, strict=True):
+        for dataset, label in zip(maps, labels, strict=True):
             a, b = measure_peaks(dataset, centers)
             print(
                 f"{name} | {label} | F1 A/B {a[3]:.2f}/{b[3]:.2f} ppm | "
                 f"F2 A/B {a[4]:.2f}/{b[4]:.2f} ppm | B/A {b[2] / a[2]:.3f}"
             )
-            ax.contour(
-                dataset.x.data,
-                dataset.y.data,
-                dataset.data / reference,
-                levels=[0.08, 0.15, 0.25, 0.4, 0.6, 0.8, 0.95],
-            )
-            ax.set(
-                title=f"{name} · {label}",
-                xlim=xlim,
-                ylim=ylim,
-                xlabel="F2 (ppm)",
-                ylabel="Isotropic F1 (ppm)",
-            )
-            for peak_label, peak in zip("AB", (a, b), strict=True):
-                ax.annotate(
-                    peak_label, peak[:2], xytext=(7, 7), textcoords="offset points"
-                )
-    return fig
+            panels.append(dataset / (scp.Quantity(reference, dataset.units)))
+            titles.append(f"{name} · {label}")
+            limits.append({"xlim": xlim, "ylim": ylim})
+            peaks.append((a, b))
+
+    grid = scp.multiplot(
+        panels,
+        labels=titles,
+        panel_kwargs=limits,
+        nrow=2,
+        ncol=3,
+        method="contour",
+        figsize=(12, 7),
+        levels=[0.08, 0.15, 0.25, 0.4, 0.6, 0.8, 0.95],
+        xlabel="F2 (ppm)",
+        ylabel="Isotropic F1 (ppm)",
+        return_dict=True,
+        show=False,
+    )
+    for ax, pair in zip(grid["axes"].flat, peaks, strict=True):
+        for label, peak in zip("AB", pair, strict=True):
+            ax.annotate(label, peak[:2], xytext=(7, 7), textcoords="offset points")
+    return grid["fig"]
 
 
 if data_root:
     mqecho_figure = compare_mqecho(Path(data_root))
-    plt.show()
+    scp.show()

@@ -94,3 +94,11 @@ _ = scp.multiplot(
     levels=levels,
     figsize=(13, 4),
 )
+
+# %%
+# Inspect signed intensities on the same color scale on either side of zero.
+# Use the 99th percentile of the absolute intensities to set the color limits
+# so weak negative features are visible alongside the positive resonances.
+_ = corrected.plot(
+    method="contourf", symmetric_percentile=99, cmap="RdBu_r", colorbar=True
+)
