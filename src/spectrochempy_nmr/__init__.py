@@ -705,6 +705,10 @@ def __getattr__(name: str):
         from .processing.agilent_reference import reference_agilent_1d
 
         return reference_agilent_1d
+    if name == "Isotope":
+        from .isotopes import Isotope
+
+        return Isotope
     if name == "read_stmas":
         from .readers.stmas import read_stmas
 
@@ -725,6 +729,7 @@ def __dir__() -> list[str]:
     return [
         "NMRPlugin",
         "Experiment",
+        "Isotope",
         "pulsar",
         "czjzek",
         "CzjzekDistribution",

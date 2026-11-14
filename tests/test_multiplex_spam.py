@@ -73,7 +73,11 @@ def test_msm_branches_and_coherence_alias_guard(spam_ser):
     phased = scp.nmr.Experiment(xf2).xf2p()
     with pytest.raises(ValueError, match="must match"):
         scp.nmr.Experiment(phased).xfshear(size=4, spin=2.5, coherence_order=5)
-    spectrum = scp.nmr.Experiment(phased).xfshear(size=4, spin=2.5, coherence_order=3)
+    spectrum = scp.nmr.Experiment(phased).xfshear(
+        size=4, spin=scp.nmr.Isotope("27Al").spin, coherence_order=3
+    )
+    inferred = scp.nmr.Experiment(phased).xfshear(size=4, coherence_order=3)
+    np.testing.assert_array_equal(inferred.data, spectrum.data)
     assert spectrum.shape == (2, 4, 8)
     assert (path / "ser").read_bytes() == before
 
