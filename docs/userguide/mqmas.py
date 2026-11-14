@@ -47,7 +47,7 @@ phase = {"phc0": preview.estimate.p0, "phc1": preview.estimate.p1, "pivot": 0}
 _ = preview.phased.real.plot()
 
 # %% [markdown]
-# By default, [`xf2()`](../reference/generated/spectrochempy_nmr.Experiment.xf2.rst) corrects the digital-filter delay before the phase
+# By default, [xf2()](../reference/generated/spectrochempy_nmr.Experiment.xf2.rst) corrects the digital-filter delay before the phase
 # preview. The `apk()` alias for `autophase()` estimates the phase on
 # the first row alone. Inspect the preview before running XFSHEAR.
 # The phase angles are in degrees and the pivot is an F2 sample index.
@@ -57,8 +57,8 @@ _ = preview.phased.real.plot()
 #
 # ## Shear and transform F1
 #
-# Apply the selected phase with [`xf2p()`](../reference/generated/spectrochempy_nmr.Experiment.xf2p.rst) to every F1 increment and both
-# States branches. Pass the phased dataset and the F1 FFT size to [`xfshear()`](../reference/generated/spectrochempy_nmr.Experiment.xfshear.rst).
+# Apply the selected phase with [xf2p()](../reference/generated/spectrochempy_nmr.Experiment.xf2p.rst) to every F1 increment and both
+# States branches. Pass the phased dataset and the F1 FFT size to [xfshear()](../reference/generated/spectrochempy_nmr.Experiment.xfshear.rst).
 # The shear includes the F1 transform.
 
 # %%
@@ -71,17 +71,17 @@ _ = rr[52.0:25.0, 65.0:20.0].plot(method="contour")
 
 # %% [markdown]
 # To revise the F2 phase, return to the complex XF2 dataset and run
-# [`xf2p()`](../reference/generated/spectrochempy_nmr.Experiment.xf2p.rst) again with the new angles. Use `pk()` on the preview row
-# to select the angles and [`xf2p()`](../reference/generated/spectrochempy_nmr.Experiment.xf2p.rst) on the complete dataset to record them
+# [xf2p()](../reference/generated/spectrochempy_nmr.Experiment.xf2p.rst) again with the new angles. Use `pk()` on the preview row
+# to select the angles and [xf2p()](../reference/generated/spectrochempy_nmr.Experiment.xf2p.rst) on the complete dataset to record them
 # for XFSHEAR. Use `f1_shift` to move the signal within the F1 window, in isotropic ppm.
 # For shifted-echo acquisitions, `echo_window=(slope, sigma)` in
-# [`xf2()`](../reference/generated/spectrochempy_nmr.Experiment.xf2.rst) applies a Gaussian along F2 before its FFT.
+# [xf2()](../reference/generated/spectrochempy_nmr.Experiment.xf2.rst) applies a Gaussian along F2 before its FFT.
 # Its center follows the expected echo at each F1 increment and includes
 # the digital group delay. Choose the slope for the acquisition and give
 # `sigma` in seconds. For baseline correction, fit the selected real plane
 # along F2 using signal-free regions.
 #
-# Use `mqecho=(slope, lb_hz)` in [`xf2()`](../reference/generated/spectrochempy_nmr.Experiment.xf2.rst) or [`prepare_xfshear()`](../reference/generated/spectrochempy_nmr.Experiment.prepare_xfshear.rst) to
+# Use `mqecho=(slope, lb_hz)` in [xf2()](../reference/generated/spectrochempy_nmr.Experiment.xf2.rst) or [prepare_xfshear()](../reference/generated/spectrochempy_nmr.Experiment.prepare_xfshear.rst) to
 # average two exponential windows centered at opposite slopes in the
 # group-delay-corrected time grid. For PST-5, use
 # `xf2(size=4096, direct_points=2048, mqecho=(19 / 12, 40))`.
@@ -104,7 +104,7 @@ _ = rr[52.0:25.0, 65.0:20.0].plot(method="contour")
 #
 # ## Estimate and apply the common phase in one call
 #
-# Use [`apk2d()`](../reference/generated/spectrochempy_nmr.Experiment.apk2d.rst) on the complex XF2 dataset when you want to estimate the
+# Use [apk2d()](../reference/generated/spectrochempy_nmr.Experiment.apk2d.rst) on the complex XF2 dataset when you want to estimate the
 # phase from one row and apply it to every increment and both States branches.
 # The following call uses the first row and the same 20–65 ppm window as the
 # preview above.
