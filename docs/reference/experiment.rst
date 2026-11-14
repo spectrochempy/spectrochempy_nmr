@@ -15,6 +15,7 @@ extraction, see :ref:`topspin-slice-and-baseline`.
 .. autosummary::
    :nosignatures:
    :toctree: generated
+   :template: autosummary/experiment.rst
 
    Experiment
 
