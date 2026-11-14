@@ -5,6 +5,14 @@ This changelog covers the independently versioned ``spectrochempy-nmr``
 distribution. The sections below describe changes in each plugin release.
 
 
+Unreleased
+----------
+
+* Automatically read complete F1 pairs from interrupted Bruker States-TPPI
+  acquisitions with zero-filled trailing storage. Report the effective F1
+  length in complex points and preserve the archived TopSpin parameters.
+
+
 0.4.0
 -----
 

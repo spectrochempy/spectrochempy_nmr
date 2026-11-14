@@ -90,7 +90,7 @@ def test_read_topspin():
     assert nd.x.size == 16384
 
     nd = _read_topspin_or_skip(_require_path(nmrdir / "topspin_2d/1/ser"))
-    assert str(nd) == "NDDataset: [complex128] count (shape: (c:2, y:96, x:1024))"
+    assert str(nd) == "NDDataset: [complex128] count (shape: (c:2, y:73, x:1024))"
 
     nd = _read_topspin_or_skip(_require_path(nmrdir / "topspin_2d/1/pdata/1/2rr"))
     assert str(nd) == "NDDataset: [complex128] count (shape: (c:2, y:1024, x:2048))"
@@ -174,7 +174,11 @@ def test_2d_ser_metadata():
     """Indirect dimension encoding must come from acqu2s, not acqus."""
     nd = _read_topspin_or_skip(_require_path(nmrdir / "topspin_2d/1/ser"))
     assert nd.meta.datatype == "SER"
-    assert nd.meta.encoding == ["CHANNELS", "PENDING-F2:STATES-TPPI", "DIRECT:DQD"]
+    assert nd.meta.encoding == [
+        "CHANNELS",
+        "PENDING-F2:INDIRECT:STATES-TPPI",
+        "CONJUGATE-FFT",
+    ]
     assert nd.meta.isfreq == [False, False, False]
     assert nd.meta.iscomplex == [False, True, True]
     assert nd.meta.nuc1 == [None, "31P", "27Al"]
@@ -182,7 +186,7 @@ def test_2d_ser_metadata():
     assert nd.meta.fnmode[-2] == 5  # STATES-TPPI
     # Direct dimension uses AQ_mod
     assert nd.meta.aq_mod[-1] == 3  # DQD
-    assert nd.shape == (2, 96, 1024)
+    assert nd.shape == (2, 73, 1024)
 
 
 @pytest.mark.skipif(not NMRDATA.exists(), reason="NMR test data not available")
@@ -280,9 +284,9 @@ def test_remove_dc_offset_flag():
     nb = np.concatenate([sp_off[c - 5 : c - 1], sp_off[c + 2 : c + 6]])
     ratio_off = abs(sp_off[c]) / (np.abs(nb).mean() + 1e-30)
     ratio_on = abs(sp_on[c]) / (np.abs(nb).mean() + 1e-30)
-    assert (
-        ratio_on < ratio_off
-    ), f"DC spike not reduced: ratio_off={ratio_off:.3f}, ratio_on={ratio_on:.3f}"
+    assert ratio_on < ratio_off, (
+        f"DC spike not reduced: ratio_off={ratio_off:.3f}, ratio_on={ratio_on:.3f}"
+    )
 
 
 @pytest.mark.skipif(not NMRDATA.exists(), reason="NMR test data not available")

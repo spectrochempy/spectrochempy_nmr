@@ -153,3 +153,62 @@ def _assert_xfb_roundtrip(root, tmp_path, mode, *, with_prediction):
     assert json.loads(
         (tmp_path / "trace.json").read_text(encoding="utf-8")
     ) == json.loads(json.dumps(trace, allow_nan=False))
+
+
+def test_interrupted_states_tppi_replays_complete_pairs():
+    import nmrglue as ng
+
+    root = os.environ.get("NMR_BRUKER_SER_DATA")
+    if not root:
+        pytest.skip("set NMR_BRUKER_SER_DATA to the Bruker test-data directory")
+    root = Path(root) / "topspin_2d/1"
+    ser = root / "ser"
+    selected = scp.read_topspin(ser, local_only=True)
+    assert selected.shape == (2, 73, 1024)
+    assert selected.meta.interrupted_states_tppi == {
+        "stored_traces": 192,
+        "acquired_traces": 147,
+        "paired_traces": 146,
+    }
+    assert selected.meta.source_metadata["acqu2s"]["TD"] == 147
+    assert selected.meta.tdeff[-2] == 73
+    assert selected.meta.source_metadata["proc2s"]["TDeff"] == 146
+    spectrum = Experiment(selected).process()
+    assert spectrum.shape[-2:] == selected.shape[-2:]
+    assert spectrum.y.units == scp.ur.Hz
+    assert np.isfinite(spectrum.data).all()
+
+    result = Experiment(selected).process(replay="topspin")
+    metadata, reference = ng.bruker.read_pdata(
+        root / "pdata/1", bin_files=["2rr", "2ri", "2ir", "2ii"], scale_data=True
+    )
+    first, second = result.data
+    planes = np.stack((first.real, second.real, first.imag, second.imag))
+    pars = metadata["acqus"]
+    scale = pars["NS"] * pars["RG"] * 2.0 ** pars["NC"]
+    residual = np.linalg.norm(planes * scale - reference, axis=(1, 2))
+    np.testing.assert_array_less(
+        residual / np.linalg.norm(reference, axis=(1, 2)), 1.2e-5
+    )
+    for axis, key in ((result.x, "procs"), (result.y, "proc2s")):
+        pars = metadata[key]
+        expected = pars["OFFSET"] - np.arange(pars["SI"]) * pars["SW_p"] / (
+            pars["SF"] * pars["SI"]
+        )
+        assert axis.units == scp.ur.ppm
+        np.testing.assert_allclose(axis.data, expected, atol=2e-12, rtol=0)
+
+
+def test_interrupted_states_tppi_requires_zero_padding():
+    from types import SimpleNamespace
+
+    from spectrochempy_nmr.readers.read_topspin import _select_interrupted_states_tppi
+
+    data = np.zeros((8, 4), dtype=np.int32)
+    data[5, 0] = 1
+    stored = SimpleNamespace(
+        data=data,
+        metadata={"acqu2s": {"FnMODE": 5, "TD": 5}},
+    )
+    with pytest.raises(ValueError, match="zero padding"):
+        _select_interrupted_states_tppi(stored)

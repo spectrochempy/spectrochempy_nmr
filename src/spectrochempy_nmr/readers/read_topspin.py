@@ -1077,6 +1077,32 @@ def _read_normalized_fid(
     return stored.metadata, dataset
 
 
+def _select_interrupted_states_tppi(stored):
+    """Select an explicit acquired prefix for the provider's paired normalizer."""
+    from dataclasses import replace  # noqa: PLC0415
+
+    meta = stored.metadata
+    indirect = meta.get("acqu2s", {})
+    acquired = indirect.get("TD")
+    if (
+        indirect.get("FnMODE") != 5
+        or not _is_bruker_mode_integer(acquired)
+        or not 4 <= acquired < stored.data.shape[0]
+        or stored.data.shape[0] % 2
+        or np.any(stored.data[acquired:])
+    ):
+        raise ValueError("Expected an interrupted States-TPPI SER with zero padding")
+    paired = acquired - acquired % 2
+    data = stored.data[:paired]
+    return replace(
+        stored,
+        data=data,
+        components=(replace(stored.components[0], data=data),),
+        metadata={**meta, "acqu2s": {**indirect, "TD": paired}},
+        dimensions={**stored.dimensions, "shape": data.shape},
+    )
+
+
 def _read_normalized_ser(
     directory, acqus_files, procs_files, *, remove_filter, remove_dc
 ):
@@ -1125,11 +1151,26 @@ def _read_normalized_ser(
         if profile is not None:
             normalizer_options["preserve_storage"] = True
         try:
-            stored = read(
-                directory, acqus_files=acqus_files, procs_files=procs_files, **options
-            )
+            try:
+                stored = read(
+                    directory,
+                    acqus_files=acqus_files,
+                    procs_files=procs_files,
+                    **options,
+                )
+                selected = stored
+            except ValueError:
+                if profile != "states-tppi":
+                    raise
+                stored = read(
+                    directory,
+                    acqus_files=acqus_files,
+                    procs_files=procs_files,
+                    read_pulseprogram=options["read_pulseprogram"],
+                )
+                selected = _select_interrupted_states_tppi(stored)
             normalized = normalize(
-                stored,
+                selected,
                 remove_dc_offset=remove_dc,
                 remove_digital_filter=remove_filter,
                 normalize_scan_gain=True,
@@ -1153,7 +1194,15 @@ def _read_normalized_ser(
         dataset.meta.acquisition_encoding = (
             tuple(stored.encoding) if profile is None else (profile.upper(), "DQD")
         )
-        return stored.metadata, dataset
+        if selected is not stored:
+            acquired = indirect["TD"]
+            dataset.meta.interrupted_states_tppi = {
+                "stored_traces": stored.data.shape[0],
+                "acquired_traces": acquired,
+                "paired_traces": selected.data.shape[0],
+            }
+            dataset.meta.source_metadata = dict(stored.metadata)
+        return selected.metadata, dataset
     return None
 
 
@@ -1203,7 +1252,6 @@ def _read_topspin(*args, **kwargs):
 
     # is-it a processed dataset file (1r, 2rr ....) ?
     processed = bool(path.match("pdata/*/*"))
-
     # ----------------------------------------------------------------------------------
     # start reading ....
     # ----------------------------------------------------------------------------------

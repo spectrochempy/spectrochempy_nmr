@@ -675,7 +675,7 @@ class TestChannelPhasing:
         f2 = ds.fft()
         assert f2.meta.isfreq == [False, False, True]
         assert str(f2.x.units) == "ppm"
-        assert f2.y.units == scp.ur.microsecond
+        assert f2.y.units == scp.ur.second
         assert "27" in f2.x.title
 
         f1 = f2.zf_size(size=256, dim="y").fft(dim="y")

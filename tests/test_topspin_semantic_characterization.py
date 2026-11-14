@@ -96,5 +96,5 @@ def test_topspin_2d_currently_sets_import_history(
     assert dataset.coord("x") is not None
     y = dataset.coord("y")
     assert y is not None
-    assert y.title in {"time", "Time", "F1 acquisition time", None}
+    assert y.title == "31P"
     assert y.size == dataset.shape[-2]

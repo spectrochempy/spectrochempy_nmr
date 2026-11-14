@@ -797,12 +797,16 @@ def extract_nmr_metadata(meta, *, ndim=None) -> NMRMetadata:
                 domains = tuple(
                     "frequency" if flag else "time" for flag in meta.isfreq[1:]
                 )
+            display = extract_topspin_metadata(meta)
             return NMRMetadata(
                 normalized_interop=True,
                 ndim=3,
                 domains=domains,
                 source_kind=infer_source_kind(2, domains),
                 encoding=(quadrature.removesuffix("-stored-2d").upper(), "DQD"),
+                nuclei=display.nuclei,
+                pulse_program=display.pulse_program,
+                spectrometer_freq_mhz=display.spectrometer_freq_mhz,
                 iscomplex=(True, True),
                 spectral_width_hz=tuple(widths)
                 if isinstance(widths, (tuple, list))
