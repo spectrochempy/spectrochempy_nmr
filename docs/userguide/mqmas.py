@@ -27,11 +27,12 @@
 # This tutorial uses a Bruker States acquisition of PST-5 to show the
 # tilted line shapes after two Fourier transforms, the effect of the
 # shear, and how apodization and baseline correction change the result.
-# See [Frydman and Harwood (1995)](https://doi.org/10.1021/ja00124a023)
-# for the original MQMAS experiment and
-# [Fernandez and Pruski (2011)](https://doi.org/10.1007/128_2011_141)
-# for experimental strategies and applications.
-#
+# %% [raw] raw_mimetype="text/restructuredtext"
+# See :cite:t:`frydman1995mqmas` for the original MQMAS experiment
+# and :cite:t:`fernandez2011quadrupolar` for experimental strategies
+# and applications.
+
+# %% [markdown]
 # ## Transform F2 and inspect the first row
 #
 # Read the Bruker SER with [read()](../reference/generated/spectrochempy_nmr.read.rst),
@@ -124,7 +125,7 @@ spectrum = scp.nmr.Experiment(phased).xfshear(
 )
 rr = scp.nmr.Experiment(spectrum).rr()
 region = rr[52.0:25.0, 65.0:20.0]
-peak = float(scp.Quantity(region.max()).magnitude)
+peak = region.max().magnitude
 comparison_levels = [
     peak * fraction for fraction in (0.06, 0.1, 0.16, 0.25, 0.4, 0.65, 0.9)
 ]
@@ -218,7 +219,7 @@ corrected_spectrum = scp.nmr.Experiment(windowed).abs2(
 corrected = scp.nmr.Experiment(corrected_spectrum).rr()[52.0:25.0, 65.0:20.0]
 
 region = rr[52.0:25.0, 65.0:20.0]
-peak = float(scp.Quantity(region.max()).magnitude)
+peak = region.max().magnitude
 positive_levels = [0.08 * peak * 1.3**i for i in range(10)]
 levels = [-level for level in reversed(positive_levels)] + positive_levels
 _ = scp.multiplot(
@@ -238,4 +239,35 @@ _ = scp.multiplot(
 # %%
 _ = corrected.plot(
     method="contourf", symmetric_percentile=99, cmap="RdBu_r", colorbar=True
+)
+
+
+# %% [markdown]
+# ## Compare exponential echo windows
+#
+# Use the public PST-5 acquisition to compare the unweighted signal
+# with a symmetric 40 Hz exponential echo and antiecho window.
+# The contour levels are shared across the two panels.
+
+# %%
+xf2_symmetric = scp.nmr.Experiment(raw).xf2(
+    size=4096,
+    direct_points=2048,
+    mqecho=(19 / 12, 40),
+)
+symmetric_phased = scp.nmr.Experiment(xf2_symmetric).xf2p(**phase)
+symmetric = scp.nmr.Experiment(symmetric_phased).xfshear(
+    size=512,
+    spin=2.5,
+    f1_shift=-20.0,
+)
+symmetric_rr = scp.nmr.Experiment(symmetric).rr()[52.0:25.0, 65.0:20.0]
+_ = scp.multiplot(
+    [region, symmetric_rr],
+    ncol=2,
+    method="contour",
+    labels=["No window", "Symmetric echo window (40 Hz)"],
+    levels=comparison_levels,
+    cmap="magma_r",
+    figsize=(10, 4),
 )

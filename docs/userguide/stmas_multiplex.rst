@@ -39,10 +39,9 @@ two States branches. Perform the frequency transforms after this
 selection. The example shows the decoding explicitly because the
 ordinary 2D reader does not interpret this storage layout.
 
-The RbNO₃ maps use the magnitude and a simple common F2 phase.
+The RbNO₃ gallery example uses the magnitude and a simple common F2 phase.
 The PST-5 reference shows positive real RR contours after manual F2
-phasing. Each panel is normalized to its own maximum. The RbNO₃
-processing leaves out historical automatic phasing, apodization and
+phasing. The RbNO₃ processing leaves out historical automatic phasing, apodization and
 baseline correction. A processed reference matrix is unavailable for
 the RbNO₃ acquisitions.
 
@@ -53,26 +52,17 @@ increment (``IN[0]``), rather than the nominal width of the phase-cycle
 storage axis.
 
 The RbNO₃ acquisition used by the gallery example is a local input.
-The comparison below uses the original MQMAS and STMAS acquisitions.
 For the early application of 3Q MAS to rubidium nitrate, see
 `Fernandez and Amoureux (1996) <https://doi.org/10.1016/0926-2040(95)01197-8>`_.
 The archived acquisition used here was recorded in 2014.
-
-.. image:: /_static/rbno3-mqmas-stmas.png
-   :alt: PST-5 MQMAS, RbNO₃ multiplex MQMAS and RbNO₃ STMAS contour maps
 
 .. _mqecho-pst5-rbno3-comparison:
 
 Symmetric echo and antiecho apodization
 ---------------------------------------
-The two rows compare PST-5 and the selected RbNO₃/206 3Q component.
-Each row shows the same data with no window, with an echo-centered
-exponential, and with a symmetric average of the echo and antiecho
-exponentials. Contours within a row use the same levels relative
-to the unwindowed height of peak A.
-
-.. image:: /_static/mqecho-pst5-rbno3.png
-   :alt: Six contour maps showing the three apodization treatments for each sample
+The table compares PST-5 and the selected RbNO₃/206 3Q component
+with three F2 windows. The :doc:`MQMAS tutorial <mqmas>` generates the
+PST-5 contour comparison from the public acquisition.
 
 The echo window is :math:`w_+(t_1,t_2)=\exp(-\pi L|t_2-|k|t_1|)`.
 The symmetric window is :math:`[w_+(t_1,t_2)+w_+(t_1,-t_2)]/2`.
@@ -86,7 +76,7 @@ For RbNO₃, the 3Q selection precedes the window. The phase is held
 fixed within each acquisition. PST-5 shows positive RR contours,
 and RbNO₃ shows magnitude.
 
-A and B mark the same two resonances across each row. Widths are full
+A and B identify the same two resonances across the three treatments within each acquisition. Widths are full
 widths at half maximum (FWHM) in ppm, measured on F1 and F2 cuts
 through the local 2D maxima. B/A is the ratio of their peak heights.
 

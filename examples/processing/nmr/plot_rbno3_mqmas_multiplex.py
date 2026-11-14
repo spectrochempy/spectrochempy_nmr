@@ -11,9 +11,7 @@ Set ``SCP_RBNO3_DATA`` to the directory containing the Bruker experiment
 The :doc:`STMAS and multiplex MQMAS guide </userguide/stmas_multiplex>`
 compares this acquisition with STMAS and discusses the effect of apodization.
 
-.. image:: /_static/rbno3-3q-mqmas.png
-   :alt: Three-quantum MQMAS contour map of rubidium nitrate
-"""
+The original acquisition is required to regenerate the contour map."""
 
 # %%
 # Select the 3Q coherence
@@ -121,8 +119,7 @@ def spectrum(branches, acqu, processing, *, scale, shear, shift, direct_size):
 
 
 # %%
-# Process the multiplex SER and display the 3Q spectrum. The stored
-# figure is used when the original acquisition is unavailable.
+# Process the multiplex SER and display the 3Q spectrum.
 data_root = os.environ.get("SCP_RBNO3_DATA")
 if data_root:
     acqu, processing, branches = read_multiplex(Path(data_root) / "206")
