@@ -5,51 +5,63 @@ This changelog covers the independently versioned ``spectrochempy-nmr``
 distribution. The sections below describe changes in each plugin release.
 
 
-Unreleased
-----------
-
-* Read Bruker SER traces and transform F2 when the F1 acquisition mode
-  is unknown. Ask for the mode when processing F1.
+0.4.0
+-----
 
 Added
 ~~~~~
 
-* Add ``Experiment.apk2d()`` for common F2 phase estimation on MQMAS XF2
-  data and common or individual phasing of complex spectral series.
+* **Phase and baseline correction.** Estimate complex 1D phase with ACME or
+  DISPA and masked reference regions, optionally correct the real-channel
+  baseline, or explicitly apply recorded phase with
+  ``Experiment.process(phase="metadata")``. ``scp.nmr.apk()`` aliases
+  ``autophase()``. Use ``Experiment.apk2d()`` for a shared F2 phase on MQMAS
+  XF2 data or for shared or individual phasing of complex spectral series.
+  (#95, #99, #106, #112)
+* **2D processing and traces.** Use TopSpin-style ``abs1()``, ``abs2()``,
+  ``rser()``, ``rsr()``, ``rsc()``, ``wsr()``, and ``wsc()`` on
+  ``Experiment``. Process supported native Agilent TPPI acquisitions.
+  (#106, #109, #110)
+* **Bruker States MQMAS.** Process F2, inspect and apply a common phase, and
+  shear with ``xf2()``, ``xf2p()``, and ``xfshear()``. The staged workflow
+  supports F2 group-delay correction, an integrated F1 FFT, optional F1
+  shift and isotropic calibration, and symmetric ``mqecho`` apodization.
+  (#96, #98, #115)
+* **JCAMP-DX exchange.** Export real processed 1D spectra with
+  ``scp.nmr.write_jcamp()`` and read them back with
+  ``scp.read_jcamp()`` in SpectroChemPy 1.3.0. (#104)
+* **Experimental powder simulation.** PULSAR supports quadrupolar and CSA
+  interactions, spinning bands, RF preparation and secular isotropic
+  J coupling. Standard and extended Czjzek EFG distributions support
+  reproducible tensor sampling and ensemble simulation. The gallery includes
+  simulation examples and a central-transition fit with ``Optimize``.
+  (#86, #114, #116)
 
-* Add ``Experiment.wsr()`` and ``wsc()`` to replace numbered 2D spectral traces.
+Changed
+~~~~~~~
 
-* Add TopSpin-style ``Experiment.abs1()``, ``abs2()``, ``rser()``,
-  ``rsr()``, and ``rsc()`` for 2D data. Add ``scp.nmr.apk()`` as an alias
-  for ``autophase()`` and show first-row phase estimation in the MQMAS example.
+* Bruker FID and SER imports leave the digital filter uncorrected by default.
+  Correct supported acquisitions during processing or restore correction at
+  import with ``remove_digital_filter=True``. (#96)
 
-* Export real processed 1D NMR spectra with ``scp.nmr.write_jcamp()``
-  and read them back with ``scp.read_jcamp()``.
+Fixed
+~~~~~
 
-* Add experimental PULSAR powder simulation with quadrupolar and CSA
-  interactions, spinning bands, RF preparation sequences and secular
-  isotropic J coupling. The tutorial fits a central transition with
-  ``Optimize``.
+* Read Bruker SER traces and transform F2 when the F1 acquisition mode is
+  unknown. Supply the mode when transforming F1. (#117)
+* Guard the Agilent indirect transform when phase metadata is missing and
+  resolve the Bruker echo/anti-echo group delay at import. (#87, #88)
+* Report conflicting installations of ``nmrglue`` and ``nmrglue-ng`` when
+  accessing the plugin API. (#103, #105)
 
-* Add standard and extended Czjzek EFG distributions with reproducible tensor
-  sampling, ensemble powder simulation and executable gallery examples.
+Documentation and validation
+~~~~~~~~~~~~~~~~~~~~~~~~~~~~
 
-* Expose separate ``Experiment.xf2()``, ``xf2p()``, and ``xfshear()``
-  steps for Bruker States MQMAS processing.
-
-* Apply recorded phase in 1D FID processing when requested with
-  ``Experiment.process(phase="metadata")``.
-
-* Read Bruker FID and SER data without digital-filter correction by default.
-  Correct supported acquisitions in ``Experiment`` or request the previous
-  import correction explicitly with ``remove_digital_filter=True``.
-
-* Estimate phase for complex 1D spectra using masked ACME or DISPA reference
-  windows, with optional real-channel baseline correction.
-
-* Add staged rectangular Bruker States MQMAS processing with automatic F2 group-delay
-  correction, phase inspection, a common F2 phase, XFSHEAR with integrated F1 FFT, and
-  optional F1 shift and isotropic calibration.
+* Clarify reader options, add processing and simulation examples, and improve
+  navigation between the NMR and core guides. (#100, #101, #102, #108, #113,
+  #114, #115, #116, #117)
+* Qualify replay of saved TopSpin XFB plans and compare Bruker PFG diffusion
+  against TopSpin exports. (#90, #91, #92, #93, #107)
 
 
 0.3.0
