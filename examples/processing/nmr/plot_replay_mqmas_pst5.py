@@ -30,20 +30,19 @@ xf2 = scp.nmr.Experiment(raw).xf2(
 )
 
 # %%
-# Estimate the zero-order phase on the first complex F2 row alone.
-# Select the first States branch and first F1 increment by zero-based index.
-# This trace is also available as ``scp.nmr.Experiment(xf2).rsr(1)``.
-first_row = xf2[0, 0, :].squeeze("c", "y")
-exclude = (first_row.x.data < 20.0) | (first_row.x.data > 65.0)
-preview = scp.nmr.apk(first_row, order=0, exclude=exclude)
+# Estimate the zero-order phase from the 65–20 ppm region of the first
+# complex F2 row.
+experiment = scp.nmr.Experiment(xf2)
+first_row = experiment.rsr(1)
+preview = scp.nmr.apk(first_row[65.0:20.0], order=0)
 if not preview.estimate.success:
     raise RuntimeError(preview.estimate.message)
-_ = preview.phased.real[65.0:20.0].plot()
+_ = preview.phased.real.plot()
 
 # %%
 # Apply those same angles to both States branches at every F1 increment.
 phase = {"phc0": preview.estimate.p0, "phc1": preview.estimate.p1, "pivot": 0}
-phased = scp.nmr.Experiment(xf2).xf2p(**phase)
+phased = experiment.xf2p(**phase)
 
 # %%
 # XFSHEAR reconstructs the F2 quadrature and performs the F1 FFT. The
