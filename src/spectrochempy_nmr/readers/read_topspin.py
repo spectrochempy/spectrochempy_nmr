@@ -1143,6 +1143,9 @@ def _read_normalized_ser(
             )
         except (OSError, ValueError):
             continue
+        indirect = stored.metadata.get("acqu2s", stored.metadata.get("acqu2", {}))
+        if isinstance(indirect.get("FnMODE"), bool):
+            return None
         dataset.meta.acquisition_encoding = (
             tuple(stored.encoding) if profile is None else (profile.upper(), "DQD")
         )
