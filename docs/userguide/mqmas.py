@@ -41,7 +41,7 @@ preview = scp.nmr.apk(first_row[65.0:20.0], order=0)
 if not preview.estimate.success:
     raise RuntimeError(preview.estimate.message)
 phase = {"phc0": preview.estimate.p0, "phc1": preview.estimate.p1, "pivot": 0}
-preview.phased.real.plot()
+_ = preview.phased.real.plot()
 
 # %% [markdown]
 # By default, `xf2()` corrects the digital-filter delay before the phase
@@ -64,7 +64,7 @@ spectrum = scp.nmr.Experiment(phased).xfshear(
     size=512, spin=2.5, coherence_order=3, f1_shift=-20.0
 )
 rr = scp.nmr.Experiment(spectrum).rr()
-rr[52.0:25.0, 65.0:20.0].plot(method="contour")
+_ = rr[52.0:25.0, 65.0:20.0].plot(method="contour")
 
 # %% [markdown]
 # To revise the F2 phase, return to the complex XF2 dataset and run

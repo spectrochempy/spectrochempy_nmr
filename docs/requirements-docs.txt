@@ -6,3 +6,4 @@ nbsphinx==0.9.6
 jupytext==1.16.7
 sphinxcontrib-bibtex==2.6.3
 ipykernel==6.29.5
+sphinx-codeautolink==0.18.0

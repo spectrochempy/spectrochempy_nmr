@@ -79,8 +79,16 @@ extensions = [
     "sphinx.ext.githubpages",
     "sphinx_gallery.gen_gallery",
     "nbsphinx",
+    "sphinx_codeautolink",
     "sphinxcontrib.bibtex",
 ]
+
+codeautolink_concat_default = True
+# The public reference documents Experiment under its re-exported name.
+codeautolink_inventory_map = {
+    f"spectrochempy_nmr.experiment.Experiment.{method}": f"spectrochempy_nmr.Experiment.{method}"
+    for method in ("xf2", "xf2p", "xfshear", "rr", "rsr", "abs2")
+}
 
 bibtex_bibfiles = ["bibliography.bib"]
 bibtex_default_style = "plain"
