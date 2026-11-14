@@ -38,7 +38,8 @@ def central_transition(x, ampl, cq, eta, shift, fwhm):
     )
     spectrum = pulsar.broaden(spectrum, gaussian_fwhm_hz=fwhm)
     spectrum.set_coordset(x=spectrum.x + (step_hz / 2) * scp.ur.Hz)
-    return ampl * spectrum.interpolate(coord=x, fill_value=0).data
+    target = scp.Coord(x, units="Hz", rounding=False)
+    return ampl * spectrum.interpolate(coord=target, fill_value=0).data
 
 
 fit = scp.Optimize(
