@@ -12,9 +12,8 @@ Data: Christian Fernandez, LCS, distributed through
 under `CC BY 4.0 <https://creativecommons.org/licenses/by/4.0/>`_.
 """
 
-# sphinx_gallery_thumbnail_number = 2
-
 # %%
+# sphinx_gallery_thumbnail_number = 2
 import spectrochempy as scp
 
 # Keep the acquired points intact at import. xf2() will
