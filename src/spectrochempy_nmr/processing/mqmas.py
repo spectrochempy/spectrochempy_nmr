@@ -5,6 +5,8 @@ from numbers import Real
 
 import numpy as np
 
+from ..isotopes import nuclear_spin
+
 
 def _mqmas_geometry(spin, coherence_order):
     if (
@@ -384,6 +386,16 @@ def xfshear(dataset, *, size, spin, coherence_order, f1_shift):
     ):
         raise ValueError(
             "XFSHEAR spin and coherence order must match the Multiplex SPAM reconstruction"
+        )
+    source = dataset.meta.get("source_metadata") or {}
+    nuclei = dataset.meta.get("nuc1")
+    nucleus = source.get("acqus", {}).get("NUC1") or (nuclei[-1] if nuclei else None)
+    acquired_spin = nuclear_spin(nucleus)
+    if acquired_spin is None:
+        raise ValueError(f"XFSHEAR requires a known observed isotope; got {nucleus!r}")
+    if spin != acquired_spin:
+        raise ValueError(
+            f"XFSHEAR spin {spin} does not match {nucleus} (spin {acquired_spin})"
         )
     if "f2_phase" not in plan:
         raise ValueError("Apply the common F2 phase with xf2p() before XFSHEAR")

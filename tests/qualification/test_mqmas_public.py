@@ -232,3 +232,15 @@ def test_mqecho_matches_independent_time_domain_weighting():
             experiment.xf2(size=4096, mqecho=invalid, **options)
     with pytest.raises(ValueError, match="either"):
         experiment.xf2(size=4096, mqecho=(1, 40), echo_window=(1, 0.001), **options)
+
+
+def test_xfshear_rejects_spin_mismatch_on_conventional_mqmas():
+    ser = os.environ.get("SCP_MQMAS_SER")
+    if not ser:
+        pytest.skip("requires MQMAS/51 SER")
+    raw = scp.nmr.read(ser)
+    xf2 = Experiment(raw).xf2(size=256)
+    phased = Experiment(xf2).xf2p()
+    with pytest.raises(ValueError, match=r"spin 1.5 does not match 27Al"):
+        Experiment(phased).xfshear(size=512, spin=1.5)
+    assert Experiment(phased).xfshear(size=512, spin=2.5).shape == (2, 512, 256)

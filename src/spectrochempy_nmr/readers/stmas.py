@@ -1,27 +1,14 @@
 """Read uniform Bruker States STMAS acquisitions for staged processing."""
 
-import csv
 from fractions import Fraction
-from functools import lru_cache
-from importlib.resources import files
 from numbers import Integral
 from pathlib import Path
 
 import numpy as np
 
 from .. import _check_nmrglue_installation
+from ..isotopes import nuclear_spin
 from .states_fids import states_fids
-
-
-@lru_cache(maxsize=1)
-def _isotope_spins():
-    """Read the isotope table shipped with SpectroChemPy."""
-    table = files("spectrochempy").joinpath("data", "databases", "isotopes.csv")
-    with table.open(encoding="utf-8") as stream:
-        return {
-            row["isotope"].strip(): Fraction(row["spin"].strip())
-            for row in csv.DictReader(stream)
-        }
 
 
 def read_stmas(path, *, procno=1, use_tdeff=False):
@@ -62,7 +49,7 @@ def read_stmas(path, *, procno=1, use_tdeff=False):
     if direct.get("PULPROG") != "dqf-stmas-old.av":
         raise ValueError("STMAS requires the qualified dqf-stmas-old.av pulse program")
     nucleus = direct.get("NUC1")
-    if _isotope_spins().get(nucleus) != Fraction(3, 2):
+    if nuclear_spin(nucleus) != Fraction(3, 2):
         raise ValueError(f"STMAS requires a known spin-3/2 nucleus; got {nucleus!r}")
     declared = indirect.get("TD")
     words = stored.dimensions["declared_td"]

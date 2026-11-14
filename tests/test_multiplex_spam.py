@@ -76,3 +76,8 @@ def test_msm_branches_and_coherence_alias_guard(spam_ser):
     spectrum = scp.nmr.Experiment(phased).xfshear(size=4, spin=2.5, coherence_order=3)
     assert spectrum.shape == (2, 4, 8)
     assert (path / "ser").read_bytes() == before
+
+    acqus = path / "acqus"
+    acqus.write_text(acqus.read_text().replace("27Al", "87Rb"))
+    with pytest.raises(ValueError, match="does not match MQMultiplex52"):
+        read(path, allow_partial=True)

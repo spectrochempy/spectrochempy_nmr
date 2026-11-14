@@ -852,7 +852,8 @@ class Experiment:
     def xfshear(self, *, size, spin, coherence_order=3, f1_shift=0.0):
         """Shear phased MQMAS data, reconstruct F2 quadrature, and transform F1.
 
-        Supply the F1 FFT size and the nuclear spin. The optional F1 shift
+        Supply the F1 FFT size and the spin of the recorded isotope.
+        The optional F1 shift
         uses isotropic ppm. The result contains all four spectral components.
 
         Parameters

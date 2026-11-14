@@ -6,6 +6,7 @@ from pathlib import Path
 import numpy as np
 
 from .. import _check_nmrglue_installation
+from ..isotopes import nuclear_spin
 from .states_fids import states_fids
 
 
@@ -73,6 +74,9 @@ def read_multiplex_spam(path, *, coherence_order=3, procno=1, allow_partial=Fals
         or metadata["acqu3s"].get("TD") != 2 * phase_count
     ):
         raise ValueError("Expected a uniform MQMultiplex32 or MQMultiplex52 SPAM SER")
+    nucleus = direct.get("NUC1")
+    if nuclear_spin(nucleus) != (phase_count - 1) / 4:
+        raise ValueError(f"Multiplex SPAM nucleus {nucleus!r} does not match {program}")
     if (
         isinstance(coherence_order, bool)
         or not isinstance(coherence_order, Integral)
