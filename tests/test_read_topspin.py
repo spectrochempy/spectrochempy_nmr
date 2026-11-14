@@ -74,6 +74,40 @@ def _has_readdir_nmr_data():
     )
 
 
+def test_normalized_ser_does_not_retry_storage_after_mode_rejection(
+    tmp_path, monkeypatch
+):
+    from nmrglue import interop
+
+    from spectrochempy_nmr.readers import read_topspin as reader
+
+    def reject_qf(*args, qf_only=False, **kwargs):
+        raise ValueError
+
+    def reject_paired(
+        *args,
+        states_only=False,
+        states_tppi_only=False,
+        echo_antiecho_only=False,
+        **kwargs,
+    ):
+        assert states_only or states_tppi_only or echo_antiecho_only
+        raise ValueError("Bruker SER acquisition mode mismatch")
+
+    monkeypatch.setattr(interop, "read_bruker_ser", reject_qf)
+    monkeypatch.setattr(interop, "read_bruker_ser_storage", reject_paired)
+    assert (
+        reader._read_normalized_ser(
+            tmp_path,
+            [],
+            [tmp_path / "procs", tmp_path / "proc2s"],
+            remove_filter=False,
+            remove_dc=False,
+        )
+        is None
+    )
+
+
 @pytest.mark.skipif(not NMRDATA.exists(), reason="NMR test data not available")
 def test_read_topspin():
     nd = _read_topspin_or_skip(_require_path(nmrdir / "exam2d_HC/3/pdata/1/2rr"))

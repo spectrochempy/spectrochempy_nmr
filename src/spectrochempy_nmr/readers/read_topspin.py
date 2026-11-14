@@ -1077,30 +1077,47 @@ def _read_normalized_fid(
     return stored.metadata, dataset
 
 
-def _select_interrupted_states_tppi(stored):
-    """Select an explicit acquired prefix for the provider's paired normalizer."""
-    from dataclasses import replace  # noqa: PLC0415
-
-    meta = stored.metadata
+def _interrupted_states_tppi_counts(directory, meta, data):
+    direct = meta.get("acqus", {})
     indirect = meta.get("acqu2s", {})
     acquired = indirect.get("TD")
     if (
-        indirect.get("FnMODE") != 5
+        data.ndim != 2
+        or direct.get("PARMODE") != 1
+        or direct.get("AQ_mod") != 3
+        or direct.get("FnTYPE", 0) != 0
+        or indirect.get("FnMODE") != 5
         or not _is_bruker_mode_integer(acquired)
-        or not 4 <= acquired < stored.data.shape[0]
-        or stored.data.shape[0] % 2
-        or np.any(stored.data[acquired:])
+        or not 4 <= acquired < data.shape[0]
+        or data.shape[0] % 2
+        or any((directory / name).exists() for name in ("nuslist", "acqu3s", "acqu4s"))
+        or np.any(data[acquired:])
     ):
+        return None
+    return {
+        "stored_traces": data.shape[0],
+        "acquired_traces": acquired,
+        "paired_traces": acquired - acquired % 2,
+    }
+
+
+def _select_interrupted_states_tppi(directory, stored):
+    """Select an explicit acquired prefix for the provider's paired normalizer."""
+    from dataclasses import replace  # noqa: PLC0415
+
+    counts = _interrupted_states_tppi_counts(directory, stored.metadata, stored.data)
+    if counts is None:
         raise ValueError("Expected an interrupted States-TPPI SER with zero padding")
-    paired = acquired - acquired % 2
+    paired = counts["paired_traces"]
     data = stored.data[:paired]
+    meta = stored.metadata
     return replace(
         stored,
         data=data,
         components=(replace(stored.components[0], data=data),),
-        metadata={**meta, "acqu2s": {**indirect, "TD": paired}},
+        metadata={**meta, "acqu2s": {**meta["acqu2s"], "TD": paired}},
         dimensions={**stored.dimensions, "shape": data.shape},
-    )
+    ), counts
 
 
 def _read_normalized_ser(
@@ -1151,6 +1168,7 @@ def _read_normalized_ser(
         if profile is not None:
             normalizer_options["preserve_storage"] = True
         try:
+            interrupted = None
             try:
                 stored = read(
                     directory,
@@ -1159,8 +1177,12 @@ def _read_normalized_ser(
                     **options,
                 )
                 selected = stored
-            except ValueError:
-                if profile != "states-tppi":
+            except ValueError as exc:
+                # The provider checks mode and dimensionality before paired TD.
+                if (
+                    profile != "states-tppi"
+                    or str(exc) != "Bruker SER requires complete paired TD geometry"
+                ):
                     raise
                 stored = read(
                     directory,
@@ -1168,7 +1190,9 @@ def _read_normalized_ser(
                     procs_files=procs_files,
                     read_pulseprogram=options["read_pulseprogram"],
                 )
-                selected = _select_interrupted_states_tppi(stored)
+                selected, interrupted = _select_interrupted_states_tppi(
+                    directory, stored
+                )
             normalized = normalize(
                 selected,
                 remove_dc_offset=remove_dc,
@@ -1194,14 +1218,11 @@ def _read_normalized_ser(
         dataset.meta.acquisition_encoding = (
             tuple(stored.encoding) if profile is None else (profile.upper(), "DQD")
         )
-        if selected is not stored:
-            acquired = indirect["TD"]
-            dataset.meta.interrupted_states_tppi = {
-                "stored_traces": stored.data.shape[0],
-                "acquired_traces": acquired,
-                "paired_traces": selected.data.shape[0],
-            }
-            dataset.meta.source_metadata = dict(stored.metadata)
+        if interrupted is not None:
+            dataset.meta.interrupted_states_tppi = interrupted
+            dataset.meta.source_metadata["acqu2s"]["TD"] = interrupted[
+                "acquired_traces"
+            ]
         return selected.metadata, dataset
     return None
 
@@ -1280,6 +1301,7 @@ def _read_topspin(*args, **kwargs):
 
     processed_components = None
     normalized_dataset = None
+    interrupted = None
     if not processed:
         remove_filter = bool(kwargs.get("remove_digital_filter", False))
         remove_dc = bool(kwargs.get("remove_dc_offset", False))
@@ -1308,12 +1330,6 @@ def _read_topspin(*args, **kwargs):
             if normalized_dataset.meta.component_axis == "c":
                 data = data[0]
 
-        # The normalized 1D route already supplies canonical samples.
-        # The fallback 1D route keeps the decoded convention for its FFT.
-        # The legacy SER route applies the direct-dimension rotation.
-        if path.name == "ser" and normalized_dataset is None:
-            data = data * np.exp(-1j * np.pi / 2.0)
-
         # Look the case when the reshaping was not correct
         # for example, this happens when the number
         # of accumulated row was incomplete
@@ -1339,6 +1355,12 @@ def _read_topspin(*args, **kwargs):
             data = data[..., :ntd]
 
         if normalized_dataset is None:
+            if path.name == "ser":
+                if not kwargs.get("use_list", False):
+                    interrupted = _interrupted_states_tppi_counts(f_expno, dic, data)
+                    if interrupted is not None:
+                        data = data[: interrupted["paired_traces"]]
+                data = data * np.exp(-1j * np.pi / 2.0)
             if remove_dc:
                 data = data - data.mean(axis=-1, keepdims=True)
 
@@ -1376,6 +1398,8 @@ def _read_topspin(*args, **kwargs):
     # we assume that all experiments have similar (important) parameters so that the experiments are compatibles
 
     meta = Meta()  # This is the parameter dictionary
+    if interrupted is not None:
+        meta.interrupted_states_tppi = interrupted
     datatype = path.name.upper() if not processed else f"{data.ndim}D"
 
     keys = sorted(dic.keys())
