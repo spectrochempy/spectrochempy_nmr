@@ -93,6 +93,7 @@ codeautolink_inventory_map = {
 codeautolink_inventory_map.update(
     {
         "spectrochempy_nmr._resolve_read.<locals>.read": "spectrochempy_nmr.read",
+        "spectrochempy_nmr.processing.autophase.autophase": "spectrochempy_nmr.autophase",
     }
 )
 

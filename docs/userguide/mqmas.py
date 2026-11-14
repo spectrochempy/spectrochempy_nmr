@@ -14,18 +14,28 @@
 # %% [markdown]
 # # Processing MQMAS spectra
 #
-# > The staged MQMAS workflow is available in the development version of
-# > the plugin.
+# Multiple-quantum magic-angle spinning (MQMAS) is a 2D solid-state NMR
+# method for half-integer quadrupolar nuclei such as ²⁷Al. Magic-angle
+# spinning leaves residual second-order quadrupolar broadening. MQMAS
+# correlates the evolution of a multiple-quantum coherence in F1 with
+# the detected central transition in F2. Their anisotropic frequency
+# shifts are proportional, so a shear removes this contribution from F1.
+# The resulting isotropic dimension helps resolve sites with overlapping
+# F2 lines. Their F1 positions retain both the isotropic chemical shift
+# and an isotropic second-order quadrupolar shift.
 #
-# See the [changelog](../changelog.rst) for release status.
-#
-# The XFSHEAR workflow separates isotropic and second-order quadrupolar
-# contributions in MQMAS spectra. It uses a Bruker States acquisition with a
-# common F2 phase and isotropic F1 calibration.
+# This tutorial uses a Bruker States acquisition of PST-5 to show the
+# tilted line shapes after two Fourier transforms, the effect of the
+# shear, and how apodization and baseline correction change the result.
+# See [Frydman and Harwood (1995)](https://doi.org/10.1021/ja00124a023)
+# for the original MQMAS experiment and
+# [Fernandez and Pruski (2011)](https://doi.org/10.1007/128_2011_141)
+# for experimental strategies and applications.
 #
 # ## Transform F2 and inspect the first row
 #
-# Read the Bruker SER, then apply a Fourier transform along the direct
+# Read the Bruker SER with [read()](../reference/generated/spectrochempy_nmr.read.rst),
+# then apply a Fourier transform along the direct
 # acquisition axis F2. TopSpin calls this step XF2. The indirect axis F1
 # stays in the time domain so you can inspect and phase an F2 row before
 # shearing.
@@ -35,6 +45,7 @@
 # and the physical resolution are set by the retained samples.
 
 # %%
+import numpy as np
 import spectrochempy as scp
 
 raw = scp.nmr.read("nmrdata/bruker/tests/nmr/MQMAS_27AL_PST5/51/ser")
@@ -48,30 +59,96 @@ _ = preview.phased.real.plot()
 
 # %% [markdown]
 # By default, [xf2()](../reference/generated/spectrochempy_nmr.Experiment.xf2.rst) corrects the digital-filter delay before the phase
-# preview. The `apk()` alias for `autophase()` estimates the phase on
-# the first row alone. Inspect the preview before running XFSHEAR.
+# preview. Select the first row with [rsr()](../reference/generated/spectrochempy_nmr.Experiment.rsr.rst)
+# and estimate its phase with [apk()](../reference/generated/spectrochempy_nmr.autophase.rst),
+# the alias for [autophase()](../reference/generated/spectrochempy_nmr.autophase.rst).
+# Inspect the preview before shearing.
 # The phase angles are in degrees and the pivot is an F2 sample index.
-# The sign convention matches SpectroChemPy's `pk()`. To reproduce
+# The sign convention matches SpectroChemPy's [pk()](https://www.spectrochempy.fr/latest/reference/generated/spectrochempy.pk.html). To reproduce
 # TopSpin phase values with a pivot of zero, reverse the signs of PHC0
 # and PHC1. Keep the original complex XF2 dataset for the next step.
 #
-# ## Shear and transform F1
+# ## Inspect the spectrum before shearing
 #
-# Apply the selected phase with [xf2p()](../reference/generated/spectrochempy_nmr.Experiment.xf2p.rst) to every F1 increment and both
-# States branches. Pass the phased dataset and the F1 FFT size to [xfshear()](../reference/generated/spectrochempy_nmr.Experiment.xfshear.rst).
-# The shear includes the F1 transform.
+# Apply the selected phase with [xf2p()](../reference/generated/spectrochempy_nmr.Experiment.xf2p.rst)
+# to every F1 increment and both States branches. Combine the two real
+# F2 branches as the real and imaginary parts of the indirect signal.
+# Transform F1 directly to see why shearing is needed. The dashed line
+# shows the predicted direction of the quadrupolar broadening for one
+# site. Each site has its own intercept. The F1 DFT is periodic, so the
+# displayed frequency offsets use the period that contains both peaks.
 
 # %%
 phased = scp.nmr.Experiment(xf2).xf2p(**phase)
+f1_size = 512
+shear = 19 / 12
+# The F2 grid is in descending ppm. Convert to signed Hz from its center.
+f2_carrier = phased.x.data[phased.shape[-1] // 2]
+reference_mhz = float(raw.meta.sfo1[-1].to("MHz").magnitude) / (1 + f2_carrier * 1e-6)
+f2_hz = (f2_carrier - phased.x.data) * reference_mhz
+dwell = phased.y.data[1] - phased.y.data[0]
+f1_hz = np.arange(-f1_size, 0) / (f1_size * dwell)
+states = phased.data[0].real + 1j * phased.data[1].real
+states[0] *= 0.5
+# Use the equivalent negative-frequency period to keep both sites in view.
+unsheared = f1_size * np.fft.ifft(states, n=f1_size, axis=0)
+unsheared_rr = scp.NDDataset(
+    unsheared.real,
+    units=phased.units,
+    coordset=[
+        scp.Coord(f1_hz, units="Hz", title="F1 offset"),
+        scp.Coord(f2_hz, units="Hz", title="F2 offset"),
+    ],
+)
+# %% [markdown]
+# ## Shear and transform F1
+#
+# For the positive-exponent Fourier convention used here, multiply the
+# complex States signal at each direct frequency $f_2$ by a phase ramp
+# in the indirect evolution time $t_1$.
+#
+# $$s_{\mathrm{shear}}(t_1,f_2) = s(t_1,f_2)\,e^{2\pi i k f_2 t_1},
+# \qquad f_{1,\mathrm{shear}} = f_1 - k f_2.$$
+#
+# The slope is $k=19/12$ for this 3Q experiment on ²⁷Al. If the
+# broadening at a site follows $f_1 = k f_2 + b$, the shear puts
+# it at a constant $f_{1,\mathrm{shear}}=b$. The anisotropic line
+# shape remains visible along F2. The plugin method
+# [xfshear()](../reference/generated/spectrochempy_nmr.Experiment.xfshear.rst)
+# combines the shear and F1 transform, then calibrates F1 in isotropic
+# ppm, with a frequency scale divisor of $3-k=17/12$.
+
+# %%
 spectrum = scp.nmr.Experiment(phased).xfshear(
-    size=512, spin=2.5, coherence_order=3, f1_shift=-20.0
+    size=f1_size, spin=2.5, coherence_order=3, f1_shift=-20.0
 )
 rr = scp.nmr.Experiment(spectrum).rr()
-_ = rr[52.0:25.0, 65.0:20.0].plot(method="contour")
+region = rr[52.0:25.0, 65.0:20.0]
+peak = float(scp.Quantity(region.max()).magnitude)
+comparison_levels = [
+    peak * fraction for fraction in (0.06, 0.1, 0.16, 0.25, 0.4, 0.65, 0.9)
+]
+f2_bounds = tuple((f2_carrier - ppm) * reference_mhz for ppm in (65, 20))
+unsheared_region = unsheared_rr[-10500.0:-4200.0, f2_bounds[0] : f2_bounds[1]]
+strongest = np.unravel_index(unsheared_region.data.argmax(), unsheared_region.shape)
+f2_peak = unsheared_region.x.data[strongest[1]]
+f1_peak = unsheared_region.y.data[strongest[0]]
+axes = scp.multiplot(
+    [unsheared_region, region],
+    ncol=2,
+    method="contour",
+    labels=["Two Fourier transforms", "After shearing"],
+    levels=comparison_levels,
+    cmap="magma_r",
+    equal_aspect=False,
+    figsize=(10, 4),
+)
+line_x = np.array(f2_bounds)
+_ = axes[0].plot(line_x, f1_peak + shear * (line_x - f2_peak), "--", color="0.3")
 
 # %% [markdown]
 # To revise the F2 phase, return to the complex XF2 dataset and run
-# [xf2p()](../reference/generated/spectrochempy_nmr.Experiment.xf2p.rst) again with the new angles. Use `pk()` on the preview row
+# [xf2p()](../reference/generated/spectrochempy_nmr.Experiment.xf2p.rst) again with the new angles. Use [pk()](https://www.spectrochempy.fr/latest/reference/generated/spectrochempy.pk.html) on the preview row
 # to select the angles and [xf2p()](../reference/generated/spectrochempy_nmr.Experiment.xf2p.rst) on the complete dataset to record them
 # for XFSHEAR. Use `f1_shift` to move the signal within the F1 window, in isotropic ppm.
 # For shifted-echo acquisitions, `echo_window=(slope, sigma)` in
@@ -99,9 +176,6 @@ _ = rr[52.0:25.0, 65.0:20.0].plot(method="contour")
 # See the [processing conventions](../devguide/processing_conventions.rst)
 # for the TopSpin comparisons.
 #
-# For the MQMAS conventions and broader context, see
-# [Fernandez and Pruski (2011)](https://doi.org/10.1007/128_2011_141).
-#
 # ## Estimate and apply the common phase in one call
 #
 # Use [apk2d()](../reference/generated/spectrochempy_nmr.Experiment.apk2d.rst) on the complex XF2 dataset when you want to estimate the
@@ -124,7 +198,9 @@ spectrum = scp.nmr.Experiment(phased).xfshear(
 # addition to the digital group delay. Apply the same window to both States
 # branches at a given increment, with a Gaussian standard deviation of
 # 0.8 ms. Then fit a linear baseline along F2 using regions to either side
-# of the resonances.
+# of the resonances with [abs2()](../reference/generated/spectrochempy_nmr.Experiment.abs2.rst).
+# Extract each real-real plane with [rr()](../reference/generated/spectrochempy_nmr.Experiment.rr.rst)
+# and display them on common contour levels with [multiplot()](https://www.spectrochempy.fr/latest/reference/generated/spectrochempy.multiplot.html).
 
 # %%
 xf2_windowed = scp.nmr.Experiment(raw).xf2(

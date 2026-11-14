@@ -19,6 +19,15 @@ extraction, see :ref:`topspin-slice-and-baseline`.
 
    Experiment
 
+Automatic phase estimation
+--------------------------
+
+.. autosummary::
+   :nosignatures:
+   :toctree: generated
+
+   autophase
+
 Experimental Agilent NOESY helpers
 ----------------------------------
 
