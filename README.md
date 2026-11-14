@@ -16,17 +16,17 @@ NMR plugin for SpectroChemPy.
 
 The plugin provides NMR-specific readers for vendor and exchange formats,
 validated 1D workflows, and processing for qualified 2D acquisitions.
-The 0.3 series stores paired 2D data as two ordinary complex channels.
+The 0.4 series stores paired 2D data as two ordinary complex channels.
 See the [NMR documentation](https://www.spectrochempy.fr/projects/nmr/latest/)
 for installation, readers, processing and supported acquisition profiles.
 
 ## Installation
 
-SpectroChemPy 1.2.1 is the recommended starting point for the published NMR
-workflows.
+Install the core and plugin directly for this release. The NMR extra in
+SpectroChemPy 1.3.0 selects plugin versions below 0.4.
 
 ```bash
-python -m pip install "spectrochempy[nmr]>=1.2.1"
+python -m pip install "spectrochempy==1.3.0" "spectrochempy-nmr==0.4.0"
 ```
 
 The plugin installs `nmrglue-ng`. If you use the original `nmrglue`, install
