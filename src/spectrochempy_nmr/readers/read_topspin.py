@@ -1419,7 +1419,7 @@ def _read_topspin(*args, **kwargs):
             fnmode = meta.fnmode[-2]
         if not _is_bruker_mode_integer(fnmode) or not 0 < fnmode < len(FnMODE):
             fnmode = None
-            for parameters in (dic.get("proc2s", {}), dic.get("proc2", {}), indirect):
+            for parameters in (dic.get("proc2s", {}), dic.get("proc2", {})):
                 mc2 = parameters.get("MC2", parameters.get("mc2"))
                 if _is_bruker_mode_integer(mc2) and 0 <= mc2 < len(FnMODE) - 1:
                     fnmode = mc2 + 1
@@ -1563,6 +1563,7 @@ def _read_topspin(*args, **kwargs):
                 )
                 vd = []
             coord = Coord(vd, title="time", units="s")
+            coord.meta["bruker_delay_list"] = True
             if missing_f1_width:
                 coord.meta["bruker_f1_width_missing"] = True
             coords.append(coord)

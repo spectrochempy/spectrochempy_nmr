@@ -291,6 +291,16 @@ def test_synthetic_bruker_ser_uses_mc2_over_fnmode_in_processing_parameters(tmp_
     assert fid.meta.encoding[0] == "QF"
 
 
+def test_synthetic_bruker_ser_ignores_mc2_in_acquisition_parameters(tmp_path):
+    path = _synthetic_ser(tmp_path, None)
+    indirect = path / "acqu2s"
+    indirect.write_text(indirect.read_text().replace("##END=", "##$MC2= 4\n##END="))
+    fid = scp.nmr.read_topspin(path / "ser")
+    assert fid.dims == ["y", "x"]
+    with pytest.raises(NotImplementedError, match="Bruker F1.*quadrature"):
+        fid.fft(dim="x").fft(dim="y")
+
+
 def test_synthetic_bruker_f2_allows_missing_direct_nucleus(tmp_path):
     path = _synthetic_ser(tmp_path, None)
     acqus = path / "acqus"
@@ -331,6 +341,14 @@ def test_synthetic_bruker_ser_list_does_not_supply_f1_width(
             fid.fft(dim="x").fft(dim="y")
 
 
+def test_synthetic_bruker_ser_does_not_transform_delay_list(tmp_path):
+    path = _synthetic_ser(tmp_path, 1)
+    (path / "vdlist").write_text("1\n2\n3\n4\n5\n6\n7\n8\n")
+    fid = scp.nmr.read_topspin(path / "ser", use_list=True)
+    with pytest.raises(ValueError, match="Bruker F1 is a delay-list axis"):
+        fid.fft(dim="x").fft(dim="y")
+
+
 @pytest.mark.parametrize("stored_width", [None, 1000])
 def test_synthetic_bruker_ser_width_uses_only_acquisition_parameters(
     tmp_path, stored_width
@@ -351,6 +369,11 @@ def test_synthetic_bruker_ser_width_uses_only_acquisition_parameters(
     f2 = fid.fft(dim="x")
     if stored_width is None:
         np.testing.assert_array_equal(fid.y.data, np.arange(fid.shape[0]))
+        with pytest.raises(
+            ValueError, match="Bruker F1 FFT requires an acquisition spectral width"
+        ):
+            f2.fft(dim="y")
+        f2.y = scp.Coord.arange(f2.shape[0])
         with pytest.raises(
             ValueError, match="Bruker F1 FFT requires an acquisition spectral width"
         ):

@@ -60,15 +60,30 @@ def _fft_validate_input(dataset, *, dim, inv=False, **kwargs):
         if inv:
             raise NotImplementedError("Inverse channel reconstruction is not validated")
     if not inv:
+        index = dataset.dims.index(dim)
         coord = dataset.coordset[dim] if dataset.coordset is not None else None
-        if getattr(getattr(coord, "meta", None), "bruker_f1_width_missing", False):
+        widths = dataset.meta.get("sw_h")
+        missing_ser_width = (
+            dataset.meta.get("datatype") == "SER"
+            and widths is not None
+            and len(widths) == dataset.ndim
+            and not _positive_scalar(widths[index])
+        )
+        if missing_ser_width or getattr(
+            getattr(coord, "meta", None), "bruker_f1_width_missing", False
+        ):
             raise ValueError(
                 "Bruker F1 FFT requires an acquisition spectral width. "
                 "Supply SW_h in Hz or restore SW and SFO1 in the indirect acquisition parameters."
             )
+        if getattr(getattr(coord, "meta", None), "bruker_delay_list", False):
+            raise ValueError(
+                "Bruker F1 is a delay-list axis. Reopen without use_list to "
+                "Fourier transform the indirect acquisition axis."
+            )
         encodings = getattr(dataset.meta, "encoding", None)
         if encodings is not None:
-            encoding = encodings[dataset.dims.index(dim)]
+            encoding = encodings[index]
             _require_known_f1_quadrature(encoding)
             if isinstance(encoding, str) and (
                 encoding.startswith(("UNVALIDATED:", "PENDING-F2:"))
