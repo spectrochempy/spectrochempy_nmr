@@ -13,6 +13,8 @@ format. See :doc:`/userguide/reading_data` for supported inputs and examples.
 
    read
    read_topspin
+   read_multiplex_spam
+   read_stmas
    read_agilent
    read_jeol
    read_simpson

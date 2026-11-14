@@ -10,7 +10,8 @@ Guides
    processing_2d
    Fourier transformation in SpectroChemPy <https://www.spectrochempy.fr/latest/userguide/processing/fourier.html>
    mqmas
-   stmas_multiplex
+   multiplex_spam
+   stmas
    analysis
    Baseline correction in SpectroChemPy <https://www.spectrochempy.fr/latest/userguide/processing/baseline.html>
    ../concepts/quadrature

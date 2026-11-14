@@ -374,6 +374,14 @@ def xfshear(dataset, *, size, spin, coherence_order, f1_shift):
 
     order, ratio, scale = _mqmas_geometry(spin, coherence_order)
     plan = _validated_xf2(dataset)
+    selection = dataset.meta.get("acquisition", {}).get("multiplex_spam")
+    if selection is not None and (
+        order != selection["coherence_order"]
+        or spin != (selection["phase_count"] - 1) / 4
+    ):
+        raise ValueError(
+            "XFSHEAR spin and coherence order must match the Multiplex SPAM reconstruction"
+        )
     if "f2_phase" not in plan:
         raise ValueError("Apply the common F2 phase with xf2p() before XFSHEAR")
     default_sy, sx = plan["size"]
@@ -476,5 +484,71 @@ def xfshear(dataset, *, size, spin, coherence_order, f1_shift):
     result.meta.readonly = readonly
     result.history = (
         "Replayed rectangular TopSpin XFSHEAR with F2 Hilbert reconstruction"
+    )
+    return result
+
+
+def stmas_shear(dataset, *, size, f1_shift):
+    """Apply the spin-3/2 DQF-STMAS shear and transform the States F1 signal."""
+    from spectrochempy.core.dataset.coord import Coord
+    from spectrochempy.core.dataset.nddataset import NDDataset
+    from spectrochempy.core.units import ur
+
+    from .topspin_xfb import _positive_fft
+
+    plan = _validated_xf2(dataset)
+    acquisition = dataset.meta.get("acquisition", {})
+    if "multiplex_spam" in acquisition:
+        raise ValueError("STMAS shear requires STMAS States data")
+    if "f2_phase" not in plan:
+        raise ValueError("Apply a common F2 phase with xf2p() before STMAS shear")
+    _, ny, nx = dataset.shape
+    if not _even_size(size) or size < max(4, ny):
+        raise ValueError("STMAS F1 size must be even and fit all acquired increments")
+    if isinstance(f1_shift, bool) or not isinstance(f1_shift, Real):
+        raise ValueError("STMAS requires a finite numerical f1_shift")
+    sw1, sw2 = plan["widths_hz"]
+    sf, carrier = plan["sf_mhz"], plan["carrier_mhz"]
+    ratio, scale = -8 / 9, 17 / 9
+    reference = scale * (sf - f1_shift * carrier * 1e-6)
+    if not np.isfinite(reference) or reference <= 0:
+        raise ValueError("STMAS F1 shift gives an invalid reference frequency")
+    f2 = (np.arange(nx) - nx // 2) * sw2 / nx
+    t1 = np.arange(ny) / sw1
+    cosine, sine = dataset.data.real
+    phase = 2 * np.pi * t1[:, None] * (ratio * f2 - f1_shift * carrier * scale)
+    spectrum = _positive_fft((cosine + 1j * sine) * np.exp(1j * phase), size, -2)
+    if not np.isfinite(spectrum).all():
+        raise ValueError("STMAS shear produced nonfinite spectral values")
+    center = (scale * carrier - reference) * 1e6 / reference
+    f1 = Coord(
+        center - (np.arange(size) - size // 2) * sw1 / (size * reference),
+        units="ppm",
+        title="isotropic chemical shift",
+        rounding=False,
+        sigdigits=15,
+    )
+    f1.meta["reference_frequency"] = reference * ur.MHz
+    result = NDDataset(spectrum, dims=["y", "x"], name=dataset.name)
+    result.set_coordset(y=f1, x=dataset.x.copy())
+    result.filename = dataset.filename
+    result.history = list(dataset.history)
+    result.history = "Applied spin-3/2 DQF-STMAS shear and F1 Fourier transform"
+    result.meta.update(
+        {
+            "stage": "spectrum",
+            "data_domain": "frequency",
+            "isfreq": [True, True],
+            "iscomplex": [True, False],
+            "acquisition": acquisition,
+            "provenance": dataset.meta.get("provenance"),
+            "stmas_shear": {
+                "ratio": ratio,
+                "scale_divisor": scale,
+                "f1_shift_ppm": float(f1_shift),
+                "f2_phase": plan["f2_phase"],
+                "digital_filter": plan["digital_filter"],
+            },
+        }
     )
     return result
