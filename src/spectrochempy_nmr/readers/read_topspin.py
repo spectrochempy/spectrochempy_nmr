@@ -1368,9 +1368,13 @@ def _read_topspin(*args, **kwargs):
                 units = ur(keys_units[key.lower()]) if keys_units[key.lower()] else None
 
                 if units is not None:
-                    if isinstance(value, float | int):
+                    if type(value) in (float, int):
                         value = value * units  # make a quantity
-                    elif isinstance(value, list) and isinstance(value[0], float | int):
+                    elif (
+                        isinstance(value, list)
+                        and value
+                        and isinstance(value[0], float | int)
+                    ):
                         value = np.array(value) * units
 
                 if key.lower() not in meta:
@@ -1407,11 +1411,19 @@ def _read_topspin(*args, **kwargs):
         fnmode = indirect.get("FnMODE", indirect.get("fnmode"))
         if fnmode is None and meta.fnmode is not None:
             fnmode = meta.fnmode[-2]
-        if not isinstance(fnmode, (int, np.integer)) or not 0 < fnmode < len(FnMODE):
+        if (
+            isinstance(fnmode, bool)
+            or not isinstance(fnmode, (int, np.integer))
+            or not 0 < fnmode < len(FnMODE)
+        ):
             fnmode = None
             for parameters in (dic.get("proc2s", {}), dic.get("proc2", {}), indirect):
                 mc2 = parameters.get("MC2", parameters.get("mc2"))
-                if isinstance(mc2, (int, np.integer)) and 0 <= mc2 < len(FnMODE) - 1:
+                if (
+                    isinstance(mc2, (int, np.integer))
+                    and not isinstance(mc2, bool)
+                    and 0 <= mc2 < len(FnMODE) - 1
+                ):
                     fnmode = mc2 + 1
                     break
         quadrature = kwargs.get("quadrature")

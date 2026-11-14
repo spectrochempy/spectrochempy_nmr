@@ -168,7 +168,7 @@ def test_synthetic_experiment_folder_with_auxiliary_files(paired_ser, monkeypatc
         np.testing.assert_array_equal(actual.data, expected.data)
 
 
-@pytest.mark.parametrize("mode", [None, 0, 99])
+@pytest.mark.parametrize("mode", [None, 0, 99, "yes"])
 def test_synthetic_unknown_bruker_f1_is_only_required_for_f1(tmp_path, mode):
     path = _synthetic_ser(tmp_path, mode) / "ser"
     fid = scp.nmr.read_topspin(path)
@@ -211,7 +211,7 @@ def test_synthetic_bruker_ser_on_core_without_prevalidation(
         assert fid.fft(dim="x").fft(dim="y").shape == fid.shape
 
 
-@pytest.mark.parametrize("invalid_sw", ["0", "<BAD>", "(0..1)\n1 2"])
+@pytest.mark.parametrize("invalid_sw", ["0", "<BAD>", "yes", "(0..-1)", "(0..1)\n1 2"])
 def test_synthetic_bruker_ser_uses_stored_width_if_sw_invalid(tmp_path, invalid_sw):
     path = _synthetic_ser(tmp_path, 1)
     acqu2s = path / "acqu2s"
@@ -221,6 +221,16 @@ def test_synthetic_bruker_ser_uses_stored_width_if_sw_invalid(tmp_path, invalid_
     fid = scp.nmr.read_topspin(path / "ser")
     np.testing.assert_allclose(fid.y.to("s").data, np.arange(fid.shape[0]) / 2000)
     assert fid.fft(dim="x").fft(dim="y").shape == fid.shape
+
+
+def test_synthetic_bruker_ser_ignores_boolean_mc2(tmp_path):
+    path = _synthetic_ser(tmp_path, None)
+    status = path / "pdata" / "1" / "proc2s"
+    status.parent.mkdir(parents=True)
+    status.write_text("##TITLE= Processing status\n##$MC2= no\n##END=\n")
+    fid = scp.nmr.read_topspin(path / "ser")
+    with pytest.raises(NotImplementedError, match="Bruker F1.*quadrature"):
+        fid.fft(dim="x").fft(dim="y")
 
 
 @pytest.mark.parametrize(("fnmode", "expected"), [(None, "STATES-TPPI"), (4, "STATES")])
