@@ -5,6 +5,13 @@ This changelog covers the independently versioned ``spectrochempy-nmr``
 distribution. The sections below describe changes in each plugin release.
 
 
+Unreleased
+----------
+
+* Reconstruct Bruker Multiplex SPAM States FIDs with ``scp.nmr.read_multiplex_spam()``.
+* Read Bruker States STMAS with ``scp.nmr.read_stmas()`` and process the
+  spin-3/2 DQF pathway with ``Experiment.stmas_shear()``.
+
 0.4.0
 -----
 

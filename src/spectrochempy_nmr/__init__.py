@@ -705,6 +705,14 @@ def __getattr__(name: str):
         from .processing.agilent_reference import reference_agilent_1d
 
         return reference_agilent_1d
+    if name == "read_stmas":
+        from .readers.stmas import read_stmas
+
+        return read_stmas
+    if name == "read_multiplex_spam":
+        from .readers.multiplex_spam import read_multiplex_spam
+
+        return read_multiplex_spam
     if name == "read_agilent_interop":
         from .readers.read_agilent_interop import read_agilent_interop  # noqa: PLC0415
 
@@ -730,6 +738,8 @@ def __dir__() -> list[str]:
         "reference_agilent_1d",
         "reference_interop_1d",
         "read_agilent_interop",
+        "read_multiplex_spam",
+        "read_stmas",
         "read",
         "write_jcamp",
         "read_topspin",

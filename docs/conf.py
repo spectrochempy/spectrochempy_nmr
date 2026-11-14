@@ -250,4 +250,5 @@ def setup(app):
             app.connect("builder-inited", generate_gallery_rst, priority=490)
             break
     app.connect("builder-inited", _refresh_gallery_sources, priority=495)
+    app.add_js_file("fold-notebook-input.js", defer="defer")
     app.connect("html-page-context", _set_section_title)
