@@ -1120,6 +1120,33 @@ def _select_interrupted_states_tppi(directory, stored):
     ), counts
 
 
+def _recover_interrupted_states_tppi(directory, meta, data):
+    direct = meta.get("acqus", {})
+    td = direct.get("TD")
+    data_type = direct.get("DTYPA")
+    if (
+        not np.iscomplexobj(data)
+        or data.ndim not in (1, 2)
+        or not _is_bruker_mode_integer(td)
+        or td < 4
+        or td % 2
+        or data_type not in (0, 2)
+    ):
+        return data, None
+    word_bytes = 8 if data_type == 2 else 4
+    trace_bytes = ((td * word_bytes + 1023) // 1024) * 1024
+    samples_per_trace = trace_bytes // (2 * word_bytes)
+    if data.size % samples_per_trace or meta.get("FILE_SIZE") != (
+        data.size * 2 * word_bytes
+    ):
+        return data, None
+    traces = data.reshape(-1, samples_per_trace)
+    counts = _interrupted_states_tppi_counts(directory, meta, traces)
+    if counts is None:
+        return data, None
+    return traces[: counts["paired_traces"], : td // 2], counts
+
+
 def _read_normalized_ser(
     directory, acqus_files, procs_files, *, remove_filter, remove_dc
 ):
@@ -1324,6 +1351,8 @@ def _read_topspin(*args, **kwargs):
             )
         if normalized is None:
             dic, data = _read_raw_data(f_expno, path.name, acqus_files, procs_files)
+            if path.name == "ser" and not kwargs.get("use_list", False):
+                data, interrupted = _recover_interrupted_states_tppi(f_expno, dic, data)
         else:
             dic, normalized_dataset = normalized
             data = normalized_dataset.data
@@ -1356,10 +1385,6 @@ def _read_topspin(*args, **kwargs):
 
         if normalized_dataset is None:
             if path.name == "ser":
-                if not kwargs.get("use_list", False):
-                    interrupted = _interrupted_states_tppi_counts(f_expno, dic, data)
-                    if interrupted is not None:
-                        data = data[: interrupted["paired_traces"]]
                 data = data * np.exp(-1j * np.pi / 2.0)
             if remove_dc:
                 data = data - data.mean(axis=-1, keepdims=True)

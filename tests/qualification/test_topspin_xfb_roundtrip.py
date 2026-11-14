@@ -208,7 +208,8 @@ def test_interrupted_states_tppi_replays_complete_pairs(tmp_path):
         np.testing.assert_allclose(axis.data, expected, atol=2e-12, rtol=0)
 
 
-def test_interrupted_states_tppi_without_processing_status(tmp_path):
+@pytest.mark.parametrize("unaligned_td", [False, True])
+def test_interrupted_states_tppi_without_processing_status(tmp_path, unaligned_td):
     root = os.environ.get("NMR_BRUKER_SER_DATA")
     if not root:
         pytest.skip("set NMR_BRUKER_SER_DATA to the Bruker test-data directory")
@@ -218,10 +219,25 @@ def test_interrupted_states_tppi_without_processing_status(tmp_path):
     for path in source.iterdir():
         if path.is_file():
             shutil.copy2(path, target / path.name)
+    if unaligned_td:
+        acqus = target / "acqus"
+        parameters = {"TD": 1000, "BYTORDA": 0, "DTYPA": 0}
+        lines = acqus.read_text().splitlines(keepends=True)
+        for index, line in enumerate(lines):
+            name = line.removeprefix("##$").partition("=")[0]
+            if name in parameters:
+                lines[index] = f"##${name}= {parameters[name]}\n"
+        acqus.write_text("".join(lines))
+        traces = np.zeros((250, 1024), dtype="<i4")
+        traces[:147, 0] = 1
+        traces.tofile(target / "ser")
     result = scp.read_topspin(target / "ser", local_only=True)
-    assert result.shape == (2, 73, 1024)
+    assert result.shape == (2, 73, 500 if unaligned_td else 1024)
     assert result.meta.tdeff[-2] == 73
     assert result.meta.interrupted_states_tppi["acquired_traces"] == 147
+    if unaligned_td:
+        assert np.all(result.data[..., 0] != 0)
+        assert not np.any(result.data[..., 1:])
 
 
 def test_interrupted_states_tppi_requires_zero_padding(tmp_path):
