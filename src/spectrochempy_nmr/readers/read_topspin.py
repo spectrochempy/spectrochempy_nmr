@@ -1536,6 +1536,11 @@ def _read_topspin(*args, **kwargs):
         use_proc_axis = [False] * (parmode + 1)
 
     for axis in axe_range:
+        missing_f1_width = (
+            datatype == "SER" and axis == 0 and not _positive_scalar(meta.sw_h[axis])
+        )
+        if missing_f1_width:
+            _require_guarded_ser_core()
         if parmode > 0 and use_list and axis == 0:
             # we use the vd or other list to make the axis
             # this is useful for pseudo 2D data such as relaxation, etc...
@@ -1551,14 +1556,15 @@ def _read_topspin(*args, **kwargs):
                 )
                 vd = []
             coord = Coord(vd, title="time", units="s")
+            if missing_f1_width:
+                coord.meta["bruker_f1_width_missing"] = True
             coords.append(coord)
 
         elif not meta.isfreq[axis]:
             if normalized_dataset is not None:
                 continue
             width = meta.sw_h[axis]
-            if datatype == "SER" and axis == 0 and not _positive_scalar(width):
-                _require_guarded_ser_core()
+            if missing_f1_width:
                 coord = Coord.arange(meta.td[axis], title="F1 increment index")
                 coord.meta["bruker_f1_width_missing"] = True
                 coords.append(coord)

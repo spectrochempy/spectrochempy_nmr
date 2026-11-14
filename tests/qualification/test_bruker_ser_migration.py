@@ -9,6 +9,7 @@ import nmrglue as ng
 import numpy as np
 import pytest
 import spectrochempy as scp
+from spectrochempy.utils.exceptions import SpectroChemPyError
 
 
 def _check_parity(path, monkeypatch, *, storage, rows, points, filtered, dc):
@@ -195,8 +196,6 @@ def test_synthetic_unknown_bruker_f1_is_only_required_for_f1(tmp_path, mode):
 def test_synthetic_bruker_ser_on_core_without_prevalidation(
     tmp_path, monkeypatch, fnmode, sw, quadrature
 ):
-    from spectrochempy.utils.exceptions import SpectroChemPyError
-
     core_fft = import_module("spectrochempy.processing.fft.fft")
     monkeypatch.setattr(core_fft, "FFT_PREVALIDATION_API", 0, raising=False)
     path = _synthetic_ser(tmp_path, fnmode)
@@ -295,6 +294,31 @@ def test_synthetic_bruker_f2_allows_missing_direct_nucleus(tmp_path):
     assert f2.x.units == scp.ur.ppm
     with pytest.raises(NotImplementedError, match="Bruker F1.*quadrature"):
         f2.fft(dim="y")
+
+
+@pytest.mark.parametrize("prevalidation_api", [0, 1])
+def test_synthetic_bruker_ser_list_does_not_supply_f1_width(
+    tmp_path, monkeypatch, prevalidation_api
+):
+    core_fft = import_module("spectrochempy.processing.fft.fft")
+    monkeypatch.setattr(
+        core_fft, "FFT_PREVALIDATION_API", prevalidation_api, raising=False
+    )
+    path = _synthetic_ser(tmp_path, 1)
+    acqu2s = path / "acqu2s"
+    acqu2s.write_text(acqu2s.read_text().replace("##$SW= 8", "##$SW= 0"))
+    (path / "vdlist").write_text("1\n2\n3\n4\n5\n6\n7\n8\n")
+
+    if prevalidation_api == 0:
+        with pytest.raises(SpectroChemPyError, match="Bruker SER.*1.2.0"):
+            scp.nmr.read_topspin(path / "ser", use_list=True)
+    else:
+        fid = scp.nmr.read_topspin(path / "ser", use_list=True)
+        np.testing.assert_array_equal(fid.y.data, np.arange(1, 9))
+        with pytest.raises(
+            ValueError, match="Bruker F1 FFT requires an acquisition spectral width"
+        ):
+            fid.fft(dim="x").fft(dim="y")
 
 
 @pytest.mark.parametrize("width_hz", [None, 0, -1000, "NaN", "1e999", 1000])
