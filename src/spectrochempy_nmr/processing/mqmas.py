@@ -31,8 +31,25 @@ def _mqmas_geometry(spin, coherence_order):
     return order, ratio, scale
 
 
+def _mqecho_weights(t1, t2, slope, lb_hz):
+    """Evaluate the symmetric exponential window on the acquired time grid."""
+    time = t2[None, :]
+    with np.errstate(over="ignore", under="ignore"):
+        center = slope * t1[:, None]
+        return 0.5 * (
+            np.exp(-np.pi * (lb_hz * np.abs(time - center)))
+            + np.exp(-np.pi * (lb_hz * np.abs(time + center)))
+        )
+
+
 def prepare_xfshear(
-    dataset, *, size, direct_points, correct_digital_filter, echo_window=None
+    dataset,
+    *,
+    size,
+    direct_points,
+    correct_digital_filter,
+    echo_window=None,
+    mqecho=None,
 ):
     if not isinstance(size, (tuple, list)) or len(size) != 2 or not _even_size(size[0]):
         raise ValueError("XFSHEAR size must contain two even FFT sizes (F1, F2)")
@@ -42,6 +59,7 @@ def prepare_xfshear(
         direct_points=direct_points,
         correct_digital_filter=correct_digital_filter,
         echo_window=echo_window,
+        mqecho=mqecho,
         f1_size=size[0],
     )
 
@@ -51,7 +69,14 @@ def _even_size(size):
 
 
 def xf2(
-    dataset, *, size, direct_points, correct_digital_filter, echo_window, f1_size=None
+    dataset,
+    *,
+    size,
+    direct_points,
+    correct_digital_filter,
+    echo_window,
+    f1_size=None,
+    mqecho=None,
 ):
     """Compute complex XF2 branches for inspecting the phase before shearing."""
     from spectrochempy.core.units import ur  # noqa: PLC0415
@@ -129,7 +154,26 @@ def xf2(
         raise ValueError(
             "echo_window requires a finite slope and positive sigma in seconds"
         )
-    if correct_digital_filter or echo_window is not None:
+    if mqecho is not None:
+        if echo_window is not None:
+            raise ValueError("Specify either echo_window or mqecho")
+        message = "mqecho requires a finite slope and positive LB in Hz"
+        if (
+            not isinstance(mqecho, (tuple, list))
+            or len(mqecho) != 2
+            or any(
+                isinstance(value, (bool, np.bool_)) or not isinstance(value, Real)
+                for value in mqecho
+            )
+        ):
+            raise ValueError(message)
+        try:
+            slope, lb_hz = map(float, mqecho)
+        except OverflowError as exc:
+            raise ValueError(message) from exc
+        if not np.isfinite(slope) or not np.isfinite(lb_hz) or lb_hz <= 0:
+            raise ValueError(message)
+    if correct_digital_filter or echo_window is not None or mqecho is not None:
         acqus = meta.get("source_metadata", {}).get("acqus", {})
         recorded_delay = acquisition["digital_filter"].get("group_delay_points")
         no_decimation = (
@@ -151,6 +195,16 @@ def xf2(
         window_metadata = {
             "slope": slope,
             "sigma_seconds": sigma,
+            "group_delay_points": delay,
+        }
+    if mqecho is not None:
+        t1 = np.arange(ny) / sw1
+        t2 = (np.arange(direct_points) - delay) / sw2
+        retained = retained * _mqecho_weights(t1, t2, slope, lb_hz)
+        window_metadata = {
+            "kind": "mqecho",
+            "slope": slope,
+            "lb_hz": lb_hz,
             "group_delay_points": delay,
         }
     if direct_points == 2:
