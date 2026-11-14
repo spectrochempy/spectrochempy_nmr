@@ -256,7 +256,7 @@ else:
 #    PST-5, Echo only (40 Hz), 1.70 / 2.00, 2.06 / 2.34, 0.910
 #    PST-5, Symmetric (40 Hz), 1.91 / 2.24, 2.06 / 2.36, 0.925
 #    RbNO₃/206, None, 0.87 / 0.90, 3.30 / 3.75, 0.761
-#    RbNO₃/206, Echo only (50 Hz), 0.86 / 0.82, 5.55 / 4.31, 0.774
+#    RbNO₃/206, Echo only (50 Hz), 0.86 / 0.82, 5.55 / 4.32, 0.774
 #    RbNO₃/206, Symmetric (50 Hz), 0.88 / 0.85, 5.55 / 4.29, 0.778
 #
 # On PST-5, symmetrization adds about 12% to both F1 widths relative
