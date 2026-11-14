@@ -34,12 +34,22 @@ def extract_component(dataset, domains, component):
     if domains[-2:] != ("frequency", "frequency"):
         raise ValueError("Component extraction requires frequency-domain F1 and F2")
 
-    if not paired and component == "rr":
-        return dataset.real
+    if not paired:
+        if component == "rr":
+            return dataset.real
+        complex_axis = dataset.meta.get("interop_complex_axis") or "F2"
+        if dataset.is_complex and component == {"F1": "ri", "F2": "ir"}.get(
+            complex_axis
+        ):
+            return dataset.imag
+        raise ValueError(f"The spectrum does not contain component {component.upper()}")
 
     labels = tuple(dataset.meta.get("component_labels") or ())
     if not dataset.is_complex:
-        labels = tuple(label.removeprefix("2") for label in labels)
+        # Native interop labels are in physical (F1, F2) order.
+        labels = tuple(
+            label[1:] if label.startswith("2") else label[::-1] for label in labels
+        )
     if paired and labels in _PAIRED_SPECTRA and dataset.is_complex:
         complex_axis = dataset.meta.get("interop_complex_axis") or "F2"
         if dataset.meta.get("normalization_profile") == "bruker-pdata-2d-public-v1":

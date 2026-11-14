@@ -15,7 +15,9 @@
 # # Processing MQMAS spectra
 #
 # > The staged MQMAS workflow is available in the development version of
-# > the plugin. See the [changelog](../changelog.html) for release status.
+# > the plugin.
+#
+# See the [changelog](../changelog.rst) for release status.
 #
 # The XFSHEAR workflow separates isotropic and second-order quadrupolar
 # contributions in MQMAS spectra. It uses a Bruker States acquisition with a
@@ -83,15 +85,15 @@ rr[52.0:25.0, 65.0:20.0].plot(method="contour")
 # Supply either window option. Both States branches receive the same
 # weights on the raw sample grid, which begins at the negative group
 # delay. When the mirrored center lies outside that grid, only its tail
-# overlaps the samples. See the
-# [exponential-window comparison](stmas_multiplex.html#mqecho-pst5-rbno3-comparison) for the peak measurements.
+# overlaps the samples. See the [exponential-window comparison](stmas_multiplex.rst#mqecho-pst5-rbno3-comparison).
 #
 # The returned channels pack RR and IR in `S_R`, and RI and II in
 # `S_I`. The F2 axis retains the acquisition reference. The F1 axis
 # uses the isotropic scaling and any requested F1 shift.
 #
-# The [PST-5 gallery notebook](../examples/gallery/nmr/plot_replay_mqmas_pst5.html)
-# shows the workflow from the raw SER to the RR map. See the [MQMAS qualification notes](qualification.html#mqmas-qualification)
+# The [PST-5 gallery notebook](../examples/gallery/nmr/plot_replay_mqmas_pst5.rst)
+# shows the workflow from the raw SER to the RR map.
+# See the [processing conventions](../devguide/processing_conventions.rst)
 # for the TopSpin comparisons.
 #
 # For the MQMAS conventions and broader context, see
