@@ -219,8 +219,13 @@ def _set_section_title(app, pagename, templatename, context, doctree):
             break
 
 
+def _refresh_gallery_sources(app):
+    app.env.find_files(app.config, app.builder)
+
+
 def setup(app):
     from sphinx_gallery.docs_resolv import embed_code_links
+    from sphinx_gallery.gen_gallery import generate_gallery_rst
 
     # Let codeautolink handle both galleries and notebooks. The gallery's
     # HTML substitution can otherwise wrap existing links in a second anchor.
@@ -228,4 +233,11 @@ def setup(app):
         if listener.handler is embed_code_links:
             app.disconnect(listener.id)
 
+    # Discover the generated pages before codeautolink snapshots the source list.
+    for listener in tuple(app.events.listeners["builder-inited"]):
+        if listener.handler is generate_gallery_rst:
+            app.disconnect(listener.id)
+            app.connect("builder-inited", generate_gallery_rst, priority=490)
+            break
+    app.connect("builder-inited", _refresh_gallery_sources, priority=495)
     app.connect("html-page-context", _set_section_title)
