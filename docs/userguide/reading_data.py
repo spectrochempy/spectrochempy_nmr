@@ -82,7 +82,9 @@ agilent = scp.nmr.read("path/to/fid", protocol="agilent")
 # analyzed directly.
 
 # %%
-spectrum = scp.nmr.read_topspin("nmrdata/bruker/tests/nmr/topspin_1d/1/pdata/1/1r")
+spectrum = scp.nmr.read_topspin(
+    "nmrdata/bruker/tests/nmr/topspin_1d", expno=1, procno=1
+)
 _ = spectrum.real.plot()
 
 # %% [raw] raw_mimetype="text/restructuredtext"
