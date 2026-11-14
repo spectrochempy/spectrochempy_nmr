@@ -256,3 +256,42 @@ def test_apk2d_identifies_the_failing_row():
         Experiment(dataset).apk2d(
             per_row=True, method="dispa", references=[(150, 211, 1)]
         )
+
+
+@pytest.mark.parametrize("complex_axis", ["F1", "F2"])
+def test_component_methods_and_properties(complex_axis):
+    rr = np.arange(12, dtype=float).reshape(3, 4)
+    ri, ir, ii = rr + 20, rr + 40, rr + 60
+    branches = (rr + 1j * ir, ri + 1j * ii)
+    if complex_axis == "F1":
+        branches = (rr + 1j * ri, ir + 1j * ii)
+    dataset = _dataset(np.stack(branches))
+    dataset.meta.interop_complex_axis = complex_axis
+    experiment = Experiment(dataset)
+    for name, values in zip(("rr", "ri", "ir", "ii"), (rr, ri, ir, ii), strict=True):
+        plane = getattr(experiment, name)()
+        np.testing.assert_array_equal(plane.data, values)
+        np.testing.assert_array_equal(getattr(experiment, name.upper()).data, values)
+        assert plane.dims == ["y", "x"]
+        assert Experiment(plane).domains == ("frequency", "frequency")
+        np.testing.assert_array_equal(plane.x.data, dataset.x.data)
+        np.testing.assert_array_equal(plane.y.data, dataset.y.data)
+
+
+def test_component_extraction_requires_a_spectrum_and_available_plane():
+    real = np.arange(12, dtype=float).reshape(3, 4)
+    np.testing.assert_array_equal(Experiment(_dataset(real)).rr().data, real)
+    with pytest.raises(ValueError, match="does not contain component RI"):
+        Experiment(_dataset(real)).ri()
+    with pytest.raises(ValueError, match="frequency-domain"):
+        Experiment(_dataset(real, frequency=(False, True))).rr()
+
+
+def test_component_extraction_finds_named_topspin_planes():
+    data = np.arange(48, dtype=float).reshape(4, 3, 4)
+    dataset = _dataset(data)
+    dataset.meta.component_labels = ("2ii", "2rr", "2ir", "2ri")
+    for name, idx in (("rr", 1), ("ri", 3), ("ir", 2), ("ii", 0)):
+        np.testing.assert_array_equal(
+            getattr(Experiment(dataset), name)().data, data[idx]
+        )

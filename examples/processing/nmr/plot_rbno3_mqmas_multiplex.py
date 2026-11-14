@@ -1,23 +1,14 @@
 """
-Comparing conventional MQMAS, multiplex MQMAS and STMAS
-=======================================================
+Process RbNO₃ multiplex MQMAS and STMAS
+=======================================
 
-A conventional 2D ²⁷Al MQMAS acquisition of PST-5 provides a reference
-for the processing workflow. Compare it with the 3Q MQMAS map extracted
-from the archived MQMultiplex32 acquisition of ⁸⁷Rb in RbNO₃ and with
-a separate STMAS acquisition of the same RbNO₃ sample.
+Replay the ⁸⁷Rb 3Q MQMAS and STMAS workflows from Bruker SER files.
+Set ``SCP_RBNO3_DATA`` to the directory containing experiments ``206``
+and ``15``. Keep their acquisition parameters and ``pdata/1`` directories.
+See :doc:`/userguide/stmas_multiplex` for the comparison with PST-5.
 
-.. image:: /_static/rbno3-mqmas-stmas.png
-   :alt: Contour maps of PST-5 MQMAS, RbNO₃ multiplex 3Q MQMAS and RbNO₃ STMAS
-
-Set ``SCP_RBNO3_DATA`` to the local directory containing experiments
-``15`` and ``206`` to run this example on the original acquisitions.
-The PST-5 reference uses the public Bruker fixture in the SpectroChemPy
-data directory. See :doc:`plot_replay_mqmas_pst5` for its full workflow.
-
-PST-5 data by Christian Fernandez, LCS, distributed through
-`spectrochempy_data <https://github.com/spectrochempy/spectrochempy_data>`_
-under `CC BY 4.0 <https://creativecommons.org/licenses/by/4.0/>`_.
+.. image:: /_static/rbno3-replay.png
+   :alt: RbNO₃ multiplex 3Q MQMAS and STMAS maps from experiments 206 and 15
 """
 
 # %%
@@ -35,11 +26,6 @@ from pathlib import Path
 import numpy as np
 import spectrochempy as scp
 from nmrglue import bruker
-
-from spectrochempy_nmr.processing.bruker_filter import resolve_bruker_delay
-from spectrochempy_nmr.processing.mqmas import _mqecho_weights
-
-PST5_SER = "nmrdata/bruker/tests/nmr/MQMAS_27AL_PST5/51/ser"
 
 
 def read_traces(path):
@@ -171,244 +157,22 @@ def replay(root):
 
 
 # %%
-# Process the conventional MQMAS reference
-# ----------------------------------------
-# The PST-5 SER already contains two States branches per increment.
-# Transform and phase F2 directly, then use XFSHEAR and select RR.
-
-
-def replay_pst5(raw=None, *, mqecho=None):
-    """Return the conventional PST-5 MQMAS reference in its resonance region."""
-    if raw is None:
-        raw = scp.nmr.read(PST5_SER)
-    xf2 = scp.nmr.Experiment(raw).xf2(size=4096, direct_points=2048, mqecho=mqecho)
-    phased = scp.nmr.Experiment(xf2).xf2p(phc0=-58.0, phc1=0.0, pivot=0)
-    spectrum = scp.nmr.Experiment(phased).xfshear(size=512, spin=2.5, f1_shift=-20.0)
-    return spectrum[0, :, :].squeeze().real[52.0:25.0, 65.0:20.0]
-
-
-# %%
-# Compare the three maps
-# ----------------------
-# Contours are fractions of each panel's own maximum. PST-5 shows
-# positive RR contours, and the RbNO₃ panels show magnitude. Each
-# panel has its own ppm ranges and intensity scale.
-
+# Display the processed spectra
+# -----------------------------
 data_root = os.environ.get("SCP_RBNO3_DATA")
 if data_root:
-    pst5 = replay_pst5()
-    multiplex, stmas = replay(Path(data_root))
-    panels = (
-        ("²⁷Al PST-5\nConventional 3Q MQMAS (RR)", pst5),
-        ("⁸⁷Rb RbNO₃/206\n3Q MQMAS from multiplex", multiplex[:, -10.0:-60.0]),
-        ("⁸⁷Rb RbNO₃/15\nSTMAS", stmas[:, -10.0:-60.0]),
-    )
+    mqmas, stmas = replay(Path(data_root))
+    maps = [dataset[:, -10.0:-60.0] for dataset in (mqmas, stmas)]
     _ = scp.multiplot(
-        [dataset / dataset.max() for _, dataset in panels],
-        labels=[title for title, _ in panels],
-        ncol=3,
+        [dataset / dataset.max() for dataset in maps],
+        labels=["RbNO₃/206 · 3Q MQMAS", "RbNO₃/15 · STMAS"],
+        ncol=2,
         method="contour",
         equal_aspect=False,
-        figsize=(12, 4),
+        figsize=(9, 4),
         levels=[0.10, 0.18, 0.30, 0.50, 0.70, 0.90],
         xlabel="F2 (ppm)",
         ylabel="Isotropic F1 (ppm)",
     )
 else:
     print("Set SCP_RBNO3_DATA to the directory containing RbNO3/15 and RbNO3/206.")
-
-
-# %%
-# .. _mqecho-pst5-rbno3-comparison:
-#
-# Symmetric echo and antiecho apodization
-# ---------------------------------------
-# The two rows compare PST-5 and the selected RbNO₃/206 3Q component.
-# Each row shows the same data with no window, with an echo-centered
-# exponential, and with a symmetric average of the echo and antiecho
-# exponentials. Contours within a row use the same levels relative
-# to the unwindowed height of peak A.
-#
-# .. image:: /_static/mqecho-pst5-rbno3.png
-#    :alt: Six contour maps showing the three apodization treatments for each sample
-#
-# The echo window is :math:`w_+(t_1,t_2)=\exp(-\pi L|t_2-|k|t_1|)`.
-# The symmetric window is :math:`[w_+(t_1,t_2)+w_+(t_1,-t_2)]/2`.
-# The time origin accounts for the digital group delay. We used
-# :math:`|k|=19/12` and :math:`L=40\,\mathrm{Hz}` for PST-5, and
-# :math:`|k|=7/9` and :math:`L=50\,\mathrm{Hz}` for RbNO₃/206.
-# These are direct-dimension settings from the Bruker processing
-# parameters. This variant applies the same window to both States
-# branches before F2 transformation, with no additional F1 window.
-# For RbNO₃, the 3Q selection precedes the window. The phase is held
-# fixed within each acquisition. PST-5 shows positive RR contours,
-# and RbNO₃ shows magnitude.
-#
-# A and B mark the same two resonances across each row. Widths are full
-# widths at half maximum (FWHM) in ppm, measured on F1 and F2 cuts
-# through the local 2D maxima. B/A is the ratio of their peak heights.
-#
-# .. csv-table::
-#    :header: Acquisition, Window, "F1 FWHM A / B (ppm)", "F2 FWHM A / B (ppm)", "Height B/A"
-#    :widths: 16, 24, 22, 22, 16
-#
-#    PST-5, None, 1.62 / 1.92, 1.89 / 2.22, 0.881
-#    PST-5, Echo only (40 Hz), 1.70 / 2.00, 2.06 / 2.34, 0.910
-#    PST-5, Symmetric (40 Hz), 1.91 / 2.24, 2.06 / 2.36, 0.925
-#    RbNO₃/206, None, 0.87 / 0.90, 3.30 / 3.75, 0.761
-#    RbNO₃/206, Echo only (50 Hz), 0.86 / 0.82, 5.55 / 4.32, 0.774
-#    RbNO₃/206, Symmetric (50 Hz), 0.88 / 0.85, 5.55 / 4.29, 0.778
-#
-# On PST-5, symmetrization adds about 12% to both F1 widths relative
-# to the echo-only treatment. On RbNO₃/206, echo-only weighting already
-# accounts for nearly all of the F2 broadening. The F2 cut through
-# RbNO₃ peak A can span two nearby lobes at half height, so its FWHM
-# characterizes the cut as a whole.
-#
-# .. note::
-#
-#    Both acquisitions start after the conversion pulse. The predicted
-#    antiecho center lies at negative physical time for nonzero t1.
-#    The raw grid used for weighting begins at the negative digital group
-#    delay, so it still contains the mirrored center for increments
-#    1–13 of PST-5 and 1–8 of RbNO₃/206 (counting from zero).
-#    For later increments only the tail overlaps the raw grid. Overlap
-#    with this grid does not establish that a physical antiecho was acquired.
-
-
-def mqecho_window(shape, dwell1, sw2, delay, slope, lb, *, symmetric):
-    """Weight the acquired time grid around the echo and optionally its mirror."""
-    t1 = np.arange(shape[-2])[:, None] * dwell1
-    t2 = (np.arange(shape[-1]) - delay) / sw2
-    if symmetric:
-        return _mqecho_weights(t1[:, 0], t2, slope, lb)
-    return np.exp(-np.pi * lb * abs(t2 - slope * t1))
-
-
-def measure_peaks(dataset, centers):
-    """Find the same resonances in each map and measure cuts through their maxima."""
-    x, y, z = dataset.x.data, dataset.y.data, dataset.data
-    peaks = []
-    for xc, yc in centers:
-        rows = np.flatnonzero(abs(y - yc) < 1.2)
-        cols = np.flatnonzero(abs(x - xc) < 2.2)
-        row, col = np.unravel_index(
-            z[np.ix_(rows, cols)].argmax(), (rows.size, cols.size)
-        )
-        row, col = rows[row], cols[col]
-        f1 = dataset[:, col].squeeze().characterize_peaks_1d(int(row)).rows[0]
-        f2 = dataset[row, :].squeeze().characterize_peaks_1d(int(col)).rows[0]
-        peaks.append(
-            (
-                x[col],
-                y[row],
-                z[row, col],
-                float(scp.Quantity(f1["fwhm"]).magnitude)
-                if f1["fwhm"] is not None
-                else float("nan"),
-                float(scp.Quantity(f2["fwhm"]).magnitude)
-                if f2["fwhm"] is not None
-                else float("nan"),
-            )
-        )
-    return peaks
-
-
-def compare_mqecho(root):
-    """Recompute the three treatments and the peak measurements for each sample."""
-    raw = scp.nmr.read(PST5_SER)
-    sw1, sw2 = (float(v.to("Hz").magnitude) for v in raw.meta.sw_h[-2:])
-    delay, _ = resolve_bruker_delay(raw, None)
-    weighted = raw.copy()
-    weighted.data = raw.data * mqecho_window(
-        raw.shape, 1 / sw1, sw2, delay, 19 / 12, 40, symmetric=False
-    )
-    pst5_maps = [
-        replay_pst5(raw),
-        replay_pst5(weighted),
-        replay_pst5(raw, mqecho=(19 / 12, 40)),
-    ]
-
-    acqu, processing, branches = read_multiplex(root / "206")
-    direct = acqu["acqus"]
-    f2 = fft_positive(bruker.remove_digital_filter(acqu, branches), 4096, -1)
-    phase = np.angle(f2.flat[np.argmax(np.abs(f2))])
-    rb_maps = []
-    for weights in (
-        1,
-        *(
-            mqecho_window(
-                branches.shape,
-                direct["IN"][0],
-                direct["SW_h"],
-                direct["GRPDLY"],
-                7 / 9,
-                50,
-                symmetric=symmetric,
-            )
-            for symmetric in (False, True)
-        ),
-    ):
-        rb_maps.append(
-            spectrum(
-                branches * weights,
-                acqu,
-                processing,
-                order="3Q MQMAS from multiplex",
-                scale=34 / 9,
-                shear=-7 / 9,
-                shift=-7,
-                direct_size=4096,
-                phase=phase,
-            )
-        )
-
-    panels, titles, limits, peaks = [], [], [], []
-    for name, maps, centers, xlim, ylim, lb in (
-        ("PST-5", pst5_maps, [(36, 38), (40, 42)], (49, 30), (50, 33), 40),
-        (
-            "RbNO₃/206",
-            rb_maps,
-            [(-27, -22.3), (-31.5, -26.3)],
-            (-21, -38),
-            (-19, -30),
-            50,
-        ),
-    ):
-        reference = measure_peaks(maps[0], centers)[0][2]
-        labels = ("No window", f"Echo only ({lb} Hz)", f"Symmetric ({lb} Hz)")
-        for dataset, label in zip(maps, labels, strict=True):
-            a, b = measure_peaks(dataset, centers)
-            print(
-                f"{name} | {label} | F1 A/B {a[3]:.2f}/{b[3]:.2f} ppm | "
-                f"F2 A/B {a[4]:.2f}/{b[4]:.2f} ppm | B/A {b[2] / a[2]:.3f}"
-            )
-            panels.append(dataset / (scp.Quantity(reference, dataset.units)))
-            titles.append(f"{name} · {label}")
-            limits.append({"xlim": xlim, "ylim": ylim})
-            peaks.append((a, b))
-
-    grid = scp.multiplot(
-        panels,
-        labels=titles,
-        panel_kwargs=limits,
-        nrow=2,
-        ncol=3,
-        method="contour",
-        equal_aspect=False,
-        figsize=(12, 7),
-        levels=[0.08, 0.15, 0.25, 0.4, 0.6, 0.8, 0.95],
-        xlabel="F2 (ppm)",
-        ylabel="Isotropic F1 (ppm)",
-        return_dict=True,
-        show=False,
-    )
-    for ax, pair in zip(grid["axes"].flat, peaks, strict=True):
-        for label, peak in zip("AB", pair, strict=True):
-            ax.annotate(label, peak[:2], xytext=(7, 7), textcoords="offset points")
-    return grid["fig"]
-
-
-if data_root:
-    mqecho_figure = compare_mqecho(Path(data_root))
-    scp.show()

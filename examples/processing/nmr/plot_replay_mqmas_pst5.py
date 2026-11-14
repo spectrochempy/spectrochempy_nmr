@@ -3,10 +3,9 @@ Processing an MQMAS spectrum
 ============================
 
 This example processes an aluminium-27 Bruker States acquisition of PST-5.
-It follows the TopSpin XFSHEAR workflow with automatic F2 phase estimation and
-compares the effects of apodization and baseline correction. It reconstructs
-the direct quadrature with a Hilbert transform and rescales F1 to the
-isotropic chemical-shift axis.
+Estimate a common F2 phase, apply XFSHEAR and display the RR map on
+isotropic F1 and direct F2 axes. The :doc:`MQMAS tutorial </userguide/mqmas>`
+compares apodization and baseline correction on the same data.
 
 Data: Christian Fernandez, LCS, distributed through
 `spectrochempy_data <https://github.com/spectrochempy/spectrochempy_data>`_
@@ -50,54 +49,8 @@ phased = experiment.xf2p(**phase)
 spectrum = scp.nmr.Experiment(phased).xfshear(size=512, spin=2.5, f1_shift=-20.0)
 
 # %%
-# The real part of the ``S_R`` channel is RR. Use the calibrated ppm axes
+# Extract the RR plane. Use the calibrated ppm axes
 # to select the region around the main resonances.
-rr = spectrum["S_R", :, :].squeeze("c").real
+rr = scp.nmr.Experiment(spectrum).rr()
 region = rr[52.0:25.0, 65.0:20.0]
 _ = region.plot(method="contour", start=0.08, nlevels=12)
-
-
-# %%
-# Apply a Gaussian before the F2 FFT, centered on the expected echo
-# in each row. In this shifted-echo experiment the echo moves by
-# (19/12) × t1 along F2, in addition to the digital group delay.
-# Both States branches at a given t1 receive the same window. The
-# Gaussian standard deviation is 0.8 ms. Keep the phase and shear
-# settings identical to isolate the effect of the window.
-xf2_windowed = scp.nmr.Experiment(raw).xf2(
-    size=4096, direct_points=2048, echo_window=(19 / 12, 0.0008)
-)
-phased_windowed = scp.nmr.Experiment(xf2_windowed).xf2p(**phase)
-windowed = scp.nmr.Experiment(phased_windowed).xfshear(
-    size=512, spin=2.5, f1_shift=-20.0
-)
-windowed_rr = windowed["S_R", :, :].squeeze("c").real[52.0:25.0, 65.0:20.0]
-
-# %%
-# Fit a linear baseline along F2 for each row of the real RR map, using
-# regions on either side of the resonances. All three maps use the same
-# contour levels so changes in intensity remain visible.
-corrected_spectrum = scp.nmr.Experiment(windowed).abs2(
-    order=1, limits=(20.0, 65.0), ranges=[(21.0, 24.0), (61.0, 64.0)]
-)
-corrected = corrected_spectrum["S_R", :, :].squeeze("c").real[52.0:25.0, 65.0:20.0]
-
-peak = float(scp.Quantity(region.max()).magnitude)
-positive_levels = [0.08 * peak * 1.3**i for i in range(10)]
-levels = [-level for level in reversed(positive_levels)] + positive_levels
-_ = scp.multiplot(
-    [region, windowed_rr, corrected],
-    ncol=3,
-    method="contour",
-    labels=["Reference", "F2 apodization", "F2 apodization and baseline correction"],
-    levels=levels,
-    figsize=(13, 4),
-)
-
-# %%
-# Inspect signed intensities on the same color scale on either side of zero.
-# Use the 99th percentile of the absolute intensities to set the color limits
-# so weak negative features are visible alongside the positive resonances.
-_ = corrected.plot(
-    method="contourf", symmetric_percentile=99, cmap="RdBu_r", colorbar=True
-)

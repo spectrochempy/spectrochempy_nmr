@@ -61,6 +61,25 @@ For the underlying dataset, plotting, and general processing API, see
 the `NMR plugin overview in the SpectroChemPy core documentation
 <https://www.spectrochempy.fr/latest/userguide/plugins/nmr.html>`_.
 
+Extracting spectral components
+------------------------------
+
+Use an ``Experiment`` to extract real 2D planes with the original F1 and F2
+coordinates and intensity units.
+
+.. code-block:: python
+
+   experiment = scp.nmr.Experiment(spectrum)
+   rr = experiment.rr()  # or experiment.RR
+   ri = experiment.RI
+   ir = experiment.IR
+   ii = experiment.II
+
+The names follow the TopSpin files ``2rr``, ``2ri``, ``2ir`` and ``2ii``.
+In this convention the first letter refers to F2 and the second to F1.
+A real-only spectrum exposes RR. Requesting a component absent from the
+spectrum raises an error.
+
 .. _topspin-slice-and-baseline:
 
 TopSpin-style slice and baseline commands

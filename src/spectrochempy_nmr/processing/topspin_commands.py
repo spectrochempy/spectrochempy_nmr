@@ -28,6 +28,78 @@ def _real_plane_index(dataset, command):
     raise ValueError(f"{command} requires identifiable real-real spectral data")
 
 
+def extract_component(dataset, domains, component):
+    """Extract a real TopSpin plane from a frequency-domain spectrum."""
+    paired = _plane_layout(dataset, component.upper())
+    if domains[-2:] != ("frequency", "frequency"):
+        raise ValueError("Component extraction requires frequency-domain F1 and F2")
+
+    if not paired and component == "rr":
+        return dataset.real
+
+    labels = tuple(dataset.meta.get("component_labels") or ())
+    if not dataset.is_complex:
+        labels = tuple(label.removeprefix("2") for label in labels)
+    if paired and labels in _PAIRED_SPECTRA and dataset.is_complex:
+        complex_axis = dataset.meta.get("interop_complex_axis") or "F2"
+        if dataset.meta.get("normalization_profile") == "bruker-pdata-2d-public-v1":
+            complex_axis = "F2"
+        part, branch = component if complex_axis == "F2" else component[::-1]
+        plane = dataset[int(branch == "i"), :, :].squeeze("c")
+        result = plane.imag if part == "i" else plane.real
+    elif paired and not dataset.is_complex and component in labels:
+        result = dataset[labels.index(component), :, :].squeeze("c")
+    else:
+        raise ValueError(f"The spectrum does not contain component {component.upper()}")
+
+    readonly = result.meta.readonly
+    result.meta.readonly = False
+    for key in (
+        "component_axis",
+        "component_labels",
+        "interop_complex_axis",
+        "quadrature_mode",
+        "interop_dimensions",
+        "interop_physical_dimensions",
+        "interop_domains",
+        "interop_encoding",
+        "interop_axes",
+        "branch_order",
+        "fft_presentation",
+        "fft_presentation_transformed",
+    ):
+        if key in result.meta:
+            result.meta.data.pop(key)
+    for key in (
+        "bf1",
+        "exptc",
+        "nuc1",
+        "phased",
+        "phc0",
+        "phc1",
+        "physical_pivots",
+        "pivot",
+        "sf",
+        "sfo1",
+        "sw",
+        "sw_h",
+    ):
+        values = result.meta.get(key)
+        if isinstance(values, (tuple, list)) and len(values) == 3:
+            result.meta[key] = values[-2:]
+    result.meta.ndim = 2
+    result.meta.datatype = "2D"
+    result.meta.isfreq = [True, True]
+    result.meta.iscomplex = [False, False]
+    result.meta.encoding = ["QF", "QF"]
+    result.meta.axis_roles = ("F1", "F2")
+    result.meta.td = list(result.shape)
+    result.meta.si = list(result.shape)
+    result.meta.readonly = readonly
+    result.history = f"Extracted TopSpin {component.upper()} plane"
+    return result
+
+
 def _trace_channels(dataset, paired, along_f2, number, command, *, mixed=False):
     """Return the array indices for the real and imaginary parts of a trace."""
     keys = (number, slice(None)) if along_f2 else (slice(None), number)

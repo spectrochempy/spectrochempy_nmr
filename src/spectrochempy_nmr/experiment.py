@@ -540,6 +540,49 @@ class Experiment:
             raise ValueError("Baseline correction requires a single 2D spectrum")
         return correct_baseline(self.dataset, self.domains, dim, **options)
 
+    def rr(self):
+        """Return the TopSpin RR plane as a real 2D dataset."""
+        return self._spectral_component("rr")
+
+    def ri(self):
+        """Return the TopSpin RI plane as a real 2D dataset."""
+        return self._spectral_component("ri")
+
+    def ir(self):
+        """Return the TopSpin IR plane as a real 2D dataset."""
+        return self._spectral_component("ir")
+
+    def ii(self):
+        """Return the TopSpin II plane as a real 2D dataset."""
+        return self._spectral_component("ii")
+
+    @property
+    def RR(self):
+        """Return the same plane as :meth:`rr`."""
+        return self.rr()
+
+    @property
+    def RI(self):
+        """Return the same plane as :meth:`ri`."""
+        return self.ri()
+
+    @property
+    def IR(self):
+        """Return the same plane as :meth:`ir`."""
+        return self.ir()
+
+    @property
+    def II(self):
+        """Return the same plane as :meth:`ii`."""
+        return self.ii()
+
+    def _spectral_component(self, component):
+        from .processing.topspin_commands import extract_component
+
+        if self.is_multi_dataset:
+            raise ValueError("Component extraction requires a single 2D spectrum")
+        return extract_component(self.dataset, self.domains, component)
+
     def rser(self, row):
         """Return the raw FID numbered ``row`` in TopSpin's 1-based convention.
 
