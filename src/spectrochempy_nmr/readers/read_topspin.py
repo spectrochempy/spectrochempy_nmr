@@ -1363,6 +1363,13 @@ def _read_topspin(*args, **kwargs):
                 if key.startswith("_") or key.lower() not in valid_keys:
                     continue
 
+                if (
+                    datatype == "SER"
+                    and item.startswith("proc")
+                    and key.lower() in ("sw", "sw_h", "sfo1", "bf1", "fnmode")
+                ):
+                    continue
+
                 value = dic[item][key]
                 units = ur(keys_units[key.lower()]) if keys_units[key.lower()] else None
 

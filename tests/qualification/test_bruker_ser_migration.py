@@ -281,6 +281,16 @@ def test_synthetic_bruker_f1_prefers_fnmode_to_mc2(tmp_path, fnmode, expected):
     assert fid.fft(dim="x").fft(dim="y").shape == fid.shape
 
 
+def test_synthetic_bruker_ser_uses_mc2_over_fnmode_in_processing_parameters(tmp_path):
+    path = _synthetic_ser(tmp_path, None)
+    status = path / "pdata" / "1" / "proc2s"
+    status.parent.mkdir(parents=True)
+    status.write_text("##TITLE= Processing status\n##$FnMODE= 5\n##$MC2= 0\n##END=\n")
+    fid = scp.nmr.read_topspin(path / "ser")
+    assert fid.dims == ["y", "x"]
+    assert fid.meta.encoding[0] == "QF"
+
+
 def test_synthetic_bruker_f2_allows_missing_direct_nucleus(tmp_path):
     path = _synthetic_ser(tmp_path, None)
     acqus = path / "acqus"
@@ -319,6 +329,37 @@ def test_synthetic_bruker_ser_list_does_not_supply_f1_width(
             ValueError, match="Bruker F1 FFT requires an acquisition spectral width"
         ):
             fid.fft(dim="x").fft(dim="y")
+
+
+@pytest.mark.parametrize("stored_width", [None, 1000])
+def test_synthetic_bruker_ser_width_uses_only_acquisition_parameters(
+    tmp_path, stored_width
+):
+    path = _synthetic_ser(tmp_path, 1)
+    acqu2s = path / "acqu2s"
+    params = acqu2s.read_text().replace("##$SW= 8\n", "")
+    if stored_width is not None:
+        params = params.replace("##END=", f"##$SW_h= {stored_width}\n##END=")
+    acqu2s.write_text(params)
+    status = path / "pdata" / "1" / "proc2s"
+    status.parent.mkdir(parents=True)
+    status.write_text(
+        "##TITLE= Processing status\n##$SW_h= 4000\n##$SW= 32\n##$SFO1= 125\n##END=\n"
+    )
+
+    fid = scp.nmr.read_topspin(path / "ser")
+    f2 = fid.fft(dim="x")
+    if stored_width is None:
+        np.testing.assert_array_equal(fid.y.data, np.arange(fid.shape[0]))
+        with pytest.raises(
+            ValueError, match="Bruker F1 FFT requires an acquisition spectral width"
+        ):
+            f2.fft(dim="y")
+    else:
+        np.testing.assert_allclose(
+            fid.y.to("s").data, np.arange(fid.shape[0]) / stored_width
+        )
+        assert f2.fft(dim="y").y.units == scp.ur.Hz
 
 
 @pytest.mark.parametrize("width_hz", [None, 0, -1000, "NaN", "1e999", 1000])
