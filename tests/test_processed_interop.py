@@ -430,3 +430,22 @@ def test_import_echo_antiecho_rejects_unsupported_contract(echo_antiecho, field,
     setattr(echo_antiecho, field, value)
     with pytest.raises(ValueError, match="requires normalized F1/F2"):
         from_interop(echo_antiecho)
+
+
+@pytest.mark.parametrize(
+    ("source_factory", "components"),
+    [
+        (_real_plane, ("rr",)),
+        (_complex_plane, ("rr", "ir")),
+        (_four_component_plane, ("rr", "ir", "ri", "ii")),
+    ],
+)
+def test_experiment_extracts_imported_spectral_components(source_factory, components):
+    source = source_factory()
+    experiment = Experiment(from_interop(source))
+    assert experiment.domains == ("frequency", "frequency")
+    planes = source.data[None] if source.data.ndim == 2 else source.data
+    for name, expected in zip(components, planes, strict=True):
+        plane = getattr(experiment, name)()
+        assert plane.dims == ["y", "x"]
+        np.testing.assert_array_equal(plane.data, expected)

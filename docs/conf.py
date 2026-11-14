@@ -77,9 +77,10 @@ extensions = [
     "sphinx.ext.napoleon",
     "sphinx.ext.viewcode",
     "sphinx.ext.githubpages",
+    # Match the original highlighted code before Sphinx-Gallery adds links.
+    "sphinx_codeautolink",
     "sphinx_gallery.gen_gallery",
     "nbsphinx",
-    "sphinx_codeautolink",
     "sphinxcontrib.bibtex",
 ]
 
@@ -90,10 +91,10 @@ codeautolink_inventory_map = {
     for method in vars(spectrochempy_nmr.Experiment)
     if not method.startswith("_")
 }
-
-# The lazy reader resolves to a function defined inside its factory.
-codeautolink_inventory_map["spectrochempy_nmr._resolve_read.<locals>.read"] = (
-    "spectrochempy_nmr.read"
+codeautolink_inventory_map.update(
+    {
+        "spectrochempy_nmr._resolve_read.<locals>.read": "spectrochempy_nmr.read",
+    }
 )
 
 bibtex_bibfiles = ["bibliography.bib"]

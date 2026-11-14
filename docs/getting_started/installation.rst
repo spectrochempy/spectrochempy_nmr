@@ -1,8 +1,9 @@
 Installation
 ============
 
-Install SpectroChemPy 1.3.1 with the NMR extra to use the workflows
-in this documentation.
+Install SpectroChemPy 1.3.1 with the NMR extra to use the released plugin.
+Workflows marked as development features, including PST-5 processing
+with ``Experiment.rr()``, require the plugin source checkout described below.
 
 .. code-block:: console
 

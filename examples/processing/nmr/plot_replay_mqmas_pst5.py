@@ -7,6 +7,9 @@ Estimate a common F2 phase, apply XFSHEAR and display the RR map on
 isotropic F1 and direct F2 axes. The :doc:`MQMAS tutorial </userguide/mqmas>`
 compares apodization and baseline correction on the same data.
 
+This example requires the development plugin for ``Experiment.rr()``.
+See the :doc:`installation guide </getting_started/installation>`.
+
 Data: Christian Fernandez, LCS, distributed through
 `spectrochempy_data <https://github.com/spectrochempy/spectrochempy_data>`_
 under `CC BY 4.0 <https://creativecommons.org/licenses/by/4.0/>`_.

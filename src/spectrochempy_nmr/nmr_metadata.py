@@ -868,6 +868,48 @@ def extract_nmr_metadata(meta, *, ndim=None) -> NMRMetadata:
                     else None,
                 )
         if (
+            physical in (("F1", "F2"), ("F2", "F1"))
+            and domain == "frequency"
+            and tuple(meta.get("interop_domains", ())) == ("frequency", "frequency")
+            and meta.get("normalization_state") == "storage-normalized"
+        ):
+            roles = tuple(meta.get("axis_roles", ()))
+            encoding = tuple(meta.get("interop_encoding", ()))
+            real_plane = (
+                ndim == 2
+                and quadrature == "real-2d"
+                and roles == dimensions == physical
+                and encoding == ("real", "real")
+            )
+            stored_components = (
+                quadrature == "stored-components-2d"
+                and dimensions == ("channels", *physical)
+                and (
+                    (
+                        ndim == 2
+                        and roles == physical
+                        and encoding in (("real", "complex"), ("complex", "real"))
+                        and meta.get("interop_complex_axis") in physical
+                    )
+                    or (
+                        ndim == 3
+                        and roles == ("component", *physical)
+                        and tuple(meta.get("component_labels", ()))
+                        in (("rr", "ri", "ir", "ii"), ("2rr", "2ri", "2ir", "2ii"))
+                    )
+                )
+            )
+            if real_plane or stored_components:
+                domains = ("frequency", "frequency")
+                return NMRMetadata(
+                    normalized_interop=True,
+                    ndim=ndim,
+                    domains=domains,
+                    source_kind=infer_source_kind(2, domains),
+                    encoding=encoding,
+                    iscomplex=tuple(mode == "complex" for mode in encoding),
+                )
+        if (
             physical != ("F2",)
             or dimensions != ("F2",)
             or meta.get("quadrature_mode") not in ("complex-1d", "real-1d")
