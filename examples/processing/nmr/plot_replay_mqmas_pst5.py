@@ -31,9 +31,9 @@ xf2 = scp.nmr.Experiment(raw).xf2(
 
 # %%
 # Estimate the zero-order phase on the first complex F2 row alone.
-# The rest of the XF2 dataset is unchanged by this estimate.
-experiment = scp.nmr.Experiment(xf2)
-first_row = experiment.rsr(1)
+# Select the first States branch and first F1 increment by zero-based index.
+# This trace is also available as ``scp.nmr.Experiment(xf2).rsr(1)``.
+first_row = xf2[0, 0, :].squeeze("c", "y")
 exclude = (first_row.x.data < 20.0) | (first_row.x.data > 65.0)
 preview = scp.nmr.apk(first_row, order=0, exclude=exclude)
 if not preview.estimate.success:
@@ -43,7 +43,7 @@ _ = preview.phased.real[65.0:20.0].plot()
 # %%
 # Apply those same angles to both States branches at every F1 increment.
 phase = {"phc0": preview.estimate.p0, "phc1": preview.estimate.p1, "pivot": 0}
-phased = experiment.xf2p(**phase)
+phased = scp.nmr.Experiment(xf2).xf2p(**phase)
 
 # %%
 # XFSHEAR reconstructs the F2 quadrature and performs the F1 FFT. The
@@ -51,9 +51,9 @@ phased = experiment.xf2p(**phase)
 spectrum = scp.nmr.Experiment(phased).xfshear(size=512, spin=2.5, f1_shift=-20.0)
 
 # %%
-# The real part of the first channel is RR. Use the calibrated ppm axes
+# The real part of the ``S_R`` channel is RR. Use the calibrated ppm axes
 # to select the region around the main resonances.
-rr = spectrum[0, :, :].squeeze().real
+rr = spectrum["S_R", :, :].squeeze("c").real
 region = rr[52.0:25.0, 65.0:20.0]
 _ = region.plot(method="contour", start=0.08, nlevels=12)
 
@@ -72,7 +72,7 @@ phased_windowed = scp.nmr.Experiment(xf2_windowed).xf2p(**phase)
 windowed = scp.nmr.Experiment(phased_windowed).xfshear(
     size=512, spin=2.5, f1_shift=-20.0
 )
-windowed_rr = windowed[0, :, :].squeeze().real[52.0:25.0, 65.0:20.0]
+windowed_rr = windowed["S_R", :, :].squeeze("c").real[52.0:25.0, 65.0:20.0]
 
 # %%
 # Fit a linear baseline along F2 for each row of the real RR map, using
@@ -81,7 +81,7 @@ windowed_rr = windowed[0, :, :].squeeze().real[52.0:25.0, 65.0:20.0]
 corrected_spectrum = scp.nmr.Experiment(windowed).abs2(
     order=1, limits=(20.0, 65.0), ranges=[(21.0, 24.0), (61.0, 64.0)]
 )
-corrected = corrected_spectrum[0, :, :].squeeze().real[52.0:25.0, 65.0:20.0]
+corrected = corrected_spectrum["S_R", :, :].squeeze("c").real[52.0:25.0, 65.0:20.0]
 
 peak = float(scp.Quantity(region.max()).magnitude)
 positive_levels = [0.08 * peak * 1.3**i for i in range(10)]
