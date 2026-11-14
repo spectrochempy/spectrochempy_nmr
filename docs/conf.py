@@ -93,6 +93,15 @@ codeautolink_inventory_map = {
 codeautolink_inventory_map.update(
     {
         "spectrochempy_nmr._resolve_read.<locals>.read": "spectrochempy_nmr.read",
+        **{
+            alias: f"spectrochempy_nmr.{name}"
+            for name in ("read_agilent", "read_jeol", "read_simpson", "read_topspin")
+            for alias in (
+                f"spectrochempy.nmr.{name}",
+                f"spectrochempy_nmr.readers.{name}.{name}",
+            )
+        },
+        "spectrochempy.core.dataset.nddataset.NDDataset.plot": "spectrochempy.NDDataset.plot",
         "spectrochempy_nmr.processing.autophase.autophase": "spectrochempy_nmr.autophase",
     }
 )

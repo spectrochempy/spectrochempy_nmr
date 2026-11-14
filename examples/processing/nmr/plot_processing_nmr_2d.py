@@ -17,9 +17,11 @@ fid = scp.nmr.read_jeol(path)
 
 # %%
 # Apply an exponential window and Fourier-transform the direct axis.
-mixed = fid.em(lb=2.0, dim="x").fft(dim="x")
+windowed = scp.em(fid, lb=2.0, dim="x")
+mixed = scp.fft(windowed, dim="x")
 mixed
 
 # %%
 # Overlay the real F2 spectra for the first five F1 increments.
-_ = mixed[:5, :].real.plot(method="lines")
+traces: scp.NDDataset = mixed[:5, :].real
+_ = traces.plot(method="lines")
