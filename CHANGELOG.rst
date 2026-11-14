@@ -8,6 +8,10 @@ distribution. The sections below describe changes in each plugin release.
 Unreleased
 ----------
 
+* Automatically read complete F1 pairs from interrupted Bruker States-TPPI
+  acquisitions with zero-filled trailing storage. Report the effective F1
+  length in complex points and preserve the archived TopSpin parameters.
+
 * Reconstruct Bruker Multiplex SPAM States FIDs with ``scp.nmr.read_multiplex_spam()``.
 * Read Bruker States STMAS with ``scp.nmr.read_stmas()`` and process the
   spin-3/2 DQF pathway with ``Experiment.stmas_shear()``.

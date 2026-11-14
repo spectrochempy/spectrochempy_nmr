@@ -12,7 +12,9 @@ import spectrochempy as scp
 from spectrochempy.utils.exceptions import SpectroChemPyError
 
 
-def _check_parity(path, monkeypatch, *, storage, rows, points, filtered, dc):
+def _check_parity(
+    path, monkeypatch, *, storage, rows, points, filtered, dc, paired_rows=None
+):
     reader = import_module("spectrochempy_nmr.readers.read_topspin")
     calls = []
     decode = ng.bruker.read
@@ -39,6 +41,8 @@ def _check_parity(path, monkeypatch, *, storage, rows, points, filtered, dc):
     meta = ng.bruker.read_acqus_file(path)
     direct, indirect = meta["acqus"], meta["acqu2s"]
     words = np.fromfile(path / "ser", dtype=storage).reshape(rows, -1)
+    if paired_rows is not None:
+        words = words[:paired_rows]
     expected = words[:, : 2 * points : 2] + 1j * words[:, 1 : 2 * points : 2]
     if dc:
         expected -= expected.mean(axis=-1, keepdims=True)
@@ -115,15 +119,17 @@ def test_synthetic_public_ser_parity(
 
 
 @pytest.mark.parametrize(
-    ("reference", "rows", "points"),
+    ("reference", "rows", "points", "paired_rows"),
     [
-        ("exam2d_HH/1", 128, 1024),
-        ("exam2d_HC/3", 256, 512),
-        ("topspin_2d/1", 192, 1024),
+        ("exam2d_HH/1", 128, 1024, None),
+        ("exam2d_HC/3", 256, 512, None),
+        ("topspin_2d/1", 192, 1024, 146),
     ],
 )
 @pytest.mark.parametrize("filtered", [False, True])
-def test_local_public_ser_parity(reference, rows, points, filtered, monkeypatch):
+def test_local_public_ser_parity(
+    reference, rows, points, paired_rows, filtered, monkeypatch
+):
     root = os.environ.get("NMR_BRUKER_SER_DATA")
     if not root:
         pytest.skip("set NMR_BRUKER_SER_DATA to the Bruker test-data directory")
@@ -135,6 +141,7 @@ def test_local_public_ser_parity(reference, rows, points, filtered, monkeypatch)
         points=points,
         filtered=filtered,
         dc=False,
+        paired_rows=paired_rows,
     )
 
 

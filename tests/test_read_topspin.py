@@ -74,6 +74,40 @@ def _has_readdir_nmr_data():
     )
 
 
+def test_normalized_ser_does_not_retry_storage_after_mode_rejection(
+    tmp_path, monkeypatch
+):
+    from nmrglue import interop
+
+    from spectrochempy_nmr.readers import read_topspin as reader
+
+    def reject_qf(*args, qf_only=False, **kwargs):
+        raise ValueError
+
+    def reject_paired(
+        *args,
+        states_only=False,
+        states_tppi_only=False,
+        echo_antiecho_only=False,
+        **kwargs,
+    ):
+        assert states_only or states_tppi_only or echo_antiecho_only
+        raise ValueError("Bruker SER acquisition mode mismatch")
+
+    monkeypatch.setattr(interop, "read_bruker_ser", reject_qf)
+    monkeypatch.setattr(interop, "read_bruker_ser_storage", reject_paired)
+    assert (
+        reader._read_normalized_ser(
+            tmp_path,
+            [],
+            [tmp_path / "procs", tmp_path / "proc2s"],
+            remove_filter=False,
+            remove_dc=False,
+        )
+        is None
+    )
+
+
 @pytest.mark.skipif(not NMRDATA.exists(), reason="NMR test data not available")
 def test_read_topspin():
     nd = _read_topspin_or_skip(_require_path(nmrdir / "exam2d_HC/3/pdata/1/2rr"))
@@ -90,7 +124,7 @@ def test_read_topspin():
     assert nd.x.size == 16384
 
     nd = _read_topspin_or_skip(_require_path(nmrdir / "topspin_2d/1/ser"))
-    assert str(nd) == "NDDataset: [complex128] count (shape: (c:2, y:96, x:1024))"
+    assert str(nd) == "NDDataset: [complex128] count (shape: (c:2, y:73, x:1024))"
 
     nd = _read_topspin_or_skip(_require_path(nmrdir / "topspin_2d/1/pdata/1/2rr"))
     assert str(nd) == "NDDataset: [complex128] count (shape: (c:2, y:1024, x:2048))"
@@ -174,7 +208,11 @@ def test_2d_ser_metadata():
     """Indirect dimension encoding must come from acqu2s, not acqus."""
     nd = _read_topspin_or_skip(_require_path(nmrdir / "topspin_2d/1/ser"))
     assert nd.meta.datatype == "SER"
-    assert nd.meta.encoding == ["CHANNELS", "PENDING-F2:STATES-TPPI", "DIRECT:DQD"]
+    assert nd.meta.encoding == [
+        "CHANNELS",
+        "PENDING-F2:INDIRECT:STATES-TPPI",
+        "CONJUGATE-FFT",
+    ]
     assert nd.meta.isfreq == [False, False, False]
     assert nd.meta.iscomplex == [False, True, True]
     assert nd.meta.nuc1 == [None, "31P", "27Al"]
@@ -182,7 +220,7 @@ def test_2d_ser_metadata():
     assert nd.meta.fnmode[-2] == 5  # STATES-TPPI
     # Direct dimension uses AQ_mod
     assert nd.meta.aq_mod[-1] == 3  # DQD
-    assert nd.shape == (2, 96, 1024)
+    assert nd.shape == (2, 73, 1024)
 
 
 @pytest.mark.skipif(not NMRDATA.exists(), reason="NMR test data not available")

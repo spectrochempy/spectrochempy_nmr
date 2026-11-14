@@ -322,7 +322,8 @@ class TestStateClassification2D:
     def test_ser_classification(self):
         ser = _read_or_skip(nmrdir / "topspin_2d/1/ser")
         exp = Experiment(ser)
-        assert exp.ndim == 2
+        assert exp.ndim == 3
+        assert ser.dims == ["c", "y", "x"]
         assert exp.domains == ("time", "time")
         assert exp.domain == "time"
         assert exp.source_kind == "ser"
@@ -378,8 +379,7 @@ class TestMetadataInterpretation:
     def test_ser_nuclei_2d(self):
         ser = _read_or_skip(nmrdir / "topspin_2d/1/ser")
         exp = Experiment(ser)
-        assert exp.nuclei is not None
-        assert len(exp.nuclei) == 2
+        assert exp.nuclei == ("31P", "27Al")
 
     @pytest.mark.skipif(not _has_topspin_1d_pdata(), reason="TopSpin 1D pdata missing")
     def test_processed_encoding_is_string(self):
@@ -1533,20 +1533,22 @@ class TestProcessFrequencyDomain:
 
 
 class TestProcess2D:
-    """Test that 2D datasets are outside the public processing scope."""
+    """Test processing support and limits for TopSpin 2D datasets."""
 
     @pytest.mark.skipif(not _has_topspin_2d(), reason="TopSpin 2D data missing")
-    def test_2d_ser_is_rejected(self):
+    def test_2d_ser_fft(self):
         ser = _read_or_skip(nmrdir / "topspin_2d/1/ser")
         exp = Experiment(ser)
-        with pytest.raises(NotImplementedError, match="only validated 1D experiments"):
-            exp.process()
+        result = exp.process()
+        assert result.shape[-2:] == ser.shape[-2:]
 
     @pytest.mark.skipif(not _has_topspin_2d(), reason="TopSpin 2D data missing")
     def test_2d_ser_with_apodization_is_rejected(self):
         ser = _read_or_skip(nmrdir / "topspin_2d/1/ser")
         exp = Experiment(ser)
-        with pytest.raises(NotImplementedError, match="only validated 1D experiments"):
+        with pytest.raises(
+            ValueError, match="normalized 2D processing supports FFT only"
+        ):
             exp.process(apodization="em", lb=2.0)
 
     @pytest.mark.skipif(not _has_topspin_2d_pdata(), reason="TopSpin 2D pdata missing")
@@ -1582,7 +1584,7 @@ class TestSummaryAndRepr:
         exp = Experiment(ser)
         s = exp.summary()
         assert "time × time" in s
-        assert "public processing: 1D only" in s
+        assert "normalized STATES-TPPI 2D FFT only" in s
 
     @pytest.mark.skipif(not _has_topspin_1d(), reason="TopSpin 1D data missing")
     def test_repr_fid(self):
@@ -1724,21 +1726,20 @@ def _has_topspin_2d():
 
 @pytest.mark.skipif(not _has_topspin_2d(), reason="TopSpin 2D data not available")
 class TestExperiment2DProcessing:
-    """Verify multi-dimensional processing is kept out of the public API."""
+    """Verify processing limits after digital filter correction."""
 
     def test_process_2d_em_fft_rejected(self):
-        """The public processing workflow is intentionally 1D-only."""
         ds = scp.nmr.read(nmrdir / "topspin_2d", expno=1, remove_digital_filter=True)
         exp = Experiment(ds)
         assert exp.is_time_domain
-        assert exp.ndim == 2
 
-        with pytest.raises(NotImplementedError, match="only validated 1D experiments"):
+        with pytest.raises(
+            ValueError, match="normalized 2D processing supports FFT only"
+        ):
             exp.process(apodization="em", lb=2.0)
 
-    def test_validate_2d_reports_public_scope_warning(self):
-        """Validation should make the current public scope explicit."""
+    def test_validate_2d_reports_fft_support(self):
         ds = scp.nmr.read(nmrdir / "topspin_2d", expno=1, remove_digital_filter=True)
         exp = Experiment(ds)
         report = exp.validate()
-        assert any("public supported workflow" in msg for msg in report.warnings)
+        assert "Normalized STATES-TPPI 2D FFT processing is available." in report.info

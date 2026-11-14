@@ -4,6 +4,7 @@ import hashlib
 import json
 import os
 from pathlib import Path
+import shutil
 import subprocess
 import sys
 
@@ -153,3 +154,105 @@ def _assert_xfb_roundtrip(root, tmp_path, mode, *, with_prediction):
     assert json.loads(
         (tmp_path / "trace.json").read_text(encoding="utf-8")
     ) == json.loads(json.dumps(trace, allow_nan=False))
+
+
+def test_interrupted_states_tppi_replays_complete_pairs(tmp_path):
+    import nmrglue as ng
+
+    root = os.environ.get("NMR_BRUKER_SER_DATA")
+    if not root:
+        pytest.skip("set NMR_BRUKER_SER_DATA to the Bruker test-data directory")
+    root = Path(root) / "topspin_2d/1"
+    ser = root / "ser"
+    selected = scp.read_topspin(ser, local_only=True)
+    assert selected.shape == (2, 73, 1024)
+    assert selected.meta.interrupted_states_tppi == {
+        "stored_traces": 192,
+        "acquired_traces": 147,
+        "paired_traces": 146,
+    }
+    assert selected.meta.source_metadata["acqu2s"]["TD"] == 147
+    assert selected.meta.tdeff[-2] == 73
+    assert selected.meta.source_metadata["proc2s"]["TDeff"] == 146
+    saved = tmp_path / "interrupted.scp"
+    selected.dump(saved)
+    restored = scp.NDDataset.load(saved)
+    assert restored.meta.source_metadata["acqu2s"]["TD"] == 147
+    assert (
+        restored.meta.source_metadata["pulseprogram_raw"].tobytes()
+        == (root / "pulseprogram").read_bytes()
+    )
+    spectrum = Experiment(selected).process()
+    assert spectrum.shape[-2:] == selected.shape[-2:]
+    assert spectrum.y.units == scp.ur.Hz
+    assert np.isfinite(spectrum.data).all()
+
+    result = Experiment(selected).process(replay="topspin")
+    metadata, reference = ng.bruker.read_pdata(
+        root / "pdata/1", bin_files=["2rr", "2ri", "2ir", "2ii"], scale_data=True
+    )
+    first, second = result.data
+    planes = np.stack((first.real, second.real, first.imag, second.imag))
+    pars = metadata["acqus"]
+    scale = pars["NS"] * pars["RG"] * 2.0 ** pars["NC"]
+    residual = np.linalg.norm(planes * scale - reference, axis=(1, 2))
+    np.testing.assert_array_less(
+        residual / np.linalg.norm(reference, axis=(1, 2)), 1.2e-5
+    )
+    for axis, key in ((result.x, "procs"), (result.y, "proc2s")):
+        pars = metadata[key]
+        expected = pars["OFFSET"] - np.arange(pars["SI"]) * pars["SW_p"] / (
+            pars["SF"] * pars["SI"]
+        )
+        assert axis.units == scp.ur.ppm
+        np.testing.assert_allclose(axis.data, expected, atol=2e-12, rtol=0)
+
+
+@pytest.mark.parametrize("unaligned_td", [False, True])
+def test_interrupted_states_tppi_without_processing_status(tmp_path, unaligned_td):
+    root = os.environ.get("NMR_BRUKER_SER_DATA")
+    if not root:
+        pytest.skip("set NMR_BRUKER_SER_DATA to the Bruker test-data directory")
+    source = Path(root) / "topspin_2d/1"
+    target = tmp_path / "1"
+    target.mkdir()
+    for path in source.iterdir():
+        if path.is_file():
+            shutil.copy2(path, target / path.name)
+    if unaligned_td:
+        acqus = target / "acqus"
+        parameters = {"TD": 1000, "BYTORDA": 0, "DTYPA": 0}
+        lines = acqus.read_text().splitlines(keepends=True)
+        for index, line in enumerate(lines):
+            name = line.removeprefix("##$").partition("=")[0]
+            if name in parameters:
+                lines[index] = f"##${name}= {parameters[name]}\n"
+        acqus.write_text("".join(lines))
+        traces = np.zeros((250, 1024), dtype="<i4")
+        traces[:147, 0] = 1
+        traces.tofile(target / "ser")
+    result = scp.read_topspin(target / "ser", local_only=True)
+    assert result.shape == (2, 73, 500 if unaligned_td else 1024)
+    assert result.meta.tdeff[-2] == 73
+    assert result.meta.interrupted_states_tppi["acquired_traces"] == 147
+    if unaligned_td:
+        assert np.all(result.data[..., 0] != 0)
+        assert not np.any(result.data[..., 1:])
+
+
+def test_interrupted_states_tppi_requires_zero_padding(tmp_path):
+    from types import SimpleNamespace
+
+    from spectrochempy_nmr.readers.read_topspin import _select_interrupted_states_tppi
+
+    data = np.zeros((8, 4), dtype=np.int32)
+    data[5, 0] = 1
+    stored = SimpleNamespace(
+        data=data,
+        metadata={
+            "acqus": {"PARMODE": 1, "AQ_mod": 3},
+            "acqu2s": {"FnMODE": 5, "TD": 5},
+        },
+    )
+    with pytest.raises(ValueError, match="zero padding"):
+        _select_interrupted_states_tppi(tmp_path, stored)

@@ -1077,6 +1077,76 @@ def _read_normalized_fid(
     return stored.metadata, dataset
 
 
+def _interrupted_states_tppi_counts(directory, meta, data):
+    direct = meta.get("acqus", {})
+    indirect = meta.get("acqu2s", {})
+    acquired = indirect.get("TD")
+    if (
+        data.ndim != 2
+        or direct.get("PARMODE") != 1
+        or direct.get("AQ_mod") != 3
+        or direct.get("FnTYPE", 0) != 0
+        or indirect.get("FnMODE") != 5
+        or not _is_bruker_mode_integer(acquired)
+        or not 4 <= acquired < data.shape[0]
+        or data.shape[0] % 2
+        or any((directory / name).exists() for name in ("nuslist", "acqu3s", "acqu4s"))
+        or np.any(data[acquired:])
+    ):
+        return None
+    return {
+        "stored_traces": data.shape[0],
+        "acquired_traces": acquired,
+        "paired_traces": acquired - acquired % 2,
+    }
+
+
+def _select_interrupted_states_tppi(directory, stored):
+    """Select an explicit acquired prefix for the provider's paired normalizer."""
+    from dataclasses import replace  # noqa: PLC0415
+
+    counts = _interrupted_states_tppi_counts(directory, stored.metadata, stored.data)
+    if counts is None:
+        raise ValueError("Expected an interrupted States-TPPI SER with zero padding")
+    paired = counts["paired_traces"]
+    data = stored.data[:paired]
+    meta = stored.metadata
+    return replace(
+        stored,
+        data=data,
+        components=(replace(stored.components[0], data=data),),
+        metadata={**meta, "acqu2s": {**meta["acqu2s"], "TD": paired}},
+        dimensions={**stored.dimensions, "shape": data.shape},
+    ), counts
+
+
+def _recover_interrupted_states_tppi(directory, meta, data):
+    direct = meta.get("acqus", {})
+    td = direct.get("TD")
+    data_type = direct.get("DTYPA")
+    if (
+        not np.iscomplexobj(data)
+        or data.ndim not in (1, 2)
+        or not _is_bruker_mode_integer(td)
+        or td < 4
+        or td % 2
+        or data_type not in (0, 2)
+    ):
+        return data, None
+    word_bytes = 8 if data_type == 2 else 4
+    trace_bytes = ((td * word_bytes + 1023) // 1024) * 1024
+    samples_per_trace = trace_bytes // (2 * word_bytes)
+    if data.size % samples_per_trace or meta.get("FILE_SIZE") != (
+        data.size * 2 * word_bytes
+    ):
+        return data, None
+    traces = data.reshape(-1, samples_per_trace)
+    counts = _interrupted_states_tppi_counts(directory, meta, traces)
+    if counts is None:
+        return data, None
+    return traces[: counts["paired_traces"], : td // 2], counts
+
+
 def _read_normalized_ser(
     directory, acqus_files, procs_files, *, remove_filter, remove_dc
 ):
@@ -1125,11 +1195,33 @@ def _read_normalized_ser(
         if profile is not None:
             normalizer_options["preserve_storage"] = True
         try:
-            stored = read(
-                directory, acqus_files=acqus_files, procs_files=procs_files, **options
-            )
+            interrupted = None
+            try:
+                stored = read(
+                    directory,
+                    acqus_files=acqus_files,
+                    procs_files=procs_files,
+                    **options,
+                )
+                selected = stored
+            except ValueError as exc:
+                # The provider checks mode and dimensionality before paired TD.
+                if (
+                    profile != "states-tppi"
+                    or str(exc) != "Bruker SER requires complete paired TD geometry"
+                ):
+                    raise
+                stored = read(
+                    directory,
+                    acqus_files=acqus_files,
+                    procs_files=procs_files,
+                    read_pulseprogram=options["read_pulseprogram"],
+                )
+                selected, interrupted = _select_interrupted_states_tppi(
+                    directory, stored
+                )
             normalized = normalize(
-                stored,
+                selected,
                 remove_dc_offset=remove_dc,
                 remove_digital_filter=remove_filter,
                 normalize_scan_gain=True,
@@ -1153,7 +1245,12 @@ def _read_normalized_ser(
         dataset.meta.acquisition_encoding = (
             tuple(stored.encoding) if profile is None else (profile.upper(), "DQD")
         )
-        return stored.metadata, dataset
+        if interrupted is not None:
+            dataset.meta.interrupted_states_tppi = interrupted
+            dataset.meta.source_metadata["acqu2s"]["TD"] = interrupted[
+                "acquired_traces"
+            ]
+        return selected.metadata, dataset
     return None
 
 
@@ -1203,7 +1300,6 @@ def _read_topspin(*args, **kwargs):
 
     # is-it a processed dataset file (1r, 2rr ....) ?
     processed = bool(path.match("pdata/*/*"))
-
     # ----------------------------------------------------------------------------------
     # start reading ....
     # ----------------------------------------------------------------------------------
@@ -1232,6 +1328,7 @@ def _read_topspin(*args, **kwargs):
 
     processed_components = None
     normalized_dataset = None
+    interrupted = None
     if not processed:
         remove_filter = bool(kwargs.get("remove_digital_filter", False))
         remove_dc = bool(kwargs.get("remove_dc_offset", False))
@@ -1254,17 +1351,13 @@ def _read_topspin(*args, **kwargs):
             )
         if normalized is None:
             dic, data = _read_raw_data(f_expno, path.name, acqus_files, procs_files)
+            if path.name == "ser" and not kwargs.get("use_list", False):
+                data, interrupted = _recover_interrupted_states_tppi(f_expno, dic, data)
         else:
             dic, normalized_dataset = normalized
             data = normalized_dataset.data
             if normalized_dataset.meta.component_axis == "c":
                 data = data[0]
-
-        # The normalized 1D route already supplies canonical samples.
-        # The fallback 1D route keeps the decoded convention for its FFT.
-        # The legacy SER route applies the direct-dimension rotation.
-        if path.name == "ser" and normalized_dataset is None:
-            data = data * np.exp(-1j * np.pi / 2.0)
 
         # Look the case when the reshaping was not correct
         # for example, this happens when the number
@@ -1291,6 +1384,8 @@ def _read_topspin(*args, **kwargs):
             data = data[..., :ntd]
 
         if normalized_dataset is None:
+            if path.name == "ser":
+                data = data * np.exp(-1j * np.pi / 2.0)
             if remove_dc:
                 data = data - data.mean(axis=-1, keepdims=True)
 
@@ -1328,6 +1423,8 @@ def _read_topspin(*args, **kwargs):
     # we assume that all experiments have similar (important) parameters so that the experiments are compatibles
 
     meta = Meta()  # This is the parameter dictionary
+    if interrupted is not None:
+        meta.interrupted_states_tppi = interrupted
     datatype = path.name.upper() if not processed else f"{data.ndim}D"
 
     keys = sorted(dic.keys())
