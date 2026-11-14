@@ -1,6 +1,6 @@
 """
-Process RbNO₃ multiplex MQMAS and STMAS
-=======================================
+Process ⁸⁷Rb MQMAS and STMAS acquisitions
+=========================================
 
 Replay the ⁸⁷Rb 3Q MQMAS and STMAS workflows from Bruker SER files.
 Set ``SCP_RBNO3_DATA`` to the directory containing experiments ``206``

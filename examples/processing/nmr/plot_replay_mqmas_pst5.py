@@ -1,6 +1,6 @@
 """
-Processing an MQMAS spectrum
-============================
+Process a ²⁷Al MQMAS acquisition
+================================
 
 This example processes an aluminium-27 Bruker States acquisition of PST-5.
 Estimate a common F2 phase, apply XFSHEAR and display the RR map on
