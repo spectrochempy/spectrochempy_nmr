@@ -4,6 +4,18 @@ Changelog
 This changelog covers the independently versioned ``spectrochempy-nmr``
 distribution. The sections below describe changes in each plugin release.
 
+Unreleased
+----------
+
+Added
+~~~~~
+
+* **CSDF exchange.** Import processed 1D and 2D NMR spectra with
+  ``scp.nmr.read_csdf()`` or ``scp.nmr.read()``, and export them with
+  ``scp.nmr.write_csdf()``. The plugin supports self-contained files with
+  a single real or complex spectrum and linear frequency axes, without
+  requiring ``csdmpy``.
+
 
 Unreleased
 ----------
