@@ -130,7 +130,16 @@ jobs:
           fallback = simulate_rectangular_pulse(**parameters, deposition="numba")
           np.testing.assert_array_equal(fallback.x.data, dense.x.data)
           np.testing.assert_array_equal(fallback.data, dense.data)
+          threaded = simulate_rectangular_pulse(
+              **parameters, workers=2, rf_solver="tridiagonal", deposition="numba"
+          )
+          np.testing.assert_array_equal(threaded.x.data, dense.x.data)
+          np.testing.assert_array_equal(threaded.data, dense.data)
           PY
+      - name: Verify the RF cache with two orientation workers
+        if: matrix.spectrochempy-version == '1.2.0'
+        run: |
+          OPENBLAS_NUM_THREADS=1 python -I -m pytest -ra tests/test_pulsar.py -k orientation_workers
       - name: Qualify the optional Numba backends
         if: matrix.spectrochempy-version == '1.2.0'
         run: |
