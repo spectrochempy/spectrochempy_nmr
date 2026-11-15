@@ -13,11 +13,6 @@ section = "Import / Export"
 section_ref = "examples-importer-index"
 
 [[examples]]
-path = "core/c_importer/plot_read_jeol_2d.py"
-section = "Import / Export"
-section_ref = "examples-importer-index"
-
-[[examples]]
 path = "core/c_importer/plot_read_nmrpipe_2d.py"
 section = "Import / Export"
 section_ref = "examples-importer-index"

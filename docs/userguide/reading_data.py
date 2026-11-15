@@ -50,25 +50,25 @@ agilent = scp.nmr.read("path/to/fid", protocol="agilent")
 #      - Recommended call
 #      - Typical inputs
 #    * - Bruker TopSpin
-#      - ``scp.nmr.read_topspin(path)``
+#      - :py:func:`scp.nmr.read_topspin(path) <spectrochempy_nmr.read_topspin>`
 #      - FID, SER, or processed ``pdata`` in an experiment directory
 #    * - Agilent/Varian
-#      - ``scp.nmr.read_agilent(path)``
+#      - :py:func:`scp.nmr.read_agilent(path) <spectrochempy_nmr.read_agilent>`
 #      - Acquisition directory containing ``fid`` and ``procpar``
 #    * - JEOL
-#      - ``scp.nmr.read_jeol(path)``
+#      - :py:func:`scp.nmr.read_jeol(path) <spectrochempy_nmr.read_jeol>`
 #      - JDF files
 #    * - SIMPSON
-#      - ``scp.nmr.read_simpson(path)``
+#      - :py:func:`scp.nmr.read_simpson(path) <spectrochempy_nmr.read_simpson>`
 #      - Simulated FIDs and spectra, or a simulation input with a sibling output
 #    * - NMRPipe
-#      - ``scp.nmr.read(path, protocol="interop")``
+#      - :py:func:`scp.nmr.read(path, protocol="interop") <spectrochempy_nmr.read>`
 #      - Supported time- and frequency-domain files
 #    * - nmrML
-#      - ``scp.nmr.read(path, protocol="interop", profile=...)``
+#      - :py:func:`scp.nmr.read(path, protocol="interop", profile=...) <spectrochempy_nmr.read>`
 #      - Supported acquisition and spectrum profiles
 #    * - NMR JCAMP-DX
-#      - ``scp.nmr.read(path, protocol="interop", profile=...)``
+#      - :py:func:`scp.nmr.read(path, protocol="interop", profile=...) <spectrochempy_nmr.read>`
 #      - Supported NMR profiles, such as ``"jcampdx-spectrum-1d"``
 #
 # See :ref:`reading-exchange-formats-through-interop` for the profile and
@@ -154,18 +154,44 @@ spectrum = scp.jcamp.read("spectrum.jdx", jcamp_kind="nmr")
 # Reading exchange formats through interop
 # ----------------------------------------
 #
-# Use ``scp.nmr.read(path, protocol="interop")`` to read and normalize one file
-# with
-# `nmrglue-ng <https://nmrglue-ng.readthedocs.io/latest/tutorials/interop.html>`_,
-# then convert the result to an ``NDDataset``. NMRPipe profiles
-# can be detected from the header. Supply an explicit provider profile for
-# nmrML and for the explicit NMR JCAMP-DX interop route.
+# All three examples pass ``protocol="interop"`` to select the
+# `nmrglue-ng interop reader <https://nmrglue-ng.readthedocs.io/latest/tutorials/interop.html>`_.
+# This route reads and normalizes one file and converts it to an
+# ``NDDataset``. With only a path,
+# :py:func:`scp.nmr.read() <spectrochempy_nmr.read>` uses its regular reader
+# dispatch. The ``.ft2``, ``.jdx`` and ``.nmrML`` files below fall through
+# to the TopSpin reader in that dispatch.
+#
+# **NMRPipe.** Read a processed 2D spectrum from ``spectrum.ft2``.
+# Once the interop route is selected, nmrglue-ng can identify the NMRPipe
+# profile from the file header, so this call can omit ``profile``.
+# The interop reader requires an explicit profile for the JCAMP-DX and
+# nmrML examples below.
 
 # %% tags=["skip-execution"]
 pipe_spectrum = scp.nmr.read("spectrum.ft2", protocol="interop")
+
+# %% [raw] raw_mimetype="text/restructuredtext"
+# **NMR JCAMP-DX.** Pass ``profile="jcampdx-spectrum-1d"`` to select the
+# interop reader for a processed 1D NMR spectrum. The ``.jdx`` extension
+# identifies the JCAMP-DX container, which can hold data from different
+# techniques. For the direct SpectroChemPy route to supported processed
+# NMR spectra, use ``scp.jcamp.read()`` as shown above.
+
+# %% tags=["skip-execution"]
 jcamp_spectrum = scp.nmr.read(
     "epicatechin.jdx", protocol="interop", profile="jcampdx-spectrum-1d"
 )
+
+# %% [raw] raw_mimetype="text/restructuredtext"
+# **nmrML.** Pass ``profile="nmrml-1d"`` to select the 1D nmrML reader.
+# The ``read_processed=True`` option loads the stored spectrum instead of
+# the acquisition data. Use ``axis_endpoint="last-point"`` when the
+# producer's ``endValue`` is the coordinate of the last sample. If
+# ``endValue`` is the outer edge beyond the last sample, use
+# ``"outer-edge"``. This choice sets the spacing of the frequency axis.
+
+# %% tags=["skip-execution"]
 xml_spectrum = scp.nmr.read(
     "spectrum.nmrML",
     protocol="interop",
@@ -182,8 +208,6 @@ xml_spectrum = scp.nmr.read(
 # missing convention choices raise the corresponding provider or converter
 # error. The nmrML reader requires ``xmltodict``.
 #
-# The usual TopSpin, Agilent, JEOL and SIMPSON dispatch continues to apply
-# outside this mode.
 # See :doc:`../nmrpipe_interop` and :doc:`../nmrml_interop` for the underlying
 # profiles and their required convention choices.
 #
