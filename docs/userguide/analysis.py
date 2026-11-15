@@ -25,7 +25,7 @@
 # ------------------------------------
 #
 # Continue from the :doc:`../getting_started/quickstart` spectrum. Choose a
-# baseline correction appropriate to the signal. Here, SNIP estimates the
+# :doc:`baseline correction <baseline>` appropriate to the signal. Here, SNIP estimates the
 # baseline before peak picking and integration. The intensity threshold and
 # integration limits are specific to this example.
 

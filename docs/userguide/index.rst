@@ -11,7 +11,7 @@ Guides
    fourier
    quadrupolar
    analysis
-   Baseline correction in SpectroChemPy <https://www.spectrochempy.fr/latest/userguide/processing/baseline.html>
+   baseline
    pulsar
 
 See also
