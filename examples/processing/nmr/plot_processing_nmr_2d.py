@@ -1,34 +1,81 @@
 """
-Transform F2 and F1 in 2D NMR
-================================
+Compare indirect quadrature modes
+=================================
 
-Transform a Bruker States acquisition of ²⁷Al PST-5 along F2 and F1,
-then plot the real-real plane. The :doc:`MQMAS guide </userguide/mqmas>`
-continues with phase correction and shearing.
+Simulate one indirect resonance at a fixed F2 frequency. The five examples
+show how F1 samples are reconstructed in QF, States, States-TPPI,
+echo/anti-echo and TPPI. See :doc:`/userguide/processing_2d` for the
+SpectroChemPy workflows on acquired data.
 
-Data: Christian Fernandez, LCS, distributed through
-`spectrochempy_data <https://github.com/spectrochempy/spectrochempy_data>`_
-under `CC BY 4.0 <https://creativecommons.org/licenses/by/4.0/>`_.
+The example uses an explicit Fourier reference on arrays to isolate the
+F1 recombination and bin selection. The magnitudes are normalized for
+comparison, and the frequency axes are illustrative offsets in Hz.
 """
 
-# %%
+import numpy as np
+
 import spectrochempy as scp
 
 # %%
-# Correct the digital-filter delay at import and transform the direct axis.
-bruker_fid = scp.nmr.read_topspin(
-    "nmrdata/bruker/tests/nmr/MQMAS_27AL_PST5/51/ser", remove_digital_filter=True
-)
-bruker_f2 = bruker_fid.fft(dim="x")
+# Start with damped cosine and sine branches at 125 Hz.
+size = 128
+width = 1000.0
+time = scp.Coord.linspace(0, size / width, size, endpoint=False, units="s")
+angle = 2 * np.pi * 125.0 * time.data
+decay = np.exp(-time.data / 0.030)
+cosine = decay * np.cos(angle)
+sine = decay * np.sin(angle)
 
 # %%
-# Keep both States branches for the indirect transform, then plot the
-# real-real plane before MQMAS shearing. Both axes are in the frequency domain.
-spectrum = bruker_f2.fft(dim="y")
-rr = scp.nmr.Experiment(spectrum).rr()
-region = rr[:, 65.0:20.0]
-peak = region.max().magnitude
-levels = [peak * fraction for fraction in (0.10, 0.16, 0.25, 0.40, 0.65, 0.90)]
-_ = region.plot(
-    method="contour", levels=levels, cmap="magma_r", title="PST-5 MQMAS before shearing"
+# QF takes one branch. States reconstructs the complex pair.
+# States-TPPI first undoes the sign alternation applied at acquisition.
+# Bruker Rance–Kay echo/anti-echo first decodes the pathways into the pair.
+alternating = (-1) ** np.arange(size)
+states_tppi_cosine = alternating * cosine
+states_tppi_sine = alternating * sine
+echo = (cosine - 1j * sine) / 2
+antiecho = (-cosine - 1j * sine) / 2
+echo_cosine = echo - antiecho
+echo_sine = 1j * (echo + antiecho)
+signals = [
+    cosine,
+    cosine + 1j * sine,
+    alternating * (states_tppi_cosine + 1j * states_tppi_sine),
+    echo_cosine + 1j * echo_sine,
+]
+frequency = scp.Coord(
+    np.fft.fftshift(np.fft.fftfreq(size, d=1 / width)),
+    units="Hz",
+    title="F1 offset",
+)
+spectra = []
+for signal in signals:
+    magnitude = abs(np.fft.fftshift(np.fft.fft(signal)))
+    spectra.append(scp.NDDataset(magnitude, coordset=[frequency]))
+
+# %%
+# TPPI encodes a linear phase advance in a single real sequence.
+# The simulated phase ramp moves the line by one quarter of the sampling
+# frequency. Retain the positive half-band after zero filling and express
+# its frequencies relative to that shift.
+tppi = decay * np.cos(angle + np.pi / 2 * np.arange(size))
+half_band = abs(np.fft.rfft(tppi, n=2 * size)[:size])
+offset = scp.Coord.linspace(
+    -width / 4, width / 4, size, endpoint=False, units="Hz", title="F1 offset"
+)
+spectra.append(scp.NDDataset(half_band, coordset=[offset]))
+
+# %%
+# The QF cosine has mirror peaks. The phase-sensitive combinations retain
+# the sign of the simulated resonance.
+_ = scp.multiplot(
+    [spectrum / spectrum.max() for spectrum in spectra],
+    labels=["QF", "States", "States-TPPI", "Echo/anti-echo", "TPPI"],
+    nrow=5,
+    sharex=True,
+    method="pen",
+    xlim=(-240, 240),
+    ylim=(0, 1.05),
+    ylabel="Magnitude",
+    figsize=(7, 9),
 )

@@ -31,34 +31,104 @@
 # Transform F2 and F1
 # -------------------
 #
-# Follow the full sequence on the Bruker States acquisition of
-# :sup:`27`Al PST-5 from the :doc:`MQMAS guide <mqmas>`. The reader can
-# correct the digital-filter delay on import. Transform F2 along ``x``
-# to obtain a frequency axis in F2 while F1 remains in the time domain.
+# Transform the direct time axis ``x`` first when working step by step.
+# For paired acquisitions, retain both complex branches through the
+# indirect transform. The examples below show how to select a workflow
+# for an acquisition whose mode is known. Replace the example paths with
+# your own data.
 
 # %%
 import spectrochempy as scp
 
-bruker_fid = scp.nmr.read_topspin(
-    "nmrdata/bruker/tests/nmr/MQMAS_27AL_PST5/51/ser", remove_digital_filter=True
-)
-bruker_f2 = bruker_fid.fft(dim="x")
+# %% [raw] raw_mimetype="text/restructuredtext"
+# QF magnitude
+# ~~~~~~~~~~~~
+#
+# QF records one trace per F1 increment. There is no cosine/sine pair
+# to combine. For the supported Bruker COSY replay, transform the complex
+# data in F2 and F1, then take the magnitude. A cosine at frequency f
+# contributes at both +f and −f. Magnitude display does not recover the
+# missing sign of the indirect frequency.
+
+# %% tags=["skip-execution"]
+fid = scp.nmr.read_topspin("path/to/qf-cosy/ser")
+spectrum = scp.nmr.Experiment(fid).process(replay="topspin")
 
 # %% [raw] raw_mimetype="text/restructuredtext"
-# Keep both States branches in this mixed-domain result for the F1
-# transform along ``y``. Extract the real-real plane after both transforms
-# to plot contours with a frequency axis in each dimension. This is the
-# MQMAS spectrum before shearing.
+# States
+# ~~~~~~
+#
+# States records two traces per increment, a cosine branch C and a sine
+# branch S. After F2, combine the real parts as
+# ``C.real + 1j * S.real`` and the imaginary parts as
+# ``C.imag + 1j * S.imag``. Transform these two complex sequences in F1.
+# For example, if the two F2 values at a given point are ``3 + 4j`` and
+# ``5 + 6j``, the F1 inputs are ``3 + 5j`` and ``4 + 6j``.
+# The plugin handles the branch order and Fourier sign.
+
+# %% tags=["skip-execution"]
+fid = scp.nmr.read_topspin("path/to/states/ser", remove_digital_filter=True)
+f2 = fid.fft(dim="x")
+spectrum = f2.fft(dim="y")
+
+# %% [raw] raw_mimetype="text/restructuredtext"
+# States-TPPI
+# ~~~~~~~~~~~
+#
+# The same two branches are acquired, but their signs alternate between
+# successive F1 increments. Undo the alternation by multiplying both
+# reconstructed sequences by +1, −1, +1, −1 before the F1 FFT.
+# At an odd increment, the example States inputs ``3 + 5j`` and
+# ``4 + 6j`` would be stored as ``-3 - 5j`` and ``-4 - 6j``.
+# The plugin applies the sign correction when the mode is States-TPPI.
+
+# %% tags=["skip-execution"]
+fid = scp.nmr.read_topspin("path/to/states-tppi/ser", remove_digital_filter=True)
+spectrum = fid.fft(dim="x").fft(dim="y")
+
+# %% [raw] raw_mimetype="text/restructuredtext"
+# Echo/anti-echo
+# ~~~~~~~~~~~~~~
+#
+# Echo/anti-echo records two coherence pathways in each increment. For the
+# Bruker Rance–Kay profile, the plugin first forms ``E - A`` and
+# ``1j * (E + A)`` from the two stored branches. For instance,
+# ``E = 2 + 3j`` and ``A = 1 + 1j`` give ``1 + 2j`` and ``-4 + 3j``.
+# After F2, the two reconstructed branches are cross-paired by real and
+# imaginary parts as for States and transformed along F1.
+
+# %% tags=["skip-execution"]
+fid = scp.nmr.read_topspin("path/to/echo-antiecho/ser")
+spectrum = scp.nmr.Experiment(fid).process(
+    echo_antiecho="bruker-rance-kay", digital_filter="phase"
+)
+
+# %% [raw] raw_mimetype="text/restructuredtext"
+# TPPI
+# ~~~~
+#
+# Native Agilent TPPI records one trace per increment and advances the
+# phase systematically with F1 evolution time. After F2, the real and
+# imaginary parts of the traces form separate real-valued F1 sequences.
+# Each sequence is zero-filled from N to 2N
+# points, and the F1 transform retains bins 0 through N−1. For N=128,
+# each real transform therefore uses 256 points and keeps 128 bins.
+# See the Agilent TPPI section below for the frequency calibration.
+
+# %% tags=["skip-execution"]
+fid = scp.nmr.read_agilent("path/to/tppi.fid")
+spectrum = scp.nmr.Experiment(fid).process()
+
+# %% [raw] raw_mimetype="text/restructuredtext"
+# The :doc:`gallery example </examples/gallery/nmr/plot_processing_nmr_2d>`
+# reconstructs a simulated resonance in all five modes. To inspect a
+# complete COSY plane, load the processed Bruker gossypol spectrum from the
+# :doc:`NMRPipe example </examples/gallery/importer/plot_read_nmrpipe_2d>`.
 
 # %%
-spectrum = bruker_f2.fft(dim="y")
-rr = scp.nmr.Experiment(spectrum).rr()
-region = rr[:, 65.0:20.0]
-peak = region.max().magnitude
-levels = [peak * fraction for fraction in (0.10, 0.16, 0.25, 0.40, 0.65, 0.90)]
-_ = region.plot(
-    method="contour", levels=levels, cmap="magma_r", title="PST-5 MQMAS before shearing"
-)
+path = scp.preferences.datadir / "nmrdata/nmrpipe/nmrpipe_2d_cosy_example.ft2"
+cosy = scp.nmr.read(path, protocol="interop")
+_ = cosy.plot(method="contour")
 
 # %% [raw] raw_mimetype="text/restructuredtext"
 # See the
@@ -78,9 +148,7 @@ _ = region.plot(
 # Here ``x`` and ``y`` are the direct and indirect dimensions of the
 # imported FID. Keep both quadrature branches through the indirect FFT.
 # Select the desired spectral component before plotting or extracting a
-# 1D slice. See the
-# :doc:`gallery example </examples/gallery/nmr/plot_processing_nmr_2d>`
-# for the Bruker workflow as a standalone script.
+# 1D slice.
 # Use :doc:`analysis` to find and integrate cross-peaks in a processed spectrum.
 #
 # For a supported uniform Bruker SER acquisition, use the recorded TopSpin
