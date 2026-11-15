@@ -14,9 +14,10 @@ from spectrochempy import ur
 
 _SI_PREFIX = r"(?:da|[qryzafpnumcdhkMGTPEZYRQ])?"
 _SI_FREQUENCY = re.compile(_SI_PREFIX + "Hz")
-_SI_UNIT = re.compile(
+_SI_FACTOR = re.compile(
     _SI_PREFIX
     + r"(?:m|s|g|A|K|mol|cd|rad|sr|Hz|N|Pa|J|W|C|V|F|Ohm|S|Wb|T|H|lm|lx|Bq|Gy|Sv|kat)"
+    + r"(?:\^-?[0-9]+)?"
 )
 _DTYPES = {
     "float32": "<f4",
@@ -126,9 +127,14 @@ def write_csdf(
 def _encode_signal_unit(unit):
     """Serialize an SI unit with explicit multiplication between factors."""
     factors = unit.replace("μ", "u").replace("µ", "u").replace("Ω", "Ohm").split()
-    if not all(_SI_UNIT.fullmatch(factor.partition("^")[0]) for factor in factors):
+    if not all(_SI_FACTOR.fullmatch(factor) for factor in factors):
         raise ValueError(f"CSDF export requires portable SI signal units, got {unit!r}")
-    return "*".join(factors)
+    encoded = "*".join(factors)
+    return f"({encoded})" if encoded.startswith("E") else encoded
+
+
+def _ascii_frequency_unit(unit):
+    return unit.replace("μ", "u").replace("µ", "u")
 
 
 def _encode_dimension(coord, count):
@@ -136,7 +142,7 @@ def _encode_dimension(coord, count):
         not isinstance(coord, Coord)
         or coord.data is None
         or coord.units is None
-        or coord.units.dimensionality != {"[time]": -1}
+        or not _SI_FREQUENCY.fullmatch(_ascii_frequency_unit(format(coord.units, "~")))
         or np.any(coord.mask)
     ):
         raise ValueError(
@@ -167,7 +173,7 @@ def _encode_dimension(coord, count):
         "increment": f"{increment:.17g} Hz",
         "coordinates_offset": f"{values[0]:.17g} Hz",
     }
-    if coord.title:
+    if coord.title and coord.title != "<untitled>":
         dimension["label"] = coord.title
     origin = coord.meta.get("csdf_origin_offset_hz")
     if origin is not None:
@@ -184,7 +190,7 @@ def _frequency(value):
     if len(fields) != 2:
         raise ValueError("Expected a CSDF quantity with frequency units")
     magnitude, unit = fields
-    unit = unit.replace("μ", "u").replace("µ", "u")
+    unit = _ascii_frequency_unit(unit)
     if not _SI_FREQUENCY.fullmatch(unit):
         raise ValueError("Expected Hz or an SI-prefixed Hz unit")
     frequency = (float(magnitude) * ur.Unit(unit)).to("Hz").magnitude

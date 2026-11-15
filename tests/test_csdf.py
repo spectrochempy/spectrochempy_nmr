@@ -151,11 +151,20 @@ def test_csdf_export_after_squeeze(tmp_path, spectrum):
     assert restored.units == dataset.units
 
 
-def test_csdf_export_rejects_nonportable_signal_units(tmp_path):
+@pytest.mark.parametrize("unit", ["absorbance", "V**0.5"])
+def test_csdf_export_rejects_nonportable_signal_units(tmp_path, unit):
     coord = scp.Coord([0, 1], units="Hz")
-    dataset = scp.NDDataset([1.0, 2.0], units="absorbance", coordset=[coord])
+    dataset = scp.NDDataset([1.0, 2.0], units=unit, coordset=[coord])
     with pytest.raises(ValueError, match="portable SI signal units"):
         scp.nmr.write_csdf(dataset, tmp_path / "absorbance.csdf")
+
+
+@pytest.mark.parametrize("unit", ["Bq", "rad/s"])
+def test_csdf_export_rejects_non_hertz_coordinates(tmp_path, unit):
+    coord = scp.Coord([0, 1], units=unit)
+    dataset = scp.NDDataset([1.0, 2.0], coordset=[coord])
+    with pytest.raises(ValueError, match="frequency coordinate"):
+        scp.nmr.write_csdf(dataset, tmp_path / "invalid-axis.csdf")
 
 
 def test_csdf_import_classifies_real_spectrum_as_processed(tmp_path):
