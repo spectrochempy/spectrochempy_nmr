@@ -1120,10 +1120,10 @@ def _select_interrupted_states_tppi(directory, stored):
     ), counts
 
 
-def _aligned_complex_ser_traces(meta, data):
+def _aligned_complex_ser_traces(meta, data, *, default_data_type=None):
     direct = meta.get("acqus", {})
     td = direct.get("TD")
-    data_type = direct.get("DTYPA")
+    data_type = direct.get("DTYPA", default_data_type)
     if (
         not np.iscomplexobj(data)
         or data.ndim not in (1, 2)
@@ -1391,10 +1391,10 @@ def _read_topspin(*args, **kwargs):
                 path.name == "ser"
                 and direct.get("FnTYPE") == 2
                 and direct.get("PARMODE") == 1
-                and direct.get("AQ_mod") == 3
+                and direct.get("AQ_mod") in (1, 3)
             )
             if aligned_nus:
-                data = _aligned_complex_ser_traces(dic, data)
+                data = _aligned_complex_ser_traces(dic, data, default_data_type=0)
                 if data is None or not len(data):
                     raise SpectroChemPyError(
                         "Bruker NUS SER has an incomplete storage trace"

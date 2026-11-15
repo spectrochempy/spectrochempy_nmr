@@ -150,8 +150,15 @@ def test_paired_nus_preserves_schedule_and_guards_f1(tmp_path, contents, indices
     ("size", "error"),
     [(6144, None), (7168, "complete F1 pairs"), (6160, "incomplete storage trace")],
 )
-def test_paired_nus_uses_physical_trace_boundaries(tmp_path, size, error):
+@pytest.mark.parametrize("aq_mode", [1, 3])
+def test_paired_nus_uses_physical_trace_boundaries(tmp_path, size, error, aq_mode):
     path = _synthetic_ser(tmp_path, 6, nus=True)
+    direct = path / "acqus"
+    direct.write_text(
+        direct.read_text()
+        .replace("##$AQ_mod= 3", f"##$AQ_mod= {aq_mode}")
+        .replace("##$DTYPA= 0\n", "")
+    )
     indirect = path / "acqu2s"
     indirect.write_text(indirect.read_text().replace("##END=", "##$NusTD= 16\n##END="))
     schedule = path / "nuslist"
