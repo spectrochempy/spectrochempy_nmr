@@ -768,8 +768,19 @@ def _from_raw_trace_matrix(result, data):
         widths = _trace_widths(result)
         x = _raw_time_coordinate(direct, data.shape[1], "x")
         sampling = result.acquisition.get("sampling")
+        nominal = result.acquisition.get("nominal_shape", ())
+        if jeol_single and (
+            sampling != ("regular", "regular")
+            or not isinstance(nominal, (tuple, list))
+            or tuple(nominal) != data.shape
+            or any(
+                not isinstance(size, (int, np.integer))
+                or isinstance(size, (bool, np.bool_))
+                for size in nominal
+            )
+        ):
+            raise ValueError("JEOL section pair requires a full regular sampling grid")
         if sampling in (("listed-paired", "regular"), ("regular-paired", "regular")):
-            nominal = result.acquisition.get("nominal_shape", ())
             branches = result.acquisition.get("trace_branch_order", ())
             if (
                 not isinstance(nominal, (tuple, list))

@@ -263,3 +263,41 @@ def test_jeol_section_pairs_keep_sampled_coordinates(sampling, indices, nominal)
     y_axis.values = y_times + np.array([0.0, 0.0001, 0.0])
     with pytest.raises(ValueError, match="sampling grid"):
         from_interop(source)
+
+
+@pytest.mark.parametrize(
+    "sampling, nominal",
+    [
+        (None, None),
+        (("listed", "regular"), (8, 5)),
+        (("regular", "regular"), (4, 5)),
+        (("regular", "regular"), (3.0, 5)),
+    ],
+)
+def test_jeol_single_section_pair_requires_full_regular_grid(sampling, nominal):
+    from copy import copy
+
+    from spectrochempy_nmr.processing.fft_validation import _require_fft_prevalidation
+
+    try:
+        _require_fft_prevalidation()
+    except NotImplementedError as exc:
+        pytest.skip(str(exc))
+    source = _normalized(
+        np.ones((3, 5), dtype=complex), axis_values=np.arange(5) / 2000
+    )
+    y_axis = copy(source.axes[0])
+    y_axis.values = np.arange(3) / 1000
+    source.axes = (y_axis, *source.axes)
+    source.dimensions = source.physical_dimensions = ("F1", "F2")
+    source.domains = ("time", "time")
+    source.encoding = ("real_complex", "real_complex")
+    source.quadrature_mode = "jeol-stored-section-pairs"
+    source.branch_order = ("section-0/1",)
+    source.acquisition = {
+        "sampling": sampling,
+        "spectral_width_hz": (1000, 2000),
+        "nominal_shape": nominal,
+    }
+    with pytest.raises(ValueError, match="JEOL.*full regular sampling grid"):
+        from_interop(source)
