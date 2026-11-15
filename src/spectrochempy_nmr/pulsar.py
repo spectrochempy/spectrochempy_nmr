@@ -21,6 +21,9 @@ from operator import index
 import numpy as np
 
 
+_RF_PROPAGATOR_CACHE_BYTES = 16 * 1024**2
+
+
 @lru_cache(maxsize=8)
 def _powder_mesh(accuracy, hemisphere=False, full_sphere=False):
     """Build the PULSAR octant mesh and its inverse-cube vertex weights."""
@@ -708,17 +711,17 @@ def _spin_operators(spin):
     return (raising + raising.T) / 2, (raising - raising.T) / (2j), np.diag(m)
 
 
-def _evolve_density(density, hamiltonian_hz, duration_s):
-    """Apply a constant Hamiltonian, in Hz, to a batch of density matrices."""
+def _propagator(hamiltonian_hz, duration_s):
     eigenvalues, eigenvectors = np.linalg.eigh(hamiltonian_hz)
     phase = np.exp(-2j * np.pi * duration_s * eigenvalues)
-    propagator = (eigenvectors * phase[..., None, :]) @ eigenvectors.conj().swapaxes(
-        -1, -2
-    )
+    return (eigenvectors * phase[..., None, :]) @ eigenvectors.conj().swapaxes(-1, -2)
+
+
+def _apply_propagator(density, propagator):
     return propagator @ density @ propagator.conj().swapaxes(-1, -2)
 
 
-def _evolve_pulse_step(density, rf, offsets, duration_s):
+def _pulse_propagator(rf, offsets, duration_s):
     # Adjacent differences of the diagonal must equal the offsets.
     levels = np.concatenate(
         (np.zeros_like(offsets[..., :1]), offsets.cumsum(axis=-1)), axis=-1
@@ -727,7 +730,28 @@ def _evolve_pulse_step(density, rf, offsets, duration_s):
     rows = np.arange(size)
     hamiltonian = np.broadcast_to(rf, (*levels.shape, size)).copy()
     hamiltonian[..., rows, rows] += levels
-    return _evolve_density(density, hamiltonian, duration_s)
+    return _propagator(hamiltonian, duration_s)
+
+
+def _resolve_rf_solver(name):
+    if name == "dense":
+        return None
+    if name != "tridiagonal":
+        raise ValueError("rf_solver must be 'dense' or 'tridiagonal'.")
+
+    from spectrochempy_nmr._pulsar_tridiagonal import get_tridiagonal_solver
+
+    accelerated = get_tridiagonal_solver()
+    if accelerated is None:
+        return None
+
+    def solve(rf, offsets, duration):
+        propagator = accelerated(rf, offsets, duration)
+        if propagator is None:
+            return _pulse_propagator(rf, offsets, duration)
+        return propagator
+
+    return solve
 
 
 @dataclass(frozen=True)
@@ -804,6 +828,21 @@ def _rf_axis(ix, iy, phase_deg):
     return np.cos(phase) * ix + np.sin(phase) * iy
 
 
+def _rf_pulse_basis(ix, iy, phase_deg, *, real):
+    if not real:
+        return _rf_axis(ix, iy, phase_deg), None
+
+    # In the descending m basis, e^(-i phase Iz) rotates Ix to the RF axis.
+    # The internal Hamiltonian is diagonal, so this basis works for every
+    # midpoint of a finite pulse even as the rotor changes the offsets.
+    phase = np.angle(np.exp(1j * np.deg2rad(phase_deg)))
+    if phase == 0.0:
+        return ix.real, None
+    levels = np.arange(ix.shape[0])
+    basis = np.exp(1j * phase * (levels[:, None] - levels[None, :]))
+    return ix.real, basis
+
+
 def _prepare_events(
     events,
     ix,
@@ -813,6 +852,7 @@ def _prepare_events(
     max_rf_step_s,
     t2_s,
     *,
+    rf_solver=None,
     partner=None,
     partner_t2_s=None,
     coupling_offsets=None,
@@ -881,7 +921,10 @@ def _prepare_events(
             )
             if duration <= 0 or power < 0 or partner_power < 0:
                 raise ValueError("Use positive pulse duration and nonnegative RF.")
-            rf = power * _rf_axis(ix, iy, phase)
+            axis, basis = _rf_pulse_basis(
+                ix, iy, phase, real=partner is None and bool(spinning_hz or rf_solver)
+            )
+            rf = power * axis
             frequency_shift = offset * projections
             if partner is not None:
                 rf += partner_power * _rf_axis(px, py, partner_phase)
@@ -898,8 +941,20 @@ def _prepare_events(
                 count = max(1, int(np.ceil(needed)))
             frame = np.exp(2j * np.pi * duration * frequency_shift)
             frame = frame[:, None] * frame[None, :].conj()
+            if basis is not None:
+                # Return from the real basis along with the carrier-frame correction.
+                frame *= basis
             prepared.append(
-                ("pulse", duration, rf, -np.diff(frequency_shift), count, frame)
+                (
+                    "pulse",
+                    duration,
+                    rf,
+                    -np.diff(frequency_shift),
+                    count,
+                    frame,
+                    basis,
+                    rf_solver or _pulse_propagator,
+                )
             )
         else:
             raise TypeError(
@@ -929,9 +984,55 @@ def _phase_integral(terms, gamma, spinning_hz):
     return -(terms @ rotor).imag.swapaxes(-1, -2)
 
 
-def _propagate_sequence(offsets, terms, initial, events, spinning_hz, gamma):
+def _shared_pulse_keys(scans, spinning_hz, gamma):
+    """Find matching real RF pulses at the same sampled rotor trajectory."""
+    if not spinning_hz or len(scans) < 2:
+        return ({},) * len(scans)
+
+    omega = 2 * np.pi * spinning_hz
+    keys_by_scan = []
+    counts = {}
+    for _, events in scans:
+        angles = gamma
+        keys = {}
+        for event_index, (kind, *args) in enumerate(events):
+            if kind == "delay":
+                angles = angles + omega * args[0]
+            elif kind == "pulse":
+                duration, rf, offset, count, *_ = args
+                step = duration / count
+                if np.isrealobj(rf):
+                    key = (
+                        angles.tobytes(),
+                        count,
+                        step,
+                        rf.tobytes(),
+                        offset.tobytes(),
+                    )
+                    keys[event_index] = key
+                    counts[key] = counts.get(key, 0) + 1
+                angles = angles + count * (omega * step)
+        keys_by_scan.append(keys)
+    return tuple(
+        {event: key for event, key in keys.items() if counts[key] > 1}
+        for keys in keys_by_scan
+    )
+
+
+def _mas_pulse_steps(offsets, terms, rf, offset, gamma, step, step_phase, count, solve):
+    order = np.arange(1, 5)
+    for i in range(count):
+        midpoint = gamma + (i + 0.5) * step_phase
+        rotor = np.exp(-1j * order[:, None] * midpoint)
+        instantaneous = offsets[:, None, :] + (terms @ rotor).real.swapaxes(-1, -2)
+        yield solve(rf, instantaneous - offset, step)
+
+
+def _propagate_sequence(
+    offsets, terms, initial, events, spinning_hz, gamma, keys, propagators, capacity
+):
     density = initial
-    for kind, *args in events:
+    for event_index, (kind, *args) in enumerate(events):
         if kind == "mask":
             density = density * args[0]
         elif kind == "partner_coherence":
@@ -945,7 +1046,7 @@ def _propagate_sequence(offsets, terms, initial, events, spinning_hz, gamma):
             density = np.where(mask, density, preserved.reshape(density.shape))
         elif kind == "ideal":
             axis, duration = args
-            density = _evolve_density(density, axis, duration)
+            density = _apply_propagator(density, _propagator(axis, duration))
         elif kind == "delay":
             duration, decoupled = args
             free_offsets = offsets - decoupled
@@ -965,23 +1066,41 @@ def _propagate_sequence(offsets, terms, initial, events, spinning_hz, gamma):
             evolution = np.exp(-1j * level_phase)
             density = evolution[..., :, None] * density * evolution[..., None, :].conj()
         else:
-            duration, rf, offset, count, frame = args
+            duration, rf, offset, count, frame, basis, solve = args
             step = duration / count
+            if basis is not None:
+                density = density * basis.conj()
             if spinning_hz:
-                order = np.arange(1, 5)
                 step_phase = 2 * np.pi * spinning_hz * step
-                for i in range(count):
-                    midpoint = gamma + (i + 0.5) * step_phase
-                    rotor = np.exp(-1j * order[:, None] * midpoint)
-                    instantaneous = offsets[:, None, :] + (terms @ rotor).real.swapaxes(
-                        -1, -2
+                key = keys.get(event_index)
+                if key in propagators:
+                    density = _apply_propagator(density, propagators[key])
+                else:
+                    steps = _mas_pulse_steps(
+                        offsets,
+                        terms,
+                        rf,
+                        offset,
+                        gamma,
+                        step,
+                        step_phase,
+                        count,
+                        solve,
                     )
-                    density = _evolve_pulse_step(
-                        density, rf, instantaneous - offset, step
-                    )
+                    if key is not None and len(propagators) < capacity:
+                        # The product acts on any incoming density in the real basis.
+                        pulse = next(steps)
+                        for propagator in steps:
+                            pulse = propagator @ pulse
+                        propagators[key] = pulse
+                        density = _apply_propagator(density, pulse)
+                    else:
+                        for propagator in steps:
+                            density = _apply_propagator(density, propagator)
                 gamma = gamma + count * step_phase
             else:
-                density = _evolve_pulse_step(density, rf, offsets - offset, step)
+                pulse = solve(rf, offsets - offset, step)
+                density = _apply_propagator(density, pulse)
             density = density * frame
     return density, gamma
 
@@ -1001,11 +1120,12 @@ def _rf_rotor_count(spectral_width_hz, spinning_hz, accuracy, sidebands, size):
     return count
 
 
-def _sequence_state_blocks(offsets, terms, initial, events, spinning_hz, count):
-    """Yield the final density matrices and rotor angle for each powder block."""
+def _sequence_state_blocks(offsets, terms, initial, scans, spinning_hz, count):
+    """Yield each scan's density and rotor angle with a cache local to the block."""
     size = initial.shape[0]
     block_size = min(128, 131072 // (count * size**2))
     gamma = 2 * np.pi * np.arange(count) / count if spinning_hz else None
+    keys_by_scan = _shared_pulse_keys(scans, spinning_hz, gamma)
     for start in range(0, offsets.shape[0], block_size):
         block = slice(start, start + block_size)
         block_terms = terms[block] if spinning_hz else None
@@ -1014,15 +1134,24 @@ def _sequence_state_blocks(offsets, terms, initial, events, spinning_hz, count):
             if spinning_hz
             else (offsets[block].shape[0],)
         )
-        density, gamma_end = _propagate_sequence(
-            offsets[block],
-            block_terms,
-            np.broadcast_to(initial, (*batch, size, size)),
-            events,
-            spinning_hz,
-            gamma,
+        state = np.broadcast_to(initial, (*batch, size, size))
+        capacity = _RF_PROPAGATOR_CACHE_BYTES // (
+            state.size * np.dtype(complex).itemsize
         )
-        yield block, density, gamma_end
+        propagators = {}
+        for (coefficient, events), keys in zip(scans, keys_by_scan, strict=True):
+            density, gamma_end = _propagate_sequence(
+                offsets[block],
+                block_terms,
+                state,
+                events,
+                spinning_hz,
+                gamma,
+                keys,
+                propagators,
+                capacity,
+            )
+            yield block, coefficient, density, gamma_end
 
 
 def _powder_density(
@@ -1042,22 +1171,16 @@ def _powder_density(
     vertex_weights = weights * np.bincount(triangles.ravel(), minlength=weights.size)
     density = np.zeros_like(initial, dtype=complex)
     for offset, population in passive_offsets:
-        for coefficient, prepared in events:
-            for block, states, _ in _sequence_state_blocks(
-                offsets + offset * passive_shift,
-                terms,
-                initial,
-                prepared,
-                spinning_hz,
-                count,
-            ):
-                if spinning_hz:
-                    states = states.mean(axis=1)
-                density += (
-                    population
-                    * coefficient
-                    * np.einsum("v,vab->ab", vertex_weights[block], states)
-                )
+        for block, coefficient, states, _ in _sequence_state_blocks(
+            offsets + offset * passive_shift, terms, initial, events, spinning_hz, count
+        ):
+            if spinning_hz:
+                states = states.mean(axis=1)
+            density += (
+                population
+                * coefficient
+                * np.einsum("v,vab->ab", vertex_weights[block], states)
+            )
     return density / vertex_weights.sum()
 
 
@@ -1086,28 +1209,27 @@ def _sequence_signals(
     amplitudes = np.zeros(
         (offsets.shape[0], strengths.size, band_orders.size), dtype=complex
     )
-    for coefficient, prepared in events:
-        for block, density, gamma_end in _sequence_state_blocks(
-            offsets, terms, initial, prepared, spinning_hz, count
-        ):
-            if readout is None:
-                coherence = np.diagonal(density, offset=1, axis1=-2, axis2=-1)
-            else:
-                coherence = density[..., readout[0], readout[1]]
-            signal = -1j * np.sqrt(strengths) * coherence
-            if not spinning_hz:
-                amplitudes[block, :, 0] += coefficient * signal
-                continue
-            detected_terms = (terms if readout_terms is None else readout_terms)[block]
-            wave = np.exp(
-                1j * _phase_integral(detected_terms, gamma_end, spinning_hz)
-            ).swapaxes(-1, -2)
-            # Opposite-sign Fourier sums for detection and preparation.
-            detection = np.fft.fft(wave, axis=-1)[..., band_orders] / count
-            preparation = np.fft.ifft(signal.swapaxes(-1, -2) * wave.conj(), axis=-1)[
-                ..., band_orders
-            ]
-            amplitudes[block] += coefficient * detection * preparation
+    for block, coefficient, density, gamma_end in _sequence_state_blocks(
+        offsets, terms, initial, events, spinning_hz, count
+    ):
+        if readout is None:
+            coherence = np.diagonal(density, offset=1, axis1=-2, axis2=-1)
+        else:
+            coherence = density[..., readout[0], readout[1]]
+        signal = -1j * np.sqrt(strengths) * coherence
+        if not spinning_hz:
+            amplitudes[block, :, 0] += coefficient * signal
+            continue
+        detected_terms = (terms if readout_terms is None else readout_terms)[block]
+        wave = np.exp(
+            1j * _phase_integral(detected_terms, gamma_end, spinning_hz)
+        ).swapaxes(-1, -2)
+        # Opposite-sign Fourier sums for detection and preparation.
+        detection = np.fft.fft(wave, axis=-1)[..., band_orders] / count
+        preparation = np.fft.ifft(signal.swapaxes(-1, -2) * wave.conj(), axis=-1)[
+            ..., band_orders
+        ]
+        amplitudes[block] += coefficient * detection * preparation
     return amplitudes
 
 
@@ -1132,6 +1254,7 @@ def simulate_rectangular_pulse(
     sidebands=0,
     max_rf_step_s=2e-6,
     probe_bandwidth_hz=None,
+    rf_solver="dense",
 ):
     """Simulate a powder after one finite rectangular RF pulse.
 
@@ -1141,6 +1264,7 @@ def simulate_rectangular_pulse(
     an ideal on-carrier 90 degree x pulse. Actual excitation losses and
     phase are retained. With MAS, midpoint propagation uses time steps
     no longer than max_rf_step_s or 1/32 of a rotor period.
+    Set rf_solver="tridiagonal" to use the optional Numba/LAPACK solver.
     """
     return simulate_pulse_sequence(
         [Pulse(duration_s, rf_hz, phase_deg)],
@@ -1160,6 +1284,7 @@ def simulate_rectangular_pulse(
         sidebands=sidebands,
         max_rf_step_s=max_rf_step_s,
         probe_bandwidth_hz=probe_bandwidth_hz,
+        rf_solver=rf_solver,
     )
 
 
@@ -1187,6 +1312,7 @@ def simulate_pulse_sequence(
     j_partners=(),
     output="spectrum",
     probe_bandwidth_hz=None,
+    rf_solver="dense",
 ):
     """Simulate a sequence of pulses, delays and coherence selections.
 
@@ -1197,6 +1323,8 @@ def simulate_pulse_sequence(
     selected transitions. RF always propagates the complete manifold.
     output="density" returns the powder-averaged deviation density
     matrix at the end of preparation, before receiver phase.
+    For finite pulses, rf_solver="tridiagonal" uses the optional
+    Numba/LAPACK backend when available and falls back to the dense solver.
     """
     points, accuracy, sidebands = index(points), index(accuracy), index(sidebands)
     (
@@ -1285,7 +1413,16 @@ def simulate_pulse_sequence(
         if spinning_hz:
             harmonics[:, i] = terms[1:].T
     ix, iy, iz = _spin_operators(spin)
-    prepared = _prepare_scans(events, ix, iy, iz, spinning_hz, max_rf_step_s, t2_s)
+    prepared = _prepare_scans(
+        events,
+        ix,
+        iy,
+        iz,
+        spinning_hz,
+        max_rf_step_s,
+        t2_s,
+        rf_solver=_resolve_rf_solver(rf_solver),
+    )
     passive_offsets = _passive_offsets(j_partners)
     if output == "density":
         return _powder_density(
