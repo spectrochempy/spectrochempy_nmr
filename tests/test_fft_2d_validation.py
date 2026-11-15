@@ -88,8 +88,15 @@ def _sine_window(size):
     return np.sin(np.pi * (np.arange(size) + 0.5) / size)
 
 
+def _qf_cosy_samples(raw):
+    # The normalized reader retains the stored imaginary sign. The
+    # historical reader changes that sign on import.
+    data = np.asarray(raw.data)
+    return data.conj() if raw.meta.fft_presentation is not None else data
+
+
 def _qf_cosy_exam2d_hh(raw, *, apply_linear_prediction=False):
-    data = np.asarray(raw.data).copy()
+    data = _qf_cosy_samples(raw)
     direct = np.zeros((data.shape[0], 1024), dtype=np.complex128)
     direct[: data.shape[0], : data.shape[1]] = data * _sine_window(data.shape[1])
     f2 = np.fft.fftshift(np.fft.fft(direct, axis=1), axes=1)
@@ -369,7 +376,7 @@ class TestExam2DHHQFCOSY:
 
         f2 = raw.fft(dim="x", size=1024)
         expected_f2 = np.fft.fftshift(
-            np.fft.fft(np.asarray(raw.data), n=1024, axis=-1),
+            np.fft.fft(_qf_cosy_samples(raw), n=1024, axis=-1),
             axes=-1,
         )
         np.testing.assert_allclose(f2.data, expected_f2, rtol=1e-12, atol=1e-12)
@@ -400,7 +407,7 @@ class TestExam2DHHQFCOSY:
         assert int(_jcamp_value(root / "acqus", "TD")) == 2048
         assert int(_jcamp_value(root / "acqu2", "TD")) == 128
         assert raw.meta.fnmode[0] == 1
-        assert raw.meta.encoding[0] == "QF"
+        assert scp.nmr.Experiment(raw).encoding == ("QF", "DQD")
         for proc_file in (
             root / "pdata" / "1" / "proc2s",
             root / "pdata" / "1" / "procs",
@@ -512,13 +519,19 @@ class TestEmFFT2DBrukerEchoAntiecho:
         assert abs(y_peak - ref_y) < 1.0
         assert abs(x_peak - ref_x) < 1.0
 
-    def test_experiment_rejects_bruker_echoanti_2d_processing(self):
-        """The public Experiment processor remains limited to validated 1D data."""
+    def test_experiment_requires_explicit_echo_antiecho_reconstruction(self):
         ds = scp.read_topspin(BRUKER_ECHOANTI_2D, expno=3, remove_digital_filter=True)
-        ref = scp.read_topspin(BRUKER_ECHOANTI_2D / "3" / "pdata" / "1" / "2rr")
+        experiment = scp.nmr.Experiment(ds)
 
-        with pytest.raises(NotImplementedError, match="only validated 1D experiments"):
-            scp.nmr.Experiment(ds).process(apodization="em", lb=2.0, size=ref.shape[-1])
+        with pytest.raises(
+            ValueError, match='requires echo_antiecho="bruker-rance-kay"'
+        ):
+            experiment.process()
+
+        spectrum = experiment.process(echo_antiecho="bruker-rance-kay")
+        assert scp.nmr.Experiment(spectrum).domains == ("frequency", "frequency")
+        assert tuple(spectrum.c.labels) == ("rr", "ri", "ir", "ii")
+        assert spectrum.shape == (4, *ds.shape[-2:])
 
 
 @pytest.mark.skipif(not _has_agilent_data(), reason="Agilent test data not available")
