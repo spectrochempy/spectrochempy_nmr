@@ -1234,3 +1234,79 @@ def test_numba_deposition_preserves_complex_spectrum_and_order_areas(
     assert len(verified_areas) == 2 * (2 * settings["sidebands"] + 1)
     np.testing.assert_array_equal(actual.x.data, expected.x.data)
     np.testing.assert_allclose(actual.data, expected.data, atol=1e-14, rtol=1e-12)
+
+
+def test_optional_backends_fall_back_when_numba_import_raises_attribute_error(
+    monkeypatch,
+):
+    import builtins
+
+    from spectrochempy_nmr._pulsar_numba_deposition import get_numba_depositor
+
+    original_import = builtins.__import__
+
+    def broken_numba(name, *args, **kwargs):
+        if name == "numba":
+            raise AttributeError("optional Numba dependency is incompatible")
+        return original_import(name, *args, **kwargs)
+
+    loaders = (get_numba_depositor, _pulsar_tridiagonal.get_tridiagonal_solver)
+    for loader in loaders:
+        loader.cache_clear()
+    settings = dict(
+        spin=0.5,
+        larmor_hz=100e6,
+        spectral_width_hz=8000,
+        rf_hz=23e3,
+        duration_s=6e-6,
+        phase_deg=72,
+        shift_hz=420,
+        points=512,
+        accuracy=1,
+    )
+    reference = simulate_rectangular_pulse(**settings)
+    try:
+        with monkeypatch.context() as context:
+            context.setattr(builtins, "__import__", broken_numba)
+            actual = simulate_rectangular_pulse(
+                **settings, workers=2, rf_solver="tridiagonal", deposition="numba"
+            )
+    finally:
+        for loader in loaders:
+            loader.cache_clear()
+    np.testing.assert_array_equal(actual.x.data, reference.x.data)
+    np.testing.assert_array_equal(actual.data, reference.data)
+
+
+def test_tridiagonal_rf_falls_back_without_jit(monkeypatch):
+    numba = pytest.importorskip("numba")
+    load = _pulsar_tridiagonal.get_tridiagonal_solver
+    if load() is None:
+        pytest.skip("optional Numba/LAPACK RF backend is unavailable")
+
+    try:
+        with monkeypatch.context() as context:
+            context.setattr(numba.config, "DISABLE_JIT", 1)
+            load.cache_clear()
+            assert load() is None
+    finally:
+        load.cache_clear()
+
+
+@pytest.mark.parametrize("workers", [1, 2])
+def test_orientation_workers_preserve_numpy_error_policy(workers):
+    with (
+        np.errstate(under="raise"),
+        pytest.raises(FloatingPointError, match="underflow"),
+    ):
+        simulate_pulse_sequence(
+            [IdealPulse(90), Delay(4e-4), Delay(4e-4)],
+            spin=0.5,
+            larmor_hz=100e6,
+            shift_hz=200,
+            t2_s=1e-6,
+            spectral_width_hz=2000,
+            points=257,
+            accuracy=1,
+            workers=workers,
+        )
