@@ -9,15 +9,12 @@ Guides
    Apodization in SpectroChemPy <https://www.spectrochempy.fr/latest/userguide/processing/apodization.html>
    processing_2d
    Fourier transformation in SpectroChemPy <https://www.spectrochempy.fr/latest/userguide/processing/fourier.html>
-   mqmas
-   multiplex_spam
-   stmas
+   quadrupolar
    analysis
    Baseline correction in SpectroChemPy <https://www.spectrochempy.fr/latest/userguide/processing/baseline.html>
    ../concepts/quadrature
    ../concepts/hypercomplex
    pulsar
-   czjzek
 
 See also
 --------
