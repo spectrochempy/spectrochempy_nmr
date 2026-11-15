@@ -54,9 +54,9 @@ raw_fid = scp.nmr.read(path, remove_digital_filter=False)
 _ = raw_fid.real.plot(title="Bruker FID as recorded")
 
 # %% [raw] raw_mimetype="text/restructuredtext"
-# The digital filter delays the signal by 76 samples (about 0.30 ms for
-# this acquisition). Zoom in on the first 160 points to see the delayed
-# onset in the raw FID. With ``remove_digital_filter=True``, the reader
+# The digital filter delays the signal by 76 samples (about 304 µs for
+# this acquisition). Plot the first 480 points to see the delayed onset
+# and subsequent decay. With ``remove_digital_filter=True``, the reader
 # compensates for the delay and the signal appears near the start of the
 # corrected time axis. The magnitude shows the onset independently of
 # the phase of the complex FID.
@@ -66,9 +66,9 @@ fid = scp.nmr.read(path, remove_digital_filter=True)
 
 fig, ax = plt.subplots()
 for trace, label in ((raw_fid, "As recorded"), (fid, "Delay corrected")):
-    onset = abs(trace[:160])
-    ax.plot(onset.x.to("ms").data, onset.data, label=label)
-ax.set(xlabel="Time / ms", ylabel="FID magnitude / count")
+    onset = abs(trace[:480])
+    ax.plot(onset.x.to("us").data, onset.data, label=label)
+ax.set(xlabel="Time / µs", ylabel="FID magnitude / count")
 ax.legend()
 plt.show()
 
