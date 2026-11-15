@@ -33,7 +33,8 @@ Use ``scp.nmr.read_csdf("spectrum.csdf")`` or
 ``scp.nmr.read("spectrum.csdf")`` to open a self-contained CSDF 1.0 file
 without installing ``csdmpy``. The reader accepts one dense, base64-encoded
 real or complex spectrum with one or two linear axes in Hz or SI-prefixed Hz.
-It preserves axis direction and expresses coordinates in Hz. CSDM origin offsets are
+Supported signal types are float32, float64, complex64 and complex128.
+The reader preserves axis direction and expresses coordinates in Hz. CSDM origin offsets are
 available in each coordinate's metadata, for example
 ``dataset.x.meta.csdf_origin_offset_hz``.
 These offsets alone cannot establish a ppm reference.

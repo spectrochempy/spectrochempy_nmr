@@ -20,7 +20,7 @@ def spectrum():
                 "count": 3,
                 "increment": "-50 Hz",
                 "coordinates_offset": "0.2 kHz",
-                "origin_offset": "0.4 GHz",
+                "origin_offset": "4e-10 (EHz) ",
                 "label": "F2",
             },
             {
@@ -173,3 +173,33 @@ def test_csdf_import_classifies_real_spectrum_as_processed(tmp_path):
     experiment = scp.nmr.Experiment(scp.nmr.read_csdf(path))
     assert experiment.source_kind == "processed_1d"
     np.testing.assert_array_equal(experiment.process().data, dataset.data)
+
+
+def test_csdf_roundtrips_resistance_unit(tmp_path):
+    coord = scp.Coord([0, 1], units="Hz")
+    dataset = scp.NDDataset([1.0, 2.0], units="milliohm", coordset=[coord])
+    path = scp.nmr.write_csdf(dataset, tmp_path / "resistance.csdf")
+    exported = json.loads(path.read_text())["csdm"]
+    assert exported["dependent_variables"][0]["unit"] == "mOhm"
+    assert scp.nmr.read_csdf(path).units == dataset.units
+
+
+def test_csdf_public_reader_retains_fine_frequency_grid(tmp_path, spectrum):
+    model, _ = spectrum
+    model["dimensions"][0]["count"] = 5
+    model["dimensions"][0]["coordinates_offset"] = "400000000 Hz"
+    model["dimensions"][0]["increment"] = "0.0000007Hz"
+    values = np.arange(10, dtype="<c8").reshape(2, 5)
+    model["dependent_variables"][0]["components"] = [
+        base64.b64encode(values.tobytes()).decode("ascii")
+    ]
+    source = tmp_path / "fine-grid.csdf"
+    source.write_text(json.dumps({"csdm": model}))
+
+    spectrum = scp.nmr.read_csdf(source)
+    frequencies = spectrum.x.data
+    np.testing.assert_array_equal(frequencies, 400000000 + 0.0000007 * np.arange(5))
+    path = scp.nmr.write_csdf(spectrum, tmp_path / "export.csdf")
+    np.testing.assert_array_max_ulp(
+        scp.nmr.read_csdf(path).x.data, frequencies, maxulp=2
+    )

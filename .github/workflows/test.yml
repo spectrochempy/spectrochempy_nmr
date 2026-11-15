@@ -157,6 +157,9 @@ jobs:
         run: |
           python -I -m pytest -ra tests/test_interop_conversion.py tests/test_agilent_interop_facade.py tests/test_agilent_reference.py tests/test_experiment_interop.py tests/test_processed_interop.py tests/test_processing_architecture.py tests/test_fft_prevalidation_compatibility.py
 
+      - name: Test CSDF exchange on released core
+        run: python -I -m pytest -ra tests/test_csdf.py
+
   pinned-core-tests:
     needs: artifacts
     runs-on: ubuntu-latest

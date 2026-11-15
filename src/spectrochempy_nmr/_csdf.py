@@ -14,6 +14,10 @@ from spectrochempy import ur
 
 _SI_PREFIX = r"(?:da|[qryzafpnumcdhkMGTPEZYRQ])?"
 _SI_FREQUENCY = re.compile(_SI_PREFIX + "Hz")
+_FREQUENCY_QUANTITY = re.compile(
+    r"([+-]?(?:[0-9]+(?:\.[0-9]*)?|\.[0-9]+)(?:[eE][+-]?[0-9]+)?)"
+    r"\s*(\(?[A-Za-z]+\)?)"
+)
 _SI_FACTOR = re.compile(
     _SI_PREFIX
     + r"(?:m|s|g|A|K|mol|cd|rad|sr|Hz|N|Pa|J|W|C|V|F|Ohm|S|Wb|T|H|lm|lx|Bq|Gy|Sv|kat)"
@@ -45,7 +49,7 @@ def read_csdf(path):
     dataset = NDDataset(
         values.copy(),
         dtype=values.dtype,
-        units=unit or None,
+        units=unit.replace("Ohm", "Ω") if unit else None,
         name=Path(path).stem,
         origin="CSDF",
     )
@@ -62,6 +66,8 @@ def read_csdf(path):
             coord.meta.csdf_origin_offset_hz = axis.origin_offset_hz
         coordinates.append(coord)
     dataset.set_coordset(*coordinates)
+    for dim in dataset.dims:
+        dataset.coord(dim)._rounding = False
     dataset.meta.data_domain = "frequency"
     dataset.meta.isfreq = [True] * dataset.ndim
     if dataset.ndim == 1:
@@ -157,13 +163,13 @@ def _encode_dimension(coord, count):
         )
     increment = (values[-1] - values[0]) / (count - 1) if count > 1 else 1.0
     expected = values[0] + np.arange(count) * increment
-    tolerance = min(
-        8 * np.finfo(float).eps * np.max(np.abs(values)), abs(increment) * 1e-6
-    )
+    magnitude = np.max(np.abs(values))
+    tolerance = 2 * (magnitude - np.nextafter(magnitude, 0.0))
     if (
         not np.isfinite(increment)
         or increment == 0
         or not np.all(np.diff(values) * np.sign(increment) > 0)
+        or not np.all(np.diff(expected) * np.sign(increment) > 0)
         or not np.allclose(values, expected, rtol=0, atol=tolerance)
     ):
         raise ValueError("CSDF export requires a linear frequency coordinate")
@@ -186,11 +192,12 @@ def _encode_dimension(coord, count):
 def _frequency(value):
     if not isinstance(value, str):
         raise ValueError("Expected a CSDF frequency quantity")
-    fields = value.split(maxsplit=1)
-    if len(fields) != 2:
+    match = _FREQUENCY_QUANTITY.fullmatch(_ascii_frequency_unit(value.strip()))
+    if match is None:
         raise ValueError("Expected a CSDF quantity with frequency units")
-    magnitude, unit = fields
-    unit = _ascii_frequency_unit(unit)
+    magnitude, unit = match.groups()
+    if unit.startswith("(") and unit.endswith(")"):
+        unit = unit[1:-1]
     if not _SI_FREQUENCY.fullmatch(unit):
         raise ValueError("Expected Hz or an SI-prefixed Hz unit")
     frequency = (float(magnitude) * ur.Unit(unit)).to("Hz").magnitude
