@@ -1279,10 +1279,10 @@ def test_optional_backends_fall_back_when_numba_import_raises_attribute_error(
 
 
 def test_tridiagonal_rf_falls_back_without_jit(monkeypatch):
-    numba = pytest.importorskip("numba")
     load = _pulsar_tridiagonal.get_tridiagonal_solver
     if load() is None:
         pytest.skip("optional Numba/LAPACK RF backend is unavailable")
+    import numba
 
     try:
         with monkeypatch.context() as context:
