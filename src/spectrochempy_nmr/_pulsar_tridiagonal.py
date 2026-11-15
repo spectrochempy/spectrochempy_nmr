@@ -33,11 +33,13 @@ def _lp64_dstev(cython_lapack):
 def get_tridiagonal_solver():
     """Initialize the optional backend once, or return None for dense fallback."""
     try:
-        from numba import njit
+        from numba import config, njit
         from numba.core.errors import NumbaError
         from numba.extending import get_cython_function_address
         from scipy.linalg import cython_lapack
-    except (ImportError, OSError, RuntimeError):
+    except (AttributeError, ImportError, OSError, RuntimeError):
+        return None
+    if config.DISABLE_JIT:
         return None
 
     try:

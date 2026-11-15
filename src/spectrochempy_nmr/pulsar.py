@@ -1231,36 +1231,44 @@ def _sequence_signals(
     readout=None,
     readout_terms=None,
     workers=1,
+    out=None,
 ):
     """Average complex band amplitudes over rotor phase at preparation onset."""
+    if out is None:
+        out = np.zeros(
+            (offsets.shape[0], strengths.size, 2 * sidebands + 1), dtype=complex
+        )
     workers = min(workers, offsets.shape[0])
     if workers > 1:
-        # Each slice processes the full phase cycle with its own block caches.
-        # Keep the vertex order so that deposition consumes the original mesh.
+        # Each slice processes the full cycle and writes to its own output range.
         edges = np.linspace(0, offsets.shape[0], workers + 1, dtype=int)
         chunks = (slice(lo, hi) for lo, hi in zip(edges[:-1], edges[1:], strict=True))
+        errors, callback = np.geterr(), np.geterrcall()
 
         def process(chunk):
-            return _sequence_signals(
-                offsets[chunk],
-                None if terms is None else terms[chunk],
-                strengths,
-                initial,
-                events,
-                spinning_hz,
-                count,
-                sidebands,
-                readout=readout,
-                readout_terms=None if readout_terms is None else readout_terms[chunk],
-            )
+            with np.errstate(call=callback, **errors):
+                _sequence_signals(
+                    offsets[chunk],
+                    None if terms is None else terms[chunk],
+                    strengths,
+                    initial,
+                    events,
+                    spinning_hz,
+                    count,
+                    sidebands,
+                    readout=readout,
+                    readout_terms=None
+                    if readout_terms is None
+                    else readout_terms[chunk],
+                    out=out[chunk],
+                )
 
         with ThreadPoolExecutor(max_workers=workers) as executor:
-            return np.concatenate(list(executor.map(process, chunks)), axis=0)
+            for _ in executor.map(process, chunks):
+                pass
+        return out
 
     band_orders = np.arange(-sidebands, sidebands + 1)
-    amplitudes = np.zeros(
-        (offsets.shape[0], strengths.size, band_orders.size), dtype=complex
-    )
     for block, coefficient, density, gamma_end in _sequence_state_blocks(
         offsets, terms, initial, events, spinning_hz, count
     ):
@@ -1270,7 +1278,7 @@ def _sequence_signals(
             coherence = density[..., readout[0], readout[1]]
         signal = -1j * np.sqrt(strengths) * coherence
         if not spinning_hz:
-            amplitudes[block, :, 0] += coefficient * signal
+            out[block, :, 0] += coefficient * signal
             continue
         detected_terms = (terms if readout_terms is None else readout_terms)[block]
         wave = np.exp(
@@ -1281,8 +1289,8 @@ def _sequence_signals(
         preparation = np.fft.ifft(signal.swapaxes(-1, -2) * wave.conj(), axis=-1)[
             ..., band_orders
         ]
-        amplitudes[block] += coefficient * detection * preparation
-    return amplitudes
+        out[block] += coefficient * detection * preparation
+    return out
 
 
 def simulate_rectangular_pulse(
