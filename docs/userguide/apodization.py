@@ -47,31 +47,48 @@
 # the three window shapes on this acquisition.
 
 # %%
-import matplotlib.pyplot as plt
-
 import spectrochempy as scp
 
 fid = scp.nmr.read_topspin(
     "nmrdata/bruker/tests/nmr/topspin_1d/1/fid", remove_digital_filter=True
 )
-comparisons = [
-    ("Exponential (30 Hz)", *fid.em(lb=30.0, retapod=True)),
-    ("Gaussian (75 Hz)", *fid.gm(gb=75.0, lb=0.0, retapod=True)),
-    ("Squared cosine bell", *fid.sp(ssb=2, pow=2, retapod=True)),
+exponential, exponential_window = fid.em(lb=30.0, retapod=True)
+gaussian, gaussian_window = fid.gm(gb=75.0, lb=0.0, retapod=True)
+cosine_bell, cosine_window = fid.sp(ssb=2, pow=2, retapod=True)
+labels = [
+    "Unweighted",
+    "Exponential (30 Hz)",
+    "Gaussian (75 Hz)",
+    "Squared cosine bell",
+]
+fids = [fid, exponential, gaussian, cosine_bell]
+windows = [
+    scp.ones_like(exponential_window),
+    exponential_window,
+    gaussian_window,
+    cosine_window,
 ]
 
-fig, (weights_ax, fid_ax) = plt.subplots(2, 1, sharex=True, layout="constrained")
-time = fid.x.to("ms").data
-weights_ax.axhline(1.0, color="0.4", linestyle=":", label="Unweighted")
-fid_ax.plot(time, abs(fid).data, color="0.4", linestyle=":", label="Unweighted")
-for label, weighted, window in comparisons:
-    (line,) = weights_ax.plot(time, window.data, label=label)
-    fid_ax.plot(time, abs(weighted).data, color=line.get_color())
+for dataset in [*fids, *windows]:
+    dataset.x = dataset.x.to("ms")
 
-weights_ax.set(ylabel="Window weight")
-weights_ax.legend()
-fid_ax.set(xlabel="Acquisition time / ms", ylabel="FID magnitude / count")
-plt.show()
+_ = scp.plot_multiple(
+    windows,
+    method="pen",
+    labels=labels,
+    legend="lower left",
+    xlabel="Acquisition time / ms",
+    ylabel="Window weight",
+    ylim=(-0.05, 1.05),
+)
+_ = scp.plot_multiple(
+    [abs(dataset) for dataset in fids],
+    method="pen",
+    labels=labels,
+    legend="upper right",
+    xlabel="Acquisition time / ms",
+    ylabel="FID magnitude / count",
+)
 
 # %% [raw] raw_mimetype="text/restructuredtext"
 # Compare the spectra
@@ -83,17 +100,16 @@ plt.show()
 # and Gaussian settings make the changes near the main resonance visible.
 
 # %%
-fig, ax = plt.subplots(layout="constrained")
-datasets = [("Unweighted", fid)]
-datasets.extend((label, weighted) for label, weighted, _ in comparisons)
-for label, dataset in datasets:
-    spectrum = dataset.zf_size(size=32768).fft().pk(phc0=52.44, phc1=-16.84)
-    region = spectrum.real[2.0:-0.5]
-    ax.plot(region.x.data, region.data, label=label)
-
-ax.set(xlim=(2, -0.5), xlabel="Chemical shift / ppm", ylabel="Intensity / count")
-ax.legend()
-plt.show()
+spectra = [
+    dataset.zf_size(size=32768).fft().pk(phc0=52.44, phc1=-16.84) for dataset in fids
+]
+_ = scp.plot_multiple(
+    [spectrum[2.0:-0.5] for spectrum in spectra],
+    method="pen",
+    labels=labels,
+    legend="upper left",
+    xlim=(2, -0.5),
+)
 
 # %% [raw] raw_mimetype="text/restructuredtext"
 # The exponential and Gaussian windows reduce the height of the main

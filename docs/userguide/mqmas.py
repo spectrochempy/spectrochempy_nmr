@@ -131,7 +131,7 @@ comparison_levels = [
 ]
 f2_bounds = tuple((f2_carrier - ppm) * reference_mhz for ppm in (65, 20))
 unsheared_region = unsheared_rr[-10500.0:-4200.0, f2_bounds[0] : f2_bounds[1]]
-strongest = np.unravel_index(unsheared_region.data.argmax(), unsheared_region.shape)
+strongest = unsheared_region.argmax()
 f2_peak = unsheared_region.x.data[strongest[1]]
 f1_peak = unsheared_region.y.data[strongest[0]]
 axes = scp.multiplot(
@@ -144,8 +144,8 @@ axes = scp.multiplot(
     equal_aspect=False,
     figsize=(10, 4),
 )
-line_x = np.array(f2_bounds)
-_ = axes[0].plot(line_x, f1_peak + shear * (line_x - f2_peak), "--", color="0.3")
+line_y = [f1_peak + shear * (frequency - f2_peak) for frequency in f2_bounds]
+_ = axes[0].plot(f2_bounds, line_y, "--", color="0.3")
 
 # %% [markdown]
 # To revise the F2 phase, return to the complex XF2 dataset and run

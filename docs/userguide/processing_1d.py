@@ -44,8 +44,6 @@
 # the recorded time-domain signal. The plot shows its real component.
 
 # %%
-import matplotlib.pyplot as plt
-
 import spectrochempy as scp
 from spectrochempy_nmr import autophase
 
@@ -64,13 +62,14 @@ _ = raw_fid.plot(title="Bruker FID as recorded")
 # %%
 fid = scp.nmr.read(path, remove_digital_filter=True)
 
-fig, ax = plt.subplots()
-for trace, label in ((raw_fid, "As recorded"), (fid, "Delay corrected")):
-    onset = abs(trace[:480])
-    ax.plot(onset.x.to("us").data, onset.data, label=label)
-ax.set(xlabel="Time / µs", ylabel="FID magnitude / count")
-ax.legend()
-plt.show()
+_ = scp.plot_multiple(
+    [abs(raw_fid[:480]), abs(fid[:480])],
+    method="pen",
+    labels=["As recorded", "Delay corrected"],
+    legend="upper right",
+    xlabel="Time / µs",
+    ylabel="FID magnitude / count",
+)
 
 # %% [raw] raw_mimetype="text/restructuredtext"
 # Wrap the corrected FID in :class:`~spectrochempy_nmr.Experiment` and

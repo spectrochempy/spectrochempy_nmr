@@ -77,9 +77,10 @@
 
 # %%
 import os
+from cmath import phase as phase_angle
+from math import degrees
 from pathlib import Path
 
-import matplotlib.pyplot as plt
 import numpy as np
 import spectrochempy as scp
 from nmrglue import bruker
@@ -91,8 +92,8 @@ path = os.environ.get("SCP_MSM_DATA")
 if path:
     states = scp.nmr.read_multiplex_spam(path, coherence_order=3)
     xf2 = scp.nmr.Experiment(states).xf2(size=4096)
-    row = xf2.data[0, 0]
-    phc0 = -np.degrees(np.angle(row[np.argmax(np.abs(row))]))
+    row = xf2[0, 0].squeeze()
+    phc0 = -degrees(phase_angle(row.data[abs(row).argmax()]))
     phased = scp.nmr.Experiment(xf2).xf2p(phc0=phc0)
     spectrum = scp.nmr.Experiment(phased).xfshear(size=256, spin=1.5, coherence_order=3)
     spectrum[0].squeeze().real.plot(method="contour")
@@ -424,11 +425,10 @@ def compare_mqecho(root):
             )
         )
 
-    fig, axes = plt.subplots(2, 3, figsize=(12, 7), layout="constrained")
-    for axrow, name, maps, centers, xlim, ylim, lb in (
-        (axes[0], "PST-5", pst5_maps, [(36, 38), (40, 42)], (49, 30), (50, 33), 40),
+    datasets, titles, panel_kwargs, peaks = [], [], [], []
+    for name, maps, centers, xlim, ylim, lb in (
+        ("PST-5", pst5_maps, [(36, 38), (40, 42)], (49, 30), (50, 33), 40),
         (
-            axes[1],
             "RbNO₃/206",
             rb_maps,
             [(-27, -22.3), (-31.5, -26.3)],
@@ -439,30 +439,38 @@ def compare_mqecho(root):
     ):
         reference = measure_peaks(maps[0], centers)[0][2]
         labels = ("No window", f"Echo only ({lb} Hz)", f"Symmetric ({lb} Hz)")
-        for ax, dataset, label in zip(axrow, maps, labels, strict=True):
+        for dataset, label in zip(maps, labels, strict=True):
             a, b = measure_peaks(dataset, centers)
             print(
                 f"{name} | {label} | F1 A/B {a[3]:.2f}/{b[3]:.2f} ppm | "
                 f"F2 A/B {a[4]:.2f}/{b[4]:.2f} ppm | B/A {b[2] / a[2]:.3f}"
             )
-            ax.contour(
-                dataset.x.data,
-                dataset.y.data,
-                dataset.data / reference,
-                levels=[0.08, 0.15, 0.25, 0.4, 0.6, 0.8, 0.95],
-            )
-            ax.set(
-                title=f"{name} · {label}",
-                xlim=xlim,
-                ylim=ylim,
-                xlabel="F2 (ppm)",
-                ylabel="Isotropic F1 (ppm)",
-            )
-            for peak_label, peak in zip("AB", (a, b), strict=True):
-                ax.annotate(
-                    peak_label, peak[:2], xytext=(7, 7), textcoords="offset points"
-                )
-    return fig
+            datasets.append(dataset / reference)
+            titles.append(f"{name} · {label}")
+            panel_kwargs.append({"xlim": xlim, "ylim": ylim})
+            peaks.append((a, b))
+
+    axes = scp.multiplot(
+        datasets,
+        nrow=2,
+        ncol=3,
+        method="contour",
+        labels=titles,
+        panel_kwargs=panel_kwargs,
+        levels=[0.08, 0.15, 0.25, 0.4, 0.6, 0.8, 0.95],
+        cmap="viridis",
+        x_reverse=True,
+        y_reverse=True,
+        xlabel="F2 (ppm)",
+        ylabel="Isotropic F1 (ppm)",
+        equal_aspect=False,
+        figsize=(12, 7),
+        show=False,
+    )
+    for ax, pair in zip(axes.flat, peaks, strict=True):
+        for peak_label, peak in zip("AB", pair, strict=True):
+            ax.annotate(peak_label, peak[:2], xytext=(7, 7), textcoords="offset points")
+    scp.show()
 
 
 # %% [raw] raw_mimetype="text/restructuredtext"
@@ -480,18 +488,20 @@ if data_root:
         ("⁸⁷Rb RbNO₃/206\n3Q MQMAS from multiplex", multiplex[:, -10.0:-60.0]),
         ("⁸⁷Rb RbNO₃/15\nSTMAS", stmas[:, -10.0:-60.0]),
     )
-    fig, axes = plt.subplots(1, 3, figsize=(12, 4), layout="constrained")
-    for ax, (title, dataset) in zip(axes, panels, strict=True):
-        ax.contour(
-            dataset.x.data,
-            dataset.y.data,
-            dataset.data / dataset.data.max(),
-            levels=[0.10, 0.18, 0.30, 0.50, 0.70, 0.90],
-        )
-        ax.set(title=title, xlabel="F2 (ppm)", ylabel="Isotropic F1 (ppm)")
-        ax.invert_xaxis()
-        ax.invert_yaxis()
-    plt.show()
+    _ = scp.multiplot(
+        [dataset / dataset.max() for _, dataset in panels],
+        ncol=3,
+        method="contour",
+        labels=[title for title, _ in panels],
+        levels=[0.10, 0.18, 0.30, 0.50, 0.70, 0.90],
+        cmap="viridis",
+        x_reverse=True,
+        y_reverse=True,
+        xlabel="F2 (ppm)",
+        ylabel="Isotropic F1 (ppm)",
+        equal_aspect=False,
+        figsize=(12, 4),
+    )
 else:
     print("Set SCP_RBNO3_DATA to the directory containing RbNO3/15 and RbNO3/206.")
 
@@ -502,5 +512,4 @@ else:
 
 # %% jupyter={"source_hidden": true}
 if data_root:
-    mqecho_figure = compare_mqecho(Path(data_root))
-    plt.show()
+    compare_mqecho(Path(data_root))

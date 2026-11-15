@@ -9,8 +9,9 @@ layout and the phase-cycle reconstruction.
 """
 
 import os
+from cmath import phase as phase_angle
+from math import degrees
 
-import numpy as np
 import spectrochempy as scp
 
 
@@ -18,8 +19,8 @@ path = os.environ.get("SCP_MSM_DATA")
 if path:
     states = scp.nmr.read_multiplex_spam(path, coherence_order=3)
     xf2 = scp.nmr.Experiment(states).xf2(size=4096)
-    row = xf2.data[0, 0]
-    phc0 = -np.degrees(np.angle(row[np.argmax(np.abs(row))]))
+    row = xf2[0, 0].squeeze()
+    phc0 = -degrees(phase_angle(row.data[abs(row).argmax()]))
     phased = scp.nmr.Experiment(xf2).xf2p(phc0=phc0)
     spectrum = scp.nmr.Experiment(phased).xfshear(size=256, spin=1.5, coherence_order=3)
     spectrum[0].squeeze().real.plot(method="contour")
