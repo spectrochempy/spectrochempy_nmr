@@ -6,8 +6,7 @@ Read the epicatechin COSY acquisition from
 `nmrXiv project P33 <https://doi.org/10.57992/nmrxiv.p33>`_ (CC0 1.0).
 Both axes are in the time domain. The direct axis F2 is ``x`` and the
 indirect axis F1 is ``y``.
-See :ref:`jeol-cosy-indirect-processing` for the F2 transform and the
-external NMRPipe workflow for this file.
+The indirect Fourier transform is currently unsupported for this acquisition.
 """
 
 # %%

@@ -4,8 +4,7 @@ Transform F2 and F1 in 2D NMR
 
 Transform a Bruker States acquisition of ²⁷Al PST-5 along F2 and F1,
 then plot the real-real plane. The :doc:`MQMAS guide </userguide/mqmas>`
-continues with phase correction and shearing. For the JEOL COSY workflow,
-see :ref:`jeol-cosy-indirect-processing`.
+continues with phase correction and shearing.
 
 Data: Christian Fernandez, LCS, distributed through
 `spectrochempy_data <https://github.com/spectrochempy/spectrochempy_data>`_
