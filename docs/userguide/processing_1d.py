@@ -93,16 +93,20 @@ result = experiment.process(apodization="em", lb=5.0, phase=None)
 # To inspect intermediate results, apply the core operations to the
 # ``NDDataset`` exposed by ``experiment.dataset``. You can call them as
 # dataset methods or as functions such as ``scp.em(experiment.dataset, lb=5.0)``.
+# Calling ``plot()`` on the complex spectrum displays its real component by
+# default. Set ``show_complex=True`` to add the imaginary component as a
+# dashed line.
 
 # %%
 windowed = experiment.dataset.em(lb=5.0)
 padded = windowed.zf_size(size=max(32768, windowed.shape[-1]))
 spectrum = padded.fft()
-unphased_axes = spectrum.real.plot(title="After Fourier transformation")
+unphased_axes = spectrum.plot(show_complex=True, title="After Fourier transformation")
+unphased_axes.autoscale(axis="y")
 
 # %% [raw] raw_mimetype="text/restructuredtext"
-# Apply phase correction to the complex spectrum, then plot its real
-# component over the same ppm range. The zero-order angle ``phc0`` is constant
+# Apply phase correction to the complex spectrum, then plot both
+# components over the same ppm range. The zero-order angle ``phc0`` is constant
 # across the spectrum, while the first-order angle ``phc1`` varies linearly
 # with frequency. The angles below are in degrees and apply to this
 # acquisition. Compare the shape of the main resonance before and after
@@ -110,7 +114,8 @@ unphased_axes = spectrum.real.plot(title="After Fourier transformation")
 
 # %%
 phased = spectrum.pk(phc0=52.44, phc1=-16.84)
-phased_axes = phased.real.plot(title="After phase correction")
+phased_axes = phased.plot(show_complex=True, title="After phase correction")
+phased_axes.autoscale(axis="y")
 phased_axes.set_xlim(unphased_axes.get_xlim())
 
 # %% [raw] raw_mimetype="text/restructuredtext"
