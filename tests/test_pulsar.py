@@ -705,8 +705,10 @@ def test_passive_j_offset_also_acts_during_preparation():
     np.testing.assert_allclose(result.data[peaks], expected, atol=1e-12, rtol=0)
 
 
-@pytest.mark.parametrize("spinning", [0, 6500])
-def test_coupled_sequence_matches_passive_limit_for_an_unpulsed_partner(spinning):
+@pytest.mark.parametrize(("spinning", "workers"), [(0, 1), (6500, 1), (6500, 2)])
+def test_coupled_sequence_matches_passive_limit_for_an_unpulsed_partner(
+    spinning, workers
+):
     events = [Pulse(25e-6, 7500, phase_deg=15), Delay(62e-6)]
     settings = dict(
         spectral_width_hz=50e3,
@@ -721,6 +723,7 @@ def test_coupled_sequence_matches_passive_limit_for_an_unpulsed_partner(spinning
         observed=SpinSite(**site),
         partner=SpinSite(0.5, 80e6),
         j_hz=300,
+        workers=workers,
         **settings,
     )
     passive = simulate_pulse_sequence(
@@ -1041,6 +1044,55 @@ def test_mas_pulse_cache_shares_only_matching_trajectories(
         # Only the two midpoint steps of the first pulse are repeated.
         per_block = 11 if difference == "duration" else 12
         assert cached_count * per_block == count * (per_block - 2)
+
+
+def test_orientation_workers_preserve_the_phase_cycle_cache(monkeypatch):
+    scans = (
+        (Pulse(4e-6, 32e3, 37), Delay(13e-6), Pulse(6e-6, 42e3, -72)),
+        (Pulse(4e-6, 32e3, 103), Delay(13e-6), Pulse(6e-6, 42e3, 217)),
+    )
+    cycle = PhaseCycle(scans, (0.4 + 0.2j, 0.3j))
+    settings = dict(
+        spin=2.5,
+        cq_hz=2.923e6,
+        eta=0.37,
+        larmor_hz=104.468516e6,
+        spectral_width_hz=48e3,
+        spinning_hz=8e3,
+        sidebands=2,
+        accuracy=1,
+        points=512,
+        transitions="central",
+    )
+    propagate = pulsar._pulse_propagator
+    batches = []
+
+    def record(rf, offsets, duration):
+        batches.append(offsets.size // offsets.shape[-1])
+        return propagate(rf, offsets, duration)
+
+    monkeypatch.setattr(pulsar, "_pulse_propagator", record)
+    serial = simulate_pulse_sequence(cycle, **settings)
+    serial_batches, serial_matrices = len(batches), sum(batches)
+    batches.clear()
+    parallel = simulate_pulse_sequence(cycle, **settings, workers=2)
+    assert len(batches) == 2 * serial_batches
+    assert sum(batches) == serial_matrices
+    np.testing.assert_array_equal(parallel.x.data, serial.x.data)
+    np.testing.assert_allclose(parallel.data, serial.data, atol=1e-14, rtol=1e-12)
+
+
+@pytest.mark.parametrize("workers", [0, -1])
+def test_rectangular_pulse_requires_positive_workers(workers):
+    with pytest.raises(ValueError, match="workers must be a positive integer"):
+        simulate_rectangular_pulse(
+            spin=0.5,
+            larmor_hz=100e6,
+            spectral_width_hz=8000,
+            rf_hz=23e3,
+            duration_s=6e-6,
+            workers=workers,
+        )
 
 
 @pytest.mark.parametrize("rotor_hz", [0, 8e3])
