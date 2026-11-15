@@ -293,6 +293,22 @@ the on- and off-resonance spin-1/2 response with a Bloch rotation and
 check the hard-pulse limit for a quadrupolar powder.
 
 Under MAS the simulator samples starting rotor phases uniformly.
+For finite pulses on an isolated spin, it rotates the density into the
+RF phase frame at the start of the pulse. The Hamiltonian in this frame
+is real symmetric at each midpoint, and the density returns to the
+simulation frame at the end of the pulse.
+Within a phase cycle, scans can share the full pulse propagator when
+the RF amplitude, offset, duration, and sampled rotor trajectory match.
+The RF phase is applied in each scan's own basis. The cache is limited
+to 16 MiB per orientation block and is released as propagation advances.
+
+Install `spectrochempy-nmr[rf]` to add Numba support. Pass
+`rf_solver="tridiagonal"` to `simulate_pulse_sequence()` or
+`simulate_rectangular_pulse()` for finite pulses on a single active
+spin, in static or MAS simulations. The backend compiles on first use
+and uses SciPy's LP64 LAPACK `DSTEV`. If the backend is unavailable or a
+batch fails in LAPACK, PULSAR uses the dense solver. The default
+`rf_solver="dense"` requires no Numba import.
 Finite preparation can distinguish octant reflections even for aligned
 tensors, so it uses at least four octants. It uses all eight for a
 rotated CSA tensor because a time-ordered RF pulse can distinguish
