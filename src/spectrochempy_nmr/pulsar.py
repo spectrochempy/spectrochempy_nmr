@@ -11,6 +11,7 @@ validation also requires independent checks of the model and its conventions.
 See the adjacent README.pulsar.md for the equations and implementation notes.
 """
 
+from concurrent.futures import ThreadPoolExecutor
 from dataclasses import dataclass
 from functools import lru_cache
 from math import log
@@ -1206,11 +1207,15 @@ def _powder_density(
     return density / vertex_weights.sum()
 
 
-def _validate_output(output, sidebands):
+def _validate_output(output, sidebands, workers):
     if output not in ("spectrum", "density"):
         raise ValueError("output must be 'spectrum' or 'density'.")
     if output == "density" and sidebands:
         raise ValueError("Sideband selection applies only to spectral output.")
+    if workers < 1:
+        raise ValueError("workers must be a positive integer.")
+    if output == "density" and workers > 1:
+        raise ValueError("Multiple workers apply only to spectral output.")
 
 
 def _sequence_signals(
@@ -1225,8 +1230,33 @@ def _sequence_signals(
     *,
     readout=None,
     readout_terms=None,
+    workers=1,
 ):
     """Average complex band amplitudes over rotor phase at preparation onset."""
+    workers = min(workers, offsets.shape[0])
+    if workers > 1:
+        # Each slice processes the full phase cycle with its own block caches.
+        # Keep the vertex order so that deposition consumes the original mesh.
+        edges = np.linspace(0, offsets.shape[0], workers + 1, dtype=int)
+        chunks = (slice(lo, hi) for lo, hi in zip(edges[:-1], edges[1:], strict=True))
+
+        def process(chunk):
+            return _sequence_signals(
+                offsets[chunk],
+                None if terms is None else terms[chunk],
+                strengths,
+                initial,
+                events,
+                spinning_hz,
+                count,
+                sidebands,
+                readout=readout,
+                readout_terms=None if readout_terms is None else readout_terms[chunk],
+            )
+
+        with ThreadPoolExecutor(max_workers=workers) as executor:
+            return np.concatenate(list(executor.map(process, chunks)), axis=0)
+
     band_orders = np.arange(-sidebands, sidebands + 1)
     amplitudes = np.zeros(
         (offsets.shape[0], strengths.size, band_orders.size), dtype=complex
@@ -1278,6 +1308,7 @@ def simulate_rectangular_pulse(
     probe_bandwidth_hz=None,
     rf_solver="dense",
     deposition="numpy",
+    workers=1,
 ):
     """Simulate a powder after one finite rectangular RF pulse.
 
@@ -1290,6 +1321,7 @@ def simulate_rectangular_pulse(
     Set rf_solver="tridiagonal" to use the optional Numba/LAPACK solver.
 
     Set deposition="numba" for optional JIT deposition with NumPy fallback.
+    Set workers above one to compute groups of powder orientations in threads.
     """
     return simulate_pulse_sequence(
         [Pulse(duration_s, rf_hz, phase_deg)],
@@ -1311,6 +1343,7 @@ def simulate_rectangular_pulse(
         probe_bandwidth_hz=probe_bandwidth_hz,
         deposition=deposition,
         rf_solver=rf_solver,
+        workers=workers,
     )
 
 
@@ -1340,6 +1373,7 @@ def simulate_pulse_sequence(
     probe_bandwidth_hz=None,
     rf_solver="dense",
     deposition="numpy",
+    workers=1,
 ):
     """Simulate a sequence of pulses, delays and coherence selections.
 
@@ -1354,6 +1388,8 @@ def simulate_pulse_sequence(
     Numba/LAPACK backend when available and falls back to the dense solver.
 
     Set deposition="numba" for optional JIT deposition with NumPy fallback.
+    For spectral output, set workers above one to compute groups of powder
+    orientations in threads. Scans share propagators within each block.
     """
     points, accuracy, sidebands = index(points), index(accuracy), index(sidebands)
     (
@@ -1396,7 +1432,8 @@ def simulate_pulse_sequence(
     if max_rf_step_s <= 0:
         raise ValueError("max_rf_step_s must be positive.")
     _validate_grid(spectral_width_hz, spinning_hz, points, accuracy, sidebands)
-    _validate_output(output, sidebands)
+    workers = index(workers)
+    _validate_output(output, sidebands, workers)
     bandwidth = _validate_probe_bandwidth(probe_bandwidth_hz)
     directions, weights, triangles, angle, csa, quadrupolar_eta = _powder_interactions(
         accuracy,
@@ -1488,6 +1525,7 @@ def simulate_pulse_sequence(
             spinning_hz,
             count if spinning_hz else 1,
             sidebands,
+            workers=workers,
         )
         signals *= receiver * population
         for i in np.flatnonzero(selected):
@@ -1637,6 +1675,7 @@ def simulate_coupled_sequence(
     output="spectrum",
     probe_bandwidth_hz=None,
     deposition="numpy",
+    workers=1,
 ):
     """Simulate two RF-active spins with a secular isotropic J coupling.
 
@@ -1648,6 +1687,8 @@ def simulate_coupled_sequence(
     with partner indices varying fastest.
 
     Set deposition="numba" for optional JIT deposition with NumPy fallback.
+    For spectral output, set workers above one to compute groups of powder
+    orientations in threads. Scans share propagators within each block.
     """
     points, accuracy, sidebands = index(points), index(accuracy), index(sidebands)
     (
@@ -1662,7 +1703,8 @@ def simulate_coupled_sequence(
     if max_rf_step_s <= 0:
         raise ValueError("max_rf_step_s must be positive.")
     _validate_grid(spectral_width_hz, spinning_hz, points, accuracy, sidebands)
-    _validate_output(output, sidebands)
+    workers = index(workers)
+    _validate_output(output, sidebands, workers)
     bandwidth = _validate_probe_bandwidth(probe_bandwidth_hz)
     site_a, site_b = _site_parameters(observed), _site_parameters(partner)
     spin_a, spin_b = site_a[0], site_b[0]
@@ -1781,6 +1823,7 @@ def simulate_coupled_sequence(
             sidebands,
             readout=readout,
             readout_terms=detected_terms,
+            workers=workers,
         )
         signals *= receiver * population
         for i in range(strengths.size):

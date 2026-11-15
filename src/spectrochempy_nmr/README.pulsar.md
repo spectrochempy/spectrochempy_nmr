@@ -317,6 +317,15 @@ on first use in each process. The default `deposition="numpy"` also
 serves as the fallback when the JIT is unavailable. This option is
 independent of `rf_solver`.
 
+For spectral output from `simulate_pulse_sequence()`,
+`simulate_rectangular_pulse()` or `simulate_coupled_sequence()`, set
+`workers=2` to process groups of powder orientations in two threads.
+The default is one worker. Each active worker uses its own orientation
+blocks and propagator cache, shared by the scans in each block. The
+blocks are joined in powder mesh order before spectral deposition.
+Extra workers increase peak memory use. With threaded BLAS, limiting
+BLAS to one thread per worker can avoid competition for CPU cores.
+
 Finite preparation can distinguish octant reflections even for aligned
 tensors, so it uses at least four octants. It uses all eight for a
 rotated CSA tensor because a time-ordered RF pulse can distinguish
