@@ -63,6 +63,10 @@ def _check_parity(
     assert result.dims == (["c", "y", "x"] if paired else ["y", "x"])
     for dim, params in (("x", direct), ("y", indirect)):
         coord = result.coordset[dim]
+        if dim == "y" and direct.get("FnTYPE") == 2:
+            assert coord.title == "Stored F1 position"
+            np.testing.assert_array_equal(coord.data, np.arange(coord.size))
+            continue
         width = params["SW"] * params["SFO1"]
         actual_seconds = (coord.data * coord.units).to("s").m
         np.testing.assert_allclose(
@@ -95,6 +99,141 @@ def _synthetic_ser(tmp_path, mode, complete=True, nus=False, floating=False):
         # The legacy path ignores this directory, while nmrglue-ng opens it.
         (path / "nuslist").mkdir()
     return path
+
+
+@pytest.mark.parametrize(
+    ("contents", "indices"),
+    [
+        ("0\n4\n2\n7\n", [0, 4, 2, 7]),
+        ("0\n4\n4\n7\n", None),
+        ("0\n4\n8\n7\n", None),
+        ("0\n4\n2\n", None),
+        ("0\n4\nbad\n7\n", None),
+        ("0\n4 2\n2\n7\n", None),
+        (None, None),
+    ],
+    ids=[
+        "storage-order",
+        "duplicate",
+        "out-of-range",
+        "short",
+        "text",
+        "extra-column",
+        "missing",
+    ],
+)
+def test_paired_nus_preserves_schedule_and_guards_f1(tmp_path, contents, indices):
+    path = _synthetic_ser(tmp_path, 6, nus=True)
+    indirect = path / "acqu2s"
+    indirect.write_text(indirect.read_text().replace("##END=", "##$NusTD= 16\n##END="))
+    schedule = path / "nuslist"
+    schedule.rmdir()
+    if contents is not None:
+        schedule.write_text(contents)
+    source = scp.read_topspin(path / "ser", local_only=True)
+    assert source.shape[:2] == (2, 4)
+    assert source.meta.bruker_nus == {
+        "indices": indices,
+        "full_points": 8,
+    }
+    expected = np.asarray(indices) * 1000.0 if indices is not None else np.arange(4)
+    np.testing.assert_allclose(source.y.data, expected)
+    with pytest.raises(NotImplementedError, match="schedule-aware reconstruction"):
+        scp.nmr.Experiment(source).process()
+    f2 = source.fft(dim="x")
+    np.testing.assert_array_equal(f2.y.data, source.y.data)
+    with pytest.raises(NotImplementedError, match="schedule-aware reconstruction"):
+        f2.fft(dim="y")
+
+
+@pytest.mark.parametrize(
+    ("size", "error"),
+    [(6144, None), (7168, "complete F1 pairs"), (6160, "incomplete storage trace")],
+)
+@pytest.mark.parametrize("aq_mode", [1, 3])
+def test_paired_nus_uses_physical_trace_boundaries(tmp_path, size, error, aq_mode):
+    path = _synthetic_ser(tmp_path, 6, nus=True)
+    direct = path / "acqus"
+    direct.write_text(
+        direct.read_text()
+        .replace("##$AQ_mod= 3", f"##$AQ_mod= {aq_mode}")
+        .replace("##$DTYPA= 0\n", "")
+    )
+    indirect = path / "acqu2s"
+    indirect.write_text(indirect.read_text().replace("##END=", "##$NusTD= 16\n##END="))
+    schedule = path / "nuslist"
+    schedule.rmdir()
+    schedule.write_text("0\n4\n2\n" if error is None else "0\n4\n2\n7\n")
+    ser = path / "ser"
+    payload = ser.read_bytes()[:size]
+    ser.write_bytes(payload)
+
+    if error is not None:
+        with pytest.raises(SpectroChemPyError, match=error):
+            scp.read_topspin(ser, local_only=True)
+        return
+
+    source = scp.read_topspin(ser, local_only=True)
+    assert source.shape == (2, 3, 128)
+    assert source.meta.tdeff[-2] == 3
+    assert source.meta.bruker_nus == {"indices": [0, 4, 2], "full_points": 8}
+    words = np.frombuffer(payload, dtype=">i4").reshape(6, 256)
+    expected = (words[:, ::2] - 1j * words[:, 1::2]) / 12
+    np.testing.assert_allclose(
+        source.data, np.stack((expected[::2], expected[1::2])), atol=1e-12
+    )
+
+
+def test_paired_nus_rejects_grid_size_outside_integer_range(tmp_path):
+    path = _synthetic_ser(tmp_path, 6, nus=True)
+    indirect = path / "acqu2s"
+    indirect.write_text(
+        indirect.read_text().replace(
+            "##END=", "##$NusTD= 200000000000000000000000\n##END="
+        )
+    )
+    schedule = path / "nuslist"
+    schedule.rmdir()
+    schedule.write_text("0\n4\n2\n70000000000000000000000\n")
+    source = scp.read_topspin(path / "ser", local_only=True)
+    assert source.meta.bruker_nus == {"indices": None, "full_points": None}
+    np.testing.assert_array_equal(source.y.data, np.arange(4))
+
+
+def test_real_bruker_nus_survives_scp_roundtrip(tmp_path):
+    root = os.environ.get("NMR_BRUKER_NUS_DATA")
+    if not root:
+        pytest.skip("set NMR_BRUKER_NUS_DATA to the NMRPipe Bruker 2d_format directory")
+    acquisition = Path(root) / "nus"
+    indices = np.loadtxt(acquisition / "nuslist", dtype=int)
+    baseline = scp.read_topspin(Path(root) / "std/ser", local_only=True)
+    source = scp.read_topspin(acquisition / "ser", local_only=True)
+    assert baseline.meta.bruker_nus is None
+    assert baseline.shape[-2] == 62
+    assert source.shape == (2, 31, 1024)
+    assert source.meta.bruker_nus == {
+        "indices": indices.tolist(),
+        "full_points": baseline.shape[-2],
+    }
+    words = np.fromfile(acquisition / "ser", dtype="<i4").reshape(62, 2048)
+    traces = (words[:, ::2] - 1j * words[:, 1::2]) / (64 * 90.5)
+    np.testing.assert_allclose(
+        source.data, np.stack((traces[::2], traces[1::2])), rtol=1e-12, atol=1e-8
+    )
+    width = source.meta.sw_h[-2].to("Hz").magnitude
+    np.testing.assert_allclose(source.y.data, indices * 1e6 / width)
+
+    path = tmp_path / "nus.scp"
+    source.dump(path)
+    restored = scp.NDDataset.load(path)
+    assert restored.meta.bruker_nus == source.meta.bruker_nus
+    f2 = restored.fft(dim="x")
+    assert f2.x.units == scp.ur.Hz
+    for dataset in (source.T, restored, f2, source.fft(dim="x").T):
+        np.testing.assert_array_equal(dataset.y.data, source.y.data)
+        with pytest.raises(NotImplementedError, match="schedule-aware reconstruction"):
+            dataset.fft(dim="y", inplace=True)
+        np.testing.assert_array_equal(dataset.y.data, source.y.data)
 
 
 @pytest.mark.parametrize(

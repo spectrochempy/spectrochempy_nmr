@@ -19,6 +19,10 @@ Unreleased
 * Expose nuclear isotope properties with ``scp.nmr.Isotope`` and infer
   MQMAS shear spin from the observed isotope by default.
 
+* Preserve Bruker NUS F1 sample indices in storage order and the full grid size
+  for paired acquisitions. Keep F2 FFT available and require a schedule-aware
+  reconstruction for F1.
+
 * Reconstruct Bruker Multiplex SPAM States FIDs with ``scp.nmr.read_multiplex_spam()``.
 * Read Bruker States STMAS with ``scp.nmr.read_stmas()`` and process the
   spin-3/2 DQF pathway with ``Experiment.stmas_shear()``.
