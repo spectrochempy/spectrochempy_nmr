@@ -27,37 +27,30 @@
 # processing explicitly on a supported dataset, you can inspect the
 # mixed-domain result after F2 before transforming F1.
 
-# %% [markdown]
-# The JEOL COSY acquisition supports the direct transform. Plot the first
-# five real F2 traces while F1 still represents acquisition time. The
-# plugin stops at F2 for this file because the JEOL indirect quadrature
-# convention has yet to be established.
+#
+# Transform F2 and F1
+# -------------------
+#
+# Follow the full sequence on the Bruker States acquisition of
+# :sup:`27`Al PST-5 from the :doc:`MQMAS guide <mqmas>`. The reader can
+# correct the digital-filter delay on import. Transform F2 along ``x``
+# to obtain a frequency axis in F2 while F1 remains in the time domain.
 
 # %%
 import spectrochempy as scp
 
-path = scp.preferences.datadir / "nmrdata/jeol/epicatechin_cosy.jdf"
-fid = scp.nmr.read_jeol(path)
-f2 = fid.fft(dim="x")
-_ = f2[:5, :].real.plot(method="lines")
+bruker_fid = scp.nmr.read_topspin(
+    "nmrdata/bruker/tests/nmr/MQMAS_27AL_PST5/51/ser", remove_digital_filter=True
+)
+bruker_f2 = bruker_fid.fft(dim="x")
 
 # %% [raw] raw_mimetype="text/restructuredtext"
-# Transform F2 and F1
-# -------------------
-#
-# To see the full sequence, use the Bruker States acquisition of
-# :sup:`27`Al PST-5 from the :doc:`MQMAS guide <mqmas>`. The reader can
-# correct the digital-filter delay on import. Transform F2 along ``x``,
-# then keep both States branches in the mixed-domain result for the F1
+# Keep both States branches in this mixed-domain result for the F1
 # transform along ``y``. Extract the real-real plane after both transforms
 # to plot contours with a frequency axis in each dimension. This is the
 # MQMAS spectrum before shearing.
 
 # %%
-bruker_fid = scp.nmr.read_topspin(
-    "nmrdata/bruker/tests/nmr/MQMAS_27AL_PST5/51/ser", remove_digital_filter=True
-)
-bruker_f2 = bruker_fid.fft(dim="x")
 spectrum = bruker_f2.fft(dim="y")
 rr = scp.nmr.Experiment(spectrum).rr()
 region = rr[:, 65.0:20.0]
@@ -85,9 +78,9 @@ _ = region.plot(
 # Here ``x`` and ``y`` are the direct and indirect dimensions of the
 # imported FID. Keep both quadrature branches through the indirect FFT.
 # Select the desired spectral component before plotting or extracting a
-# 1D slice. The :doc:`gallery example </examples/gallery/nmr/plot_processing_nmr_2d>`
-# shows the JEOL mixed-domain result alongside the fully transformed Bruker
-# example.
+# 1D slice. See the
+# :doc:`gallery example </examples/gallery/nmr/plot_processing_nmr_2d>`
+# for the Bruker workflow as a standalone script.
 # Use :doc:`analysis` to find and integrate cross-peaks in a processed spectrum.
 #
 # For a supported uniform Bruker SER acquisition, use the recorded TopSpin
@@ -234,3 +227,40 @@ phased = scp.nmr.Experiment(series).apk2d(reference_row=1, order=0)  # noqa: F82
 # For MQMAS, pass the complex result of ``xf2()``. The common phase applies
 # to both States branches. The output can go directly to ``xfshear()``.
 # An unsuccessful estimate raises an error identifying the row.
+#
+# .. _jeol-cosy-indirect-processing:
+#
+# Appendix on JEOL COSY processing
+# --------------------------------
+#
+# SpectroChemPy imports the epicatechin JEOL JDF acquisition and transforms
+# the direct dimension. Plot the first five real F2 traces while F1 is
+# still in the time domain.
+
+# %%
+path = scp.preferences.datadir / "nmrdata/jeol/epicatechin_cosy.jdf"
+jeol_fid = scp.nmr.read_jeol(path)
+jeol_f2 = jeol_fid.fft(dim="x")
+_ = jeol_f2[:5, :].real.plot(method="lines")
+
+# %% [raw] raw_mimetype="text/restructuredtext"
+# Native F1 processing is unavailable for this profile. NMRPipe's
+# `delta2pipe <https://spin.niddk.nih.gov/NMRPipe/ref/prog/delta2pipe.html>`_
+# converts this JDF with a real indirect axis and labels the acquisition
+# ``Magnitude``. NMRPipe's
+# `magnitude-mode workflow <https://spin.niddk.nih.gov/NMRPipe/ref/nmrpipe/ft.html>`_
+# keeps the complex F2 result until after the F1 transform, then computes
+# the magnitude. With NMRPipe installed, run the following from a directory
+# containing the JDF file.
+#
+# .. code-block:: bash
+#
+#    delta2pipe -in epicatechin_cosy.jdf -out cosy.fid
+#    nmrPipe -in cosy.fid -fn SP | nmrPipe -fn ZF -auto | nmrPipe -fn FT \
+#      | nmrPipe -fn TP | nmrPipe -fn SP | nmrPipe -fn ZF -auto \
+#      | nmrPipe -fn FT | nmrPipe -fn MC | nmrPipe -fn TP -out cosy.ft2
+#
+# Import the resulting frequency-domain plane with
+# ``scp.nmr.read("cosy.ft2", protocol="interop")``. This is an external
+# processing route for this file. Verification against a spectrum processed
+# in JEOL Delta remains open.
