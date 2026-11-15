@@ -2,6 +2,7 @@
 
 import base64
 import json
+import re
 from dataclasses import dataclass
 from pathlib import Path
 from tempfile import TemporaryDirectory
@@ -9,8 +10,14 @@ from tempfile import TemporaryDirectory
 import numpy as np
 from spectrochempy import Coord
 from spectrochempy import NDDataset
+from spectrochempy import ur
 
-_FREQUENCY_UNITS = {"Hz": 1.0, "kHz": 1e3, "MHz": 1e6}
+_SI_PREFIX = r"(?:da|[qryzafpnumcdhkMGTPEZYRQ])?"
+_SI_FREQUENCY = re.compile(_SI_PREFIX + "Hz")
+_SI_UNIT = re.compile(
+    _SI_PREFIX
+    + r"(?:m|s|g|A|K|mol|cd|rad|sr|Hz|N|Pa|J|W|C|V|F|Ohm|S|Wb|T|H|lm|lx|Bq|Gy|Sv|kat)"
+)
 _DTYPES = {
     "float32": "<f4",
     "float64": "<f8",
@@ -31,7 +38,7 @@ def read_csdf(path):
     """Read a processed 1D or 2D NMR spectrum from a self-contained CSDF file.
 
     Coordinates are expressed in Hz. CSDM origin offsets are stored in
-    `dataset.meta.csdf_origin_offset_hz` in dataset axis order.
+    each coordinate's `meta.csdf_origin_offset_hz`.
     """
     values, axes, unit = _read_csdf(path)
     dataset = NDDataset(
@@ -41,19 +48,23 @@ def read_csdf(path):
         name=Path(path).stem,
         origin="CSDF",
     )
-    dataset.set_coordset(
-        *(
-            Coord(
-                axis.values_hz,
-                units="Hz",
-                title=axis.label,
-                rounding=False,
-                sigdigits=15,
-            )
-            for axis in axes
+    coordinates = []
+    for axis in axes:
+        coord = Coord(
+            axis.values_hz,
+            units="Hz",
+            title=axis.label,
+            rounding=False,
+            sigdigits=15,
         )
-    )
-    dataset.meta.csdf_origin_offset_hz = [axis.origin_offset_hz for axis in axes]
+        if axis.origin_offset_hz is not None:
+            coord.meta.csdf_origin_offset_hz = axis.origin_offset_hz
+        coordinates.append(coord)
+    dataset.set_coordset(*coordinates)
+    dataset.meta.data_domain = "frequency"
+    dataset.meta.isfreq = [True] * dataset.ndim
+    if dataset.ndim == 1:
+        dataset.meta.iscomplex = [np.iscomplexobj(values)]
     return dataset
 
 
@@ -76,12 +87,9 @@ def write_csdf(
     numeric_type = _NUMERIC_TYPES.get(values.dtype.name)
     if numeric_type is None or np.any(dataset.mask):
         raise ValueError("CSDF export requires unmasked float or complex data")
-    origins = dataset.meta.get("csdf_origin_offset_hz", [None] * dataset.ndim)
-    if len(origins) != dataset.ndim:
-        raise ValueError("Expected one CSDF origin offset per dataset axis")
     dimensions = [
-        _encode_dimension(dataset.coord(dim), count, origin)
-        for dim, count, origin in zip(dataset.dims, values.shape, origins, strict=True)
+        _encode_dimension(dataset.coord(dim), count)
+        for dim, count in zip(dataset.dims, values.shape, strict=True)
     ]
     signal = {
         "type": "internal",
@@ -94,8 +102,10 @@ def write_csdf(
             ).decode("ascii")
         ],
     }
-    if dataset.units is not None:
-        signal["unit"] = format(dataset.units, "~")
+    if dataset.units:
+        unit = format(dataset.units, "~")
+        if unit:
+            signal["unit"] = _encode_signal_unit(unit)
     model = {
         "version": "1.0",
         "dimensions": dimensions[::-1],
@@ -113,7 +123,15 @@ def write_csdf(
     return path
 
 
-def _encode_dimension(coord, count, origin):
+def _encode_signal_unit(unit):
+    """Serialize an SI unit with explicit multiplication between factors."""
+    factors = unit.replace("μ", "u").replace("µ", "u").replace("Ω", "Ohm").split()
+    if not all(_SI_UNIT.fullmatch(factor.partition("^")[0]) for factor in factors):
+        raise ValueError(f"CSDF export requires portable SI signal units, got {unit!r}")
+    return "*".join(factors)
+
+
+def _encode_dimension(coord, count):
     if (
         not isinstance(coord, Coord)
         or coord.data is None
@@ -151,6 +169,7 @@ def _encode_dimension(coord, count, origin):
     }
     if coord.title:
         dimension["label"] = coord.title
+    origin = coord.meta.get("csdf_origin_offset_hz")
     if origin is not None:
         if not np.isfinite(origin):
             raise ValueError("CSDF origin offsets must be finite")
@@ -161,10 +180,14 @@ def _encode_dimension(coord, count, origin):
 def _frequency(value):
     if not isinstance(value, str):
         raise ValueError("Expected a CSDF frequency quantity")
-    fields = value.split()
-    if len(fields) != 2 or fields[1] not in _FREQUENCY_UNITS:
-        raise ValueError("Expected a CSDF frequency in Hz, kHz or MHz")
-    frequency = float(fields[0]) * _FREQUENCY_UNITS[fields[1]]
+    fields = value.split(maxsplit=1)
+    if len(fields) != 2:
+        raise ValueError("Expected a CSDF quantity with frequency units")
+    magnitude, unit = fields
+    unit = unit.replace("μ", "u").replace("µ", "u")
+    if not _SI_FREQUENCY.fullmatch(unit):
+        raise ValueError("Expected Hz or an SI-prefixed Hz unit")
+    frequency = (float(magnitude) * ur.Unit(unit)).to("Hz").magnitude
     if not np.isfinite(frequency):
         raise ValueError("CSDF frequencies must be finite")
     return frequency

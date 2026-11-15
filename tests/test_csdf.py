@@ -20,7 +20,7 @@ def spectrum():
                 "count": 3,
                 "increment": "-50 Hz",
                 "coordinates_offset": "0.2 kHz",
-                "origin_offset": "400 MHz",
+                "origin_offset": "0.4 GHz",
                 "label": "F2",
             },
             {
@@ -90,7 +90,8 @@ def test_csdf_public_reader_preserves_coordinates_and_origins(tmp_path, spectrum
         )
         assert dataset.x.units == dataset.y.units == scp.ur.Hz
         assert (dataset.y.title, dataset.x.title) == ("F1", "F2")
-        assert dataset.meta.csdf_origin_offset_hz == [100e6, 400e6]
+        assert dataset.y.meta.csdf_origin_offset_hz == 100e6
+        assert dataset.x.meta.csdf_origin_offset_hz == 400e6
 
     model["dimensions"][0]["count"] = 2
     path.write_text(json.dumps({"csdm": model}))
@@ -105,6 +106,7 @@ def test_csdf_export_preserves_centered_complex_spectrum(tmp_path, spectrum):
     source.write_text(json.dumps({"csdm": model}))
     dataset = scp.nmr.read_csdf(source)
     np.testing.assert_array_equal(dataset.x.data, [250, 200, 150])
+    assert scp.nmr.Experiment(dataset).is_processed
 
     target = tmp_path / "export.csdf"
     assert scp.nmr.write_csdf(dataset, target) == target
@@ -114,7 +116,8 @@ def test_csdf_export_preserves_centered_complex_spectrum(tmp_path, spectrum):
     assert restored.units == dataset.units
     np.testing.assert_array_equal(restored.x.data, dataset.x.data)
     np.testing.assert_array_equal(restored.y.data, dataset.y.data)
-    assert restored.meta.csdf_origin_offset_hz == [100e6, 400e6]
+    assert restored.y.meta.csdf_origin_offset_hz == 100e6
+    assert restored.x.meta.csdf_origin_offset_hz == 400e6
     with pytest.raises(FileExistsError):
         scp.nmr.write_csdf(dataset, target)
     scp.nmr.write_csdf(dataset, target, overwrite=True)
@@ -126,3 +129,38 @@ def test_csdf_export_rejects_irregular_grid(tmp_path):
     )
     with pytest.raises(ValueError, match="linear frequency"):
         scp.nmr.write_csdf(dataset, tmp_path / "irregular.csdf")
+
+
+def test_csdf_export_after_squeeze(tmp_path, spectrum):
+    model, expected = spectrum
+    model["dimensions"][1]["count"] = 1
+    model["dependent_variables"][0]["components"] = [
+        base64.b64encode(expected[:1].tobytes()).decode("ascii")
+    ]
+    model["dependent_variables"][0]["unit"] = "V*m"
+    source = tmp_path / "source.csdf"
+    source.write_text(json.dumps({"csdm": model}))
+    dataset = scp.nmr.read_csdf(source).squeeze()
+    target = scp.nmr.write_csdf(dataset, tmp_path / "export.csdf")
+
+    exported = json.loads(target.read_text())["csdm"]
+    assert exported["dependent_variables"][0]["unit"] == "m*V"
+    restored = scp.nmr.read_csdf(target)
+    np.testing.assert_array_equal(restored.data, expected[0])
+    assert restored.x.meta.csdf_origin_offset_hz == 400e6
+    assert restored.units == dataset.units
+
+
+def test_csdf_export_rejects_nonportable_signal_units(tmp_path):
+    coord = scp.Coord([0, 1], units="Hz")
+    dataset = scp.NDDataset([1.0, 2.0], units="absorbance", coordset=[coord])
+    with pytest.raises(ValueError, match="portable SI signal units"):
+        scp.nmr.write_csdf(dataset, tmp_path / "absorbance.csdf")
+
+
+def test_csdf_import_classifies_real_spectrum_as_processed(tmp_path):
+    dataset = scp.NDDataset([1.0, 2.0], coordset=[scp.Coord([0, 1], units="Hz")])
+    path = scp.nmr.write_csdf(dataset, tmp_path / "real.csdf")
+    experiment = scp.nmr.Experiment(scp.nmr.read_csdf(path))
+    assert experiment.source_kind == "processed_1d"
+    np.testing.assert_array_equal(experiment.process().data, dataset.data)

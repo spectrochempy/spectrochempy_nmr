@@ -199,6 +199,9 @@ jobs:
       - name: Test Multiplex SPAM, MQMAS and STMAS processing
         run: python -I -m pytest -ra tests/test_multiplex_spam.py tests/test_mqmas.py tests/test_stmas.py tests/test_isotopes.py
 
+      - name: Test CSDF exchange through the public plugin API
+        run: python -I -m pytest -ra tests/test_csdf.py
+
       - name: Qualify SIMPSON migration and Tecmag reader withdrawal
         run: python -I -m pytest -ra tests/test_read_simpson.py tests/test_simpson_migration.py
 

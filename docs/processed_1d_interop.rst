@@ -32,14 +32,17 @@ Exchange a CSDF spectrum
 Use ``scp.nmr.read_csdf("spectrum.csdf")`` or
 ``scp.nmr.read("spectrum.csdf")`` to open a self-contained CSDF 1.0 file
 without installing ``csdmpy``. The reader accepts one dense, base64-encoded
-real or complex spectrum with one or two linear frequency axes. It preserves
+real or complex spectrum with one or two linear axes in Hz or SI-prefixed Hz.
+It preserves
 axis direction and expresses coordinates in Hz. CSDM origin offsets are
-available in ``dataset.meta.csdf_origin_offset_hz``, in NumPy axis order.
+available in each coordinate's metadata, for example
+``dataset.x.meta.csdf_origin_offset_hz``.
 These offsets alone cannot establish a ppm reference.
 
 Use ``scp.nmr.write_csdf(spectrum, "export.csdf")`` to export an unmasked
-real or complex spectrum with regular frequency coordinates. Export
-expresses axes in Hz. Signal units, axis titles and stored CSDM origin
+real or complex spectrum with regular frequency coordinates. Convert ppm
+coordinates to Hz using a known reference before exporting. Export
+expresses axes in Hz. Portable SI signal units, axis titles and stored CSDM origin
 offsets are written when available. Processing history, reciprocal axis
 metadata and vendor metadata are omitted. Centered FFT axes are written
 as linear grids with the same coordinates. Use ``overwrite=True`` to
