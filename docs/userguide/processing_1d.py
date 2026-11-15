@@ -98,7 +98,20 @@ result = experiment.process(apodization="em", lb=5.0, phase=None)
 windowed = experiment.dataset.em(lb=5.0)
 padded = windowed.zf_size(size=max(32768, windowed.shape[-1]))
 spectrum = padded.fft()
-_ = spectrum.real.plot()
+unphased_axes = spectrum.real.plot(title="After Fourier transformation")
+
+# %% [raw] raw_mimetype="text/restructuredtext"
+# Apply phase correction to the complex spectrum, then plot its real
+# component over the same ppm range. The zero-order angle ``phc0`` is constant
+# across the spectrum, while the first-order angle ``phc1`` varies linearly
+# with frequency. The angles below are in degrees and apply to this
+# acquisition. Compare the shape of the main resonance before and after
+# correction.
+
+# %%
+phased = spectrum.pk(phc0=52.44, phc1=-16.84)
+phased_axes = phased.real.plot(title="After phase correction")
+phased_axes.set_xlim(unphased_axes.get_xlim())
 
 # %% [raw] raw_mimetype="text/restructuredtext"
 # Both approaches preserve the original FID by default. A supported complex
@@ -113,11 +126,8 @@ _ = spectrum.real.plot()
 # and FFT.
 #
 # An exponential window trades some resolution for sensitivity. Zero filling
-# sets the spacing of the frequency bins. Once the spectrum is in the
-# frequency domain, use ``spectrum.pk(phc0=..., phc1=...)`` to apply explicit
-# phase angles in degrees. With core 1.2.1, the FFT leaves the phase untouched. Plot the result with ``spectrum.plot()``, then use
-# :doc:`analysis` for baseline correction, peak picking, integration and
-# fitting.
+# sets the spacing of the frequency bins. See :doc:`analysis` for baseline
+# correction, peak picking, integration and fitting of a phased spectrum.
 #
 # A direct ``.fft()`` transforms the samples supplied to it. For a Bruker FID
 # you can explicitly correct the filter at import with
