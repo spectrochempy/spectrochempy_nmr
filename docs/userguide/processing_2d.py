@@ -297,3 +297,12 @@ phased = scp.nmr.Experiment(series).apk2d(reference_row=1, order=0)  # noqa: F82
 # For MQMAS, pass the complex result of ``xf2()``. The common phase applies
 # to both States branches. The output can go directly to ``xfshear()``.
 # An unsuccessful estimate raises an error identifying the row.
+#
+# Related concepts
+# ----------------
+#
+# .. toctree::
+#    :maxdepth: 1
+#
+#    /concepts/quadrature
+#    /concepts/hypercomplex

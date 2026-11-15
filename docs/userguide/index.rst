@@ -12,8 +12,6 @@ Guides
    quadrupolar
    analysis
    Baseline correction in SpectroChemPy <https://www.spectrochempy.fr/latest/userguide/processing/baseline.html>
-   ../concepts/quadrature
-   ../concepts/hypercomplex
    pulsar
 
 See also
