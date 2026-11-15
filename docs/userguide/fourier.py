@@ -66,7 +66,7 @@ _ = scp.multiplot(
 
 # %% [raw] raw_mimetype="text/restructuredtext"
 # Transform a 2D signal and calculate its magnitude
-# ------------------------------------------------
+# -------------------------------------------------
 #
 # Give the same indirect cosine a complex F2 oscillation at 500 Hz.
 # In this separable example there is one trace per F1 increment and
