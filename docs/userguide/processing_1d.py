@@ -51,7 +51,7 @@ from spectrochempy_nmr import autophase
 
 path = "nmrdata/bruker/tests/nmr/topspin_1d/1/fid"
 raw_fid = scp.nmr.read(path, remove_digital_filter=False)
-_ = raw_fid.real.plot(title="Bruker FID as recorded")
+_ = raw_fid.plot(title="Bruker FID as recorded")
 
 # %% [raw] raw_mimetype="text/restructuredtext"
 # The digital filter delays the signal by 76 samples (about 304 µs for
@@ -114,7 +114,6 @@ unphased_axes.autoscale(axis="y")
 phased = spectrum.pk(phc0=52.44, phc1=-16.84)
 phased_axes = phased.plot(show_complex=True, title="After phase correction")
 phased_axes.autoscale(axis="y")
-phased_axes.set_xlim(unphased_axes.get_xlim())
 
 # %% [raw] raw_mimetype="text/restructuredtext"
 # Both approaches preserve the original FID by default. A supported complex
