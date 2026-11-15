@@ -18,6 +18,8 @@ Known limitations (not tested here):
 from __future__ import annotations
 
 import hashlib
+import os
+from pathlib import Path
 
 import numpy as np
 import pytest
@@ -29,15 +31,15 @@ import spectrochempy as scp
 EXTRA_DATADIR = scp.preferences.datadir.parent / "testdata-extra"
 EXTRA_NMR = EXTRA_DATADIR / "testdata" / "nmrdata"
 
-TOPSPIN_2D = (
-    scp.preferences.datadir / "nmrdata" / "bruker" / "tests" / "nmr" / "topspin_2d"
+BRUKER_TEST_DATA = Path(
+    os.environ.get(
+        "NMR_BRUKER_FFT_DATA",
+        scp.preferences.datadir / "nmrdata" / "bruker" / "tests" / "nmr",
+    )
 )
-BRUKER_ECHOANTI_2D = (
-    scp.preferences.datadir / "nmrdata" / "bruker" / "tests" / "nmr" / "exam2d_HC"
-)
-EXAM2D_HH = (
-    scp.preferences.datadir / "nmrdata" / "bruker" / "tests" / "nmr" / "exam2d_HH"
-)
+TOPSPIN_2D = BRUKER_TEST_DATA / "topspin_2d"
+BRUKER_ECHOANTI_2D = BRUKER_TEST_DATA / "exam2d_HC"
+EXAM2D_HH = BRUKER_TEST_DATA / "exam2d_HH"
 
 EXAM2D_HH_SHA256 = {
     "ser": "641707c170f8352785ee3bc923c52f85a335984c38e0ace7c591c054d32ccc6b",
