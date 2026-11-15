@@ -8,7 +8,7 @@ Guides
    processing_1d
    apodization
    processing_2d
-   Fourier transformation in SpectroChemPy <https://www.spectrochempy.fr/latest/userguide/processing/fourier.html>
+   fourier
    quadrupolar
    analysis
    Baseline correction in SpectroChemPy <https://www.spectrochempy.fr/latest/userguide/processing/baseline.html>

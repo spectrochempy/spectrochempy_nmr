@@ -135,9 +135,7 @@ levels = [first_level * 2**index for index in range(8)]
 _ = cosy.plot(method="contour", levels=levels, figsize=(6, 6))
 
 # %% [raw] raw_mimetype="text/restructuredtext"
-# See the
-# :external+core:doc:`Fourier transformation guide <userguide/processing/fourier>`
-# for the core FFT and phase correction operations.
+# See :doc:`fourier` for the core FFT and magnitude operations.
 #
 # A direct FFT uses the supplied samples, including the original group delay
 # when reading a Bruker SER without import correction. TopSpin XFB replay applies
