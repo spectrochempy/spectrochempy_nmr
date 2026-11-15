@@ -203,3 +203,45 @@ def test_csdf_public_reader_retains_fine_frequency_grid(tmp_path, spectrum):
     np.testing.assert_array_max_ulp(
         scp.nmr.read_csdf(path).x.data, frequencies, maxulp=2
     )
+
+
+def test_csdf_export_accepts_roundoff_from_centered_fft(tmp_path, spectrum):
+    model, _ = spectrum
+    model["dimensions"] = [
+        {
+            "type": "linear",
+            "count": 20,
+            "increment": "257.4389616190284 Hz",
+            "coordinates_offset": "-949.4105260628276 Hz",
+            "complex_fft": True,
+        }
+    ]
+    values = np.arange(20, dtype="<c8")
+    model["dependent_variables"][0]["components"] = [
+        base64.b64encode(values.tobytes()).decode("ascii")
+    ]
+    source = tmp_path / "centered.csdf"
+    source.write_text(json.dumps({"csdm": model}))
+    dataset = scp.nmr.read_csdf(source)
+    target = scp.nmr.write_csdf(dataset, tmp_path / "export.csdf")
+    restored = scp.nmr.read_csdf(target)
+
+    np.testing.assert_array_equal(restored.data, values)
+    tolerance = 8 * np.spacing(np.max(np.abs(dataset.x.data)))
+    np.testing.assert_allclose(restored.x.data, dataset.x.data, rtol=0, atol=tolerance)
+
+
+def test_csdf_export_accepts_roundoff_from_prefixed_hz(tmp_path):
+    values = np.arange(32, dtype=float)
+    frequencies = 512.25 - 22.3 * values
+    coord = scp.Coord(frequencies, units="kHz", rounding=False, sigdigits=15)
+    dataset = scp.NDDataset(values)
+    dataset.set_coordset(x=coord)
+
+    target = scp.nmr.write_csdf(dataset, tmp_path / "prefixed.csdf")
+    restored = scp.nmr.read_csdf(target)
+
+    np.testing.assert_array_equal(restored.data, values)
+    hz = frequencies * 1000
+    tolerance = 8 * np.spacing(np.max(np.abs(hz)))
+    np.testing.assert_allclose(restored.x.data, hz, rtol=0, atol=tolerance)

@@ -164,7 +164,7 @@ def _encode_dimension(coord, count):
     increment = (values[-1] - values[0]) / (count - 1) if count > 1 else 1.0
     expected = values[0] + np.arange(count) * increment
     magnitude = np.max(np.abs(values))
-    tolerance = 2 * (magnitude - np.nextafter(magnitude, 0.0))
+    tolerance = 8 * (magnitude - np.nextafter(magnitude, 0.0))
     if (
         not np.isfinite(increment)
         or increment == 0
