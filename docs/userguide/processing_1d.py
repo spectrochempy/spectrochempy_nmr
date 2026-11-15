@@ -40,24 +40,47 @@
 # Processing a FID
 # ----------------
 #
-# Wrap a dataset in :class:`~spectrochempy_nmr.Experiment` and select explicit
-# processing parameters:
+# Read the Bruker FID with digital-filter correction disabled to inspect
+# the recorded time-domain signal. The plot shows its real component.
 
 # %%
 import spectrochempy as scp
 from spectrochempy_nmr import autophase
 
-fid = scp.nmr.read(
-    "nmrdata/bruker/tests/nmr/topspin_1d/1/fid", remove_digital_filter=True
+path = "nmrdata/bruker/tests/nmr/topspin_1d/1/fid"
+raw_fid = scp.nmr.read(path, remove_digital_filter=False)
+_ = raw_fid.plot(title="Bruker FID as recorded")
+
+# %% [raw] raw_mimetype="text/restructuredtext"
+# The digital filter delays the signal by 76 samples (about 304 µs for
+# this acquisition). Plot the first 480 points to see the delayed onset
+# and subsequent decay. With ``remove_digital_filter=True``, the reader
+# compensates for the delay and the signal appears near the start of the
+# corrected time axis. The magnitude shows the onset independently of
+# the phase of the complex FID.
+
+# %%
+fid = scp.nmr.read(path, remove_digital_filter=True)
+
+_ = scp.plot_multiple(
+    [abs(raw_fid[:480]), abs(fid[:480])],
+    method="pen",
+    labels=["As recorded", "Delay corrected"],
+    legend="upper right",
+    xlabel="Time / µs",
+    ylabel="FID magnitude / count",
 )
 
+# %% [raw] raw_mimetype="text/restructuredtext"
+# Wrap the corrected FID in :class:`~spectrochempy_nmr.Experiment` and
+# select explicit processing parameters.
+
+# %%
 experiment = scp.nmr.Experiment(fid)
 result = experiment.process(apodization="em", lb=5.0, phase=None)
 
 # %% [raw] raw_mimetype="text/restructuredtext"
-# The supported apodization modes are ``em``, ``gm`` and ``sp``. The
-# :external+core:doc:`apodization guide <userguide/processing/apodization>`
-# describes the corresponding window functions. Use
+# See :doc:`apodization` for the ``em``, ``gm`` and ``sp`` windows. Use
 # ``result.history`` to inspect the steps recorded on the spectrum.
 # Use ``phase="manual"`` with explicit angles. With core 1.2.1 and
 # ``phase=None``, the transform leaves the phase untouched. The development
@@ -67,12 +90,29 @@ result = experiment.process(apodization="em", lb=5.0, phase=None)
 # To inspect intermediate results, apply the core operations to the
 # ``NDDataset`` exposed by ``experiment.dataset``. You can call them as
 # dataset methods or as functions such as ``scp.em(experiment.dataset, lb=5.0)``.
+# Calling ``plot()`` on the complex spectrum displays its real component by
+# default. Set ``show_complex=True`` to add the imaginary component as a
+# dashed line.
 
 # %%
 windowed = experiment.dataset.em(lb=5.0)
 padded = windowed.zf_size(size=max(32768, windowed.shape[-1]))
 spectrum = padded.fft()
-_ = spectrum.real.plot()
+unphased_axes = spectrum.plot(show_complex=True, title="After Fourier transformation")
+unphased_axes.autoscale(axis="y")
+
+# %% [raw] raw_mimetype="text/restructuredtext"
+# Apply phase correction to the complex spectrum, then plot both
+# components over the same ppm range. The zero-order angle ``phc0`` is constant
+# across the spectrum, while the first-order angle ``phc1`` varies linearly
+# with frequency. The angles below are in degrees and apply to this
+# acquisition. Compare the shape of the main resonance before and after
+# correction.
+
+# %%
+phased = spectrum.pk(phc0=52.44, phc1=-16.84)
+phased_axes = phased.plot(show_complex=True, title="After phase correction")
+phased_axes.autoscale(axis="y")
 
 # %% [raw] raw_mimetype="text/restructuredtext"
 # Both approaches preserve the original FID by default. A supported complex
@@ -87,11 +127,8 @@ _ = spectrum.real.plot()
 # and FFT.
 #
 # An exponential window trades some resolution for sensitivity. Zero filling
-# sets the spacing of the frequency bins. Once the spectrum is in the
-# frequency domain, use ``spectrum.pk(phc0=..., phc1=...)`` to apply explicit
-# phase angles in degrees. With core 1.2.1, the FFT leaves the phase untouched. Plot the result with ``spectrum.plot()``, then use
-# :doc:`analysis` for baseline correction, peak picking, integration and
-# fitting.
+# sets the spacing of the frequency bins. See :doc:`analysis` for baseline
+# correction, peak picking, integration and fitting of a phased spectrum.
 #
 # A direct ``.fft()`` transforms the samples supplied to it. For a Bruker FID
 # you can explicitly correct the filter at import with

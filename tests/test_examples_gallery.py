@@ -27,8 +27,6 @@ VISIBLE_EXAMPLES = [
 ]
 JEOL_DATA = {
     "plot_read_jeol_1d": "epicatechin_1h.jdf",
-    "plot_read_jeol_2d": "epicatechin_cosy.jdf",
-    "plot_processing_nmr_2d": "epicatechin_cosy.jdf",
 }
 
 
@@ -36,6 +34,7 @@ def _has_nmr_example_data(example: Path) -> bool:
     if example.stem in {
         "plot_fit_central_transition",
         "plot_simulate_central_transition",
+        "plot_processing_nmr_2d",
     }:
         return True
     root = Path(scp.preferences.datadir) / "nmrdata"
