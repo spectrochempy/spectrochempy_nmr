@@ -7,6 +7,8 @@ from scipy.ndimage import gaussian_filter1d
 from spectrochempy.core.dataset.coord import Coord
 from spectrochempy.core.dataset.nddataset import NDDataset
 from spectrochempy.core.units import ur
+from spectrochempy_nmr import _pulsar_tridiagonal
+from spectrochempy_nmr import pulsar
 from spectrochempy_nmr.pulsar import Coherence
 from spectrochempy_nmr.pulsar import Delay
 from spectrochempy_nmr.pulsar import IdealPulse
@@ -932,6 +934,179 @@ def test_mas_phase_cycle_combines_each_scan_at_its_own_rotor_phase(output):
     np.testing.assert_allclose(
         combined, weights[0] * results[0] + weights[1] * results[1], atol=1e-12
     )
+
+
+@pytest.mark.parametrize("output", ["spectrum", "density"])
+def test_finite_mas_real_rf_matches_complex_for_distinct_phases(monkeypatch, output):
+    scans = (
+        (Pulse(4e-6, 32e3, 37), Delay(13e-6), Pulse(8e-6, 42e3, -72, 640)),
+        (Pulse(5e-6, 32e3, 103), Delay(19e-6), Pulse(6e-6, 42e3, 217, -350)),
+    )
+    events = PhaseCycle(scans, (0.3 + 0.1j, 0.2j))
+    settings = dict(
+        spin=2.5,
+        cq_hz=2.923e6,
+        eta=0.136,
+        larmor_hz=104.468516e6,
+        spectral_width_hz=48e3,
+        spinning_hz=8e3,
+        sidebands=2 if output == "spectrum" else 0,
+        accuracy=2,
+        points=1024,
+        output=output,
+    )
+    prepare_basis = pulsar._rf_pulse_basis
+    observed_bases = []
+
+    def record_basis(ix, iy, phase_deg, *, real):
+        axis, basis = prepare_basis(ix, iy, phase_deg, real=real)
+        observed_bases.append((np.isrealobj(axis), basis is not None))
+        return axis, basis
+
+    monkeypatch.setattr(pulsar, "_rf_pulse_basis", record_basis)
+    actual = simulate_pulse_sequence(events, **settings)
+    assert observed_bases == [(True, True)] * 4
+
+    def complex_basis(ix, iy, phase_deg, *, real):
+        return prepare_basis(ix, iy, phase_deg, real=False)
+
+    monkeypatch.setattr(pulsar, "_rf_pulse_basis", complex_basis)
+    expected = simulate_pulse_sequence(events, **settings)
+    if output == "spectrum":
+        np.testing.assert_array_equal(actual.x.data, expected.x.data)
+        actual, expected = actual.data, expected.data
+    np.testing.assert_allclose(actual, expected, atol=1e-14, rtol=1e-12)
+
+
+@pytest.mark.parametrize(
+    ("difference", "output"),
+    [
+        ("phase", "spectrum"),
+        ("phase", "density"),
+        ("time", "spectrum"),
+        ("offset", "spectrum"),
+        ("power", "spectrum"),
+        ("duration", "spectrum"),
+    ],
+)
+def test_mas_pulse_cache_shares_only_matching_trajectories(
+    monkeypatch, difference, output
+):
+    first = (Pulse(4e-6, 32e3, 37), Delay(13e-6), Pulse(8e-6, 42e3, -72, 640))
+    second = (
+        Pulse(4e-6, 32e3, 103),
+        Delay(17e-6 if difference == "time" else 13e-6),
+        Pulse(
+            6e-6 if difference == "duration" else 8e-6,
+            40e3 if difference == "power" else 42e3,
+            217,
+            -350 if difference == "offset" else 640,
+        ),
+    )
+    cycle = PhaseCycle((first, second), (0.3 + 0.1j, 0.2j))
+    settings = dict(
+        spin=2.5,
+        cq_hz=2.923e6,
+        eta=0.136,
+        larmor_hz=104.468516e6,
+        spectral_width_hz=48e3,
+        spinning_hz=8e3,
+        sidebands=2 if output == "spectrum" else 0,
+        accuracy=1,
+        points=512,
+        output=output,
+    )
+    count = 0
+    propagate = pulsar._pulse_propagator
+
+    def record(*args):
+        nonlocal count
+        count += 1
+        return propagate(*args)
+
+    monkeypatch.setattr(pulsar, "_pulse_propagator", record)
+    actual = simulate_pulse_sequence(cycle, **settings)
+    cached_count = count
+
+    count = 0
+    monkeypatch.setattr(pulsar, "_RF_PROPAGATOR_CACHE_BYTES", 0)
+    expected = simulate_pulse_sequence(cycle, **settings)
+    if output == "spectrum":
+        np.testing.assert_array_equal(actual.x.data, expected.x.data)
+        actual, expected = actual.data, expected.data
+    np.testing.assert_allclose(actual, expected, atol=1e-14, rtol=1e-12)
+    if difference == "phase":
+        assert cached_count * 2 == count
+    else:
+        # Only the two midpoint steps of the first pulse are repeated.
+        per_block = 11 if difference == "duration" else 12
+        assert cached_count * per_block == count * (per_block - 2)
+
+
+@pytest.mark.parametrize("rotor_hz", [0, 8e3])
+def test_optional_tridiagonal_rf_matches_dense(monkeypatch, rotor_hz):
+    if _pulsar_tridiagonal.get_tridiagonal_solver() is None:
+        pytest.skip("optional Numba/LAPACK RF backend is unavailable")
+
+    settings = dict(
+        spin=2.5,
+        cq_hz=2.923e6,
+        eta=0.136,
+        larmor_hz=104.468516e6,
+        spectral_width_hz=48e3,
+        spinning_hz=rotor_hz,
+        sidebands=2 if rotor_hz else 0,
+        accuracy=1,
+        points=512,
+        transitions="central",
+        receiver_phase_deg=29,
+    )
+    scans = (
+        (Pulse(4e-6, 32e3, 37), Delay(13e-6), Pulse(6e-6, 42e3, -72, 640)),
+        (Pulse(4e-6, 32e3, 103), Delay(13e-6), Pulse(6e-6, 42e3, 217, 640)),
+    )
+    cycle = PhaseCycle(scans, (0.4 + 0.2j, 0.3j))
+    expected = simulate_pulse_sequence(cycle, **settings)
+
+    def unexpected_fallback(*args):
+        pytest.fail("the tridiagonal solver should handle this batch")
+
+    monkeypatch.setattr(pulsar, "_pulse_propagator", unexpected_fallback)
+    actual = simulate_pulse_sequence(cycle, **settings, rf_solver="tridiagonal")
+    np.testing.assert_array_equal(actual.x.data, expected.x.data)
+    np.testing.assert_allclose(actual.data, expected.data, atol=1e-14, rtol=1e-12)
+
+
+@pytest.mark.parametrize("backend_loaded", [False, True])
+def test_tridiagonal_rf_falls_back_to_dense(monkeypatch, backend_loaded):
+    calls = []
+
+    def failed_batch(*args):
+        calls.append(args)
+        return None
+
+    monkeypatch.setattr(
+        _pulsar_tridiagonal,
+        "get_tridiagonal_solver",
+        lambda: failed_batch if backend_loaded else None,
+    )
+    settings = dict(
+        spin=0.5,
+        larmor_hz=100e6,
+        spectral_width_hz=8000,
+        rf_hz=23e3,
+        duration_s=6e-6,
+        phase_deg=72,
+        shift_hz=420,
+        points=512,
+        accuracy=1,
+    )
+    expected = simulate_rectangular_pulse(**settings)
+    actual = simulate_rectangular_pulse(**settings, rf_solver="tridiagonal")
+    assert bool(calls) is backend_loaded
+    np.testing.assert_allclose(actual.data, expected.data, atol=1e-14, rtol=1e-12)
+    with pytest.raises(ValueError, match="rf_solver"):
+        simulate_rectangular_pulse(**settings, rf_solver="unknown")
 
 
 @pytest.mark.parametrize("size", [2, 128, 129])

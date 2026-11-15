@@ -21,6 +21,9 @@ dependencies = [
 [project.entry-points."spectrochempy.plugins"]
 nmr = "spectrochempy_nmr:NMRPlugin"
 
+[project.optional-dependencies]
+rf = ["numba"]
+
 [tool.setuptools.packages.find]
 where = ["src"]
 
