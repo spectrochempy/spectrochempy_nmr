@@ -51,8 +51,10 @@ replace an existing file.
 
 SIMPSON 4.2.1 with its Tcl CSDM module reads the tested 2D L-histidine
 export. This SIMPSON reader requires increasing axes. For a 1D spectrum
-with a decreasing axis, export ``spectrum[::-1]`` to reverse the
-coordinates and intensities together.
+with a decreasing axis, use SpectroChemPy 1.3.1 to reverse the coordinates
+and intensities together before exporting ``spectrum[::-1]``. Earlier
+versions can round finely spaced coordinates during slicing and produce
+a grid that the CSDF writer rejects.
 
 Export a processed 1D spectrum
 ------------------------------
