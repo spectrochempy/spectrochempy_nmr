@@ -8,6 +8,7 @@ from collections.abc import Callable
 from importlib import import_module
 from importlib.metadata import PackageNotFoundError
 from importlib.metadata import distribution
+from os import PathLike
 from pathlib import Path
 
 from spectrochempy.api.plugins import CORE_PLUGIN_API_VERSION
@@ -112,10 +113,7 @@ def _read_interop(
 
 def _resolve_read():
     """Lazily import and return a generic NMR reader dispatching by file type."""
-    from .readers.read_agilent import read_agilent  # noqa: PLC0415
-    from .readers.read_jeol import read_jeol  # noqa: PLC0415
-    from .readers.read_simpson import read_simpson  # noqa: PLC0415
-    from .readers.read_topspin import read_topspin  # noqa: PLC0415
+    from ._csdf import read_csdf
 
     def read(*paths, **kwargs):
         """Read NMR data with a native reader or explicit interop routing.
@@ -123,8 +121,8 @@ def _resolve_read():
         Parameters
         ----------
         *paths : str or path-like
-            NMR data paths. The interop protocol takes exactly one path.
-        protocol : {"topspin", "agilent", "jeol", "simpson", "interop"}, optional
+            NMR data paths. The CSDF and interop protocols take exactly one path.
+        protocol : {"topspin", "agilent", "jeol", "simpson", "csdf", "interop"}, optional
             Select a reader explicitly. By default, select from the first
             path and use TopSpin when no other format is recognized.
         **kwargs : keyword parameters, optional
@@ -156,6 +154,21 @@ def _resolve_read():
         read_simpson : Read SIMPSON data.
         """
         protocol = kwargs.get("protocol")
+        if protocol == "csdf" or (
+            protocol is None
+            and paths
+            and isinstance(paths[0], (str, PathLike))
+            and Path(paths[0]).suffix.lower() == ".csdf"
+        ):
+            if len(paths) != 1:
+                raise TypeError("CSDF reading requires exactly one path")
+            kwargs.pop("protocol", None)
+            return read_csdf(paths[0], **kwargs)
+        from .readers.read_agilent import read_agilent
+        from .readers.read_jeol import read_jeol
+        from .readers.read_simpson import read_simpson
+        from .readers.read_topspin import read_topspin
+
         if protocol == "interop":
             if len(paths) != 1:
                 raise TypeError("interop reading requires exactly one path")
@@ -647,6 +660,8 @@ def __getattr__(name: str):
         "read_agilent",
         "read_jeol",
         "read_simpson",
+        "read_csdf",
+        "write_csdf",
     }:
         _check_nmrglue_installation()
     if name in {"pulsar", "czjzek"}:
@@ -663,6 +678,14 @@ def __getattr__(name: str):
         return _resolve_read_jeol()
     if name == "read_simpson":
         return _resolve_read_simpson()
+    if name == "read_csdf":
+        from ._csdf import read_csdf
+
+        return read_csdf
+    if name == "write_csdf":
+        from ._csdf import write_csdf
+
+        return write_csdf
     if name == "write_jcamp":
         from .jcamp import write_jcamp
 
@@ -751,5 +774,7 @@ def __dir__() -> list[str]:
         "read_agilent",
         "read_jeol",
         "read_simpson",
+        "read_csdf",
+        "write_csdf",
         "set_nmr_context",
     ]

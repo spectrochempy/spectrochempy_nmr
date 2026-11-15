@@ -26,6 +26,36 @@ an explicit additional phase without moving the axis. It does not replay phase
 parameters from raw vendor metadata. Inverse reconstruction of a source FID,
 especially from a real-only spectrum, is outside this qualification.
 
+Exchange a CSDF spectrum
+------------------------
+
+Use ``scp.nmr.read_csdf("spectrum.csdf")`` or
+``scp.nmr.read("spectrum.csdf")`` to open a self-contained CSDF 1.0 file
+without installing ``csdmpy``. The reader accepts one dense, base64-encoded
+real or complex spectrum with one or two linear axes in Hz or SI-prefixed Hz.
+Supported signal types are float32, float64, complex64 and complex128.
+The reader preserves axis direction and expresses coordinates in Hz. CSDM origin offsets are
+available in each coordinate's metadata, for example
+``dataset.x.meta.csdf_origin_offset_hz``.
+These offsets alone cannot establish a ppm reference.
+
+Use ``scp.nmr.write_csdf(spectrum, "export.csdf")`` to export an unmasked
+real or complex spectrum with regular coordinates in Hz or SI-prefixed Hz.
+Convert ppm coordinates to Hz using a known reference before exporting.
+The writer expresses axes in Hz and includes portable SI signal units with
+integer powers, axis titles and stored CSDM origin offsets when available.
+The exchange omits processing history, reciprocal axis metadata and vendor
+metadata. Centered FFT axes are written
+as linear grids with the same coordinates. Use ``overwrite=True`` to
+replace an existing file.
+
+SIMPSON 4.2.1 with its Tcl CSDM module reads the tested 2D L-histidine
+export. This SIMPSON reader requires increasing axes. For a 1D spectrum
+with a decreasing axis, use SpectroChemPy 1.3.1 to reverse the coordinates
+and intensities together before exporting ``spectrum[::-1]``. Earlier
+versions can round finely spaced coordinates during slicing and produce
+a grid that the CSDF writer rejects.
+
 Export a processed 1D spectrum
 ------------------------------
 
