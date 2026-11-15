@@ -53,7 +53,7 @@ def get_numba_depositor():
     try:
         from numba import config, njit, types
         from numba.core.errors import NumbaError
-    except (ImportError, OSError, RuntimeError):
+    except (AttributeError, ImportError, OSError, RuntimeError):
         return None
     if config.DISABLE_JIT:
         return None
