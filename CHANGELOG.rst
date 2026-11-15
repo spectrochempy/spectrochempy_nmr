@@ -7,6 +7,10 @@ distribution. The sections below describe changes in each plugin release.
 Unreleased
 ----------
 
+* Import JEOL 2D section pairs through interop with explicit F1 and F2
+  times and preserved NUS lists. The physical F1 quadrature remains
+  undetermined. The dedicated JEOL reader retains its interleaved signs.
+
 * **CSDF exchange.** Import processed 1D and 2D NMR spectra with
   ``scp.nmr.read_csdf()`` or ``scp.nmr.read()``, and export them with
   ``scp.nmr.write_csdf()``. The plugin supports self-contained files with
