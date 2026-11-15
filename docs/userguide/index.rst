@@ -6,7 +6,7 @@ Guides
 
    reading_data
    processing_1d
-   Apodization in SpectroChemPy <https://www.spectrochempy.fr/latest/userguide/processing/apodization.html>
+   apodization
    processing_2d
    Fourier transformation in SpectroChemPy <https://www.spectrochempy.fr/latest/userguide/processing/fourier.html>
    quadrupolar
