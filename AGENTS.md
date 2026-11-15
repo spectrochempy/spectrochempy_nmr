@@ -18,6 +18,15 @@ results establish. After delivery, reconcile the note with the verified
 outcome. For a standalone contributor checkout, the public documentation and
 tests provide the project contract.
 
+## Independent review before merge
+
+Every PR requires an independent review in a fresh temporary subagent
+session without the implementation history. Record the reviewer verdict
+against the exact PR head. Resolve actionable findings, validate the
+corrections, and repeat in a fresh session. Merge only when the current
+head has an explicit `APPROVE` verdict and all required checks pass.
+Any change to the head requires a new independent review.
+
 ## User guides, notebooks, and gallery examples
 
 Use the public SpectroChemPy and NMR APIs whenever they express the
