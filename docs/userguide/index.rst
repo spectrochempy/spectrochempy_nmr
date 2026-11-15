@@ -13,6 +13,7 @@ Guides
    analysis
    baseline
    pulsar
+   pulsar_scope
 
 See also
 --------
