@@ -124,11 +124,15 @@ spectrum = scp.nmr.Experiment(fid).process()
 # reconstructs a simulated resonance in all five modes. To inspect a
 # complete COSY plane, load the processed Bruker gossypol spectrum from the
 # :doc:`NMRPipe example </examples/gallery/importer/plot_read_nmrpipe_2d>`.
+# Start the positive contours at 0.3% of the maximum and double each
+# successive level to show weak cross-peaks alongside the diagonal.
 
 # %%
 path = scp.preferences.datadir / "nmrdata/nmrpipe/nmrpipe_2d_cosy_example.ft2"
 cosy = scp.nmr.read(path, protocol="interop")
-_ = cosy.plot(method="contour")
+first_level = 0.003 * cosy.max()
+levels = [first_level * 2**index for index in range(8)]
+_ = cosy.plot(method="contour", levels=levels, figsize=(6, 6))
 
 # %% [raw] raw_mimetype="text/restructuredtext"
 # See the
