@@ -28,7 +28,6 @@ VISIBLE_EXAMPLES = [
 JEOL_DATA = {
     "plot_read_jeol_1d": "epicatechin_1h.jdf",
     "plot_read_jeol_2d": "epicatechin_cosy.jdf",
-    "plot_processing_nmr_2d": "epicatechin_cosy.jdf",
 }
 
 
@@ -44,8 +43,11 @@ def _has_nmr_example_data(example: Path) -> bool:
     if example.stem in {"plot_read_nmrpipe_2d", "plot_analyze_cosy_2d"}:
         return (root / "nmrpipe" / "nmrpipe_2d_cosy_example.ft2").is_file()
     bruker = root / "bruker" / "tests" / "nmr"
+    pst5_ser = bruker / "MQMAS_27AL_PST5" / "51" / "ser"
+    if example.stem == "plot_processing_nmr_2d":
+        return (root / "jeol" / "epicatechin_cosy.jdf").is_file() and pst5_ser.is_file()
     if example.stem == "plot_replay_mqmas_pst5":
-        return (bruker / "MQMAS_27AL_PST5" / "51" / "ser").is_file()
+        return pst5_ser.is_file()
     if example.stem == "plot_processing_cp_nmr":
         return all(
             (bruker / "CP" / str(expno) / "fid").is_file() for expno in range(80, 95)

@@ -28,8 +28,10 @@
 # mixed-domain result after F2 before transforming F1.
 
 # %% [markdown]
-# The JEOL COSY fixture supports the direct transform. Plot the first five
-# real F2 traces while F1 still represents acquisition time.
+# The JEOL COSY acquisition supports the direct transform. Plot the first
+# five real F2 traces while F1 still represents acquisition time. The
+# plugin stops at F2 for this file because the JEOL indirect quadrature
+# convention has yet to be established.
 
 # %%
 import spectrochempy as scp
@@ -39,12 +41,31 @@ fid = scp.nmr.read_jeol(path)
 f2 = fid.fft(dim="x")
 _ = f2[:5, :].real.plot(method="lines")
 
-# %% [markdown]
-# On an acquisition that supports both transforms, use the following sequence.
+# %% [raw] raw_mimetype="text/restructuredtext"
+# Transform F2 and F1
+# -------------------
+#
+# To see the full sequence, use the Bruker States acquisition of
+# :sup:`27`Al PST-5 from the :doc:`MQMAS guide <mqmas>`. The reader can
+# correct the digital-filter delay on import. Transform F2 along ``x``,
+# then keep both States branches in the mixed-domain result for the F1
+# transform along ``y``. Extract the real-real plane after both transforms
+# to plot contours with a frequency axis in each dimension. This is the
+# MQMAS spectrum before shearing.
 
-# %% tags=["skip-execution"]
-f2 = fid.fft(dim="x")
-spectrum = f2.fft(dim="y")
+# %%
+bruker_fid = scp.nmr.read_topspin(
+    "nmrdata/bruker/tests/nmr/MQMAS_27AL_PST5/51/ser", remove_digital_filter=True
+)
+bruker_f2 = bruker_fid.fft(dim="x")
+spectrum = bruker_f2.fft(dim="y")
+rr = scp.nmr.Experiment(spectrum).rr()
+region = rr[:, 65.0:20.0]
+peak = region.max().magnitude
+levels = [peak * fraction for fraction in (0.10, 0.16, 0.25, 0.40, 0.65, 0.90)]
+_ = region.plot(
+    method="contour", levels=levels, cmap="magma_r", title="PST-5 MQMAS before shearing"
+)
 
 # %% [raw] raw_mimetype="text/restructuredtext"
 # See the
@@ -64,8 +85,9 @@ spectrum = f2.fft(dim="y")
 # Here ``x`` and ``y`` are the direct and indirect dimensions of the
 # imported FID. Keep both quadrature branches through the indirect FFT.
 # Select the desired spectral component before plotting or extracting a
-# 1D slice. The :doc:`JEOL COSY example </examples/gallery/nmr/plot_processing_nmr_2d>`
-# shows a mixed-domain result for an acquisition that supports the F2 FFT.
+# 1D slice. The :doc:`gallery example </examples/gallery/nmr/plot_processing_nmr_2d>`
+# shows the JEOL mixed-domain result alongside the fully transformed Bruker
+# example.
 # Use :doc:`analysis` to find and integrate cross-peaks in a processed spectrum.
 #
 # For a supported uniform Bruker SER acquisition, use the recorded TopSpin

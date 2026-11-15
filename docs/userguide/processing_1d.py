@@ -40,17 +40,43 @@
 # Processing a FID
 # ----------------
 #
-# Wrap a dataset in :class:`~spectrochempy_nmr.Experiment` and select explicit
-# processing parameters:
+# Read the Bruker FID with digital-filter correction disabled to inspect
+# the recorded time-domain signal. The plot shows its real component.
 
 # %%
+import matplotlib.pyplot as plt
+
 import spectrochempy as scp
 from spectrochempy_nmr import autophase
 
-fid = scp.nmr.read(
-    "nmrdata/bruker/tests/nmr/topspin_1d/1/fid", remove_digital_filter=True
-)
+path = "nmrdata/bruker/tests/nmr/topspin_1d/1/fid"
+raw_fid = scp.nmr.read(path, remove_digital_filter=False)
+_ = raw_fid.real.plot(title="Bruker FID as recorded")
 
+# %% [raw] raw_mimetype="text/restructuredtext"
+# The digital filter delays the signal by 76 samples (about 0.30 ms for
+# this acquisition). Zoom in on the first 160 points to see the delayed
+# onset in the raw FID. With ``remove_digital_filter=True``, the reader
+# compensates for the delay and the signal appears near the start of the
+# corrected time axis. The magnitude shows the onset independently of
+# the phase of the complex FID.
+
+# %%
+fid = scp.nmr.read(path, remove_digital_filter=True)
+
+fig, ax = plt.subplots()
+for trace, label in ((raw_fid, "As recorded"), (fid, "Delay corrected")):
+    onset = abs(trace[:160])
+    ax.plot(onset.x.to("ms").data, onset.data, label=label)
+ax.set(xlabel="Time / ms", ylabel="FID magnitude / count")
+ax.legend()
+plt.show()
+
+# %% [raw] raw_mimetype="text/restructuredtext"
+# Wrap the corrected FID in :class:`~spectrochempy_nmr.Experiment` and
+# select explicit processing parameters.
+
+# %%
 experiment = scp.nmr.Experiment(fid)
 result = experiment.process(apodization="em", lb=5.0, phase=None)
 
