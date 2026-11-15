@@ -62,6 +62,10 @@ def _fft_validate_input(dataset, *, dim, inv=False, **kwargs):
     if not inv:
         index = dataset.dims.index(dim)
         coord = dataset.coordset[dim] if dataset.coordset is not None else None
+        if getattr(getattr(coord, "meta", None), "bruker_nus", False):
+            raise NotImplementedError(
+                "Bruker NUS F1 requires schedule-aware reconstruction"
+            )
         widths = dataset.meta.get("sw_h")
         missing_ser_width = (
             dataset.meta.get("datatype") == "SER"

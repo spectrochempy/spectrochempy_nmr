@@ -1274,7 +1274,8 @@ def _require_guarded_ser_core():
     except NotImplementedError:
         raise SpectroChemPyError(
             "Reading a Bruker SER with unsupported or undetermined F1 quadrature or missing "
-            "F1 spectral width requires SpectroChemPy 1.2.0 or later."
+            "F1 spectral width, or with nonuniform sampling, requires "
+            "SpectroChemPy 1.2.0 or later."
         ) from None
 
 
@@ -1291,6 +1292,33 @@ def _read_raw_data(directory, filename, acqus_files, procs_files):
         read_nus_schedule=False,
         legacy_layout=True,
     )
+
+
+def _bruker_nus_schedule(directory, indirect, trace_count, *, paired):
+    from nmrglue import bruker  # noqa: PLC0415
+
+    planned = indirect.get("NusTD")
+    full_points = (
+        planned // 2
+        if paired
+        and _is_bruker_mode_integer(planned)
+        and planned % 2 == 0
+        and planned >= trace_count
+        else None
+    )
+    indices = None
+    try:
+        schedule = bruker.read_nuslist(directory) if full_points is not None else []
+    except (OSError, ValueError):
+        schedule = []
+    if (
+        schedule
+        and len(schedule) * 2 == trace_count
+        and len(set(schedule)) == len(schedule)
+        and all(len(row) == 1 and 0 <= row[0] < full_points for row in schedule)
+    ):
+        indices = [row[0] for row in schedule]
+    return {"indices": indices, "full_points": full_points}
 
 
 @_importer_method
@@ -1548,6 +1576,12 @@ def _read_topspin(*args, **kwargs):
         if meta.encoding[-2].startswith("UNVALIDATED:"):
             _require_guarded_ser_core()
 
+        if dic["acqus"].get("FnTYPE") == 2:
+            _require_guarded_ser_core()
+            meta.bruker_nus = _bruker_nus_schedule(
+                f_expno, indirect, data.shape[0], paired=meta.iscomplex[-2]
+            )
+
     # correct TD, so it is the number of complex points, not the number of data
     # not for the last dimension which is already correct
     if normalized_fid:
@@ -1648,7 +1682,18 @@ def _read_topspin(*args, **kwargs):
         )
         if missing_f1_width:
             _require_guarded_ser_core()
-        if parmode > 0 and use_list and axis == 0:
+        if axis == 0 and meta.bruker_nus is not None:
+            indices = meta.bruker_nus["indices"]
+            if indices is None:
+                coord = Coord.arange(meta.td[axis], title="Stored F1 position")
+            elif missing_f1_width:
+                coord = Coord(indices, title="F1 increment index")
+            else:
+                dw = (1.0 / meta.sw_h[axis]).to("us")
+                coord = Coord(np.asarray(indices) * dw, title="F1 acquisition time")
+            coord.meta["bruker_nus"] = True
+            coords.append(coord)
+        elif parmode > 0 and use_list and axis == 0:
             # we use the vd or other list to make the axis
             # this is useful for pseudo 2D data such as relaxation, etc...
             if not isinstance(use_list, str):

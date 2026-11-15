@@ -1109,6 +1109,10 @@ class Experiment:
         """
 
         ds = self._dataset
+        if ds.meta.get("bruker_nus") is not None:
+            raise NotImplementedError(
+                "Bruker NUS F1 requires schedule-aware reconstruction"
+            )
         explicit_arguments = {
             "apodization": apodization is not _UNSET_NONE,
             "lb": lb is not _UNSET_NONE,
