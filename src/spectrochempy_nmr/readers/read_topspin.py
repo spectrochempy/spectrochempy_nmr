@@ -1120,7 +1120,7 @@ def _select_interrupted_states_tppi(directory, stored):
     ), counts
 
 
-def _recover_interrupted_states_tppi(directory, meta, data):
+def _aligned_complex_ser_traces(meta, data):
     direct = meta.get("acqus", {})
     td = direct.get("TD")
     data_type = direct.get("DTYPA")
@@ -1132,19 +1132,25 @@ def _recover_interrupted_states_tppi(directory, meta, data):
         or td % 2
         or data_type not in (0, 2)
     ):
-        return data, None
+        return None
     word_bytes = 8 if data_type == 2 else 4
     trace_bytes = ((td * word_bytes + 1023) // 1024) * 1024
     samples_per_trace = trace_bytes // (2 * word_bytes)
     if data.size % samples_per_trace or meta.get("FILE_SIZE") != (
         data.size * 2 * word_bytes
     ):
+        return None
+    return data.reshape(-1, samples_per_trace)
+
+
+def _recover_interrupted_states_tppi(directory, meta, data):
+    traces = _aligned_complex_ser_traces(meta, data)
+    if traces is None:
         return data, None
-    traces = data.reshape(-1, samples_per_trace)
     counts = _interrupted_states_tppi_counts(directory, meta, traces)
     if counts is None:
         return data, None
-    return traces[: counts["paired_traces"], : td // 2], counts
+    return traces[: counts["paired_traces"], : meta["acqus"]["TD"] // 2], counts
 
 
 def _read_normalized_ser(
@@ -1303,7 +1309,7 @@ def _bruker_nus_schedule(directory, indirect, trace_count, *, paired):
         if paired
         and _is_bruker_mode_integer(planned)
         and planned % 2 == 0
-        and planned >= trace_count
+        and trace_count <= planned <= np.iinfo(np.intp).max
         else None
     )
     indices = None
@@ -1357,6 +1363,7 @@ def _read_topspin(*args, **kwargs):
     processed_components = None
     normalized_dataset = None
     interrupted = None
+    aligned_nus = False
     if not processed:
         remove_filter = bool(kwargs.get("remove_digital_filter", False))
         remove_dc = bool(kwargs.get("remove_dc_offset", False))
@@ -1379,7 +1386,20 @@ def _read_topspin(*args, **kwargs):
             )
         if normalized is None:
             dic, data = _read_raw_data(f_expno, path.name, acqus_files, procs_files)
-            if path.name == "ser" and not kwargs.get("use_list", False):
+            direct = dic.get("acqus", {})
+            aligned_nus = (
+                path.name == "ser"
+                and direct.get("FnTYPE") == 2
+                and direct.get("PARMODE") == 1
+                and direct.get("AQ_mod") == 3
+            )
+            if aligned_nus:
+                data = _aligned_complex_ser_traces(dic, data)
+                if data is None or not len(data):
+                    raise SpectroChemPyError(
+                        "Bruker NUS SER has an incomplete storage trace"
+                    )
+            elif path.name == "ser" and not kwargs.get("use_list", False):
                 data, interrupted = _recover_interrupted_states_tppi(f_expno, dic, data)
         else:
             dic, normalized_dataset = normalized
@@ -1579,7 +1599,10 @@ def _read_topspin(*args, **kwargs):
         if dic["acqus"].get("FnTYPE") == 2:
             _require_guarded_ser_core()
             meta.bruker_nus = _bruker_nus_schedule(
-                f_expno, indirect, data.shape[0], paired=meta.iscomplex[-2]
+                f_expno,
+                indirect,
+                data.shape[0],
+                paired=aligned_nus and meta.iscomplex[-2],
             )
 
     # correct TD, so it is the number of complex points, not the number of data
@@ -1594,11 +1617,17 @@ def _read_topspin(*args, **kwargs):
     if paired_ser:
         if not normalized_ser:
             if data.shape[0] % 2:
+                if aligned_nus:
+                    raise SpectroChemPyError(
+                        "Bruker NUS SER requires complete F1 pairs"
+                    )
                 raise ValueError("TopSpin States SER requires an even number of traces")
             meta.td[0] //= 2
     for axis in range(parmode + 1):
         if meta.iscomplex[axis] and not normalized_fid:
             meta.tdeff[axis] //= 2
+    if aligned_nus:
+        meta.tdeff[0] = meta.td[0]
 
     if normalized_fid:
         meta.sw_h = [normalized_dataset.meta.acquisition["spectral_width_hz"] * ur.Hz]

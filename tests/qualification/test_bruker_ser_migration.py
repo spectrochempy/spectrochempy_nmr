@@ -146,6 +146,53 @@ def test_paired_nus_preserves_schedule_and_guards_f1(tmp_path, contents, indices
         f2.fft(dim="y")
 
 
+@pytest.mark.parametrize(
+    ("size", "error"),
+    [(6144, None), (7168, "complete F1 pairs"), (6160, "incomplete storage trace")],
+)
+def test_paired_nus_uses_physical_trace_boundaries(tmp_path, size, error):
+    path = _synthetic_ser(tmp_path, 6, nus=True)
+    indirect = path / "acqu2s"
+    indirect.write_text(indirect.read_text().replace("##END=", "##$NusTD= 16\n##END="))
+    schedule = path / "nuslist"
+    schedule.rmdir()
+    schedule.write_text("0\n4\n2\n" if error is None else "0\n4\n2\n7\n")
+    ser = path / "ser"
+    payload = ser.read_bytes()[:size]
+    ser.write_bytes(payload)
+
+    if error is not None:
+        with pytest.raises(SpectroChemPyError, match=error):
+            scp.read_topspin(ser, local_only=True)
+        return
+
+    source = scp.read_topspin(ser, local_only=True)
+    assert source.shape == (2, 3, 128)
+    assert source.meta.tdeff[-2] == 3
+    assert source.meta.bruker_nus == {"indices": [0, 4, 2], "full_points": 8}
+    words = np.frombuffer(payload, dtype=">i4").reshape(6, 256)
+    expected = (words[:, ::2] - 1j * words[:, 1::2]) / 12
+    np.testing.assert_allclose(
+        source.data, np.stack((expected[::2], expected[1::2])), atol=1e-12
+    )
+
+
+def test_paired_nus_rejects_grid_size_outside_integer_range(tmp_path):
+    path = _synthetic_ser(tmp_path, 6, nus=True)
+    indirect = path / "acqu2s"
+    indirect.write_text(
+        indirect.read_text().replace(
+            "##END=", "##$NusTD= 200000000000000000000000\n##END="
+        )
+    )
+    schedule = path / "nuslist"
+    schedule.rmdir()
+    schedule.write_text("0\n4\n2\n70000000000000000000000\n")
+    source = scp.read_topspin(path / "ser", local_only=True)
+    assert source.meta.bruker_nus == {"indices": None, "full_points": None}
+    np.testing.assert_array_equal(source.y.data, np.arange(4))
+
+
 def test_real_bruker_nus_survives_scp_roundtrip(tmp_path):
     root = os.environ.get("NMR_BRUKER_NUS_DATA")
     if not root:
