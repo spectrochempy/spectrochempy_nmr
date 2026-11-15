@@ -309,6 +309,14 @@ spin, in static or MAS simulations. The backend compiles on first use
 and uses SciPy's LP64 LAPACK `DSTEV`. If the backend is unavailable or a
 batch fails in LAPACK, PULSAR uses the dense solver. The default
 `rf_solver="dense"` requires no Numba import.
+
+Set `deposition="numba"` on a PULSAR spectrum simulator to integrate the
+same triangular densities using a JIT-compiled loop. The `[rf]` extra
+provides Numba for ideal and finite RF simulations. The loop compiles
+on first use in each process. The default `deposition="numpy"` also
+serves as the fallback when the JIT is unavailable. This option is
+independent of `rf_solver`.
+
 Finite preparation can distinguish octant reflections even for aligned
 tensors, so it uses at least four octants. It uses all eight for a
 rotated CSA tensor because a time-ordered RF pulse can distinguish
