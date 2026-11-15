@@ -7,19 +7,12 @@ distribution. The sections below describe changes in each plugin release.
 Unreleased
 ----------
 
-Added
-~~~~~
-
 * **CSDF exchange.** Import processed 1D and 2D NMR spectra with
   ``scp.nmr.read_csdf()`` or ``scp.nmr.read()``, and export them with
   ``scp.nmr.write_csdf()``. The plugin supports self-contained files with
   a single real or complex spectrum and linear frequency axes, without
   requiring ``csdmpy``.
-
-
-Unreleased
-----------
-
+  (`#123 <https://github.com/spectrochempy/spectrochempy_nmr/pull/123>`_)
 * Automatically read complete F1 pairs from interrupted Bruker States-TPPI
   acquisitions with zero-filled trailing storage. Report the effective F1
   length in complex points and preserve the archived TopSpin parameters.
