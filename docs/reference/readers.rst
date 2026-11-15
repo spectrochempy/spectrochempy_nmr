@@ -18,3 +18,26 @@ format. See :doc:`/userguide/reading_data` for supported inputs and examples.
    read_agilent
    read_jeol
    read_simpson
+
+JEOL 2D acquisition branches
+~~~~~~~~~~~~~~~~~~~~~~~~~~~
+
+For a supported JDF acquisition, select interop to keep the stored section
+pairs as separate complex components:
+
+.. code-block:: python
+
+   dataset = scp.nmr.read(
+       "hsqc.jdf",
+       protocol="interop",
+       normalize_options={"conjugation": "none"},
+   )
+
+Four-section acquisitions use dimensions ``c, y, x`` for the two
+components, F1, and F2. Time coordinates are in seconds. For listed F1
+sampling, ``dataset.y`` contains the acquired times and
+``dataset.meta.acquisition["nominal_shape"]`` records the full sampling grid.
+F1 quadrature remains undetermined and F1 Fourier transformation is guarded.
+The dedicated ``read_jeol()`` reader retains the historical interleaved
+presentation and signs. Uniform four-section files require a provider
+with uniform complex/complex JEOL normalization support.
