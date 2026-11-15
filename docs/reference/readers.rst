@@ -20,7 +20,7 @@ format. See :doc:`/userguide/reading_data` for supported inputs and examples.
    read_simpson
 
 JEOL 2D acquisition branches
-~~~~~~~~~~~~~~~~~~~~~~~~~~~
+~~~~~~~~~~~~~~~~~~~~~~~~~~~~
 
 For a supported JDF acquisition, select interop to keep the stored section
 pairs as separate complex components:
