@@ -1129,3 +1129,56 @@ def test_broaden_matches_gaussian_convolution(size, complex_input):
     assert broadened.x.units == spectrum.x.units
     assert broadened.units == spectrum.units
     assert broadened.is_complex == spectrum.is_complex
+
+
+@pytest.mark.parametrize("quadrupolar", [False, True])
+def test_numba_deposition_preserves_complex_spectrum_and_order_areas(
+    monkeypatch, quadrupolar
+):
+    from spectrochempy_nmr._pulsar_numba_deposition import get_numba_depositor
+
+    compiled = get_numba_depositor()
+    if compiled is None:
+        pytest.skip("optional Numba deposition backend is unavailable")
+
+    settings = dict(
+        spin=2.5 if quadrupolar else 0.5,
+        cq_hz=2.923e6 if quadrupolar else 0,
+        eta=0.37 if quadrupolar else 0,
+        csa_anisotropy_hz=0 if quadrupolar else 3400,
+        csa_eta=0.4,
+        larmor_hz=104.468516e6,
+        spectral_width_hz=48e3,
+        spinning_hz=8e3,
+        sidebands=2,
+        accuracy=2,
+        points=512,
+        transitions="central" if quadrupolar else "all",
+        receiver_phase_deg=29,
+    )
+    cycle = PhaseCycle(
+        (
+            (Pulse(4e-6, 32e3, 37), Delay(13e-6), Pulse(6e-6, 42e3, -72)),
+            (Pulse(4e-6, 32e3, 103), Delay(13e-6), Pulse(6e-6, 42e3, 217)),
+        ),
+        (0.4 + 0.2j, 0.3j),
+    )
+    reference = pulsar._deposit_triangles
+    verified_areas = []
+
+    def compare_deposition(*args):
+        actual = compiled(*args)
+        expected = reference(*args)
+        np.testing.assert_allclose(actual.sum(), expected.sum(), atol=1e-14, rtol=1e-12)
+        verified_areas.append(actual.sum())
+        return actual
+
+    expected = simulate_pulse_sequence(cycle, **settings)
+    monkeypatch.setattr(
+        "spectrochempy_nmr._pulsar_numba_deposition.get_numba_depositor",
+        lambda: compare_deposition,
+    )
+    actual = simulate_pulse_sequence(cycle, **settings, deposition="numba")
+    assert len(verified_areas) == 2 * (2 * settings["sidebands"] + 1)
+    np.testing.assert_array_equal(actual.x.data, expected.x.data)
+    np.testing.assert_allclose(actual.data, expected.data, atol=1e-14, rtol=1e-12)

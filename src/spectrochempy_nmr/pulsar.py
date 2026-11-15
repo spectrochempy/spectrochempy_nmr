@@ -216,6 +216,17 @@ def _deposit_triangles(axis, frequencies, weights, triangles):
     return spectrum
 
 
+def _resolve_deposition(name):
+    if name == "numpy":
+        return _deposit_triangles
+    if name != "numba":
+        raise ValueError("deposition must be 'numpy' or 'numba'.")
+
+    from spectrochempy_nmr._pulsar_numba_deposition import get_numba_depositor
+
+    return get_numba_depositor() or _deposit_triangles
+
+
 def _real_scalars(*values):
     if not all(isinstance(value, Real) for value in values):
         raise TypeError("PULSAR parameters must be real scalars.")
@@ -318,6 +329,7 @@ def _central_transition_profile(
     transitions="central",
     j_partners=(),
     probe_bandwidth_hz=None,
+    deposition="numpy",
     _normalize=True,
 ):
     points, accuracy, sidebands = index(points), index(accuracy), index(sidebands)
@@ -385,6 +397,7 @@ def _central_transition_profile(
         sidebands,
         _passive_offsets(j_partners),
         _validate_probe_bandwidth(probe_bandwidth_hz),
+        _resolve_deposition(deposition),
     )
     if transitions == "central":
         harmonics = _quadrupolar_harmonics(directions, quadrupolar_eta, angle)
@@ -478,8 +491,9 @@ def _powder_profile(
     spinning_hz,
     accuracy,
     sidebands,
-    passive_offsets=((0.0, 1.0),),
-    probe_bandwidth_hz=None,
+    passive_offsets,
+    probe_bandwidth_hz,
+    deposit,
 ):
     """Integrate the selected orders for a set of vertex harmonics."""
     frequencies = shift_hz + harmonics[0].real
@@ -495,9 +509,7 @@ def _powder_profile(
         for offset, population in passive_offsets:
             frequency = frequencies + offset
             detected = _probe_weights(frequency, weights, probe_bandwidth_hz)
-            spectrum += population * _deposit_triangles(
-                axis, frequency, detected, triangles
-            )
+            spectrum += population * deposit(axis, frequency, detected, triangles)
         return axis, spectrum
 
     rotor_samples = spectral_width_hz / spinning_hz
@@ -540,9 +552,7 @@ def _powder_profile(
             detected = _probe_weights(
                 frequency, weights * intensity, probe_bandwidth_hz
             )
-            spectrum += population * _deposit_triangles(
-                axis, frequency, detected, triangles
-            )
+            spectrum += population * deposit(axis, frequency, detected, triangles)
     return axis, spectrum
 
 
@@ -564,6 +574,7 @@ def simulate_central_transition(
     csa_rotation=None,
     j_partners=(),
     probe_bandwidth_hz=None,
+    deposition="numpy",
 ):
     """Simulate the central transition of an isolated spin as an NDDataset.
 
@@ -581,6 +592,8 @@ def simulate_central_transition(
     to 4096 rotor samples. The table of intensities across powder vertices
     and requested bands is limited to 64 MiB. Optional probe_bandwidth_hz
     is the Lorentzian receiver bandwidth at half height.
+
+    Set deposition="numba" for optional JIT deposition with NumPy fallback.
     """
     axis, profile = _central_transition_profile(
         cq_hz=cq_hz,
@@ -599,6 +612,7 @@ def simulate_central_transition(
         csa_rotation=csa_rotation,
         j_partners=j_partners,
         probe_bandwidth_hz=probe_bandwidth_hz,
+        deposition=deposition,
     )
     return _as_dataset(axis, profile, "PULSAR central transition")
 
@@ -622,6 +636,7 @@ def simulate_quadrupolar(
     csa_rotation=None,
     j_partners=(),
     probe_bandwidth_hz=None,
+    deposition="numpy",
 ):
     """Simulate a selected set of quadrupolar transitions of one spin.
 
@@ -631,6 +646,8 @@ def simulate_quadrupolar(
     second-order shifts. Intensities are normalized once over the
     requested transitions and MAS orders. See simulate_central_transition
     for frequency, powder mesh and CSA conventions.
+
+    Set deposition="numba" for optional JIT deposition with NumPy fallback.
     """
     axis, profile = _central_transition_profile(
         cq_hz=cq_hz,
@@ -650,6 +667,7 @@ def simulate_quadrupolar(
         csa_rotation=csa_rotation,
         j_partners=j_partners,
         probe_bandwidth_hz=probe_bandwidth_hz,
+        deposition=deposition,
     )
     return _as_dataset(axis, profile, "PULSAR quadrupolar spectrum")
 
@@ -667,6 +685,7 @@ def simulate_csa(
     sidebands=0,
     j_partners=(),
     probe_bandwidth_hz=None,
+    deposition="numpy",
 ):
     """Simulate first-order chemical shift anisotropy for an isolated spin.
 
@@ -675,6 +694,8 @@ def simulate_csa(
     A zero MAS rate gives a static powder pattern. Otherwise, the rotor
     angle defaults to 54.736 degrees and sidebands selects the orders on each side.
     The spectrum is normalized over the requested bands.
+
+    Set deposition="numba" for optional JIT deposition with NumPy fallback.
     """
     points, accuracy, sidebands = index(points), index(accuracy), index(sidebands)
     values = (anisotropy_hz, eta, spectral_width_hz, shift_hz, spinning_hz)
@@ -699,6 +720,7 @@ def simulate_csa(
         sidebands,
         _passive_offsets(j_partners),
         _validate_probe_bandwidth(probe_bandwidth_hz),
+        _resolve_deposition(deposition),
     )
     return _as_dataset(
         axis, _normalize_profile(profile), "PULSAR chemical shift anisotropy"
@@ -1255,6 +1277,7 @@ def simulate_rectangular_pulse(
     max_rf_step_s=2e-6,
     probe_bandwidth_hz=None,
     rf_solver="dense",
+    deposition="numpy",
 ):
     """Simulate a powder after one finite rectangular RF pulse.
 
@@ -1265,6 +1288,8 @@ def simulate_rectangular_pulse(
     phase are retained. With MAS, midpoint propagation uses time steps
     no longer than max_rf_step_s or 1/32 of a rotor period.
     Set rf_solver="tridiagonal" to use the optional Numba/LAPACK solver.
+
+    Set deposition="numba" for optional JIT deposition with NumPy fallback.
     """
     return simulate_pulse_sequence(
         [Pulse(duration_s, rf_hz, phase_deg)],
@@ -1284,6 +1309,7 @@ def simulate_rectangular_pulse(
         sidebands=sidebands,
         max_rf_step_s=max_rf_step_s,
         probe_bandwidth_hz=probe_bandwidth_hz,
+        deposition=deposition,
         rf_solver=rf_solver,
     )
 
@@ -1313,6 +1339,7 @@ def simulate_pulse_sequence(
     output="spectrum",
     probe_bandwidth_hz=None,
     rf_solver="dense",
+    deposition="numpy",
 ):
     """Simulate a sequence of pulses, delays and coherence selections.
 
@@ -1325,6 +1352,8 @@ def simulate_pulse_sequence(
     matrix at the end of preparation, before receiver phase.
     For finite pulses, rf_solver="tridiagonal" uses the optional
     Numba/LAPACK backend when available and falls back to the dense solver.
+
+    Set deposition="numba" for optional JIT deposition with NumPy fallback.
     """
     points, accuracy, sidebands = index(points), index(accuracy), index(sidebands)
     (
@@ -1446,6 +1475,7 @@ def simulate_pulse_sequence(
     ):
         raise ValueError("The spectral window must contain the requested transitions.")
     receiver = np.exp(1j * np.deg2rad(receiver_phase_deg))
+    deposit = _resolve_deposition(deposition)
     profile = np.zeros(points, dtype=complex)
     for offset, population in passive_offsets:
         shifted = offsets + offset
@@ -1466,12 +1496,8 @@ def simulate_pulse_sequence(
                 signal = _probe_weights(
                     frequency, weights * signals[:, i, j], bandwidth
                 )
-                profile.real += _deposit_triangles(
-                    axis, frequency, signal.real, triangles
-                )
-                profile.imag += _deposit_triangles(
-                    axis, frequency, signal.imag, triangles
-                )
+                profile.real += deposit(axis, frequency, signal.real, triangles)
+                profile.imag += deposit(axis, frequency, signal.imag, triangles)
     ideal_signal = strengths[selected].sum() / 2
     powder_mass = weights[triangles].sum()
     return _as_dataset(
@@ -1610,6 +1636,7 @@ def simulate_coupled_sequence(
     j_partners=(),
     output="spectrum",
     probe_bandwidth_hz=None,
+    deposition="numpy",
 ):
     """Simulate two RF-active spins with a secular isotropic J coupling.
 
@@ -1619,6 +1646,8 @@ def simulate_coupled_sequence(
     Use the partner RF fields on Pulse and IdealPulse to address it.
     output="density" returns the final averaged product density matrix
     with partner indices varying fastest.
+
+    Set deposition="numba" for optional JIT deposition with NumPy fallback.
     """
     points, accuracy, sidebands = index(points), index(accuracy), index(sidebands)
     (
@@ -1737,6 +1766,7 @@ def simulate_coupled_sequence(
         or frequency.max() + band_offset + passive_offsets[-1][0] > axis[-1]
     ):
         raise ValueError("The spectral window must contain the requested transitions.")
+    deposit = _resolve_deposition(deposition)
     profile = np.zeros(points, dtype=complex)
     receiver = np.exp(1j * np.deg2rad(receiver_phase_deg))
     for offset, population in passive_offsets:
@@ -1759,12 +1789,8 @@ def simulate_coupled_sequence(
                 weighted = _probe_weights(
                     shifted, weights * signals[:, i, j], bandwidth
                 )
-                profile.real += _deposit_triangles(
-                    axis, shifted, weighted.real, triangles
-                )
-                profile.imag += _deposit_triangles(
-                    axis, shifted, weighted.imag, triangles
-                )
+                profile.real += deposit(axis, shifted, weighted.real, triangles)
+                profile.imag += deposit(axis, shifted, weighted.imag, triangles)
     norm = strengths.sum() / 2 * weights[triangles].sum()
     return _as_dataset(axis, profile / norm, "PULSAR coupled sequence")
 
