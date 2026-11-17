@@ -110,3 +110,8 @@ def test_jeol_cosy_default_grid(cenapt):
     assert np.all(np.diff(result.x.data) < 0)
     assert result.y.data[255] == pytest.approx(1998.91099189125)
     assert result.x.data[4096] == pytest.approx(1998.3737105862325)
+
+    on_native_grid = process_jeol_cosy_magnitude(
+        path, frequency_grid=(result.y.data, result.x.data)
+    )
+    np.testing.assert_array_equal(on_native_grid.data, result.data)

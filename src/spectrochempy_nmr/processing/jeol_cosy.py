@@ -161,7 +161,7 @@ def _frequency_axis(axis):
 def _sample_magnitude(magnitude, y, x, f1, f2):
     """Interpolate the unsymmetrized FFT on a grid of physical frequencies."""
     coordinates = np.broadcast_arrays(
-        (y - f1[0]) / (f1[1] - f1[0]),
-        (f2[0] - x) / (f2[0] - f2[1]),
+        np.interp(y, f1, np.arange(f1.size), left=-1, right=f1.size),
+        np.interp(x, f2[::-1], np.arange(f2.size - 1, -1, -1), left=f2.size, right=-1),
     )
     return map_coordinates(magnitude, coordinates, order=1)
