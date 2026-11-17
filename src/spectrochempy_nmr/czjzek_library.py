@@ -116,14 +116,14 @@ class CzjzekRFLibrary:
         library._spectra = spectra
         return library
 
-    def _check_spectral_window(self, couplings, asymmetries, shift):
+    def _check_spectral_window(self, couplings, asymmetries, shifts):
         settings = self._settings
         spinning = settings["spinning_hz"]
         directions, _, _ = pulsar._powder_mesh(settings["accuracy"], bool(spinning))
         angle = pulsar._rotor_angle(settings["rotor_angle_deg"], spinning)
         extent = settings["sidebands"] * spinning
         transitions = settings["transitions"]
-        for cq, eta in zip(couplings, asymmetries, strict=True):
+        for cq, eta, shift in zip(couplings, asymmetries, shifts, strict=True):
             for m, _, terms in pulsar._transition_harmonics(
                 directions, cq, eta, angle, settings["spin"], settings["larmor_hz"], 0.0
             ):
@@ -146,56 +146,68 @@ class CzjzekRFLibrary:
             raise TypeError("distribution must be a CzjzekDistribution.")
         members = distribution.sample(samples, seed)
         cq, eta = members.cq_hz, members.eta
-        displacement = (float(distribution.shift_hz) - self._shift_hz) / self._step
+        displacement = (members.shift_hz - self._shift_hz) / self._step
         inside = (
             (self._cq[0] <= cq)
             & (cq <= self._cq[-1])
             & (self._eta[0] <= eta)
             & (eta <= self._eta[-1])
+            & (np.abs(displacement) <= self._bins + 1e-12)
         )
-        if distribution.shift_sigma_hz or abs(displacement) > self._bins + 1e-12:
-            inside[:] = False
 
         profile = np.zeros(self._axis.size, dtype=complex)
         if np.any(inside):
             cq, eta = cq[inside], eta[inside]
-            self._check_spectral_window(cq, eta, float(distribution.shift_hz))
-            i = (
-                np.searchsorted(self._cq, cq, side="right").clip(1, self._cq.size - 1)
-                - 1
+            self._check_spectral_window(cq, eta, members.shift_hz[inside])
+            profile += self._interpolate(
+                cq, eta, displacement[inside], members.weights[inside]
             )
-            j = (
-                np.searchsorted(self._eta, eta, side="right").clip(
-                    1, self._eta.size - 1
-                )
-                - 1
-            )
-            u = (cq - self._cq[i]) / (self._cq[i + 1] - self._cq[i])
-            v = (eta - self._eta[j]) / (self._eta[j + 1] - self._eta[j])
-            weights = np.zeros((self._cq.size, self._eta.size))
-            populations = members.weights[inside]
-            for di, dj, fraction in (
-                (0, 0, (1 - u) * (1 - v)),
-                (0, 1, (1 - u) * v),
-                (1, 0, u * (1 - v)),
-                (1, 1, u * v),
-            ):
-                np.add.at(weights, (i + di, j + dj), fraction * populations)
-            lower, upper = self._spectra.reshape(2, weights.size, profile.size)
-            blend = np.clip((displacement / self._bins + 1) / 2, 0, 1)
-            aligned = (1 - blend) * (weights.ravel() @ lower) + blend * (
-                weights.ravel() @ upper
-            )
-            size = aligned.size
-            padded = np.pad(aligned, size)
-            phase = np.exp(-2j * np.pi * np.fft.fftfreq(padded.size) * displacement)
-            profile[:] = np.fft.ifft(np.fft.fft(padded) * phase)[size : 2 * size]
 
         for k in np.flatnonzero(~inside):
             profile += members.weights[k] * self._direct(
                 members.cq_hz[k], members.eta[k], members.shift_hz[k]
             )
         return pulsar._as_dataset(self._axis, profile, "Czjzek RF library spectrum")
+
+    def _interpolate(self, cq, eta, displacements, populations):
+        i = np.searchsorted(self._cq, cq, side="right").clip(1, self._cq.size - 1) - 1
+        j = (
+            np.searchsorted(self._eta, eta, side="right").clip(1, self._eta.size - 1)
+            - 1
+        )
+        u = (cq - self._cq[i]) / (self._cq[i + 1] - self._cq[i])
+        v = (eta - self._eta[j]) / (self._eta[j + 1] - self._eta[j])
+        columns = self._eta.size
+        origin = i * columns + j
+        nodes = origin[:, None] + np.array([0, 1, columns, columns + 1])
+        weights = populations[:, None] * np.column_stack(
+            ((1 - u) * (1 - v), (1 - u) * v, u * (1 - v), u * v)
+        )
+        size = self._axis.size
+        planes = self._spectra.reshape(2, -1, size)
+        frequencies = -2j * np.pi * np.fft.fftfreq(3 * size)
+        summed = np.zeros(3 * size, dtype=complex)
+
+        # Combine members at the same displacement before translation. With
+        # shift disorder each group usually needs just the four adjacent nodes.
+        order = np.argsort(displacements, kind="stable")
+        shifts, counts = np.unique(displacements[order], return_counts=True)
+        starts = np.r_[0, counts.cumsum()]
+        for shift, start, end in zip(shifts, starts[:-1], starts[1:], strict=True):
+            selected = order[start:end]
+            if shifts.size == 1:
+                mass = np.bincount(
+                    nodes.ravel(), weights=weights.ravel(), minlength=planes.shape[1]
+                )
+                lower, upper = mass @ planes
+            else:
+                indices, inverse = np.unique(nodes[selected], return_inverse=True)
+                mass = np.bincount(inverse.ravel(), weights=weights[selected].ravel())
+                lower, upper = mass @ planes[:, indices]
+            blend = np.clip((shift / self._bins + 1) / 2, 0, 1)
+            aligned = (1 - blend) * lower + blend * upper
+            summed += np.fft.fft(np.pad(aligned, size)) * np.exp(frequencies * shift)
+        return np.fft.ifft(summed)[size : 2 * size]
 
     @staticmethod
     def _scan_metadata(scan):

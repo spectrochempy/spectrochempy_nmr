@@ -229,7 +229,7 @@ def test_rf_library_uses_direct_response_outside_supported_region():
     targets = (
         CzjzekDistribution(0, -2.9e6, 0.35, 325),
         CzjzekDistribution(0, 2.9e6, 0.35, 800),
-        CzjzekDistribution(30e3, 2.9e6, 0.35, 325, 35),
+        CzjzekDistribution(30e3, 2.9e6, 0.35, 2500, 35),
     )
     for target in targets:
         expected = simulate_czjzek(
@@ -269,6 +269,44 @@ def test_rf_library_combines_interpolated_and_direct_members():
     )
     expected = simulate_czjzek(target, samples=2, seed=17, events=events, **settings)
     actual = library.simulate(target, samples=2, seed=17)
+    np.testing.assert_allclose(actual.data, expected.data, rtol=1e-12, atol=1e-14)
+
+
+@pytest.mark.parametrize("outside", [False, True])
+def test_rf_library_interpolates_sampled_shift_dispersion(monkeypatch, outside):
+    from spectrochempy_nmr import CzjzekRFLibrary
+    from spectrochempy_nmr.pulsar import Pulse
+
+    events = (Pulse(7e-6, 24e3, 23),)
+    settings = {**SETTINGS, "points": 513, "accuracy": 1}
+    step = settings["spectral_width_hz"] / (settings["points"] - 1)
+    seed = 17
+    unit_shifts = CzjzekDistribution(0, 3e6, 0.5, 0, 1).sample(2, seed).shift_hz
+    low, high = np.sort(unit_shifts)
+    span = 6 * step
+    sigma = span / (high - low)
+    target = CzjzekDistribution(0, 3e6, 0.5, 325 - span / 2 - low * sigma, sigma)
+    expected = simulate_czjzek(target, events=events, samples=2, seed=seed, **settings)
+    library = CzjzekRFLibrary.build(
+        events,
+        cq_grid_hz=[2.8e6, 3e6],
+        eta_grid=[0.2, 0.5],
+        shift_hz=325 - (span if outside else 0),
+        shift_bins=3,
+        **settings,
+    )
+    direct = library._direct
+    fallbacks = []
+
+    def track_fallback(cq, eta, shift):
+        fallbacks.append(shift)
+        return direct(cq, eta, shift)
+
+    monkeypatch.setattr(library, "_direct", track_fallback)
+    actual = library.simulate(target, samples=2, seed=seed)
+    expected_fallbacks = [target.shift_hz + sigma * high] if outside else []
+    assert fallbacks == expected_fallbacks
+    np.testing.assert_array_equal(actual.x.data, expected.x.data)
     np.testing.assert_allclose(actual.data, expected.data, rtol=1e-12, atol=1e-14)
 
 
