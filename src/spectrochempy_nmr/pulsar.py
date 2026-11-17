@@ -1411,7 +1411,9 @@ def simulate_t1_series(preparation, t1_s, conversion, **settings):
 
     Settings are those of simulate_pulse_sequence for spectral output.
     For States, call once per quadrature branch and retain the two datasets
-    for reconstruction.
+    for reconstruction. Keep the original sampling schedule for nonuniform
+    reconstruction, since core dataset copies can linearize nearly uniform
+    coordinates.
 
     Each call retains the orientation-resolved band amplitudes for all
     requested times until powder integration. If those arrays and the
@@ -1951,15 +1953,16 @@ def _as_dataset(axis, profile, name, *, times=None):
             title="indirect evolution time",
             rounding=False,
             linearize_below=0,
-            sigdigits=17,
+            sigdigits=12,
         )
     dataset.set_coordset(**coords)
-    if times is not None and not np.array_equal(dataset.y.data, times):
-        # Older Coord versions can linearize the grid or restore rounding
-        # when attaching it. Keep the exact times used by the propagator.
+    if times is not None:
+        # Keep Coord's regular-spacing classification for the FFT, but retain
+        # the exact times used by the propagator if Coord rebuilt the grid.
         time_coord = dataset.y
-        time_coord._set_data(times)
         time_coord._rounding = False
+        if not np.array_equal(time_coord.data, times):
+            time_coord._set_data(times)
     return dataset
 
 

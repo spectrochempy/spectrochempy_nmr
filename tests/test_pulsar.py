@@ -967,14 +967,14 @@ def test_t1_series_rejects_invalid_times(times):
 
 
 @pytest.mark.parametrize(
-    "times",
+    "times,linear",
     [
-        (1.0, np.nextafter(1.0, 2.0)),
-        (0, 0.4999e-3, 1e-3),
-        tuple(np.arange(48) * 7.5e-6),
+        ((1.0, np.nextafter(1.0, 2.0)), False),
+        ((0, 0.4999e-3, 1e-3), False),
+        (tuple(np.arange(48) * 7.5e-6), True),
     ],
 )
-def test_t1_series_preserves_the_input_schedule(times):
+def test_t1_series_preserves_the_input_schedule(times, linear):
     series = simulate_t1_series(
         (),
         times,
@@ -987,6 +987,7 @@ def test_t1_series_preserves_the_input_schedule(times):
         points=256,
     )
     np.testing.assert_array_equal(series.y.data, times)
+    assert series.y.linear is linear
 
 
 def test_t1_series_reuses_the_signal_buffer_across_passive_offsets(monkeypatch):
