@@ -21,6 +21,9 @@
 # :ref:`nmr-processing-validation` for the distinction between runtime checks
 # and qualification against reference data.
 #
+# For an interrupted States-TPPI acquisition or a nonuniformly sampled
+# Bruker SER, see :doc:`bruker_indirect_sampling` before transforming F1.
+#
 # Process the direct dimension (F2) before the indirect dimension (F1) for
 # supported paired acquisitions. The plugin uses the acquisition metadata to
 # select the quadrature convention and check the transform order. When

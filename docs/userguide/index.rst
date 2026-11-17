@@ -8,6 +8,7 @@ Guides
    processing_1d
    apodization
    processing_2d
+   bruker_indirect_sampling
    jeol_cosy_magnitude
    fourier
    quadrupolar
