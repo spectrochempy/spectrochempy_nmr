@@ -31,3 +31,18 @@ python docs/fetch_gallery_data.py
 
 No fixture is copied into the NMR repository or published as a new data
 distribution.
+
+## JEOL COSY magnitude qualification
+
+The optional tests in `tests/qualification/test_jeol_cosy_magnitude.py`
+use JDF and JCAMP-DX COSY pairs from nmrXiv project P33 for
+[luteolin](https://doi.org/10.57992/nmrxiv.p33.s214),
+[epicatechin](https://doi.org/10.57992/nmrxiv.p33.s192), and
+[rutin](https://doi.org/10.57992/nmrxiv.p33.s188). The test module pins
+the file hashes. Keep the original filenames in study subdirectories
+and point `NMR_JEOL_COSY_DIR` at their common parent. The rejection test
+also uses the raw epicatechin HSQC from the same study.
+
+```console
+NMR_JEOL_COSY_DIR=/path/to/CENAPT python -m pytest -q tests/qualification/test_jeol_cosy_magnitude.py
+```
