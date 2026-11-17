@@ -700,6 +700,10 @@ def __getattr__(name: str):
         from .experiment import Experiment  # noqa: PLC0415
 
         return Experiment
+    if name == "process_jeol_cosy_magnitude":
+        from .processing.jeol_cosy import process_jeol_cosy_magnitude
+
+        return process_jeol_cosy_magnitude
     if name == "process_agilent_noesy_states_tppi":
         from .adapters.agilent_noesy import (  # noqa: PLC0415
             process_agilent_noesy_states_tppi,
@@ -761,6 +765,7 @@ def __dir__() -> list[str]:
         "apk",
         "autophase",
         "process_agilent_noesy_states_tppi",
+        "process_jeol_cosy_magnitude",
         "extract_noesy_components",
         "from_interop",
         "reference_agilent_1d",
