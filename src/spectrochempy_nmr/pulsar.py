@@ -1957,6 +1957,7 @@ def _as_dataset(axis, profile, name, *, times=None):
         )
     dataset.set_coordset(**coords)
     if times is not None:
+        dataset.meta.td = list(dataset.shape)
         # Keep Coord's regular-spacing classification for the FFT, but retain
         # the exact times used by the propagator if Coord rebuilt the grid.
         time_coord = dataset.y

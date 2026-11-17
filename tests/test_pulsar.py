@@ -988,6 +988,11 @@ def test_t1_series_preserves_the_input_schedule(times, linear):
     )
     np.testing.assert_array_equal(series.y.data, times)
     assert series.y.linear is linear
+    if linear:
+        transformed = series.fft(dim="y")
+        assert transformed.shape == series.shape
+        assert transformed.y.units == ur.Hz
+        np.testing.assert_array_equal(transformed.x.data, series.x.data)
 
 
 def test_t1_series_reuses_the_signal_buffer_across_passive_offsets(monkeypatch):
