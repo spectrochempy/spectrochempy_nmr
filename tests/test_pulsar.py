@@ -23,6 +23,7 @@ from spectrochempy_nmr.pulsar import simulate_csa
 from spectrochempy_nmr.pulsar import simulate_pulse_sequence
 from spectrochempy_nmr.pulsar import simulate_quadrupolar
 from spectrochempy_nmr.pulsar import simulate_rectangular_pulse
+from spectrochempy_nmr.pulsar import simulate_t1_series
 
 
 @pytest.mark.parametrize(
@@ -910,6 +911,59 @@ def test_phase_cycle_cancels_or_recovers_opposite_pulse_phases():
     recovered = simulate_pulse_sequence(PhaseCycle(scans, (0.5, -0.5)), **settings)
     assert np.abs(cancelled.data).sum() < 1e-12
     assert recovered.data.sum() == pytest.approx(1, abs=1e-12)
+
+
+@pytest.mark.parametrize("spinning_hz,workers", [(0, 1), (12_500, 1), (12_500, 2)])
+def test_t1_series_preserves_complex_phase_cycle(spinning_hz, workers):
+    excitation = Pulse(12e-6, 110e3)
+    scans = (
+        (excitation, Coherence(3)),
+        (excitation, Coherence(-3), Delay(5e-6)),
+    )
+    conversion = (Pulse(4e-6, 85e3, 15), Coherence(1))
+    times = np.array([0, 7.5e-6, 82.5e-6])
+    settings = dict(
+        spin=2.5,
+        larmor_hz=104.46851646e6,
+        cq_hz=2.923e6,
+        eta=0.136,
+        spinning_hz=spinning_hz,
+        sidebands=2 if spinning_hz else 0,
+        transitions="central",
+        spectral_width_hz=120_000,
+        points=256,
+        accuracy=1,
+        receiver_phase_deg=37,
+        t2_s=60e-6,
+        workers=workers,
+    )
+    for coefficients in ((0.5, 0.5), (-0.5j, 0.5j)):
+        series = simulate_t1_series(
+            PhaseCycle(scans, coefficients), times, conversion, **settings
+        )
+        reference = [
+            simulate_pulse_sequence(
+                PhaseCycle(
+                    tuple((*scan, Delay(time), *conversion) for scan in scans),
+                    coefficients,
+                ),
+                **settings,
+            )
+            for time in times
+        ]
+        np.testing.assert_allclose(
+            series.data, [row.data for row in reference], atol=1e-14
+        )
+        np.testing.assert_array_equal(series.y.data, times)
+        np.testing.assert_array_equal(series.x.data, reference[0].x.data)
+        assert series.y.units == ur.s
+        assert series.x.units == ur.Hz
+
+
+@pytest.mark.parametrize("times", [[], [-1e-6], [np.nan]])
+def test_t1_series_rejects_invalid_times(times):
+    with pytest.raises(ValueError, match="indirect times|finite"):
+        simulate_t1_series((IdealPulse(90),), times, ())
 
 
 @pytest.mark.parametrize("output", ["spectrum", "density"])
