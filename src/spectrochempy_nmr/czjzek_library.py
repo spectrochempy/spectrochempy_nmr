@@ -22,6 +22,7 @@ _DEFAULTS = dict(
     max_rf_step_s=2e-6,
 )
 _REQUIRED = {"spin", "larmor_hz", "spectral_width_hz"}
+_INTEGER_SETTINGS = {"points", "accuracy", "sidebands"}
 _FORMAT = 1
 
 
@@ -40,12 +41,16 @@ class CzjzekRFLibrary:
             raise ValueError(
                 "Supply the RF Czjzek spectral settings, including spin, Larmor frequency and spectral width."
             )
-        self._settings = {
-            key: value.item() if isinstance(value, np.generic) else value
-            for key, value in settings.items()
-        }
-        points = index(settings["points"])
-        width, shift_hz = pulsar._real_scalars(settings["spectral_width_hz"], shift_hz)
+        self._settings = {}
+        for key, value in settings.items():
+            if key in _INTEGER_SETTINGS:
+                value = index(value)
+            elif key != "transitions":
+                (value,) = pulsar._real_scalars(value)
+            self._settings[key] = value
+        points = self._settings["points"]
+        width = self._settings["spectral_width_hz"]
+        (shift_hz,) = pulsar._real_scalars(shift_hz)
         bins = index(shift_bins)
         if points < 2 or width <= 0 or not 0 < bins < points:
             raise ValueError(

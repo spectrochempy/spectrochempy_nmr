@@ -146,6 +146,8 @@ def test_shift_disorder_preserves_local_tensor_at_eta_one():
 
 
 def test_rf_library_exact_nodes_roundtrip_and_model_validation(tmp_path):
+    from fractions import Fraction
+
     from spectrochempy_nmr import CzjzekRFLibrary
     from spectrochempy_nmr.pulsar import Delay
     from spectrochempy_nmr.pulsar import Pulse
@@ -163,7 +165,11 @@ def test_rf_library_exact_nodes_roundtrip_and_model_validation(tmp_path):
     grid = dict(
         cq_grid_hz=[2.8e6, 3e6], eta_grid=[0.2, 0.5], shift_hz=325, shift_bins=3
     )
-    library = CzjzekRFLibrary.build(events, **grid, **settings)
+    library = CzjzekRFLibrary.build(
+        events,
+        **grid,
+        **{**settings, "spin": Fraction(5, 2), "larmor_hz": np.longdouble("104468516")},
+    )
     step = settings["spectral_width_hz"] / (settings["points"] - 1)
     for offset in (-3, 3):
         target = CzjzekDistribution(0, 3e6, 0.5, 325 + offset * step)
