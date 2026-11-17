@@ -114,6 +114,9 @@ _ = spectrum.real.plot()
 # For an undetermined mode with a valid width, supply ``quadrature="qf"``
 # if the acquisition used QF.
 #
+# See :doc:`bruker_indirect_sampling` for interrupted States-TPPI
+# acquisitions and nonuniformly sampled (NUS) SER files.
+#
 # Agilent/Varian States quadrature
 # --------------------------------
 #

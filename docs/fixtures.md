@@ -6,7 +6,7 @@ the complete SpectroChemPy data corpus. The manifest is
 
 The TopSpin source is `spectrochempy_data` revision
 `08bb9b0cbff8f4363c48b6bff7ccb743f8140e0a`. The provenance register identifies
-the TopSpin 1D, CP and relaxation measurements as LCS data released under CC BY
+the TopSpin 1D, 2D, CP and relaxation measurements as LCS data released under CC BY
 4.0, with attribution to Christian Fernandez, LCS. Pulse programs and generated
 `__index__` files are intentionally not fetched because they are excluded from
 that grant or are generated metadata.
@@ -46,3 +46,7 @@ also uses the raw epicatechin HSQC from the same study.
 ```console
 NMR_JEOL_COSY_DIR=/path/to/CENAPT python -m pytest -q tests/qualification/test_jeol_cosy_magnitude.py
 ```
+
+The interrupted States-TPPI guide also fetches the PST-5 HMQC
+SER and acquisition/processing parameters from `topspin_2d/1` at the
+same pinned revision. The stored pulse program is excluded.
