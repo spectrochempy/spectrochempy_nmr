@@ -8,6 +8,7 @@ Guides
    processing_1d
    apodization
    processing_2d
+   jeol_cosy_magnitude
    fourier
    quadrupolar
    analysis

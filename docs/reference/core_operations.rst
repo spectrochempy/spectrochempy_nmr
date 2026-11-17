@@ -74,3 +74,14 @@ parameters from an array-based workflow.
 
 See :ref:`topspin-xfb-replay` for applying a recorded TopSpin recipe with
 its window, phase and acquisition conventions.
+
+JEOL COSY magnitude reconstruction
+----------------------------------
+
+.. currentmodule:: spectrochempy_nmr
+
+.. autosummary::
+   :nosignatures:
+   :toctree: generated
+
+   process_jeol_cosy_magnitude
