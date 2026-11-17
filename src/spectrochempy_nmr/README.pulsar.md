@@ -920,10 +920,10 @@ model = library.simulate(
 ```
 
 Loading checks the saved simulation settings against the requested model.
-The library evaluates individual tensors directly outside the signed
-coupling or asymmetry grid. A displacement outside the two planes or
-nonzero Gaussian shift disorder uses direct evaluation for the whole
-ensemble. Within the grids, interpolation can bias fitted distribution
+The library interpolates each sampled coupling, asymmetry and chemical
+shift, including samples from a Gaussian shift distribution. It evaluates
+members directly when any of those coordinates falls outside the grid.
+Within the grids, interpolation can bias fitted distribution
 widths. Check the direct residual and the stability of the refined fit.
 The two 48 × 32 planes in the example contain about 96 MiB of complex data.
 
