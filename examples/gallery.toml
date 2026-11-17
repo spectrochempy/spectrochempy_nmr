@@ -91,3 +91,13 @@ section_ref = "examples-processing-nmr-index"
 path = "processing/nmr/plot_stmas.py"
 section = "NMR processing"
 section_ref = "examples-processing-nmr-index"
+
+[[examples]]
+path = "core/c_importer/plot_exchange_nmr_spectra.py"
+section = "Import / Export"
+section_ref = "examples-importer-index"
+
+[[examples]]
+path = "simulation/plot_csa_static_mas.py"
+section = "NMR simulation"
+section_ref = "examples-simulation-index"

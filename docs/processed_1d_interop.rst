@@ -26,12 +26,18 @@ an explicit additional phase without moving the axis. It does not replay phase
 parameters from raw vendor metadata. Inverse reconstruction of a source FID,
 especially from a real-only spectrum, is outside this qualification.
 
+For a step-by-step export and reloading workflow, see
+:doc:`userguide/exchanging_spectra`.
+
 Exchange a CSDF spectrum
 ------------------------
 
 Use ``scp.nmr.read_csdf("spectrum.csdf")`` or
 ``scp.nmr.read("spectrum.csdf")`` to open a self-contained CSDF 1.0 file
-without installing ``csdmpy``. The reader accepts one dense, base64-encoded
+without installing `csdmpy <https://csdmpy.readthedocs.io/en/stable/>`_.
+See the `CSDM format introduction
+<https://csdmpy.readthedocs.io/en/stable/CSD_model.html>`_ for the data model.
+The reader accepts one dense, base64-encoded
 real or complex spectrum with one or two linear axes in Hz or SI-prefixed Hz.
 Supported signal types are float32, float64, complex64 and complex128.
 The reader preserves axis direction and expresses coordinates in Hz. CSDM origin offsets are
@@ -55,6 +61,32 @@ with a decreasing axis, use SpectroChemPy 1.3.1 to reverse the coordinates
 and intensities together before exporting ``spectrum[::-1]``. Earlier
 versions can round finely spaced coordinates during slicing and produce
 a grid that the CSDF writer rejects.
+
+Dmfit CSDF exchange checks
+--------------------------
+
+Dmfit documents CSDF input and output on its
+`file-format page <https://nmr.cemhti.cnrs-orleans.fr/Dmfit/Help/FileFormat/CsdfFileFormat.aspx>`_.
+Use CSDF for this workflow; its published format list does not describe
+JCAMP-DX import.
+
+Two real spectra originating from Dmfit have been imported through
+``scp.nmr.read_csdf()`` and re-exported with ``scp.nmr.write_csdf()``:
+
+* `Phosphate, phosphorus-31, 2048 points <https://ssnmr.org/sites/default/files/mrsimulator/31P%20Phosphate%206kHz.csdf>`_.
+* `YAG, aluminium-27, 4096 points <https://ssnmr.org/sites/default/files/mrsimulator/27Al%20Quad%20MAS%20YAG%20400MHz.csdf>`_.
+
+The originals and exports were independently read with csdmpy 0.7.0.
+Every float32 sample, frequency coordinate and stored CSDM origin agreed
+in these checks. The real 1D, complex 1D and real 2D synthetic CSDF
+exports in the exchange guide also preserved every sample and coordinate
+when read by csdmpy.
+
+Opening a plugin export in the Dmfit application remains to be qualified.
+These checks establish interoperability with Dmfit-originated files
+and the independent CSDF reader. Export retains the supported spectral
+data, axis labels and origins. Vendor parameters, processing history
+and Dmfit fitting settings require separate handling.
 
 Export a processed 1D spectrum
 ------------------------------

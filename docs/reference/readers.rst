@@ -18,6 +18,7 @@ format. See :doc:`/userguide/reading_data` for supported inputs and examples.
    read_agilent
    read_jeol
    read_simpson
+   read_csdf
 
 JEOL 2D acquisition branches
 ~~~~~~~~~~~~~~~~~~~~~~~~~~~~
