@@ -883,6 +883,50 @@ distribution sampling and orientation accuracy separately when checking
 convergence. Shift/EFG correlations and tensor-relative CSA orientations
 would require extending this initial distribution API.
 
+### Experimental finite-RF library for fit initialization
+
+Build a `CzjzekRFLibrary` for a fixed RF sequence, MAS condition and
+spectral grid. It stores complex powder profiles on a signed `Cq` and
+`eta` grid at two displacements. Use its `simulate()` method in the
+residual function of an initial fit. Keep the seed and sample count fixed
+throughout the fit. Refine the result by running the optimizer again
+from those parameters with `simulate_czjzek(..., events=events, **settings)`
+in the residual function.
+
+```python
+import numpy as np
+
+from spectrochempy_nmr import CzjzekDistribution, CzjzekRFLibrary
+from spectrochempy_nmr.pulsar import Delay, Pulse
+
+events = (Pulse(7e-6, 24e3, 23), Delay(13e-6))
+settings = dict(
+    spin=2.5, larmor_hz=104.468516e6, spectral_width_hz=48e3,
+    spinning_hz=8e3, sidebands=2, points=2048, accuracy=2,
+)
+grid = dict(
+    cq_grid_hz=np.linspace(1.7e6, 4.2e6, 48),
+    eta_grid=np.linspace(0, 1, 32),
+    shift_hz=325,
+    shift_bins=7,
+)
+library = CzjzekRFLibrary.build(events, **grid, **settings)
+library.save("czjzek-rf.npz")
+library = CzjzekRFLibrary.load("czjzek-rf.npz", events, **grid, **settings)
+model = library.simulate(
+    CzjzekDistribution(180e3, 2.923e6, 0.37, shift_hz=325),
+    samples=128, seed=17,
+)
+```
+
+Loading checks the saved simulation settings against the requested model.
+The library evaluates individual tensors directly outside the signed
+coupling or asymmetry grid. A displacement outside the two planes or
+nonzero Gaussian shift disorder uses direct evaluation for the whole
+ensemble. Within the grids, interpolation can bias fitted distribution
+widths. Check the direct residual and the stability of the refined fit.
+The two 48 × 32 planes in the example contain about 96 MiB of complex data.
+
 ### PBG1 extended Czjzek comparison
 
 ```sh
