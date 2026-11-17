@@ -143,3 +143,112 @@ def test_shift_disorder_preserves_local_tensor_at_eta_one():
     nodes = CzjzekDistribution(0, cq_hz=-2, eta=1, shift_sigma_hz=0.1).sample(8)
     np.testing.assert_array_equal(nodes.cq_hz, -2)
     np.testing.assert_array_equal(nodes.eta, 1)
+
+
+def test_rf_library_exact_nodes_roundtrip_and_model_validation(tmp_path):
+    from spectrochempy_nmr import CzjzekRFLibrary
+    from spectrochempy_nmr.pulsar import Delay
+    from spectrochempy_nmr.pulsar import Pulse
+
+    events = (Pulse(7e-6, 24e3, 23), Delay(13e-6))
+    settings = dict(
+        spin=2.5,
+        larmor_hz=104.468516e6,
+        spectral_width_hz=48e3,
+        spinning_hz=8e3,
+        points=513,
+        accuracy=1,
+        sidebands=2,
+    )
+    grid = dict(
+        cq_grid_hz=[2.8e6, 3e6], eta_grid=[0.2, 0.5], shift_hz=325, shift_bins=3
+    )
+    library = CzjzekRFLibrary.build(events, **grid, **settings)
+    step = settings["spectral_width_hz"] / (settings["points"] - 1)
+    for offset in (-3, 3):
+        target = CzjzekDistribution(0, 3e6, 0.5, 325 + offset * step)
+        expected = simulate_czjzek(target, events=events, **settings)
+        actual = library.simulate(target)
+        np.testing.assert_array_equal(actual.x.data, expected.x.data)
+        np.testing.assert_allclose(actual.data, expected.data, rtol=1e-12, atol=1e-14)
+
+    target = CzjzekDistribution(0, 2.9e6, 0.35, 368)
+    filename = tmp_path / "library.npz"
+    library.save(filename)
+    loaded = CzjzekRFLibrary.load(filename, events, **grid, **settings)
+    np.testing.assert_array_equal(
+        loaded.simulate(target).data, library.simulate(target).data
+    )
+    with pytest.raises(ValueError, match="does not match"):
+        CzjzekRFLibrary.load(
+            filename, events, **grid, **{**settings, "spinning_hz": 9000}
+        )
+    with pytest.raises(ValueError, match="does not match"):
+        CzjzekRFLibrary.load(filename, (Pulse(7e-6, 24e3, 20),), **grid, **settings)
+
+
+def test_rf_library_uses_direct_response_outside_supported_region():
+    from spectrochempy_nmr import CzjzekRFLibrary
+    from spectrochempy_nmr.pulsar import Pulse
+
+    events = (Pulse(7e-6, 24e3, 23),)
+    settings = dict(
+        spin=2.5,
+        larmor_hz=104.468516e6,
+        spectral_width_hz=48e3,
+        spinning_hz=8e3,
+        points=513,
+        accuracy=1,
+        sidebands=2,
+    )
+    library = CzjzekRFLibrary.build(
+        events,
+        cq_grid_hz=[2.8e6, 3e6],
+        eta_grid=[0.2, 0.5],
+        shift_hz=325,
+        shift_bins=3,
+        **settings,
+    )
+    targets = (
+        CzjzekDistribution(0, -2.9e6, 0.35, 325),
+        CzjzekDistribution(0, 2.9e6, 0.35, 800),
+        CzjzekDistribution(30e3, 2.9e6, 0.35, 325, 35),
+    )
+    for target in targets:
+        expected = simulate_czjzek(
+            target, samples=8, seed=17, events=events, **settings
+        )
+        actual = library.simulate(target, samples=8, seed=17)
+        np.testing.assert_array_equal(actual.data, expected.data)
+
+
+def test_rf_library_combines_interpolated_and_direct_members():
+    from spectrochempy_nmr import CzjzekRFLibrary
+    from spectrochempy_nmr.pulsar import Pulse
+
+    events = (Pulse(7e-6, 24e3, 23),)
+    settings = dict(
+        spin=2.5,
+        larmor_hz=104.468516e6,
+        spectral_width_hz=48e3,
+        spinning_hz=8e3,
+        points=513,
+        accuracy=1,
+        sidebands=2,
+    )
+    target = CzjzekDistribution(85e3, 2.9e6, 0.35, 606.25)
+    members = target.sample(2, seed=17)
+    inside = np.argmax(members.cq_hz)
+    cq, eta = members.cq_hz[inside], members.eta[inside]
+    assert members.cq_hz[1 - inside] < cq
+    library = CzjzekRFLibrary.build(
+        events,
+        cq_grid_hz=[cq, cq + 100e3],
+        eta_grid=[0, eta],
+        shift_hz=325,
+        shift_bins=3,
+        **settings,
+    )
+    expected = simulate_czjzek(target, samples=2, seed=17, events=events, **settings)
+    actual = library.simulate(target, samples=2, seed=17)
+    np.testing.assert_allclose(actual.data, expected.data, rtol=1e-12, atol=1e-14)
