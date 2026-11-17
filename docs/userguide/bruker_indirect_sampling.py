@@ -53,10 +53,15 @@ fid = scp.nmr.read_topspin(path)
 print(fid.meta.interrupted_states_tppi, fid.meta.tdeff[-2])
 spectrum = scp.nmr.Experiment(fid).process(replay="topspin")
 rr = scp.nmr.Experiment(spectrum).rr()
-levels = [0.06 * rr.max() * 2**index for index in range(4)]
-_ = rr.plot(method="contour", levels=levels, figsize=(7, 5))
+_ = rr.plot(
+    method="contour", start=0.06, nlevels=12, negative=False, cmap="viridis",
+    figsize=(7, 5),
+)
 
 # %% [raw] raw_mimetype="text/restructuredtext"
+# The plot starts at 6% of the maximum and uses 12 automatically generated
+# positive contour levels.
+#
 # The contours show the real-real plane of the interrupted PST-5 HMQC
 # acquisition after XFB replay. The acquisition correlates aluminium-27
 # and phosphorus-31. The reader retains 146 traces, giving 73 complete
@@ -102,4 +107,3 @@ _ = rr.plot(method="contour", levels=levels, figsize=(7, 5))
 #    fid = scp.nmr.read_topspin("path/to/nus/ser")
 #    print(fid.meta.bruker_nus)
 #    f2 = fid.fft(dim="x")
-
