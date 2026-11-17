@@ -14,6 +14,19 @@ the :ref:`public reader <reading-exchange-formats-through-interop>`.
    from_interop
    set_nmr_context
 
+Export processed spectra
+-------------------------
+
+See :doc:`/userguide/exchanging_spectra` for the supported components,
+axis units and round-trip examples.
+
+.. autosummary::
+   :nosignatures:
+   :toctree: generated
+
+   write_jcamp
+   write_csdf
+
 Experimental entry points
 -------------------------
 

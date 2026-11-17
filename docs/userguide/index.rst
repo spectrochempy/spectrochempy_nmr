@@ -5,6 +5,7 @@ Guides
    :maxdepth: 2
 
    reading_data
+   exchanging_spectra
    processing_1d
    apodization
    processing_2d
