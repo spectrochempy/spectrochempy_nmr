@@ -1945,7 +1945,7 @@ def _as_dataset(axis, profile, name, *, times=None):
     coords = {"x": Coord(axis, units="Hz", title="frequency offset")}
     if times is not None:
         times = np.asarray(times)
-        time_coord = Coord(
+        coords["y"] = Coord(
             times,
             units="s",
             title="indirect evolution time",
@@ -1953,12 +1953,13 @@ def _as_dataset(axis, profile, name, *, times=None):
             linearize_below=0,
             sigdigits=17,
         )
-        if not np.array_equal(time_coord.data, times):
-            # Coord can rebuild even a strictly linear axis with linspace.
-            # Keep the exact dwell times used to calculate the spectra.
-            time_coord._set_data(times)
-        coords["y"] = time_coord
     dataset.set_coordset(**coords)
+    if times is not None and not np.array_equal(dataset.y.data, times):
+        # Older Coord versions can linearize the grid or restore rounding
+        # when attaching it. Keep the exact times used by the propagator.
+        time_coord = dataset.y
+        time_coord._set_data(times)
+        time_coord._rounding = False
     return dataset
 
 
