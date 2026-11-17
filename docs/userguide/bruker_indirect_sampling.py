@@ -54,7 +54,11 @@ print(fid.meta.interrupted_states_tppi, fid.meta.tdeff[-2])
 spectrum = scp.nmr.Experiment(fid).process(replay="topspin")
 rr = scp.nmr.Experiment(spectrum).rr()
 _ = rr.plot(
-    method="contour", start=0.06, nlevels=12, negative=False, cmap="viridis",
+    method="contour",
+    start=0.06,
+    nlevels=12,
+    negative=False,
+    cmap="viridis",
     figsize=(7, 5),
 )
 
