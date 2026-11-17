@@ -193,6 +193,10 @@ def test_rf_library_exact_nodes_roundtrip_and_model_validation(tmp_path):
     with pytest.raises(ValueError, match="does not match"):
         CzjzekRFLibrary.load(filename, (Pulse(7e-6, 24e3, 20),), **grid, **settings)
 
+    invalid_cycle = PhaseCycle((events,), ("1",))
+    with pytest.raises(ValueError, match="Supply one numeric coefficient"):
+        CzjzekRFLibrary.load(filename, invalid_cycle, **grid, **settings)
+
 
 def test_rf_library_uses_direct_response_outside_supported_region():
     from spectrochempy_nmr import CzjzekRFLibrary

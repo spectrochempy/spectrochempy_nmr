@@ -203,12 +203,12 @@ class CzjzekRFLibrary:
         if not isinstance(self._events, pulsar.PhaseCycle):
             return [[self._scan_metadata(self._events), [1.0, 0.0]]]
         scans = self._events.scans
-        coefficients = self._events.coefficients
-        if coefficients is None:
-            coefficients = (1 / len(scans),) * len(scans) if scans else ()
+        coefficients = pulsar._phase_cycle_coefficients(
+            scans, self._events.coefficients
+        )
         return [
             [self._scan_metadata(scan), [weight.real, weight.imag]]
-            for scan, weight in zip(scans, map(complex, coefficients), strict=True)
+            for scan, weight in zip(scans, coefficients, strict=True)
         ]
 
     def _metadata(self):
