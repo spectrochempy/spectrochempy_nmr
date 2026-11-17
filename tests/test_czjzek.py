@@ -193,6 +193,12 @@ def test_rf_library_exact_nodes_roundtrip_and_model_validation(tmp_path):
     with pytest.raises(ValueError, match="does not match"):
         CzjzekRFLibrary.load(filename, (Pulse(7e-6, 24e3, 20),), **grid, **settings)
 
+    invalid_grid = {**grid, "cq_grid_hz": np.asarray(grid["cq_grid_hz"]) + 1j}
+    with pytest.raises(TypeError, match="real"):
+        CzjzekRFLibrary.load(filename, events, **invalid_grid, **settings)
+    with pytest.raises(TypeError, match="real"):
+        CzjzekRFLibrary.build(events, **invalid_grid, **settings)
+
     invalid_cycle = PhaseCycle((events,), ("1",))
     with pytest.raises(ValueError, match="Supply one numeric coefficient"):
         CzjzekRFLibrary.load(filename, invalid_cycle, **grid, **settings)

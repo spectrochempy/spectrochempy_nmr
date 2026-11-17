@@ -76,16 +76,13 @@ class CzjzekRFLibrary:
 
     @staticmethod
     def _grid(values):
-        grid = np.array(values, dtype=float, copy=True)
-        if (
-            grid.ndim != 1
-            or grid.size < 2
-            or not np.isfinite(grid).all()
-            or not np.all(grid[1:] > grid[:-1])
-        ):
-            raise ValueError(
-                "Each library grid must have at least two finite, strictly increasing values."
-            )
+        entries = np.asarray(values, dtype=object)
+        message = "Each library grid must have at least two finite, strictly increasing values."
+        if entries.ndim != 1 or entries.size < 2:
+            raise ValueError(message)
+        grid = np.asarray(pulsar._real_scalars(*entries))
+        if not np.all(grid[1:] > grid[:-1]):
+            raise ValueError(message)
         grid.setflags(write=False)
         return grid
 
