@@ -119,6 +119,30 @@ class CzjzekRFLibrary:
         library._spectra = spectra
         return library
 
+    def _check_spectral_window(self, couplings, asymmetries, shift):
+        settings = self._settings
+        spinning = settings["spinning_hz"]
+        directions, _, _ = pulsar._powder_mesh(settings["accuracy"], bool(spinning))
+        angle = pulsar._rotor_angle(settings["rotor_angle_deg"], spinning)
+        extent = settings["sidebands"] * spinning
+        transitions = settings["transitions"]
+        for cq, eta in zip(couplings, asymmetries, strict=True):
+            for m, _, terms in pulsar._transition_harmonics(
+                directions, cq, eta, angle, settings["spin"], settings["larmor_hz"], 0.0
+            ):
+                if transitions == "central" and m != 0.5:
+                    continue
+                if transitions == "satellites" and m == 0.5:
+                    continue
+                offsets = shift + terms[0].real
+                if (
+                    offsets.min() - extent < self._axis[0]
+                    or offsets.max() + extent > self._axis[-1]
+                ):
+                    raise ValueError(
+                        "The spectral window must contain the requested transitions."
+                    )
+
     def simulate(self, distribution, *, samples=128, seed=0):
         """Evaluate the distribution, calculating uncovered members directly."""
         if not isinstance(distribution, CzjzekDistribution):
@@ -138,6 +162,7 @@ class CzjzekRFLibrary:
         profile = np.zeros(self._axis.size, dtype=complex)
         if np.any(inside):
             cq, eta = cq[inside], eta[inside]
+            self._check_spectral_window(cq, eta, float(distribution.shift_hz))
             i = (
                 np.searchsorted(self._cq, cq, side="right").clip(1, self._cq.size - 1)
                 - 1

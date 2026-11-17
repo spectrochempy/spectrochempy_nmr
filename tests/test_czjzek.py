@@ -264,3 +264,32 @@ def test_rf_library_combines_interpolated_and_direct_members():
     expected = simulate_czjzek(target, samples=2, seed=17, events=events, **settings)
     actual = library.simulate(target, samples=2, seed=17)
     np.testing.assert_allclose(actual.data, expected.data, rtol=1e-12, atol=1e-14)
+
+
+def test_rf_library_rejects_out_of_window_transition_inside_eta_cell():
+    from spectrochempy_nmr import CzjzekRFLibrary
+    from spectrochempy_nmr.pulsar import Pulse
+
+    events = (Pulse(7e-6, 24e3, 23),)
+    settings = dict(
+        spin=1,
+        larmor_hz=104e6,
+        spectral_width_hz=2600,
+        points=4097,
+        accuracy=1,
+        spinning_hz=8000,
+        transitions="all",
+    )
+    library = CzjzekRFLibrary.build(
+        events,
+        cq_grid_hz=[3e6, 3000010],
+        eta_grid=[0.05, 0.15],
+        shift_hz=-7068,
+        shift_bins=1,
+        **settings,
+    )
+    target = CzjzekDistribution(0, 3e6, 0.10, -7068)
+    with pytest.raises(ValueError, match="spectral window"):
+        simulate_czjzek(target, events=events, **settings)
+    with pytest.raises(ValueError, match="spectral window"):
+        library.simulate(target)
