@@ -823,16 +823,13 @@ class PhaseCycle:
     coefficients: tuple | None = None
 
 
-def _prepare_scans(events, *args, **kwargs):
-    if not isinstance(events, PhaseCycle):
-        return ((1.0, _prepare_events(events, *args, **kwargs)),)
-    scans = tuple(events.scans)
+def _phase_cycle_coefficients(scans, coefficients):
     if not 1 <= len(scans) <= 256:
         raise ValueError("A phase cycle must contain 1 to 256 scans.")
-    if events.coefficients is None:
+    if coefficients is None:
         coefficients = (1 / len(scans),) * len(scans)
     else:
-        coefficients = tuple(events.coefficients)
+        coefficients = tuple(coefficients)
         if len(coefficients) != len(scans) or not all(
             isinstance(weight, Complex) for weight in coefficients
         ):
@@ -840,6 +837,14 @@ def _prepare_scans(events, *args, **kwargs):
         coefficients = tuple(map(complex, coefficients))
         if not np.isfinite(coefficients).all():
             raise ValueError("Phase-cycle coefficients must be finite.")
+    return coefficients
+
+
+def _prepare_scans(events, *args, **kwargs):
+    if not isinstance(events, PhaseCycle):
+        return ((1.0, _prepare_events(events, *args, **kwargs)),)
+    scans = tuple(events.scans)
+    coefficients = _phase_cycle_coefficients(scans, events.coefficients)
     return tuple(
         (weight, _prepare_events(scan, *args, **kwargs))
         for weight, scan in zip(coefficients, scans, strict=True)

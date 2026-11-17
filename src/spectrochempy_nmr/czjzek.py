@@ -206,6 +206,11 @@ def simulate_czjzek(
         sidebands=sidebands,
         transitions=transitions,
     )
+    if sequence is not None:
+        # Reconstruct the simulator's canonical grid before coordinate display
+        # rounding, using the same scalar conversion as RF propagation.
+        (width,) = _real_scalars(spectral_width_hz)
+        axis = np.linspace(-width / 2, width / 2, index(points))
     total = None
     for cq, eta, shift, weight in zip(
         members.cq_hz, members.eta, members.shift_hz, members.weights, strict=True
@@ -216,11 +221,6 @@ def simulate_czjzek(
         else:
             result = simulate_pulse_sequence(
                 sequence, **parameters, max_rf_step_s=max_rf_step_s
-            )
-            # The dataset coordinates are rounded for display. Recover the
-            # uniform simulator grid before constructing the final dataset.
-            axis = np.linspace(
-                -spectral_width_hz / 2, spectral_width_hz / 2, index(points)
             )
             profile = result.data
         if total is None:
