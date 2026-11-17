@@ -248,9 +248,6 @@ def _read_jdf(*args, **kwargs):
         msg = f"JEOL datasets with {ndim} dimensions are not supported (max 2D)."
         raise NotImplementedError(msg)
 
-    # Axis prefixes: x, y, z, ...
-    axis_prefixes = ["x", "y", "z", "a", "b", "c", "d", "e"]
-
     # Build metadata
     meta = Meta()
 
@@ -275,8 +272,10 @@ def _read_jdf(*args, **kwargs):
     meta.isfreq = [False] * ndim
     meta.offset = [None] * ndim
 
-    for i in range(ndim):
-        prefix = axis_prefixes[i]
+    # JDF stores X (F2) first. The decoded array puts F2 last.
+    axis_types = header.get("data_axis_type", [None] * 8)
+    for i, storage_axis in enumerate(reversed(range(ndim))):
+        prefix = "xy"[storage_axis]
 
         # Spectral width in Hz
         sw = params.get(f"{prefix}_sweep")
@@ -294,7 +293,7 @@ def _read_jdf(*args, **kwargs):
         meta.offset[i] = params.get(f"{prefix}_offset")
 
         # Encoding and iscomplex from axis_type
-        axis_type = header.get("data_axis_type", [None] * 8)[i]
+        axis_type = axis_types[storage_axis]
         if axis_type is not None:
             enc, ic = _jeol_axis_type_to_encoding(axis_type, axis=i, ndim=ndim)
             meta.encoding[i] = enc
@@ -341,7 +340,10 @@ def _read_jdf(*args, **kwargs):
             if sw_hz is not None and float(sw_hz.magnitude) > 0:
                 dw = (1.0 / sw_hz).to("us")
                 coordpoints = np.arange(size)
-                coord = Coord(coordpoints * dw, title=f"F{axis + 1} acquisition time")
+                precision = {"rounding": False, "sigdigits": 15} if ndim == 2 else {}
+                coord = Coord(
+                    coordpoints * dw, title=f"F{axis + 1} acquisition time", **precision
+                )
             else:
                 coord = Coord(np.arange(size), title=f"F{axis + 1} acquisition time")
 

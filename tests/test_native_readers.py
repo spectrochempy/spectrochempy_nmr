@@ -247,11 +247,26 @@ def test_jeol_retains_decoded_matrix_without_fabricating_channels(
     raw = np.arange(24).reshape(4, 6) + 1j * np.arange(24, 48).reshape(4, 6)
     dic = {
         "header": {"data_axis_type": ["complex", "complex"]},
-        "parameters": {"x_sweep": 1000.0, "y_sweep": 4000.0},
+        "parameters": {
+            "x_sweep": 1000.0,
+            "y_sweep": 4000.0,
+            "x_freq": 400e6,
+            "y_freq": 100e6,
+            "x_domain": "Proton",
+            "y_domain": "Carbon13",
+            "x_offset": 5.0,
+            "y_offset": 80.0,
+        },
     }
     monkeypatch.setattr(reader, "_read_jeol_raw", lambda *a: (dic, raw.copy()))
     result = reader._read_jdf(scp.NDDataset(), path)
     np.testing.assert_array_equal(result.data, raw)
+    np.testing.assert_array_equal(result.y.data, np.arange(4) * 250)
+    np.testing.assert_array_equal(result.x.data, np.arange(6) * 1000)
+    assert result.meta.sw == [4000.0, 1000.0]
+    assert result.meta.sfrq == [100.0, 400.0]
+    assert result.meta.nucleus == ["Carbon13", "Proton"]
+    assert result.meta.offset == [80.0, 5.0]
     assert result.meta.normalization_state == "storage-decoded"
     with pytest.raises(NotImplementedError, match="UNVALIDATED:JEOL"):
         result.fft(dim="y")
