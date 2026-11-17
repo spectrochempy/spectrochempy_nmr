@@ -23,6 +23,7 @@ from spectrochempy_nmr.pulsar import simulate_csa
 from spectrochempy_nmr.pulsar import simulate_pulse_sequence
 from spectrochempy_nmr.pulsar import simulate_quadrupolar
 from spectrochempy_nmr.pulsar import simulate_rectangular_pulse
+from spectrochempy_nmr.pulsar import simulate_t1_series
 
 
 @pytest.mark.parametrize(
@@ -910,6 +911,125 @@ def test_phase_cycle_cancels_or_recovers_opposite_pulse_phases():
     recovered = simulate_pulse_sequence(PhaseCycle(scans, (0.5, -0.5)), **settings)
     assert np.abs(cancelled.data).sum() < 1e-12
     assert recovered.data.sum() == pytest.approx(1, abs=1e-12)
+
+
+@pytest.mark.parametrize("spinning_hz,workers", [(0, 1), (12_500, 1), (12_500, 2)])
+def test_t1_series_preserves_complex_phase_cycle(spinning_hz, workers):
+    excitation = Pulse(12e-6, 110e3)
+    scans = (
+        (excitation, Coherence(3)),
+        (excitation, Coherence(-3), Delay(5e-6)),
+    )
+    conversion = (Pulse(4e-6, 85e3, 15), Coherence(1))
+    times = np.array([0, 7.5e-6, 82.5e-6])
+    settings = dict(
+        spin=2.5,
+        larmor_hz=104.46851646e6,
+        cq_hz=2.923e6,
+        eta=0.136,
+        spinning_hz=spinning_hz,
+        sidebands=2 if spinning_hz else 0,
+        transitions="central",
+        spectral_width_hz=120_000,
+        points=256,
+        accuracy=1,
+        receiver_phase_deg=37,
+        t2_s=60e-6,
+        workers=workers,
+    )
+    for coefficients in ((0.5, 0.5), (-0.5j, 0.5j)):
+        series = simulate_t1_series(
+            PhaseCycle(scans, coefficients), times, conversion, **settings
+        )
+        reference = [
+            simulate_pulse_sequence(
+                PhaseCycle(
+                    tuple((*scan, Delay(time), *conversion) for scan in scans),
+                    coefficients,
+                ),
+                **settings,
+            )
+            for time in times
+        ]
+        np.testing.assert_allclose(
+            series.data, [row.data for row in reference], atol=1e-14
+        )
+        np.testing.assert_array_equal(series.y.data, times)
+        np.testing.assert_array_equal(series.x.data, reference[0].x.data)
+        assert series.y.units == ur.s
+        assert series.x.units == ur.Hz
+
+
+@pytest.mark.parametrize("times", [[], [-1e-6], [np.nan]])
+def test_t1_series_rejects_invalid_times(times):
+    with pytest.raises(ValueError, match="indirect times|finite"):
+        simulate_t1_series((IdealPulse(90),), times, ())
+
+
+@pytest.mark.parametrize(
+    "times,linear",
+    [
+        ((1.0, np.nextafter(1.0, 2.0)), False),
+        ((0, 0.4999e-3, 1e-3), False),
+        (tuple(np.arange(48) * 7.5e-6), True),
+    ],
+)
+def test_t1_series_preserves_the_input_schedule(times, linear):
+    series = simulate_t1_series(
+        (),
+        times,
+        (IdealPulse(90),),
+        spin=0.5,
+        larmor_hz=100e6,
+        spectral_width_hz=1000,
+        shift_hz=20,
+        accuracy=1,
+        points=256,
+    )
+    np.testing.assert_array_equal(series.y.data, times)
+    assert series.y.linear is linear
+    if linear:
+        transformed = series.fft(dim="y")
+        assert transformed.shape == series.shape
+        assert transformed.y.units == ur.Hz
+        np.testing.assert_array_equal(transformed.x.data, series.x.data)
+
+
+def test_t1_series_reuses_the_signal_buffer_across_passive_offsets(monkeypatch):
+    settings = dict(
+        spin=0.5,
+        larmor_hz=100e6,
+        spectral_width_hz=1000,
+        accuracy=1,
+        points=256,
+        j_partners=(PassiveJ(0.5, 100),),
+    )
+    times = (0, 1e-3)
+    prep = PhaseCycle(((), (IdealPulse(90),)), (0.25, -0.5j))
+    conversion = (IdealPulse(30, 20),)
+    reference = [
+        simulate_pulse_sequence(
+            PhaseCycle(
+                tuple((*scan, Delay(t), *conversion) for scan in prep.scans),
+                prep.coefficients,
+            ),
+            **settings,
+        ).data
+        for t in times
+    ]
+    original = pulsar._sequence_signals
+    buffers = []
+
+    def track_buffer(*args, **kwargs):
+        result = original(*args, **kwargs)
+        buffers.append(result)
+        return result
+
+    monkeypatch.setattr(pulsar, "_sequence_signals", track_buffer)
+    series = simulate_t1_series(prep, times, conversion, **settings)
+    assert len(buffers) == 2
+    assert buffers[0] is buffers[1]
+    np.testing.assert_allclose(series.data, reference, rtol=1e-11, atol=1e-14)
 
 
 @pytest.mark.parametrize("output", ["spectrum", "density"])

@@ -7,6 +7,11 @@ distribution. The sections below describe changes in each plugin release.
 Unreleased
 ----------
 
+* Simulate indirect evolution series with ``scp.nmr.pulsar.simulate_t1_series()``.
+  Reuse RF preparation across indirect times and return complex F2 spectra
+  for each time in a single dataset.
+  (`#138 <https://github.com/spectrochempy/spectrochempy_nmr/pull/138>`_)
+
 * Import JEOL 2D section pairs through interop with explicit F1 and F2
   times and preserved NUS lists. The physical F1 quadrature remains
   undetermined. The dedicated JEOL reader retains its interleaved signs.

@@ -823,6 +823,13 @@ class PhaseCycle:
     coefficients: tuple | None = None
 
 
+@dataclass(frozen=True)
+class _T1Series:
+    preparation: object
+    times: tuple
+    conversion: tuple
+
+
 def _phase_cycle_coefficients(scans, coefficients):
     if not 1 <= len(scans) <= 256:
         raise ValueError("A phase cycle must contain 1 to 256 scans.")
@@ -880,6 +887,7 @@ def _prepare_events(
     max_rf_step_s,
     t2_s,
     *,
+    allow_empty=False,
     rf_solver=None,
     partner=None,
     partner_t2_s=None,
@@ -1001,7 +1009,7 @@ def _prepare_events(
                     decay,
                 )
             prepared.append(("mask", decay))
-    if not prepared:
+    if not prepared and not allow_empty:
         raise ValueError("Supply at least one sequence event.")
     return prepared
 
@@ -1182,6 +1190,27 @@ def _sequence_state_blocks(offsets, terms, initial, scans, spinning_hz, count):
             yield block, coefficient, density, gamma_end
 
 
+def _t1_state_blocks(offsets, terms, initial, scans, spinning_hz, count, tails):
+    for block, coefficient, prepared, gamma_start in _sequence_state_blocks(
+        offsets, terms, initial, scans, spinning_hz, count
+    ):
+        block_terms = None if terms is None else terms[block]
+        block_offsets = offsets[block]
+        for row, events in enumerate(tails):
+            density, gamma_end = _propagate_sequence(
+                block_offsets,
+                block_terms,
+                prepared,
+                events,
+                spinning_hz,
+                gamma_start,
+                {},
+                {},
+                0,
+            )
+            yield row, block, coefficient, density, gamma_end
+
+
 def _powder_density(
     offsets,
     terms,
@@ -1237,12 +1266,13 @@ def _sequence_signals(
     readout_terms=None,
     workers=1,
     out=None,
+    tails=None,
 ):
     """Average complex band amplitudes over rotor phase at preparation onset."""
     if out is None:
-        out = np.zeros(
-            (offsets.shape[0], strengths.size, 2 * sidebands + 1), dtype=complex
-        )
+        shape = (offsets.shape[0], strengths.size, 2 * sidebands + 1)
+        out = np.zeros(shape if tails is None else (len(tails), *shape), dtype=complex)
+    rows = out[None] if tails is None else out
     workers = min(workers, offsets.shape[0])
     if workers > 1:
         # Each slice processes the full cycle and writes to its own output range.
@@ -1265,7 +1295,8 @@ def _sequence_signals(
                     readout_terms=None
                     if readout_terms is None
                     else readout_terms[chunk],
-                    out=out[chunk],
+                    out=rows[0, chunk] if tails is None else rows[:, chunk],
+                    tails=tails,
                 )
 
         with ThreadPoolExecutor(max_workers=workers) as executor:
@@ -1274,16 +1305,25 @@ def _sequence_signals(
         return out
 
     band_orders = np.arange(-sidebands, sidebands + 1)
-    for block, coefficient, density, gamma_end in _sequence_state_blocks(
-        offsets, terms, initial, events, spinning_hz, count
-    ):
+    if tails is None:
+        states = (
+            (0, *state)
+            for state in _sequence_state_blocks(
+                offsets, terms, initial, events, spinning_hz, count
+            )
+        )
+    else:
+        states = _t1_state_blocks(
+            offsets, terms, initial, events, spinning_hz, count, tails
+        )
+    for row, block, coefficient, density, gamma_end in states:
         if readout is None:
             coherence = np.diagonal(density, offset=1, axis1=-2, axis2=-1)
         else:
             coherence = density[..., readout[0], readout[1]]
         signal = -1j * np.sqrt(strengths) * coherence
         if not spinning_hz:
-            out[block, :, 0] += coefficient * signal
+            rows[row, block, :, 0] += coefficient * signal
             continue
         detected_terms = (terms if readout_terms is None else readout_terms)[block]
         wave = np.exp(
@@ -1294,7 +1334,7 @@ def _sequence_signals(
         preparation = np.fft.ifft(signal.swapaxes(-1, -2) * wave.conj(), axis=-1)[
             ..., band_orders
         ]
-        out[block] += coefficient * detection * preparation
+        rows[row, block] += coefficient * detection * preparation
     return out
 
 
@@ -1357,6 +1397,33 @@ def simulate_rectangular_pulse(
         deposition=deposition,
         rf_solver=rf_solver,
         workers=workers,
+    )
+
+
+def simulate_t1_series(preparation, t1_s, conversion, **settings):
+    """Simulate complex F2 spectra at the given indirect times, in seconds.
+
+    Supply a preparation sequence or PhaseCycle, then conversion events
+    common to the scans. Each row is equivalent to inserting Delay(t1)
+    between preparation and conversion in simulate_pulse_sequence. The
+    preparation is propagated once per scan and powder block. The result
+    is an NDDataset with indirect time on y and frequency offset on x.
+
+    Settings are those of simulate_pulse_sequence for spectral output.
+    For States, call once per quadrature branch and retain the two datasets
+    for reconstruction. Keep the original sampling schedule for nonuniform
+    reconstruction, since core dataset copies can linearize nearly uniform
+    coordinates.
+
+    Each call retains the orientation-resolved band amplitudes for all
+    requested times until powder integration. If those arrays and the
+    rotor harmonics exceed 64 MiB, split the times into smaller batches.
+    """
+    times = _real_scalars(*t1_s)
+    if not times or min(times) < 0:
+        raise ValueError("Supply one or more nonnegative indirect times.")
+    return simulate_pulse_sequence(
+        _T1Series(preparation, times, tuple(conversion)), **settings
     )
 
 
@@ -1447,6 +1514,11 @@ def simulate_pulse_sequence(
     _validate_grid(spectral_width_hz, spinning_hz, points, accuracy, sidebands)
     workers = index(workers)
     _validate_output(output, sidebands, workers)
+    series = events if isinstance(events, _T1Series) else None
+    if series is not None:
+        if output != "spectrum":
+            raise ValueError("simulate_t1_series requires spectral output.")
+        events = series.preparation
     bandwidth = _validate_probe_bandwidth(probe_bandwidth_hz)
     directions, weights, triangles, angle, csa, quadrupolar_eta = _powder_interactions(
         accuracy,
@@ -1474,13 +1546,17 @@ def simulate_pulse_sequence(
         count = _rf_rotor_count(
             spectral_width_hz, spinning_hz, accuracy, sidebands, transition_count + 1
         )
-        order_count = 2 * sidebands + 1 if output == "spectrum" else 0
-        # Bound the two persistent complex arrays before allocating either.
-        storage = offsets.size * (4 + order_count) * np.dtype(complex).itemsize
-        if storage > 64 * 1024**2:
+    row_count = 1 if series is None else len(series.times)
+    order_count = 2 * sidebands + 1 if output == "spectrum" else 0
+    if spinning_hz or series is not None:
+        # Bound the persistent harmonics and signal arrays before allocating either.
+        slots = (4 if spinning_hz else 0) + row_count * order_count
+        if offsets.size * slots * np.dtype(complex).itemsize > 64 * 1024**2:
             raise ValueError(
-                "MAS pulse work arrays exceed 64 MiB. Reduce accuracy or sidebands."
+                "Pulse work arrays exceed 64 MiB. Reduce accuracy, sidebands "
+                "or the number of indirect times per call."
             )
+    if spinning_hz:
         harmonics = np.empty((*offsets.shape, 4), dtype=complex)
     for i, (_, strength, terms) in enumerate(
         _transition_harmonics(
@@ -1492,16 +1568,20 @@ def simulate_pulse_sequence(
         if spinning_hz:
             harmonics[:, i] = terms[1:].T
     ix, iy, iz = _spin_operators(spin)
+    pulse_args = ix, iy, iz, spinning_hz, max_rf_step_s, t2_s
+    solver = _resolve_rf_solver(rf_solver)
     prepared = _prepare_scans(
-        events,
-        ix,
-        iy,
-        iz,
-        spinning_hz,
-        max_rf_step_s,
-        t2_s,
-        rf_solver=_resolve_rf_solver(rf_solver),
+        events, *pulse_args, rf_solver=solver, allow_empty=series is not None
     )
+    tails = None
+    if series is not None:
+        conversion = _prepare_events(
+            series.conversion, *pulse_args, rf_solver=solver, allow_empty=True
+        )
+        tails = [
+            _prepare_events((Delay(time),), *pulse_args, rf_solver=solver) + conversion
+            for time in series.times
+        ]
     passive_offsets = _passive_offsets(j_partners)
     if output == "density":
         return _powder_density(
@@ -1526,9 +1606,12 @@ def simulate_pulse_sequence(
         raise ValueError("The spectral window must contain the requested transitions.")
     receiver = np.exp(1j * np.deg2rad(receiver_phase_deg))
     deposit = _resolve_deposition(deposition)
-    profile = np.zeros(points, dtype=complex)
+    profiles = np.zeros((row_count, points), dtype=complex)
+    signals = None
     for offset, population in passive_offsets:
         shifted = offsets + offset
+        if signals is not None:
+            signals.fill(0)
         signals = _sequence_signals(
             shifted,
             harmonics if spinning_hz else None,
@@ -1539,21 +1622,26 @@ def simulate_pulse_sequence(
             count if spinning_hz else 1,
             sidebands,
             workers=workers,
+            out=signals,
+            tails=tails,
         )
-        signals *= receiver * population
+        rows = signals[None] if series is None else signals
+        rows *= receiver * population
         for i in np.flatnonzero(selected):
             for j, order in enumerate(range(-sidebands, sidebands + 1)):
                 frequency = shifted[:, i] + order * spinning_hz
-                signal = _probe_weights(
-                    frequency, weights * signals[:, i, j], bandwidth
-                )
-                profile.real += deposit(axis, frequency, signal.real, triangles)
-                profile.imag += deposit(axis, frequency, signal.imag, triangles)
+                for profile, row in zip(profiles, rows, strict=True):
+                    signal = _probe_weights(
+                        frequency, weights * row[:, i, j], bandwidth
+                    )
+                    profile.real += deposit(axis, frequency, signal.real, triangles)
+                    profile.imag += deposit(axis, frequency, signal.imag, triangles)
     ideal_signal = strengths[selected].sum() / 2
     powder_mass = weights[triangles].sum()
-    return _as_dataset(
-        axis, profile / (ideal_signal * powder_mass), "PULSAR pulse sequence"
-    )
+    profiles /= ideal_signal * powder_mass
+    if series is not None:
+        return _as_dataset(axis, profiles, "PULSAR t1 series", times=series.times)
+    return _as_dataset(axis, profiles[0], "PULSAR pulse sequence")
 
 
 @dataclass(frozen=True)
@@ -1851,12 +1939,31 @@ def simulate_coupled_sequence(
     return _as_dataset(axis, profile / norm, "PULSAR coupled sequence")
 
 
-def _as_dataset(axis, profile, name):
+def _as_dataset(axis, profile, name, *, times=None):
     from spectrochempy.core.dataset.coord import Coord
     from spectrochempy.core.dataset.nddataset import NDDataset
 
     dataset = NDDataset(profile, name=name)
-    dataset.set_coordset(x=Coord(axis, units="Hz", title="frequency offset"))
+    coords = {"x": Coord(axis, units="Hz", title="frequency offset")}
+    if times is not None:
+        times = np.asarray(times)
+        coords["y"] = Coord(
+            times,
+            units="s",
+            title="indirect evolution time",
+            rounding=False,
+            linearize_below=0,
+            sigdigits=12,
+        )
+    dataset.set_coordset(**coords)
+    if times is not None:
+        dataset.meta.td = list(dataset.shape)
+        # Keep Coord's regular-spacing classification for the FFT, but retain
+        # the exact times used by the propagator if Coord rebuilt the grid.
+        time_coord = dataset.y
+        time_coord._rounding = False
+        if not np.array_equal(time_coord.data, times):
+            time_coord._set_data(times)
     return dataset
 
 
