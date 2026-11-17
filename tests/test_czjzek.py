@@ -181,7 +181,8 @@ def test_rf_library_exact_nodes_roundtrip_and_model_validation(tmp_path):
     target = CzjzekDistribution(0, 2.9e6, 0.35, 368)
     filename = tmp_path / "library.npz"
     library.save(filename)
-    loaded = CzjzekRFLibrary.load(filename, events, **grid, **settings)
+    equivalent_events = (Pulse(7e-6, 24e3, np.int64(23), offset_hz=-0.0), events[1])
+    loaded = CzjzekRFLibrary.load(filename, equivalent_events, **grid, **settings)
     np.testing.assert_array_equal(
         loaded.simulate(target).data, library.simulate(target).data
     )
@@ -201,7 +202,7 @@ def test_rf_library_uses_direct_response_outside_supported_region():
     settings = dict(
         spin=2.5,
         larmor_hz=104.468516e6,
-        spectral_width_hz=48e3,
+        spectral_width_hz=np.float32(48001),
         spinning_hz=8e3,
         points=513,
         accuracy=1,
@@ -225,6 +226,7 @@ def test_rf_library_uses_direct_response_outside_supported_region():
             target, samples=8, seed=17, events=events, **settings
         )
         actual = library.simulate(target, samples=8, seed=17)
+        np.testing.assert_array_equal(actual.x.data, expected.x.data)
         np.testing.assert_array_equal(actual.data, expected.data)
 
 

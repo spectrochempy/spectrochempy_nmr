@@ -1,5 +1,6 @@
 """Experimental interpolation library for finite-RF Czjzek spectra."""
 
+from dataclasses import fields
 from hashlib import sha256
 import json
 from operator import index
@@ -174,21 +175,54 @@ class CzjzekRFLibrary:
             )
         return pulsar._as_dataset(self._axis, profile, "Czjzek RF library spectrum")
 
+    @staticmethod
+    def _scan_metadata(scan):
+        result = []
+        for event in scan:
+            if isinstance(event, pulsar.Coherence):
+                result.append(["coherence", index(event.order)])
+            elif isinstance(event, pulsar.Delay):
+                (duration,) = pulsar._real_scalars(event.duration_s)
+                result.append(["delay", duration, bool(event.decouple_j)])
+            else:
+                for event_type in (pulsar.Pulse, pulsar.IdealPulse):
+                    if isinstance(event, event_type):
+                        values = pulsar._real_scalars(
+                            *(
+                                getattr(event, field.name)
+                                for field in fields(event_type)
+                            )
+                        )
+                        result.append([event_type.__name__, *values])
+                        break
+                else:
+                    raise TypeError("Unsupported RF library sequence event.")
+        return result
+
+    def _event_metadata(self):
+        if not isinstance(self._events, pulsar.PhaseCycle):
+            return [[self._scan_metadata(self._events), [1.0, 0.0]]]
+        scans = self._events.scans
+        coefficients = self._events.coefficients
+        if coefficients is None:
+            coefficients = (1 / len(scans),) * len(scans) if scans else ()
+        return [
+            [self._scan_metadata(scan), [weight.real, weight.imag]]
+            for scan, weight in zip(scans, map(complex, coefficients), strict=True)
+        ]
+
     def _metadata(self):
-        return json.dumps(
-            dict(
-                format=_FORMAT,
-                pulsar=sha256(Path(pulsar.__file__).read_bytes()).hexdigest(),
-                numpy=np.__version__,
-                scipy=scipy.__version__,
-                events=repr(self._events),
-                settings=self._settings,
-                cq=self._cq.tolist(),
-                eta=self._eta.tolist(),
-                shift_hz=self._shift_hz,
-                shift_bins=self._bins,
-            ),
-            sort_keys=True,
+        return dict(
+            format=_FORMAT,
+            pulsar=sha256(Path(pulsar.__file__).read_bytes()).hexdigest(),
+            numpy=np.__version__,
+            scipy=scipy.__version__,
+            events=self._event_metadata(),
+            settings=self._settings,
+            cq=self._cq.tolist(),
+            eta=self._eta.tolist(),
+            shift_hz=self._shift_hz,
+            shift_bins=self._bins,
         )
 
     def save(self, path):
@@ -197,7 +231,11 @@ class CzjzekRFLibrary:
         with NamedTemporaryFile(dir=path.parent, delete=False) as file:
             temporary_path = Path(file.name)
             try:
-                np.savez(file, metadata=self._metadata(), spectra=self._spectra)
+                np.savez(
+                    file,
+                    metadata=json.dumps(self._metadata(), sort_keys=True),
+                    spectra=self._spectra,
+                )
                 file.close()
                 temporary_path.replace(path)
             finally:
@@ -210,7 +248,7 @@ class CzjzekRFLibrary:
         """Load a file only if its metadata match the requested model."""
         library = cls(events, cq_grid_hz, eta_grid, shift_hz, shift_bins, settings)
         with np.load(path, allow_pickle=False) as data:
-            if data["metadata"].item() != library._metadata():
+            if json.loads(data["metadata"].item()) != library._metadata():
                 raise ValueError(
                     "The library does not match the requested RF/MAS model."
                 )
