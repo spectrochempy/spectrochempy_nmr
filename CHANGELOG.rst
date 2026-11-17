@@ -1,5 +1,5 @@
 Changelog
-=========
+==
 
 This changelog covers the independently versioned ``spectrochempy-nmr``
 distribution. The sections below describe changes in each plugin release.
@@ -62,6 +62,10 @@ Unreleased
   Digital-filter correction in this path consumes the imported delay
   descriptor or a caller override.
   (`#144 <https://github.com/spectrochempy/spectrochempy_nmr/pull/144>`_)
+=======
+* Reuse RF conversion readouts across indirect times on a common rotor grid
+  in PULSAR series simulations. Stream powder integration with the detected
+  transitions so that fine meshes can retain preparation across all times.
 
 * Simulate indirect evolution series with ``scp.nmr.pulsar.simulate_t1_series()``.
   Reuse RF preparation across indirect times and return complex F2 spectra
