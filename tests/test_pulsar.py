@@ -966,6 +966,66 @@ def test_t1_series_rejects_invalid_times(times):
         simulate_t1_series((IdealPulse(90),), times, ())
 
 
+@pytest.mark.parametrize(
+    "times",
+    [
+        (1.0, np.nextafter(1.0, 2.0)),
+        (0, 0.4999e-3, 1e-3),
+        tuple(np.arange(48) * 7.5e-6),
+    ],
+)
+def test_t1_series_preserves_the_input_schedule(times):
+    series = simulate_t1_series(
+        (),
+        times,
+        (IdealPulse(90),),
+        spin=0.5,
+        larmor_hz=100e6,
+        spectral_width_hz=1000,
+        shift_hz=20,
+        accuracy=1,
+        points=256,
+    )
+    np.testing.assert_array_equal(series.y.data, times)
+
+
+def test_t1_series_reuses_the_signal_buffer_across_passive_offsets(monkeypatch):
+    settings = dict(
+        spin=0.5,
+        larmor_hz=100e6,
+        spectral_width_hz=1000,
+        accuracy=1,
+        points=256,
+        j_partners=(PassiveJ(0.5, 100),),
+    )
+    times = (0, 1e-3)
+    prep = PhaseCycle(((), (IdealPulse(90),)), (0.25, -0.5j))
+    conversion = (IdealPulse(30, 20),)
+    reference = [
+        simulate_pulse_sequence(
+            PhaseCycle(
+                tuple((*scan, Delay(t), *conversion) for scan in prep.scans),
+                prep.coefficients,
+            ),
+            **settings,
+        ).data
+        for t in times
+    ]
+    original = pulsar._sequence_signals
+    buffers = []
+
+    def track_buffer(*args, **kwargs):
+        result = original(*args, **kwargs)
+        buffers.append(result)
+        return result
+
+    monkeypatch.setattr(pulsar, "_sequence_signals", track_buffer)
+    series = simulate_t1_series(prep, times, conversion, **settings)
+    assert len(buffers) == 2
+    assert buffers[0] is buffers[1]
+    np.testing.assert_allclose(series.data, reference, rtol=1e-11, atol=1e-14)
+
+
 @pytest.mark.parametrize("output", ["spectrum", "density"])
 def test_mas_phase_cycle_combines_each_scan_at_its_own_rotor_phase(output):
     scans = (

@@ -887,6 +887,7 @@ def _prepare_events(
     max_rf_step_s,
     t2_s,
     *,
+    allow_empty=False,
     rf_solver=None,
     partner=None,
     partner_t2_s=None,
@@ -1008,7 +1009,7 @@ def _prepare_events(
                     decay,
                 )
             prepared.append(("mask", decay))
-    if not prepared:
+    if not prepared and not allow_empty:
         raise ValueError("Supply at least one sequence event.")
     return prepared
 
@@ -1567,13 +1568,13 @@ def simulate_pulse_sequence(
     ix, iy, iz = _spin_operators(spin)
     pulse_args = ix, iy, iz, spinning_hz, max_rf_step_s, t2_s
     solver = _resolve_rf_solver(rf_solver)
-    prepared = _prepare_scans(events, *pulse_args, rf_solver=solver)
+    prepared = _prepare_scans(
+        events, *pulse_args, rf_solver=solver, allow_empty=series is not None
+    )
     tails = None
     if series is not None:
-        conversion = (
-            _prepare_events(series.conversion, *pulse_args, rf_solver=solver)
-            if series.conversion
-            else []
+        conversion = _prepare_events(
+            series.conversion, *pulse_args, rf_solver=solver, allow_empty=True
         )
         tails = [
             _prepare_events((Delay(time),), *pulse_args, rf_solver=solver) + conversion
@@ -1604,8 +1605,11 @@ def simulate_pulse_sequence(
     receiver = np.exp(1j * np.deg2rad(receiver_phase_deg))
     deposit = _resolve_deposition(deposition)
     profiles = np.zeros((row_count, points), dtype=complex)
+    signals = None
     for offset, population in passive_offsets:
         shifted = offsets + offset
+        if signals is not None:
+            signals.fill(0)
         signals = _sequence_signals(
             shifted,
             harmonics if spinning_hz else None,
@@ -1616,6 +1620,7 @@ def simulate_pulse_sequence(
             count if spinning_hz else 1,
             sidebands,
             workers=workers,
+            out=signals,
             tails=tails,
         )
         rows = signals[None] if series is None else signals
@@ -1939,9 +1944,20 @@ def _as_dataset(axis, profile, name, *, times=None):
     dataset = NDDataset(profile, name=name)
     coords = {"x": Coord(axis, units="Hz", title="frequency offset")}
     if times is not None:
-        coords["y"] = Coord(
-            times, units="s", title="indirect evolution time", sigdigits=12
+        times = np.asarray(times)
+        time_coord = Coord(
+            times,
+            units="s",
+            title="indirect evolution time",
+            rounding=False,
+            linearize_below=0,
+            sigdigits=17,
         )
+        if not np.array_equal(time_coord.data, times):
+            # Coord can rebuild even a strictly linear axis with linspace.
+            # Keep the exact dwell times used to calculate the spectra.
+            time_coord._set_data(times)
+        coords["y"] = time_coord
     dataset.set_coordset(**coords)
     return dataset
 
