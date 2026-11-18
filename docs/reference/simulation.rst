@@ -9,7 +9,7 @@ fitting shared MQMAS and MAS populations, including the cached
 :func:`~spectrochempy_nmr.mqmas_inversion.mqmas_response` generator.
 
 .. automodule:: spectrochempy_nmr.pulsar
-   :members: broaden, simulate_central_transition, simulate_quadrupolar, simulate_csa, simulate_rectangular_pulse, simulate_pulse_sequence, simulate_t1_series, simulate_mqmas, MQMASModel, simulate_coupled_sequence, Pulse, IdealPulse, Delay, Coherence, PassiveJ, SpinSite, PhaseCycle
+   :members: broaden, simulate_central_transition, simulate_quadrupolar, simulate_csa, simulate_rectangular_pulse, simulate_pulse_sequence, simulate_t1_series, simulate_mqmas, MQMASModel, simulate_coupled_sequence, Pulse, IdealPulse, Delay, Coherence, PassiveJ, SpinSite, PhaseCycle, PulseProgram, SequenceError, parse_sequence, read_sequence
 
 .. raw:: html
 

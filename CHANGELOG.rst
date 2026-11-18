@@ -7,6 +7,12 @@ distribution. The sections below describe changes in each plugin release.
 Unreleased
 ----------
 
+* Read reusable PULSAR pulse programs with ``pulsar.read_sequence()`` and
+  ``pulsar.parse_sequence()``. Bind external parameters with explicit units,
+  optional arithmetic, nested loops and per-channel RF/phase/offset settings.
+  Programs support simultaneous pulses on two nuclei and indirect-delay
+  increments for complex States acquisitions, with source-line diagnostics.
+
 * Connect fast RF-weighted MQMAS responses to population inversion with
   ``mqmas_inversion.mqmas_response()``. Cache RF profiles across parameter
   grids and linewidth views, and reuse built kernels for MQMAS-only or
