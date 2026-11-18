@@ -69,7 +69,8 @@ def test_agilent_states_nmrpipe_transport_and_fft(tmp_path):
     np.testing.assert_array_equal(fid.data[0], native.data[0].conj())
     np.testing.assert_array_equal(fid.data[1], -native.data[1].conj())
     selected = scp.nmr.read_agilent(directory, quadrature="states")
-    np.testing.assert_array_equal(selected.data, native.data)
+    np.testing.assert_array_equal(selected.data, fid.data)
+    before = selected.data.copy()
     assert selected.meta.acquisition["quadrature_selection"] == {
         "mode": "states",
         "source": "manual",
@@ -91,7 +92,7 @@ def test_agilent_states_nmrpipe_transport_and_fft(tmp_path):
     first, second = final[::2].T, final[1::2].T
     spectrum = Experiment(selected).process()
     np.testing.assert_array_equal(spectrum.data, Experiment(fid).process().data)
-    np.testing.assert_array_equal(selected.data, native.data)
+    np.testing.assert_array_equal(selected.data, before)
     assert tuple(spectrum.c.labels) == ("rr", "ri", "ir", "ii")
     for actual, expected in zip(
         spectrum.data, (first.real, second.real, first.imag, second.imag), strict=True

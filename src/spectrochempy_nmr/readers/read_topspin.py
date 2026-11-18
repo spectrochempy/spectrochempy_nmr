@@ -687,22 +687,9 @@ def _remove_digital_filter(dic, data):
 
 
 def _correct_digital_filter_time(data, phase):
-    """Apply the historical reader's integer shift and boundary treatment."""
-    phase = np.floor(phase)
-    si = data.shape[-1]
-    s = float(si)
+    from ..processing.digital_filter import correct_delay_time
 
-    pdata = np.fft.fft(np.fft.ifftshift(data, -1), axis=-1) / s
-    pdata = pdata * np.exp(2.0j * np.pi * phase * np.arange(s) / s)
-    pdata = np.fft.fftshift(np.fft.ifft(pdata, axis=-1), -1) * s
-
-    skip = int(np.floor(phase + 2.0))
-    add = int(max(skip - 6, 0))
-
-    if add > 0:
-        pdata[..., :add] = pdata[..., :add] + pdata[..., : -(add + 1) : -1]
-
-    return pdata[..., :-skip]
+    return correct_delay_time(data, phase)
 
 
 # ======================================================================================

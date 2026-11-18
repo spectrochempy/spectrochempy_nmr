@@ -256,3 +256,99 @@ def test_qsim_pknl_uses_the_fractional_delay_on_the_final_fft_grid(delay, size):
     source.meta.acquisition["digital_filter"] = {"applied": True}
     with pytest.raises(ValueError, match="already applied"):
         Experiment(source).process(digital_filter="pknl")
+
+
+def _tppi_fid():
+    from copy import copy
+
+    from spectrochempy_nmr.processing.fft_validation import _require_fft_prevalidation
+
+    try:
+        _require_fft_prevalidation()
+    except NotImplementedError as exc:
+        pytest.skip(str(exc))
+
+    source = _normalized(
+        np.arange(32).reshape(4, 8) + 1j * np.arange(32, 64).reshape(4, 8)
+    )
+    first = copy(source.axes[0])
+    first.unit = source.axes[0].unit = "s"
+    first.values = np.arange(4) / 1000
+    source.axes[0].values = np.arange(8) / 2000
+    source.axes = (first, *source.axes)
+    source.physical_dimensions = source.dimensions = ("F1", "F2")
+    source.domains = ("time", "time")
+    source.quadrature_mode = "tppi-stored-2d"
+    source.encoding = ("tppi", "complex")
+    source.branch_order = ("complex",)
+    source.acquisition = {"spectral_widths_hz": (1000, 2000)}
+    return from_interop(source)
+
+
+def test_tppi_uses_quadrature_instead_of_vendor_profile_or_experiment(
+    monkeypatch, tmp_path
+):
+    from nmrglue import interop
+
+    source = _tppi_fid()
+    expected = Experiment(source).process()
+    assert Experiment(source).encoding == ("TPPI", "QSIM")
+    assert not Experiment(source)._supports_qf_fft
+    saved = tmp_path / "tppi.scp"
+    source.write(saved)
+    source = scp.read(saved)
+
+    def forbidden(*args, **kwargs):
+        pytest.fail("The processing kernel must not decode input files")
+
+    monkeypatch.setattr(interop, "read", forbidden)
+    monkeypatch.setattr(interop, "normalize", forbidden)
+    for identity in ("COSY", "HSQC", "NOESY", "unknown"):
+        source.origin = identity
+        source.meta.normalization_profile = identity
+        source.meta.provenance = {"vendor": identity}
+        source.meta.source_metadata = {"experiment": identity}
+        source.meta.pulprog = identity
+        actual = Experiment(source).process()
+        np.testing.assert_array_equal(actual.data, expected.data)
+        np.testing.assert_array_equal(actual.y.data, expected.y.data)
+        np.testing.assert_array_equal(actual.x.data, expected.x.data)
+
+
+def test_tppi_profile_name_cannot_enable_an_unsupported_quadrature():
+    source = _tppi_fid()
+    source.meta.quadrature_mode = "f2-traces-stored-2d"
+    source.meta.encoding = ["UNVALIDATED:F1", "DIRECT:QSIM"]
+    source.meta.normalization_profile = "agilent-tppi-2d-v1"
+    experiment = Experiment(source)
+    assert not experiment._supports_tppi_fft
+    assert not experiment._supports_qf_fft
+    before = source.data.copy()
+    with pytest.raises(NotImplementedError):
+        experiment.process()
+    np.testing.assert_array_equal(source.data, before)
+
+
+def test_tppi_physical_and_index_time_presentations_match():
+    source = _tppi_fid()
+    expected = Experiment(source).process()
+    source.y = scp.Coord(np.arange(source.shape[0]), rounding=False)
+    actual = Experiment(source).process()
+    np.testing.assert_array_equal(actual.data, expected.data)
+    np.testing.assert_array_equal(actual.y.data, expected.y.data)
+
+
+@pytest.mark.parametrize("invalid", ["grid", "count"])
+def test_tppi_inconsistent_physical_acquisition_refuses_before_processing(invalid):
+    source = _tppi_fid()
+    if invalid == "grid":
+        source.y = scp.Coord(
+            np.arange(source.shape[0]) / 900, units="s", rounding=False
+        )
+    else:
+        source.meta.acquisition["physical_indirect_increments"] = source.shape[0] + 1
+    before = source.copy()
+    with pytest.raises(ValueError, match="acquisition grids"):
+        Experiment(source).process()
+    np.testing.assert_array_equal(source.data, before.data)
+    np.testing.assert_array_equal(source.y.data, before.y.data)

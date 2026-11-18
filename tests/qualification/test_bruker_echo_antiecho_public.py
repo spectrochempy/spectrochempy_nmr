@@ -79,7 +79,7 @@ def _check_route(path, monkeypatch, dc, filtered):
             == "normalized acquisition"
         )
     assert physical.x.units == scp.ur.Hz
-    assert physical.meta.echo_antiecho_reconstruction == "bruker-rance-kay"
+    assert physical.meta.echo_antiecho_reconstruction == "rance-kay"
     with pytest.raises(NotImplementedError, match="PENDING-F2"):
         actual.fft(dim="y")
 

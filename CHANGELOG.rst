@@ -7,6 +7,15 @@ distribution. The sections below describe changes in each plugin release.
 Unreleased
 ----------
 
+* Normalize qualified raw 2D component arrangements at import and select
+  ordinary Fourier processing by QF, States, States-TPPI, TPPI or
+  echo/anti-echo quadrature, independently of vendor and experiment names.
+  Echo/anti-echo processing now uses Rance–Kay reconstruction by default;
+  the historical ``echo_antiecho="bruker-rance-kay"`` argument remains valid.
+  Digital-filter correction in this path consumes the imported delay
+  descriptor or a caller override.
+  (`#144 <https://github.com/spectrochempy/spectrochempy_nmr/pull/144>`_)
+
 * Simulate indirect evolution series with ``scp.nmr.pulsar.simulate_t1_series()``.
   Reuse RF preparation across indirect times and return complex F2 spectra
   for each time in a single dataset.
