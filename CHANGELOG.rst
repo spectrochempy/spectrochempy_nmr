@@ -7,6 +7,12 @@ distribution. The sections below describe changes in each plugin release.
 Unreleased
 ----------
 
+* Connect fast RF-weighted MQMAS responses to population inversion with
+  ``mqmas_inversion.mqmas_response()``. Cache RF profiles across parameter
+  grids and linewidth views, and reuse built kernels for MQMAS-only or
+  joint MAS/MQMAS fits.
+  (`#154 <https://github.com/spectrochempy/spectrochempy_nmr/pull/154>`_)
+
 * Read Multiplex SPAM phase cycles with ``read(..., phase_cycle="paired")``
   and select 3Q/5Q through ``Experiment.select_coherence()`` before the common
   XF2, phase and XFSHEAR workflow. The reader retains every complete acquired

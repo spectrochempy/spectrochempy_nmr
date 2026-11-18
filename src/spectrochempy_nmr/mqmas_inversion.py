@@ -15,6 +15,7 @@ from spectrochempy.core.dataset.nddataset import NDDataset
 
 
 from ._mqmas_response import mas_response as mas_response
+from ._mqmas_response import mqmas_response as mqmas_response
 from ._mqmas_response import z_filtered_3qmas_response as z_filtered_3qmas_response
 
 
@@ -99,7 +100,7 @@ def build_kernel(
 
     `response(shift_ppm, cq_hz, eta)` returns a real array with the shape
     of the supplied spectrum, on its calibrated spectral grid. Use
-    `z_filtered_3qmas_response` or `mas_response` for PULSAR templates,
+    `mqmas_response`, `z_filtered_3qmas_response` or `mas_response` for PULSAR templates,
     or provide a response that replays the acquisition and processing.
     `asymmetry` is a fixed eta in [0, 1], "uniform", or "czjzek" for
     standard isotropic Czjzek weighting conditional on Pq.
