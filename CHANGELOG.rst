@@ -7,6 +7,17 @@ distribution. The sections below describe changes in each plugin release.
 Unreleased
 ----------
 
+* Remove the experimental ``process_agilent_noesy_states_tppi()`` and
+  ``extract_noesy_components()`` entry points. Read supported acquisitions
+  with ``scp.nmr.read(path, quadrature="states-tppi")`` when the mode must
+  be selected explicitly, then use ``Experiment(fid).process()`` and
+  ``Experiment(spectrum).RR``, ``RI``, ``IR`` or ``II``. The common workflow
+  uses physical axes and the qualified States-TPPI reconstruction; it does
+  not retain the prototype's transport option or provisional index axes.
+  Agilent acquisition directories ending in ``.fid`` are now recognized
+  before applying SIMPSON file-extension routing.
+  (`#145 <https://github.com/spectrochempy/spectrochempy_nmr/pull/145>`_)
+
 * Normalize qualified raw 2D component arrangements at import and select
   ordinary Fourier processing by QF, States, States-TPPI, TPPI or
   echo/anti-echo quadrature, independently of vendor and experiment names.

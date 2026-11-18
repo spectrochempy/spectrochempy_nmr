@@ -31,6 +31,13 @@ def _write_text_1d(path, npts=8, sw=10000.0):
     return data
 
 
+def test_common_read_keeps_simpson_fid_files(tmp_path):
+    path = tmp_path / "simulation.fid"
+    expected = _write_text_1d(path)
+    actual = scp.nmr.read(path)
+    np.testing.assert_allclose(actual.data, expected, atol=1e-6)
+
+
 def _write_text_2d(path, npts=8, ni=4, sw=10000.0, sw1=5000.0):
     """Write a synthetic SIMPSON TEXT 2D file."""
     data = np.empty((ni, npts), dtype="complex64")

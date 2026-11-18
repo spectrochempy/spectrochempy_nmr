@@ -188,17 +188,16 @@ def _resolve_read():
             first = paths[0]
             try:
                 path = Path(first)
+                if path.is_dir():
+                    if (path / "fid").exists() and (path / "procpar").exists():
+                        return read_agilent(*paths, **kwargs)
+                    return read_topspin(*paths, **kwargs)
                 # SIMPSON files use .spe/.fid/.in extensions
                 if path.suffix.lower() in {".spe", ".fid", ".in"}:
                     return read_simpson(*paths, **kwargs)
                 # JEOL files have .jdf extension
                 if path.suffix.lower() == ".jdf":
                     return read_jeol(*paths, **kwargs)
-                if path.is_dir():
-                    # An Agilent directory contains fid + procpar.
-                    if (path / "fid").exists() and (path / "procpar").exists():
-                        return read_agilent(*paths, **kwargs)
-                    return read_topspin(*paths, **kwargs)
                 if (
                     path.name == "fid"
                     and path.parent.exists()
@@ -708,18 +707,6 @@ def __getattr__(name: str):
         from .processing.jeol_cosy import process_jeol_cosy_magnitude
 
         return process_jeol_cosy_magnitude
-    if name == "process_agilent_noesy_states_tppi":
-        from .adapters.agilent_noesy import (  # noqa: PLC0415
-            process_agilent_noesy_states_tppi,
-        )
-
-        return process_agilent_noesy_states_tppi
-    if name == "extract_noesy_components":
-        from .processing.complex_channels import (  # noqa: PLC0415
-            extract_complex_components,
-        )
-
-        return extract_complex_components
     if name == "from_interop":
         from .interop import from_interop  # noqa: PLC0415
 
@@ -769,9 +756,7 @@ def __dir__() -> list[str]:
         "simulate_czjzek",
         "apk",
         "autophase",
-        "process_agilent_noesy_states_tppi",
         "process_jeol_cosy_magnitude",
-        "extract_noesy_components",
         "from_interop",
         "reference_agilent_1d",
         "reference_interop_1d",

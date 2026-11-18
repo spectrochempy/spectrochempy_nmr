@@ -4,6 +4,18 @@ Experiment and processing
 Use ``scp.nmr.Experiment(dataset)`` to inspect the acquisition and run a
 processing workflow. See :doc:`/userguide/processing_1d` and
 :doc:`/userguide/processing_2d` for examples.
+States and States-TPPI use the same processing entry point regardless of
+experiment name. When the acquisition does not establish the quadrature,
+select it explicitly at reading, for example for a supported Agilent pair::
+
+    fid = scp.nmr.read("path/to/acquisition", quadrature="states-tppi")
+    spectrum = scp.nmr.Experiment(fid).process()
+    rr = scp.nmr.Experiment(spectrum).RR
+
+The four real output planes use physical F1/F2 labels. ``Experiment.RR``,
+``RI``, ``IR`` and ``II`` follow the TopSpin component convention; use these
+accessors for component extraction.
+
 For the Bruker States MQMAS workflow, see :doc:`/userguide/mqmas`.
 Use ``Experiment.xf2()`` to transform F2, ``Experiment.xf2p()`` to apply
 the common phase, and ``Experiment.xfshear()`` to produce the final spectrum.
@@ -29,13 +41,3 @@ Automatic phase estimation
    :toctree: generated
 
    autophase
-
-Experimental Agilent NOESY helpers
-----------------------------------
-
-.. autosummary::
-   :nosignatures:
-   :toctree: generated
-
-   process_agilent_noesy_states_tppi
-   extract_noesy_components
