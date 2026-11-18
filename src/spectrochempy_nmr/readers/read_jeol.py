@@ -49,7 +49,16 @@ from nmrglue.fileio.jeol import read as _read_jeol_raw  # noqa: E402
 
 def read_jeol(*paths, **kwargs):
     r"""
-    Open JEOL JDF NMR spectra.
+    Read JEOL JDF acquisition data.
+
+    Supported user workflows cover 1D FIDs. For a complete uniform proton
+    COSY workflow, use :func:`process_jeol_cosy_magnitude`.
+
+    .. warning::
+
+        Low-level import of other JEOL 2D acquisitions is an incomplete
+        workflow. Complete HSQC, HMQC and HMBC processing is not supported
+        by the plugin.
 
     Parameters
     ----------

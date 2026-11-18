@@ -11,7 +11,7 @@ the TopSpin 1D, 2D, CP and relaxation measurements as LCS data released under CC
 `__index__` files are intentionally not fetched because they are excluded from
 that grant or are generated metadata.
 
-The JEOL epicatechin 1D acquisition and the processed NMRPipe
+The JEOL epicatechin 1D and COSY acquisitions and the processed NMRPipe
 gossypol COSY plane come from [nmrXiv project P33](https://doi.org/10.57992/nmrxiv.p33)
 under CC0 1.0. They are retrieved from pinned revisions of nmrglue-ng.
 The NMRPipe file is a conversion of the processed Bruker RR plane from
@@ -22,7 +22,7 @@ The Bruker PST-5 aluminium-27 MQMAS acquisition (experiment 51) comes from
 The dataset is licensed under CC BY 4.0 and attributed to Christian Fernandez,
 LCS. The fixture contains the SER and the parameters used to read it.
 
-The selected files total about 8.5 MiB. Run the same fetch as the RTD
+The selected files total about 15.0 MiB. Run the same fetch as the RTD
 pre-build job locally with:
 
 ```console

@@ -33,8 +33,8 @@ cannot distinguish States from States-TPPI.
 The reader logs the choice at INFO level and records the mode and its
 source in ``fid.meta.acquisition["quadrature_selection"]``. For an unknown
 program or absent source, automatic selection leaves the mode unset and
-F1 processing guarded. Reading the stored traces and the historical F2
-operation remain available. Quadrature selection requires an nmrglue-ng
+the acquisition is not supported for processing until its quadrature is
+selected from acquisition evidence. Quadrature selection requires an nmrglue-ng
 provider that supports it and a SpectroChemPy core with FFT
 prevalidation (1.2.0 or later).
 

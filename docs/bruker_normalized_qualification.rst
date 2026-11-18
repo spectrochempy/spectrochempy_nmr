@@ -140,9 +140,7 @@ Decoding outside the normalized profiles
 
 TopSpin uses nmrglue-ng for both qualified spectra and compatibility reads.
 The latter retain the public treatment of incomplete acquisitions, including
-the trace length used when recovering flat SER data. Nonuniform sampling is
-retained in acquisition metadata. Loading the samples does not reconstruct
-the NUS schedule or qualify that acquisition for a normalized FFT.
+the trace length used when recovering flat SER data. NUS acquisitions are not supported for complete 2D processing.
 
 Prepare a FID explicitly
 ------------------------

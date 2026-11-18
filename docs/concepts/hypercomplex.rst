@@ -21,9 +21,8 @@ and calibrated frequency axes remain experimental.
 
 For Agilent pairs with ``phase=[1,2]``, use the
 :doc:`reader guide <../userguide/reading_data>` to select or verify the
-indirect quadrature before transforming F1. For JEOL, see the
-:doc:`2D processing guide <../userguide/processing_2d>` for the supported
-transforms.
+indirect quadrature before transforming F1. For a complete uniform JEOL
+proton COSY workflow, see :doc:`../userguide/jeol_cosy_magnitude`.
 
 Select the channel and its real or imaginary part before plotting. For
 example, the real part of the first channel in a processed Bruker

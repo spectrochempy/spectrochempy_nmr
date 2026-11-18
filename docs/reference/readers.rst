@@ -23,7 +23,14 @@ format. See :doc:`/userguide/reading_data` for supported inputs and examples.
 JEOL 2D acquisition branches
 ~~~~~~~~~~~~~~~~~~~~~~~~~~~~
 
-For a supported JDF acquisition, select interop to keep the stored section
+.. warning::
+
+   The low-level import described here is an incomplete workflow.
+   Complete processing of JEOL HSQC, HMQC and HMBC acquisitions is not
+   supported by the plugin. For a supported uniform proton COSY workflow,
+   use :doc:`/userguide/jeol_cosy_magnitude`.
+
+For a JDF layout accepted by the low-level importer, select interop to keep the stored section
 pairs as separate complex components:
 
 .. code-block:: python

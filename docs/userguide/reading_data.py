@@ -55,9 +55,12 @@ agilent = scp.nmr.read("path/to/fid", protocol="agilent")
 #    * - Agilent/Varian
 #      - :py:func:`scp.nmr.read_agilent(path) <spectrochempy_nmr.read_agilent>`
 #      - Acquisition directory containing ``fid`` and ``procpar``
-#    * - JEOL
+#    * - JEOL 1D
 #      - :py:func:`scp.nmr.read_jeol(path) <spectrochempy_nmr.read_jeol>`
-#      - JDF files
+#      - Supported 1D JDF FIDs
+#    * - JEOL proton COSY
+#      - ``scp.nmr.process_jeol_cosy_magnitude(path)``
+#      - Supported uniform proton COSY JDFs, processed to a 2D magnitude spectrum
 #    * - SIMPSON
 #      - :py:func:`scp.nmr.read_simpson(path) <spectrochempy_nmr.read_simpson>`
 #      - Simulated FIDs and spectra, or a simulation input with a sibling output
@@ -74,6 +77,9 @@ agilent = scp.nmr.read("path/to/fid", protocol="agilent")
 #      - :py:func:`scp.nmr.read(path, protocol="interop", profile=...) <spectrochempy_nmr.read>`
 #      - Supported NMR profiles, such as ``"jcampdx-spectrum-1d"``
 #
+# See :doc:`jeol_cosy_magnitude` for a complete raw-JDF-to-2D-spectrum
+# workflow on uniform proton COSY acquisitions. Other JEOL 2D acquisitions
+# (including HSQC, HMQC and HMBC) and NUS acquisitions are not supported.
 # See :doc:`exchanging_spectra` for export and round-trip examples.
 #
 # See :ref:`reading-exchange-formats-through-interop` for the profile and
@@ -100,18 +106,14 @@ _ = spectrum.real.plot()
 # --------------------------
 #
 # With SpectroChemPy 1.2.0 or later, if the indirect spectral width cannot
-# be determined, the reader labels
-# the F1 axis by increment index. F2 can still be transformed. To transform
-# F1, supply the acquisition width in Hz (``SW_h``) or restore the indirect
-# ``SW`` and ``SFO1`` parameters.
+# be determined, supply the acquisition width in Hz (``SW_h``) or restore
+# the indirect ``SW`` and ``SFO1`` parameters before 2D processing.
 #
 # For a raw Bruker SER, the reader uses the indirect acquisition parameter
 # ``FnMODE``. If it is missing or undefined, the reader uses ``MC2`` from
 # the indirect processing parameters when available.
 #
-# With SpectroChemPy 1.2.0 or later, you can read the traces and transform F2
-# when the mode is still unknown.
-# If you need F1, reopen the acquisition with its known mode, for example
+# Reopen the acquisition with its known mode, for example
 # ``scp.nmr.read_topspin(path, quadrature="states-tppi")``, then apply the
 # F2 and F1 transforms in order. The accepted choices are ``"qf"``,
 # ``"states"``, ``"states-tppi"`` and ``"echo-antiecho"``.
@@ -119,8 +121,8 @@ _ = spectrum.real.plot()
 # For an undetermined mode with a valid width, supply ``quadrature="qf"``
 # if the acquisition used QF.
 #
-# See :doc:`bruker_indirect_sampling` for interrupted States-TPPI
-# acquisitions and nonuniformly sampled (NUS) SER files.
+# See :doc:`bruker_indirect_sampling` for complete 2D processing of
+# interrupted States-TPPI acquisitions.
 #
 # Agilent/Varian States quadrature
 # --------------------------------
@@ -141,9 +143,8 @@ _ = spectrum.real.plot()
 # Supply the source used for the acquisition with ``pulse_program_source``,
 # or put it next to ``fid`` and ``procpar`` with the name given by ``seqfil``
 # and a ``.c`` suffix. Check the selected quadrature
-# in the reader's log. If the mode remains undetermined, you can read the
-# traces and transform F2. Choose ``"states"`` or ``"states-tppi"`` explicitly
-# before transforming F1, once you know the acquisition convention.
+# in the reader's log. Choose ``"states"`` or ``"states-tppi"`` explicitly
+# when you know the acquisition convention and automatic selection needs it.
 #
 # Reading processed NMR JCAMP-DX
 # ------------------------------

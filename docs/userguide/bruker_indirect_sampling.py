@@ -15,11 +15,9 @@
 # Bruker SER acquisitions with incomplete F1 sampling
 # ===================================================
 #
-# Check how the indirect dimension was sampled before transforming it.
-# An interrupted uniform acquisition contains a contiguous prefix of the
-# scheduled increments. A nonuniformly sampled (NUS) acquisition records
-# selected increments across the nominal grid. Both can contain fewer
-# traces than planned, but their F1 processing differs.
+# Reconstruct a complete 2D spectrum from an interrupted uniform
+# acquisition. This workflow uses the acquired prefix and the archived
+# processing parameters to replay TopSpin XFB and plot the real-real plane.
 #
 # Interrupted uniform States-TPPI
 # -------------------------------
@@ -76,38 +74,5 @@ _ = rr.plot(
 # The measurement and parameters are attributed to Christian Fernandez,
 # LCS, and distributed under CC BY 4.0 through
 # `spectrochempy_data <https://github.com/spectrochempy/spectrochempy_data/tree/08bb9b0cbff8f4363c48b6bff7ccb743f8140e0a/testdata/nmrdata/bruker/tests/nmr/topspin_2d/1>`_.
-# See the `fixture manifest <https://github.com/spectrochempy/spectrochempy_nmr/blob/docs/bruker-f1-workflows/docs/gallery-fixtures.toml>`_
+# See the `fixture manifest <https://github.com/spectrochempy/spectrochempy_nmr/blob/master/docs/gallery-fixtures.toml>`_
 # for the pinned files used by the documentation build.
-
-# %% [raw] raw_mimetype="text/restructuredtext"
-# Paired nonuniform sampling
-# --------------------------
-#
-# For supported paired Bruker NUS data, the reader preserves the compact
-# acquisition and stores the schedule in ``fid.meta.bruker_nus``.
-# ``indices`` contains zero-based F1 indices in storage order.
-# ``full_points`` gives the size of the nominal grid in complex F1 points.
-# For example, the Bruker NUS acquisition in the
-# `NMRPipe demo data <https://www.ibbr.umd.edu/nmrpipe/demo>`_ has 31
-# acquired echo/anti-echo pairs on a nominal grid of 62 complex points.
-#
-# With a valid schedule and indirect spectral width, the F1 coordinate
-# contains the acquired times. If the schedule is missing or unusable,
-# ``indices`` is ``None``. If the nominal grid cannot be determined,
-# ``full_points`` is also ``None``. Inspect the original ``nuslist``
-# and acquisition parameters before attempting reconstruction.
-#
-# F2 can be transformed while the F1 increments remain in acquisition
-# order. A regular FFT along F1 is refused because adjacent stored
-# increments need not be adjacent in time. A reconstruction method
-# must use the schedule and the nominal grid. The direct FFT below
-# transforms the stored samples. See :doc:`processing_2d` for the
-# Bruker digital-filter options.
-#
-# .. code-block:: python
-#
-#    import spectrochempy as scp
-#
-#    fid = scp.nmr.read_topspin("path/to/nus/ser")
-#    print(fid.meta.bruker_nus)
-#    f2 = fid.fft(dim="x")

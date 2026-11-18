@@ -129,35 +129,18 @@ reference through ``Experiment.process(reference=...)`` selects the canonical
 FFT convention. Other profiles still use the compatibility reader.
 
 
-Agilent States 2D public reader
--------------------------------
+Agilent paired 2D processing
+----------------------------
 
-With a provider that supports States storage normalization,
-``read_agilent()`` uses the dataset returned by ``from_interop()`` for
-the supported ``phase=[1, 2]`` layout. The provider pairs adjacent
-complex FIDs and applies the historical NS/NE divisor once. The plugin
-preserves the public branch labels, display coordinates and direct FFT.
-The indirect FFT remains guarded until the States processing convention
-has been qualified. Profiles outside this layout use the nmrglue-ng compatibility reader.
-
-The historical ``agilent_2d`` dataset is qualified locally. It contains
-332 stored traces paired into 166 increments with 1500 complex points
-each. The public reader retains the F1 point index because the file has
-no ``sw2``. The physical width from ``sw1`` remains available through
-the normalized acquisition metadata. Synthetic binary input in CI
-checks branch order, a nontrivial divisor and public dataset identity.
-
-
-Agilent TPPI 2D public reader
------------------------------
-
-For ``phase=[3]`` with one stored trace per indirect increment,
-``read_agilent()`` returns the normalized interop matrix with its
-historical public presentation. The real reference has 600 increments
-and 1400 complex points per trace. The physical F1 time grid derives
-from ``sw1``. The public display retains point indices when ``sw2`` is
-absent. The direct FFT remains available. The indirect TPPI FFT is
-guarded pending processing qualification. Other layouts use the compatibility reader.
+For supported ``phase=[1, 2]`` acquisitions, select the known States or
+States-TPPI convention as described in :doc:`userguide/reading_data` and
+process both dimensions with ``Experiment.process()``. The
+:doc:`userguide/processing_2d` guide describes the complete workflow.
+Native Agilent TPPI acquisitions also have a complete two-dimensional
+FFT workflow through ``Experiment.process()``. It returns ``rr``, ``ri``,
+``ir`` and ``ii`` planes in carrier-relative Hz, or ppm when
+``tppi_reference`` is supplied. This profile accepts FFT and frequency
+referencing only; see :doc:`userguide/processing_2d` for the TPPI recipe.
 
 
 Agilent flat FID series

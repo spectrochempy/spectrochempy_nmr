@@ -101,3 +101,8 @@ section_ref = "examples-importer-index"
 path = "simulation/plot_csa_static_mas.py"
 section = "NMR simulation"
 section_ref = "examples-simulation-index"
+
+[[examples]]
+path = "processing/nmr/plot_jeol_cosy.py"
+section = "NMR processing"
+section_ref = "examples-processing-nmr-index"

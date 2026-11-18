@@ -30,7 +30,8 @@ for installation and API integration.
 Formats and reference workflows
 -------------------------------
 
-The plugin reads Bruker TopSpin, Agilent/Varian, JEOL, and SIMPSON data. It
+The plugin reads supported Bruker TopSpin, Agilent/Varian and SIMPSON data,
+JEOL 1D FIDs, and uniform JEOL proton COSY acquisitions. It
 also reads supported profiles of the NMRPipe, nmrML, and NMR JCAMP-DX exchange
 formats. See :doc:`userguide/reading_data` for supported inputs and options.
 

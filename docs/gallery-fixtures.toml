@@ -334,3 +334,11 @@ size = 2200
 path = "nmrdata/bruker/tests/nmr/topspin_2d/1/pdata/1/proc2s"
 sha256 = "3124c8af9239e417a34165278e4aca9124bb5e3dbace50c9245588e4afab67cd"
 size = 2162
+
+# JEOL epicatechin COSY acquisition, CENAPTNMR P33 (CC0 1.0).
+
+[[files]]
+path = "nmrdata/jeol/epicatechin_cosy.jdf"
+url = "https://raw.githubusercontent.com/spectrochempy/nmrglue-ng/dc964243d265e60e74598312f0ee170eb4e7e4d6/tests/fixtures/fileio/data/jeol/epicatechin_cosy.jdf"
+sha256 = "f109351f2102435faa7d302659e073b77ecc1184f1c3ef8817087ca91b9df3aa"
+size = 5271680

@@ -106,15 +106,5 @@ _ = plane.plot(
 )
 
 # %% [raw] raw_mimetype="text/restructuredtext"
-# Exploratory case: JEOL COSY
-# ---------------------------
-#
-# The epicatechin JEOL JDF can be imported and transformed along F2.
-# On this file, the NMRPipe converter
-# `delta2pipe <https://spin.niddk.nih.gov/NMRPipe/ref/prog/delta2pipe.html>`_
-# reports a real indirect axis and acquisition mode ``Magnitude``.
-# This suggests testing a real F1 sampling model, retaining the complex
-# F2 result through the F1 transform and applying magnitude at the end.
-# A comparison with a spectrum processed in JEOL Delta is still needed
-# to verify the F1 convention and the frequency referencing. Native F1
-# processing remains unavailable for this profile.
+# A complete JEOL COSY workflow, including both Fourier transforms and
+# a 2D magnitude plot, is given in :doc:`jeol_cosy_magnitude`.

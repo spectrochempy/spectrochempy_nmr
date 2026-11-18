@@ -27,6 +27,7 @@ VISIBLE_EXAMPLES = [
 ]
 JEOL_DATA = {
     "plot_read_jeol_1d": "epicatechin_1h.jdf",
+    "plot_jeol_cosy": "epicatechin_cosy.jdf",
 }
 
 
