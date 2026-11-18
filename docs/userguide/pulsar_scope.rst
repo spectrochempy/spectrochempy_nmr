@@ -12,6 +12,36 @@ is now preserved on GitHub. SpectroChemPy NMR ported the method to Python
 and added optimizations such as reusable powder grids, optional compiled
 deposition via Numba, and parallel powder averaging for pulse sequences.
 
+Rewriting historical sequence scripts
+-------------------------------------
+
+The historical ``pypulsar/workspace/models/*.tpl`` files contain Python
+scripts. Rewrite them with ``Pulse``, ``Delay``, ``Coherence`` and
+``simulate_pulse_sequence``; they are not read by a compatibility layer.
+The :doc:`Hahn echo example
+<../examples/gallery/simulation/plot_pypulsar_hahn>` ports the finite-pulse
+aluminium experiment, including rotor-synchronised timings and T2 decay.
+The old engine detected the lower matrix diagonal; this rewrite selects
+order -1 before refocusing into the modern detected +1 coherence. Its
+104.228 MHz Larmor frequency follows the historical rounded isotope ratio
+at 400 MHz proton frequency. The old 100 Hz Lorentzian display broadening
+and per-spectrum peak normalisation are omitted to preserve echo amplitudes.
+Accuracy 5 follows the original demonstration rather than a converged
+powder-grid qualification. This is not a comparison against an executed
+old binary.
+
+Durations in the current API are seconds. Local scale factors keep a script
+readable without changing that convention::
+
+    us, ms, kHz = 1e-6, 1e-3, 1e3
+    pulse = pulsar.Pulse(1.2 * us, 100 * kHz)
+    delay = pulsar.Delay(2 * ms)
+
+These are numeric scale factors, without dimensional checking. In old
+scripts ``usec`` equalled 1 because numeric durations were in microseconds;
+copying that value into a modern script would change durations by a factor
+of a million.
+
 Which model to use
 ------------------
 

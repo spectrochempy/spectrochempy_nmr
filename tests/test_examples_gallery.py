@@ -37,6 +37,7 @@ def _has_nmr_example_data(example: Path) -> bool:
         "plot_processing_nmr_2d",
         "plot_exchange_nmr_spectra",
         "plot_csa_static_mas",
+        "plot_pypulsar_hahn",
     }:
         return True
     root = Path(scp.preferences.datadir) / "nmrdata"
