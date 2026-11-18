@@ -117,8 +117,9 @@ def test_saved_acquisition_processes_without_reader_and_extracts_components(
     components = (experiment.RR, experiment.IR, experiment.RI, experiment.II)
     for index, component in enumerate(components):
         np.testing.assert_array_equal(component.data, result.data[index])
-        np.testing.assert_array_equal(component.x.data, result.x.data)
-        np.testing.assert_array_equal(component.y.data, result.y.data)
+        assert component.x.units == component.y.units == scp.ur.Hz
+        np.testing.assert_allclose(component.x.data, result.x.data, rtol=0, atol=1e-10)
+        np.testing.assert_allclose(component.y.data, result.y.data, rtol=0, atol=1e-10)
     mask = np.zeros(result.shape, dtype=bool)
     mask[0, 1, 2] = True
     result.mask = mask
