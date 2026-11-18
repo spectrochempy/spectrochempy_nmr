@@ -21,6 +21,11 @@ from operator import index
 
 import numpy as np
 
+from spectrochempy_nmr._pulse_program import PulseProgram as PulseProgram
+from spectrochempy_nmr._pulse_program import SequenceError as SequenceError
+from spectrochempy_nmr._pulse_program import parse_sequence as parse_sequence
+from spectrochempy_nmr._pulse_program import read_sequence as read_sequence
+
 
 _RF_PROPAGATOR_CACHE_BYTES = 16 * 1024**2
 

@@ -17,6 +17,7 @@ Guides
    baseline
    pulsar
    pulsar_scope
+   pulse_programs
 
 See also
 --------

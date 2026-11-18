@@ -1,0 +1,9 @@
+# Both channels act during the same p1 interval.
+set rf=rf1
+set partner_rf=rf2
+pulse p1 phase=ph1 partner_phase=ph2 offset=o1 partner_offset=o2
+set rf=0 Hz
+pulse p2 partner_phase=0
+set rf=rf1
+set partner_rf=0 Hz
+pulse p3
