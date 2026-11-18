@@ -35,6 +35,26 @@ asks to push it or to open a PR that needs it. Open a GitHub PR, including a
 draft PR, only when the maintainer explicitly asks to open it. Write and
 submit the title and description as part of opening the authorized PR.
 
+## Task records and shared documents
+
+Keep investigation, acquisitions or fixtures, commands, results, skips and
+limits, review reports, and delivery outcome in the task's working record
+under the workspace workflow, or in the local handoff/PR for a standalone
+checkout. A routine PR does not require a maintainer audit file.
+
+Update the existing RFC, architecture reference, or topic audit when a durable
+decision, important scientific qualification, or reusable campaign conclusion
+needs to be shared. Include enough evidence and limitations to assess shared
+conclusions without access to local task tracking. Multi-PR coordination alone
+does not require a new note. After delivery, reconcile shared documents and
+indexes only when their content changes; record any pending shared update.
+
+After an authorized push, verify the remote PR head and update the task record.
+After a merge, verify it on GitHub and record the delivered result and explicit
+follow-ups before closing the task. Inspect task-owned worktrees before
+removing clean merged ones. Document edits and publication follow the existing
+authorization rules.
+
 ## Independent review before merge
 
 Every PR, including documentation, test-only and mechanical changes, needs
@@ -62,7 +82,9 @@ context. Repeat until the current revision receives an explicit `APPROVE`.
 If a finding needs a maintainer decision, surface it and resume the review
 loop once it is resolved.
 
-Record the verdict and reviewed commit for a PR. Immediately before merging,
+Return review reports to the parent session for the task record; a separate
+maintainer Markdown report is not required. Record the verdict and reviewed
+commit for a PR. Immediately before merging,
 verify that GitHub still reports the approved head and that required checks
 passed. Make the merge request conditional on that exact head. If the head
 has changed, review the new head. If a guarded merge is unavailable,

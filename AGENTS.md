@@ -12,11 +12,15 @@ maintainer repository when available. In particular, check existing decisions
 before changing Fourier conventions, coordinate referencing, processing
 semantics or the boundary between the core, this plugin and nmrglue-ng.
 
-Update the relevant maintainer audit as findings become useful for handoff.
-Record the acquisition or fixture, the commands or tests used, and what the
-results establish. After delivery, reconcile the note with the verified
-outcome. For a standalone contributor checkout, the public documentation and
-tests provide the project contract.
+Keep the acquisition or fixture, commands, validation results and limits,
+review verdict and reviewed revision, and delivery outcome in the task's
+working record under the workspace workflow. Update a shared maintainer
+document when findings establish a durable decision, an important scientific
+qualification, or a reusable campaign synthesis. Prefer an existing topic
+document; routine PRs and review rounds do not require separate audit files.
+Shared conclusions must remain understandable without local task records.
+For a standalone contributor checkout, the public documentation and tests
+provide the project contract; use the local handoff or PR for work records.
 
 ## Development skill
 
