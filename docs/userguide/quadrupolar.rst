@@ -12,6 +12,7 @@ quadrupolar tensors.
    multiplex_spam
    stmas
    czjzek
+   mqmas_inversion
 
 See :doc:`pulsar` for simulating and fitting powder spectra with quadrupolar
 interactions or chemical shift anisotropy.
