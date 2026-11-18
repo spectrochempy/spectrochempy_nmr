@@ -21,6 +21,7 @@ _DEFAULTS = dict(
     sidebands=0,
     transitions="central",
     max_rf_step_s=2e-6,
+    probe_bandwidth_hz=None,
 )
 _REQUIRED = {"spin", "larmor_hz", "spectral_width_hz"}
 _INTEGER_SETTINGS = {"points", "accuracy", "sidebands"}
@@ -46,6 +47,8 @@ class CzjzekRFLibrary:
         for key, value in settings.items():
             if key in _INTEGER_SETTINGS:
                 value = index(value)
+            elif key == "probe_bandwidth_hz":
+                value = pulsar._validate_probe_bandwidth(value)
             elif key != "transitions":
                 (value,) = pulsar._real_scalars(value)
             self._settings[key] = value
@@ -97,7 +100,11 @@ class CzjzekRFLibrary:
 
     @classmethod
     def build(cls, events, *, cq_grid_hz, eta_grid, shift_hz, shift_bins, **settings):
-        """Simulate signed-Cq and eta grids at shift_hz plus/minus shift_bins bins."""
+        """Simulate signed-Cq and eta grids at shift_hz plus/minus shift_bins bins.
+
+        Optional ``probe_bandwidth_hz`` fixes the receiver response for
+        both shift planes and all direct fallbacks, as in PULSAR.
+        """
         library = cls(events, cq_grid_hz, eta_grid, shift_hz, shift_bins, settings)
         spectra = np.empty(library._shape, dtype=np.complex128)
         for plane, offset in enumerate((-library._bins, library._bins)):
@@ -274,7 +281,12 @@ class CzjzekRFLibrary:
             numpy=np.__version__,
             scipy=scipy.__version__,
             events=self._event_metadata(),
-            settings=self._settings,
+            # Preserve format-1 flat-response archives and their fingerprints.
+            settings={
+                key: value
+                for key, value in self._settings.items()
+                if key != "probe_bandwidth_hz" or value is not None
+            },
             cq=self._cq.tolist(),
             eta=self._eta.tolist(),
             shift_hz=self._shift_hz,

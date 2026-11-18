@@ -53,6 +53,8 @@ def fit_czjzek(
     Supply the finite RF sequence and simulation settings as for
     :func:`simulate_czjzek`. A supplied library must match those settings
     and sequence. Loading and building the library are timed by the caller.
+    This includes ``probe_bandwidth_hz``: a receiver-weighted library
+    requires that same bandwidth in the direct refinement settings.
     `simulate_direct` may implement the same API with a different execution
     strategy that calculates one exact response per sampled ensemble member.
     Stage counts include exact fallbacks and exclude separately prepared

@@ -10,7 +10,8 @@ from spectrochempy_nmr import simulate_czjzek
 from spectrochempy_nmr.pulsar import Pulse
 
 
-def test_two_stage_retains_direct_result_and_tracks_library_fallbacks():
+@pytest.mark.parametrize("bandwidth", [None, 8e3])
+def test_two_stage_retains_direct_result_and_tracks_library_fallbacks(bandwidth):
     events = (Pulse(0.5e-6, 50e3),)
     settings = dict(
         spin=2.5,
@@ -18,6 +19,7 @@ def test_two_stage_retains_direct_result_and_tracks_library_fallbacks():
         spectral_width_hz=16e3,
         points=129,
         accuracy=1,
+        probe_bandwidth_hz=bandwidth,
     )
     library = CzjzekRFLibrary.build(
         events,

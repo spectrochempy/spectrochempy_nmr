@@ -1038,6 +1038,7 @@ events = (Pulse(7e-6, 24e3, 23), Delay(13e-6))
 settings = dict(
     spin=2.5, larmor_hz=104.468516e6, spectral_width_hz=48e3,
     spinning_hz=8e3, sidebands=2, points=2048, accuracy=2,
+    probe_bandwidth_hz=80e3,
 )
 grid = dict(
     cq_grid_hz=np.linspace(1.7e6, 4.2e6, 48),
@@ -1055,6 +1056,16 @@ model = library.simulate(
 ```
 
 Loading checks the saved simulation settings against the requested model.
+The optional `probe_bandwidth_hz` fixes the real Lorentzian receiver
+response `1 / (1 + (2*f/W)**2)`, with `f` measured from the simulation
+carrier and `W` in Hz. It is applied before deposition in both shift
+planes and all direct fallbacks. The same setting must be passed to
+`fit_czjzek` so its direct refinement uses the same reception model.
+Omit it or use `None` for a flat response; existing flat-response
+archives remain compatible. Changing the bandwidth requires rebuilding
+the library. Interpolation remains approximate between grid nodes,
+including the shift dependence of reception; check direct refinement.
+
 The library interpolates each sampled coupling, asymmetry and chemical
 shift, including samples from a Gaussian shift distribution. It evaluates
 members directly when any of those coordinates falls outside the grid.
