@@ -11,6 +11,7 @@ Unreleased
   ``mqmas_inversion.mqmas_response()``. Cache RF profiles across parameter
   grids and linewidth views, and reuse built kernels for MQMAS-only or
   joint MAS/MQMAS fits.
+  (`#154 <https://github.com/spectrochempy/spectrochempy_nmr/pull/154>`_)
 
 * Read Multiplex SPAM phase cycles with ``read(..., phase_cycle="paired")``
   and select 3Q/5Q through ``Experiment.select_coherence()`` before the common
