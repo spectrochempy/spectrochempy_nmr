@@ -439,6 +439,59 @@ apodization, including a deliberately unsynchronized control.
 The frequency and shearing conventions follow
 [Frydman, Fundamentals of MQMAS (2002)](https://www.weizmann.ac.il/chembiophys/Frydman_group/sites/chemphys.Frydman_group/files/publications/paper34.pdf).
 
+### Fast MQMAS population kernels
+
+`scp.nmr.mqmas_inversion.mqmas_response` samples the fast model on the
+calibrated ppm axes required by `build_kernel` and `fit`. F1 must be
+uniform, on the isotropic scale with unit chemical-shift sensitivity.
+Both axes can run in either direction. The parameter grid must keep
+the analytical F1 centers inside the observed F1 bin edges.
+
+```python
+inv = scp.nmr.mqmas_inversion
+response = inv.mqmas_response(
+    spectrum.y.to("ppm").data, spectrum.x.to("ppm").data,
+    [p.Pulse(5e-6, 60e3)],
+    [p.Pulse(2.5e-6, 70e3), p.Coherence(1)],
+    spin=1.5, larmor_hz=130.9e6, spinning_hz=20000,
+    spectral_width_hz=24000, points=1024, accuracy=4,
+    f1_gaussian_fwhm_hz=600, f2_gaussian_fwhm_hz=100,
+)
+kernel = inv.build_kernel(
+    spectrum, [-3, 0, 3], [1.2, 1.5, 1.8], response, asymmetry=0.42,
+)
+fit = inv.fit(spectrum, kernel, regularization=0.1)
+```
+
+Supply the phased **real** spectrum, preserving signed intensities.
+`receiver_phase_deg` phases the simulated response; `carrier_ppm`
+references both axes and `f1_offset_ppm` adds a separate F1 reference
+shift. Responses are frequency densities per Hz squared: F1 bin masses
+are divided by their width, and F2 is interpolated at the PULSAR bin
+centers after division by its bin width. Columns retain their RF losses.
+
+The response caches the two RF profiles for each exact shift/Cq/eta
+triple, including eta nodes used by `build_kernel`. The resulting kernel
+matrix is the reusable library for fitting. To scan widths, use
+`response.with_broadening(f1_gaussian_fwhm_hz=700)` and rebuild the matrix;
+the new view shares the RF cache. `response.cache_info()` reports its size.
+`response.cache_clear()` frees the RF profiles for every shared view,
+while built kernels remain usable. A 2,048-point pair of complex profiles
+uses 64 KiB per parameter triple, excluding dataset overhead; kernel
+matrices occupy additional memory.
+
+For a joint fit, construct a 1D kernel on the same shift/Pq grid using
+`inv.mas_response` and pass `mas` and `mas_kernel` to `inv.fit`. MAS gain
+and baseline are fitted separately. Normalize the recovered population
+map by its sum to compare fractions; absolute concentrations require
+additional calibration. The assumed eta weighting, grid spacing and
+regularization can change those fractions.
+
+`tools/qualify_fast_mqmas_inversion.py` compares a known two-site mixture
+against independent, rotor-synchronized full States simulations, then
+refines the inversion grid on the same noisy observations. The ordinary
+fixed-transfer and finite-acquisition limitations above still apply.
+
 `simulate_pulse_sequence` takes an ordered list of immutable events.
 `Pulse(duration_s, rf_hz, phase_deg, offset_hz)` is rectangular;
 `IdealPulse(flip_deg, phase_deg)` is an instantaneous rotation;
