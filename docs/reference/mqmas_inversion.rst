@@ -21,6 +21,8 @@ raises ``ValueError``.
 .. automodule:: spectrochempy_nmr.mqmas_inversion
    :members: Kernel, build_kernel, FitResult, fit, ProfilePoint, profile
 
+.. autofunction:: spectrochempy_nmr.mqmas_inversion.mqmas_response
+
 .. autofunction:: spectrochempy_nmr.mqmas_inversion.z_filtered_3qmas_response
 
 .. autofunction:: spectrochempy_nmr.mqmas_inversion.mas_response
