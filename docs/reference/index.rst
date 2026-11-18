@@ -16,6 +16,7 @@ one function or class.
    core_operations
    simulation
    czjzek
+   mqmas_inversion
 
 See also
 --------
