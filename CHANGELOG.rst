@@ -1,5 +1,6 @@
 Changelog
-=========
+==  (`#151 <https://github.com/spectrochempy/spectrochempy_nmr/pull/151>`_)
+
 
 This changelog covers the independently versioned ``spectrochempy-nmr``
 distribution. The sections below describe changes in each plugin release.
@@ -14,6 +15,13 @@ Unreleased
   independent of pulse-program names and archived vendor parameters.
   Automatic shearing inherits the selected order. ``read_multiplex_spam()``
   remains a compatibility shortcut with unchanged numerical output.
+  (`#151 <https://github.com/spectrochempy/spectrochempy_nmr/pull/151>`_)
+
+* Add experimental MQMAS inversion on isotropic shift and quadrupolar-product
+  grids through ``scp.nmr.mqmas_inversion``. Average PULSAR kernels over
+  asymmetry, fit MQMAS with an optional shared-population MAS spectrum, and
+  profile local populations across candidate MAS widths.
+  (`#149 <https://github.com/spectrochempy/spectrochempy_nmr/pull/149>`_)
 
 * Unify STMAS with the complete MQMAS XFSHEAR reconstruction. Supply
   ``ratio`` and ``f1_scale`` together to ``Experiment.xfshear()`` for explicit

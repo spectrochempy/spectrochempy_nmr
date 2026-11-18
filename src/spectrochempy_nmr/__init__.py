@@ -684,7 +684,7 @@ def __getattr__(name: str):
         "write_csdf",
     }:
         _check_nmrglue_installation()
-    if name in {"pulsar", "czjzek", "czjzek_library"}:
+    if name in {"pulsar", "czjzek", "czjzek_library", "mqmas_inversion"}:
         return import_module(f".{name}", __name__)
     if name == "CzjzekRFLibrary":
         from .czjzek_library import CzjzekRFLibrary
@@ -770,6 +770,7 @@ def __dir__() -> list[str]:
         "Experiment",
         "Isotope",
         "pulsar",
+        "mqmas_inversion",
         "czjzek",
         "CzjzekDistribution",
         "CzjzekRFLibrary",
