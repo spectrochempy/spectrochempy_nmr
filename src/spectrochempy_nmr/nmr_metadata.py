@@ -735,6 +735,30 @@ def extract_nmr_metadata(meta, *, ndim=None) -> NMRMetadata:
         domain = meta.get("data_domain")
         quadrature = meta.get("quadrature_mode")
         if (
+            quadrature == "paired-phase-cycle-2d"
+            and ndim in (None, 3)
+            and physical == ("F1", "F2")
+            and dimensions == ("channels", *physical)
+            and tuple(meta.get("axis_roles", ())) == ("component", *physical)
+            and domain == "time"
+            and meta.get("stage") == "acquisition"
+            and meta.get("normalization_state") == "storage-normalized"
+        ):
+            return NMRMetadata(
+                normalized_interop=True,
+                ndim=3,
+                domains=("time", "time"),
+                source_kind="ser",
+                datatype="SER",
+                encoding=("PHASE-CYCLE", "DQD"),
+                iscomplex=(False, True),
+                nuclei=tuple(acquisition.get("nuclei", ())),
+                spectral_width_hz=tuple(acquisition.get("spectral_width_hz", ())),
+                spectrometer_freq_mhz=tuple(
+                    acquisition.get("acquisition_frequency_mhz", ())
+                ),
+            )
+        if (
             quadrature == "states-stored-2d"
             and ndim in (None, 3)
             and physical == ("F1", "F2")

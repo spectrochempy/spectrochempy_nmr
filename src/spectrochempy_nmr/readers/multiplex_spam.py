@@ -1,56 +1,27 @@
-"""Reconstruct States time-domain data from a Bruker Multiplex SPAM SER."""
+"""Decode paired phase-cycle storage without selecting a coherence."""
 
 from numbers import Integral
 from pathlib import Path
 
 import numpy as np
+from spectrochempy import Coord, NDDataset
+from spectrochempy.core.units import ur
 
 from .. import _check_nmrglue_installation
-from ..isotopes import nuclear_spin
-from .states_fids import states_fids
+from ..interop import _plain
+from ..processing.bruker_filter import imported_bruker_filter
+from ._metadata import complete_states_metadata
+from .states_fids import fid_calibration
 
 
-def _select_order(traces, order):
-    """Project paired scans on one harmonic and return the two States FIDs."""
-    count = traces.shape[1]
-    angle = 2 * np.pi * order * np.arange(count) / count
-    cosine, sine = np.cos(angle), np.sin(angle)
-    first, second = traces[:, :, 0], traces[:, :, 1]
-    difference, total = first - second, first + second
-    e1 = np.einsum("p,ipt->it", cosine, difference)
-    e1 -= 1j * np.einsum("p,ipt->it", sine, total)
-    e2 = np.einsum("p,ipt->it", sine, difference)
-    e2 += 1j * np.einsum("p,ipt->it", cosine, total)
-    return np.stack((e1, e2)) / count
-
-
-def read_multiplex_spam(path, *, coherence_order=3, procno=1, allow_partial=False):
-    """Read an archived Bruker MQMultiplex32/52 experiment as States FIDs.
-
-    Parameters
-    ----------
-    path : path-like
-        Experiment directory containing the raw SER, or the SER itself.
-    coherence_order : int, optional
-        Select 3Q (default) or, for a spin of 5/2, 5Q.
-    procno : int, optional
-        Processing number supplying the direct reference frequency (SF).
-    allow_partial : bool, optional
-        Ignore a single incomplete phase cycle beyond the declared TD,
-        followed by zero padding. Complete extra cycles are rejected.
-
-    Returns
-    -------
-    NDDataset
-        Uncorrected complex E1/E2 time-domain FIDs with axes (c, y, x).
-        Amplitudes are divided by the number of excitation phases.
-    """
+def read_paired_fids(path, *, procno=1, allow_partial=False, indirect_dwell=None):
+    """Decode uniform excitation phases with adjacent 0/180 SPAM pairs."""
     _check_nmrglue_installation()
     from nmrglue import interop
 
     if not isinstance(allow_partial, bool):
         raise TypeError("allow_partial must be a boolean")
-    if isinstance(procno, bool) or not isinstance(procno, Integral) or procno < 1:
+    if not str(procno).isdigit() or int(procno) < 1:
         raise ValueError("procno must be a positive integer")
     directory = Path(path).resolve()
     if directory.name == "ser":
@@ -62,31 +33,29 @@ def read_multiplex_spam(path, *, coherence_order=3, procno=1, allow_partial=Fals
     stored = interop.read_bruker_ser_storage(directory, procs_files=[procs])
     metadata = stored.metadata
     direct = metadata.get("acqus", {})
-    program = direct.get("PULPROG")
-    phase_count = {"MQMultiplex32": 7, "MQMultiplex52": 11}.get(program)
+    cycle_td = metadata.get("acqu3s", {}).get("TD")
+    phase_count = cycle_td // 2 if isinstance(cycle_td, Integral) else None
     if (
-        phase_count is None
+        phase_count not in (7, 11)
         or direct.get("PARMODE") != 2
         or direct.get("AQ_mod") not in (1, 3)
         or direct.get("FnTYPE", 0) != 0
         or "nuslist_raw" in metadata
         or stored.dimensions.get("higher_dimension_files") != ("acqu3s",)
-        or metadata["acqu3s"].get("TD") != 2 * phase_count
+        or cycle_td != 2 * phase_count
     ):
-        raise ValueError("Expected a uniform MQMultiplex32 or MQMultiplex52 SPAM SER")
-    nucleus = direct.get("NUC1")
-    if nuclear_spin(nucleus) != (phase_count - 1) / 4:
-        raise ValueError(f"Multiplex SPAM nucleus {nucleus!r} does not match {program}")
-    if (
-        isinstance(coherence_order, bool)
-        or not isinstance(coherence_order, Integral)
-        or coherence_order not in ((3,) if phase_count == 7 else (3, 5))
-    ):
-        raise ValueError(f"Unsupported MQ coherence order for {program}")
-    order = int(coherence_order)
+        raise ValueError(
+            "Expected a uniform paired phase cycle with 7 or 11 excitation phases"
+        )
     increments = metadata.get("acqu2s", {}).get("TD")
     words = stored.dimensions["declared_td"]
-    if not isinstance(increments, Integral) or increments < 2 or words < 4 or words % 2:
+    if (
+        isinstance(increments, (bool, np.bool_))
+        or not isinstance(increments, Integral)
+        or increments < 2
+        or words < 4
+        or words % 2
+    ):
         raise ValueError(
             "Multiplex SPAM requires complete phase cycles and complex FIDs"
         )
@@ -110,22 +79,103 @@ def read_multiplex_spam(path, *, coherence_order=3, procno=1, allow_partial=Fals
     traces.imag = pairs[..., 1::2]
     if not np.isfinite(traces).all():
         raise ValueError("Multiplex SPAM requires finite acquired samples")
-    branches = _select_order(traces, order)
-    del traces
-    selection = {
-        "coherence_order": order,
+    if indirect_dwell == "IN[0]":
+        indirect_dwell = None
+    calibration = fid_calibration(metadata, (increments, words // 2), indirect_dwell)
+    widths = calibration["spectral_width_hz"]
+    labels = tuple(f"phase{j}:{pair}" for j in range(phase_count) for pair in (0, 180))
+    descriptor = {
         "phase_count": phase_count,
+        "excitation_phases_degrees": tuple(360 * np.arange(phase_count) / phase_count),
         "spam_pair_order": (0, 180),
         "ignored_traces": extra.shape[0],
-        "ignored_nonzero_traces": nonzero.size,
+        "ignored_nonzero_traces": int(nonzero.size),
+        "indirect_dwell_seconds": 1 / widths[0],
     }
-    return states_fids(
-        stored,
-        branches,
-        kind="multiplex_spam",
-        selection=selection,
-        operation="reconstruct-multiplex-spam",
-        scale=1 / phase_count,
-        sign="MSM",
-        history=f"Reconstructed {order}Q Multiplex SPAM States FIDs",
+    acquisition = imported_bruker_filter(
+        {
+            **calibration,
+            "sampling": ("regular", "regular"),
+            "phase_cycle": descriptor,
+            "dc_offset": {"applied": False},
+            "digital_filter": {"applied": False},
+        },
+        metadata,
+    )
+    dataset = NDDataset(
+        traces.reshape(increments, 2 * phase_count, -1).transpose(1, 0, 2),
+        dims=("c", "y", "x"),
+        coordset=[
+            Coord(labels=list(labels)),
+            Coord(np.arange(increments) / widths[0], units="s", rounding=False),
+            Coord(np.arange(words // 2) / widths[1], units="s", rounding=False),
+        ],
+        units="a.u.",
+    )
+    dataset.meta.update(
+        {
+            "acquisition": acquisition,
+            "source_metadata": _plain(metadata),
+            "provenance": {"source": str(stored.source), "format": stored.format},
+            "interop_dimensions": ("channels", "F1", "F2"),
+            "interop_physical_dimensions": ("F1", "F2"),
+            "interop_domains": ("time", "time"),
+            "interop_encoding": ("phase-cycle", "complex"),
+            "axis_roles": ("component", "F1", "F2"),
+            "quadrature_mode": "paired-phase-cycle-2d",
+            "component_axis": "c",
+            "component_labels": labels,
+            "normalization_state": "storage-normalized",
+            "normalization_profile": "paired-phase-cycle-2d-v1",
+            "data_domain": "time",
+            "stage": "acquisition",
+            "datatype": "SER",
+            "td": list(dataset.shape),
+            "tdeff": list(dataset.shape),
+            "isfreq": [False, False, False],
+            "iscomplex": [False, False, True],
+            "sw_h": [None, *(width * ur.Hz for width in widths)],
+            "sfo1": [
+                None,
+                *(v * ur.MHz for v in calibration["acquisition_frequency_mhz"]),
+            ],
+            "sf": [None, *(v * ur.MHz for v in calibration["reference_frequency_mhz"])],
+            "nuc1": [None, *calibration["nuclei"]],
+            "applied_operations": (
+                {"name": "decode-paired-phase-cycle", "stage": "acquisition"},
+            ),
+        }
+    )
+    complete_states_metadata(dataset)
+    dataset.filename = stored.source
+    dataset.history = "Read paired excitation-phase scans without coherence selection"
+    return dataset
+
+
+def read_multiplex_spam(path, *, coherence_order=3, procno=1, allow_partial=False):
+    """Compatibility shortcut for ``read(..., phase_cycle='paired')`` and selection.
+
+    Parameters
+    ----------
+    path : path-like
+        Experiment directory or raw SER.
+    coherence_order : int
+        Select 3Q or 5Q (5Q requires eleven excitation phases).
+    procno : int
+        Processing number supplying the F2 reference frequency.
+    allow_partial : bool
+        Explicitly discard one incomplete cycle after the declared increments.
+
+    Returns
+    -------
+    NDDataset
+        Uncorrected complex States E1/E2 FIDs, normalized per excitation phase.
+    """
+    from ..processing.phase_cycle import select_coherence
+
+    if isinstance(procno, bool) or not isinstance(procno, Integral) or procno < 1:
+        raise ValueError("procno must be a positive integer")
+    return select_coherence(
+        read_paired_fids(path, procno=procno, allow_partial=allow_partial),
+        coherence_order=coherence_order,
     )

@@ -101,8 +101,10 @@ def _automatic_shear(dataset, plan, experiment, spin, coherence_order):
         raise ValueError(
             "coherence_order conflicts with the selected shearing experiment"
         )
+    selection = dataset.meta.get("acquisition", {}).get("multiplex_spam")
     if order is None:
-        order = 3 if coherence_order is None else coherence_order
+        selected_order = selection["coherence_order"] if selection is not None else 3
+        order = selected_order if coherence_order is None else coherence_order
     spin = _shear_spin(dataset, plan, spin, required=kind != "zqtrosy")
     if kind == "zqtrosy":
         ratio, scale = -1.0, 1.0
@@ -125,13 +127,9 @@ def _automatic_shear(dataset, plan, experiment, spin, coherence_order):
     else:
         order, ratio, scale = _mqmas_geometry(spin, order)
         kind = f"{order}qmas"
-    selection = dataset.meta.get("acquisition", {}).get("multiplex_spam")
-    if selection is not None and (
-        order != selection["coherence_order"]
-        or spin != (selection["phase_count"] - 1) / 4
-    ):
+    if selection is not None and order != selection["coherence_order"]:
         raise ValueError(
-            "XFSHEAR spin and coherence order must match the Multiplex SPAM reconstruction"
+            "XFSHEAR coherence order must match the Multiplex SPAM reconstruction"
         )
     return kind, spin, order, ratio, scale
 

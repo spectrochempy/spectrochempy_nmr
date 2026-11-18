@@ -34,7 +34,7 @@ __all__ = ["apply_reader_metadata_options"]
 
 
 def complete_states_metadata(dataset):
-    """Complete physical States descriptors at the reader boundary."""
+    """Complete physical FID descriptors at the reader boundary."""
     from collections.abc import Mapping
     from numbers import Real
 
@@ -44,6 +44,7 @@ def complete_states_metadata(dataset):
         "states",
         "states-tppi",
         "echo-antiecho-stored-2d",
+        "paired-phase-cycle-2d",
     ):
         return dataset
     meta = dataset.meta
