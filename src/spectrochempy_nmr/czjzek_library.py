@@ -142,6 +142,9 @@ class CzjzekRFLibrary:
 
     def simulate(self, distribution, *, samples=128, seed=0):
         """Evaluate the distribution, calculating uncovered members directly."""
+        return self._simulate(distribution, samples=samples, seed=seed)[0]
+
+    def _simulate(self, distribution, *, samples, seed):
         if not isinstance(distribution, CzjzekDistribution):
             raise TypeError("distribution must be a CzjzekDistribution.")
         members = distribution.sample(samples, seed)
@@ -163,11 +166,13 @@ class CzjzekRFLibrary:
                 cq, eta, displacement[inside], members.weights[inside]
             )
 
-        for k in np.flatnonzero(~inside):
+        uncovered = np.flatnonzero(~inside)
+        for k in uncovered:
             profile += members.weights[k] * self._direct(
                 members.cq_hz[k], members.eta[k], members.shift_hz[k]
             )
-        return pulsar._as_dataset(self._axis, profile, "Czjzek RF library spectrum")
+        spectrum = pulsar._as_dataset(self._axis, profile, "Czjzek RF library spectrum")
+        return spectrum, uncovered.size
 
     def _interpolate(self, cq, eta, displacements, populations):
         i = np.searchsorted(self._cq, cq, side="right").clip(1, self._cq.size - 1) - 1
@@ -244,6 +249,18 @@ class CzjzekRFLibrary:
             [self._scan_metadata(scan), [weight.real, weight.imag]]
             for scan, weight in zip(scans, coefficients, strict=True)
         ]
+
+    def _validate_fit_model(self, events, settings):
+        requested = CzjzekRFLibrary(
+            events, self._cq, self._eta, self._shift_hz, self._bins, settings
+        )
+        if (
+            requested._settings != self._settings
+            or requested._event_metadata() != self._event_metadata()
+        ):
+            raise ValueError(
+                "The RF library does not match the fit simulation settings or sequence."
+            )
 
     def _metadata(self):
         return dict(

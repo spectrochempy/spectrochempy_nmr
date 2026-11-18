@@ -686,6 +686,10 @@ def __getattr__(name: str):
         _check_nmrglue_installation()
     if name in {"pulsar", "czjzek", "czjzek_library", "mqmas_inversion"}:
         return import_module(f".{name}", __name__)
+    if name in {"CzjzekFitResult", "CzjzekFitStage", "fit_czjzek"}:
+        from . import czjzek_fit
+
+        return getattr(czjzek_fit, name)
     if name == "CzjzekRFLibrary":
         from .czjzek_library import CzjzekRFLibrary
 
@@ -773,9 +777,12 @@ def __dir__() -> list[str]:
         "mqmas_inversion",
         "czjzek",
         "CzjzekDistribution",
+        "CzjzekFitResult",
+        "CzjzekFitStage",
         "CzjzekRFLibrary",
         "CzjzekSamples",
         "simulate_czjzek",
+        "fit_czjzek",
         "apk",
         "autophase",
         "process_jeol_cosy_magnitude",
