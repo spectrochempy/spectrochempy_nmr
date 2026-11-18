@@ -12,6 +12,7 @@ Unreleased
   optional arithmetic, nested loops and per-channel RF/phase/offset settings.
   Programs support simultaneous pulses on two nuclei and indirect-delay
   increments for complex States acquisitions, with source-line diagnostics.
+  (`#157 <https://github.com/spectrochempy/spectrochempy_nmr/pull/157>`_)
 
 * Connect fast RF-weighted MQMAS responses to population inversion with
   ``mqmas_inversion.mqmas_response()``. Cache RF profiles across parameter
