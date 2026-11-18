@@ -30,6 +30,10 @@
 # the inner-satellite coefficients from the observed spin. The archived
 # example uses ⁸⁷Rb; ``spin`` need only be supplied if metadata and isotope
 # lookup cannot establish it.
+# The observed F2 nucleus determines this spin and the sheared F1 reference.
+# An unused default isotope in the indirect header (for example ``1H`` in
+# RbNO₃/15) does not constrain the STMAS geometry. The acquired indirect time
+# increment still determines the F1 frequency spacing.
 # The double-quantum filter selects the transfer pathway, and States
 # phase cycling records two adjacent FIDs for each indirect increment.
 # The archived experiment RbNO₃/15 has 111 acquired traces in 128 stored

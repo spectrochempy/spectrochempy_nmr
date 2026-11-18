@@ -101,6 +101,34 @@ def test_stmas_spin_table_is_resolved_from_isotope(raw, nucleus, ratio, scale):
     assert result.meta.mqmas_shearing["scale_divisor"] == pytest.approx(scale)
 
 
+@pytest.mark.parametrize("mode", ["states", "states-tppi", "echo-antiecho"])
+@pytest.mark.parametrize("indirect_nucleus", ["1H", "15N", "off", None])
+def test_stmas_ignores_unused_indirect_isotope(raw, mode, indirect_nucleus):
+    expected = scp.nmr.Experiment(_phase(_encoded(raw, mode))).xfshear(
+        size=32, experiment="STMAS", f1_shift=-0.1
+    )
+    raw.meta.acquisition["nuclei"] = (indirect_nucleus, "27Al")
+    raw.meta.acquisition["nuclear_spin"] = (0.5, 2.5)
+    raw.meta.acquisition["acquisition_frequency_mhz"] = (500.0, 130.0)
+    raw.meta.acquisition["reference_frequency_mhz"] = (499.99, 129.999)
+    encoded = _encoded(raw, mode)
+    before = deepcopy(dict(encoded.meta.acquisition))
+    actual = scp.nmr.Experiment(_phase(encoded)).xfshear(
+        size=32, experiment="STMAS", f1_shift=-0.1
+    )
+    np.testing.assert_array_equal(actual.data, expected.data)
+    np.testing.assert_array_equal(actual.x.data, expected.x.data)
+    np.testing.assert_array_equal(actual.y.data, expected.y.data)
+    assert actual.meta.mqmas_shearing["spin"] == 2.5
+    assert dict(encoded.meta.acquisition) == before
+
+
+def test_stmas_still_rejects_an_unsuitable_observed_spin(raw):
+    raw.meta.acquisition["nuclei"] = ("27Al", "1H")
+    with pytest.raises(ValueError, match="STMAS requires a half-integer spin"):
+        scp.nmr.Experiment(_phase(raw)).xfshear(size=32, experiment="STMAS")
+
+
 def test_missing_isotope_uses_metadata_or_explicit_spin(raw):
     raw.meta.acquisition["nuclei"] = ("unknown", "unknown")
     phased = _phase(raw)
