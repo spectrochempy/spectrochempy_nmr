@@ -40,7 +40,11 @@ def complete_states_metadata(dataset):
 
     from ..processing.bruker_filter import imported_bruker_filter
 
-    if dataset.ndim != 3 or dataset.meta.get("quadrature_mode") != "states":
+    if dataset.ndim != 3 or dataset.meta.get("quadrature_mode") not in (
+        "states",
+        "states-tppi",
+        "echo-antiecho-stored-2d",
+    ):
         return dataset
     meta = dataset.meta
     acquisition = dict(meta.get("acquisition", {}))

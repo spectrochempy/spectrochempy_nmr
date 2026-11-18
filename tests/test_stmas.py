@@ -69,8 +69,15 @@ def test_stmas_removes_f2_dependent_f1_evolution(states_path):
     out = scp.nmr.Experiment(phased).stmas_shear(size=ny)
     iy, ix = ny // 2 + ky, nx // 2 + kx
     expected = np.zeros((ny, nx))
-    expected[iy, ix] = nx * ny
-    np.testing.assert_allclose(out.data, expected, atol=1e-10)
+    # The shared XFSHEAR path weights the first F1 sample by 1/2.
+    expected[:, ix] = -nx / 2
+    expected[iy, ix] += nx * ny
+    view = scp.nmr.Experiment(out)
+    assert out.shape == (2, ny, nx)
+    np.testing.assert_allclose(view.RR.data, expected, atol=1e-10)
+    assert np.max(np.abs(view.IR.data)) > 1
+    np.testing.assert_allclose(view.RI.data, 0, atol=1e-10)
+    np.testing.assert_allclose(view.II.data, 0, atol=1e-10)
     center = (carrier - sf) * 1e6 / sf
     f2_hz = kx * width / nx
     assert out.x.data[ix] == pytest.approx(center - f2_hz / sf)
@@ -92,10 +99,10 @@ def test_reader_does_not_select_experiment_or_spin(states_path, nucleus):
     raw = scp.nmr.read(path, use_tdeff=True, indirect_dwell="IN[0]")
     xf2 = scp.nmr.Experiment(raw).xf2(size=16, correct_digital_filter=False)
     phased = scp.nmr.Experiment(xf2).xf2p()
-    if nucleus in ("87Rb", "23Na"):
-        assert scp.nmr.Experiment(phased).stmas_shear(size=16).shape == (16, 16)
+    if nucleus in ("87Rb", "23Na", "27Al"):
+        assert scp.nmr.Experiment(phased).stmas_shear(size=16).shape == (2, 16, 16)
     else:
-        with pytest.raises(ValueError, match="known spin-3/2 nucleus"):
+        with pytest.raises(ValueError, match="pass spin="):
             scp.nmr.Experiment(phased).stmas_shear(size=16)
 
 
@@ -148,7 +155,8 @@ def test_stmas_uses_common_states_contract_and_survives_scp(
     final = extract_nmr_metadata(resumed.meta, ndim=resumed.ndim)
     assert final.normalized_interop
     assert final.domains == ("frequency", "frequency")
-    assert final.encoding == ("complex", "real")
+    assert final.iscomplex == (True, True)
+    assert resumed.shape == (2, 32, 16)
     assert final.nuclei == ("87Rb", "87Rb")
     assert scp.nmr.Experiment(resumed).source_kind == "processed_2d"
 
@@ -207,7 +215,7 @@ def test_stmas_accepts_default_common_reader(tmp_path):
     mixed = scp.nmr.Experiment(raw).xf2(size=256)
     phased = scp.nmr.Experiment(mixed).xf2p()
     spectrum = scp.nmr.Experiment(phased).stmas_shear(size=16)
-    assert spectrum.shape == (16, 256)
+    assert spectrum.shape == (2, 16, 256)
     assert np.isfinite(spectrum.data).all()
 
 
