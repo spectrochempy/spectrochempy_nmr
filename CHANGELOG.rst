@@ -15,6 +15,7 @@ Unreleased
   normalized observed isotope instead. The DQF shear, complex F1 output and
   referencing are unchanged. Normalized States data can be processed without
   any reader-specific STMAS marker.
+  (`#147 <https://github.com/spectrochempy/spectrochempy_nmr/pull/147>`_)
 
 * Process MQMAS States data with ``Experiment.xf2()``, ``xf2p()`` and
   ``xfshear()`` using physical acquisition descriptors instead of a Bruker
