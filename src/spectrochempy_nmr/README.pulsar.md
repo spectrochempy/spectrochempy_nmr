@@ -948,6 +948,42 @@ Within the grids, interpolation can bias fitted distribution
 widths. Check the direct residual and the stability of the refined fit.
 The two 48 × 32 planes in the example contain about 96 MiB of complex data.
 
+Use `fit_czjzek` to initialize a bounded fit with the library and refine
+it with direct RF simulation. The objective receives the current
+parameters and a simulator for one Czjzek distribution. Use the same
+objective to include processing, weights or broadening in both stages.
+
+```python
+import numpy as np
+from spectrochempy_nmr import fit_czjzek
+
+def objective(parameters, simulate):
+    sigma_khz, = parameters
+    distribution = CzjzekDistribution(sigma_khz * 1000, 2.923e6, 0.37, shift_hz=325)
+    residual = simulate(distribution).data - measured.data
+    return np.vdot(residual, residual).real
+
+fit = fit_czjzek(
+    objective, [180], [(100, 350)], events=events, library=library,
+    samples=128, seed=17, **settings,
+)
+sigma_khz, = fit.direct.optimization.x
+```
+
+Here `measured` is a complex spectrum on the simulation grid. Omit
+`library` to fit directly from the supplied starting parameters.
+`fit.direct` and, when available, `fit.interpolated` report the SciPy
+result, elapsed time and exact RF propagation count for each stage.
+Add library construction or loading time when comparing total costs.
+
+The interpolated starting point can change which solution the direct
+optimizer reaches. On PBG1 at 32 Sobol points per component, both direct
+fits gave similar residuals in the fitted region, with different dispersion
+and shift estimates. For parameter inference, compare the direct optima
+from different starting points and check stability as the sample count
+increases. Where available, use bands excluded from the fit to assess
+prediction quality.
+
 ### PBG1 extended Czjzek comparison
 
 ```sh
