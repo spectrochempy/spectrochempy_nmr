@@ -7,6 +7,11 @@ distribution. The sections below describe changes in each plugin release.
 Unreleased
 ----------
 
+* Add experimental MQMAS inversion on isotropic shift and quadrupolar-product
+  grids through ``scp.nmr.mqmas_inversion``. Average PULSAR kernels over
+  asymmetry, fit MQMAS with an optional shared-population MAS spectrum, and
+  profile local populations across candidate MAS widths.
+
 * Unify STMAS with the complete MQMAS XFSHEAR reconstruction. Supply
   ``ratio`` and ``f1_scale`` together to ``Experiment.xfshear()`` for explicit
   physical coefficients. ``experiment="3QMAS"``, ``"5QMAS"``, ``"STMAS"``
