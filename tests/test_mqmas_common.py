@@ -269,7 +269,7 @@ def test_invalid_normalized_delay_refuses_before_processing(states_path, delay):
     np.testing.assert_array_equal(source.data, before)
 
 
-@pytest.mark.parametrize("legacy", [None, "contradictory"])
+@pytest.mark.parametrize("legacy", [None, "contradictory", "opaque"])
 def test_final_spectrum_uses_normalized_physical_metadata(states_path, legacy):
     from spectrochempy_nmr.nmr_metadata import extract_nmr_metadata
 
@@ -279,12 +279,23 @@ def test_final_spectrum_uses_normalized_physical_metadata(states_path, legacy):
         source.meta.data.pop("nuc1", None)
         source.meta.data.pop("sfo1", None)
         source.meta.data.pop("sw_h", None)
+    elif legacy == "opaque":
+        for key in ("nuc1", "sfo1", "sw_h"):
+            source.meta[key] = [None, "opaque legacy value", "opaque legacy value"]
     else:
         source.meta.nuc1 = [None, "1H", "1H"]
         source.meta.sfo1 = [None, 99 * scp.ur.MHz, 99 * scp.ur.MHz]
         source.meta.sw_h = [None, 99 * scp.ur.Hz, 99 * scp.ur.Hz]
-    for stage in (source, *_workflow(source)):
+    stages = (source, *_workflow(source))
+    for stage in stages:
         physical = extract_nmr_metadata(stage.meta, ndim=stage.ndim)
         assert physical.nuclei == ("27Al", "27Al")
         assert physical.spectrometer_freq_mhz == (125, 125)
         assert physical.spectral_width_hz == (1000, 2000)
+    if legacy == "opaque":
+        for got, ref in zip(
+            stages[1:], _workflow(scp.nmr.read(states_path)), strict=True
+        ):
+            np.testing.assert_array_equal(got.data, ref.data)
+            np.testing.assert_array_equal(got.x.data, ref.x.data)
+            np.testing.assert_array_equal(got.y.data, ref.y.data)

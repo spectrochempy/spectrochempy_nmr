@@ -179,6 +179,20 @@ def _physical_metadata(meta):
     return physical
 
 
+def _normalized_display_metadata(meta, acquisition):
+    """Read legacy display fields only where normalized descriptors are absent."""
+    display = meta.copy()
+    display.readonly = False
+    for physical, legacy in (
+        ("nuclei", "nuc1"),
+        ("acquisition_frequency_mhz", "sfo1"),
+        ("spectral_width_hz", "sw_h"),
+    ):
+        if acquisition.get(physical):
+            display[legacy] = None
+    return extract_topspin_metadata(display)
+
+
 def extract_topspin_metadata(meta) -> NMRMetadata:
     """
     Extract :class:`NMRMetadata` from a TopSpin metadata object.
@@ -809,7 +823,7 @@ def extract_nmr_metadata(meta, *, ndim=None) -> NMRMetadata:
                 domains = tuple(
                     "frequency" if flag else "time" for flag in meta.isfreq[1:]
                 )
-            display = extract_topspin_metadata(meta)
+            display = _normalized_display_metadata(meta, acquisition)
             return NMRMetadata(
                 normalized_interop=True,
                 ndim=3,
@@ -838,7 +852,7 @@ def extract_nmr_metadata(meta, *, ndim=None) -> NMRMetadata:
             and meta.get("normalization_state") == "storage-normalized"
         ):
             domains = ("frequency", "frequency")
-            display = extract_topspin_metadata(meta)
+            display = _normalized_display_metadata(meta, acquisition)
             return replace(
                 display,
                 normalized_interop=True,
