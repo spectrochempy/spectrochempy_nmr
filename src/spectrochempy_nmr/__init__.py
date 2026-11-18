@@ -108,7 +108,11 @@ def _read_interop(
 
     stored = interop.read(path, profile=profile, **(read_options or {}))
     normalized = interop.normalize(stored, **(normalize_options or {}))
-    return from_interop(normalized, profile=conversion_profile)
+    from .readers._metadata import complete_states_metadata
+
+    return complete_states_metadata(
+        from_interop(normalized, profile=conversion_profile)
+    )
 
 
 def _resolve_read():
@@ -154,6 +158,18 @@ def _resolve_read():
         read_simpson : Read SIMPSON data.
         """
         protocol = kwargs.get("protocol")
+        if (
+            protocol is None
+            and len(paths) == 1
+            and isinstance(paths[0], (str, PathLike))
+            and Path(paths[0]).suffix.lower() == ".scp"
+            and not Path(paths[0]).is_dir()
+        ):
+            import spectrochempy as scp
+
+            from .readers._metadata import complete_states_metadata
+
+            return complete_states_metadata(scp.read(paths[0], **kwargs))
         if protocol == "csdf" or (
             protocol is None
             and paths

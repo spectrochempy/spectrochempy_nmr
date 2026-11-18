@@ -107,6 +107,9 @@ def states_fids(stored, branches, *, kind, selection, operation, scale, sign, hi
             "nuc1": [None, nucleus, nucleus],
         }
     )
+    from ._metadata import complete_states_metadata
+
+    complete_states_metadata(dataset)
     dataset.filename = stored.source
     dataset.history = history
     return dataset

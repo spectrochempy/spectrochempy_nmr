@@ -19,6 +19,12 @@ accessors for component extraction.
 For the Bruker States MQMAS workflow, see :doc:`/userguide/mqmas`.
 Use ``Experiment.xf2()`` to transform F2, ``Experiment.xf2p()`` to apply
 the common phase, and ``Experiment.xfshear()`` to produce the final spectrum.
+These operations consume normalized States components, physical acquisition
+widths and point counts, frequency references, the observed isotope and the
+recorded digital-filter delay. Missing physical references are rejected;
+processing does not reread the source parameters or choose a kernel from the
+file profile. Read native SCP saves through ``scp.nmr.read()`` to complete
+missing physical descriptors in older States saves at the reader boundary.
 For spin-3/2 DQF-STMAS, use ``Experiment.stmas_shear()`` after the common
 phase. See :doc:`/userguide/stmas`.
 For polynomial baseline correction along F1 or F2 and numbered trace

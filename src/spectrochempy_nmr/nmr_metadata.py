@@ -179,6 +179,20 @@ def _physical_metadata(meta):
     return physical
 
 
+def _normalized_display_metadata(meta, acquisition):
+    """Read legacy display fields only where normalized descriptors are absent."""
+    display = meta.copy()
+    display.readonly = False
+    for physical, legacy in (
+        ("nuclei", "nuc1"),
+        ("acquisition_frequency_mhz", "sfo1"),
+        ("spectral_width_hz", "sw_h"),
+    ):
+        if acquisition.get(physical):
+            display[legacy] = None
+    return extract_topspin_metadata(display)
+
+
 def extract_topspin_metadata(meta) -> NMRMetadata:
     """
     Extract :class:`NMRMetadata` from a TopSpin metadata object.
@@ -809,16 +823,19 @@ def extract_nmr_metadata(meta, *, ndim=None) -> NMRMetadata:
                 domains = tuple(
                     "frequency" if flag else "time" for flag in meta.isfreq[1:]
                 )
-            display = extract_topspin_metadata(meta)
+            display = _normalized_display_metadata(meta, acquisition)
             return NMRMetadata(
                 normalized_interop=True,
                 ndim=3,
                 domains=domains,
                 source_kind=infer_source_kind(2, domains),
                 encoding=(quadrature.removesuffix("-stored-2d").upper(), "DQD"),
-                nuclei=display.nuclei,
+                nuclei=tuple(acquisition.get("nuclei") or ()) or display.nuclei,
                 pulse_program=display.pulse_program,
-                spectrometer_freq_mhz=display.spectrometer_freq_mhz,
+                spectrometer_freq_mhz=tuple(
+                    acquisition.get("acquisition_frequency_mhz") or ()
+                )
+                or display.spectrometer_freq_mhz,
                 iscomplex=(True, True),
                 spectral_width_hz=tuple(widths)
                 if isinstance(widths, (tuple, list))
@@ -835,7 +852,7 @@ def extract_nmr_metadata(meta, *, ndim=None) -> NMRMetadata:
             and meta.get("normalization_state") == "storage-normalized"
         ):
             domains = ("frequency", "frequency")
-            display = extract_topspin_metadata(meta)
+            display = _normalized_display_metadata(meta, acquisition)
             return replace(
                 display,
                 normalized_interop=True,
@@ -843,9 +860,13 @@ def extract_nmr_metadata(meta, *, ndim=None) -> NMRMetadata:
                 source_kind=infer_source_kind(2, domains),
                 encoding=display.encoding or ("complex", "complex"),
                 iscomplex=display.iscomplex or (True, True),
-                spectrometer_freq_mhz=display.spectrometer_freq_mhz
-                or tuple(acquisition.get("acquisition_frequency_mhz", ()))
-                or None,
+                spectral_width_hz=tuple(acquisition.get("spectral_width_hz") or ())
+                or display.spectral_width_hz,
+                nuclei=tuple(acquisition.get("nuclei") or ()) or display.nuclei,
+                spectrometer_freq_mhz=tuple(
+                    acquisition.get("acquisition_frequency_mhz") or ()
+                )
+                or display.spectrometer_freq_mhz,
             )
         if (
             ndim == 2

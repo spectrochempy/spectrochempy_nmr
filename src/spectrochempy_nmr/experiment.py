@@ -781,7 +781,7 @@ class Experiment:
         echo_window=None,
         mqecho=None,
     ):
-        """Transform F2 of a calibrated Bruker States MQMAS or STMAS acquisition.
+        """Transform F2 of a calibrated normalized States MQMAS or STMAS acquisition.
 
         Supply the F2 FFT size and optionally the number of acquired F2
         points to retain. By default, compensate the digital group delay
@@ -799,7 +799,7 @@ class Experiment:
             Number of acquired complex F2 samples to retain. By default, retain the
             available samples up to the FFT size.
         correct_digital_filter : bool
-            Compensate the Bruker digital group delay on the F2 frequency grid.
+            Compensate the recorded digital group delay on the F2 frequency grid.
         echo_window : tuple of float, optional
             Shifted Gaussian window as (slope, sigma), with sigma in seconds.
         mqecho : tuple of float, optional
@@ -814,7 +814,7 @@ class Experiment:
         from .processing.mqmas import xf2  # noqa: PLC0415
 
         if self.is_multi_dataset:
-            raise ValueError("XF2 requires a single Bruker acquisition")
+            raise ValueError("XF2 requires a single States acquisition")
         return xf2(
             self.dataset,
             size=size,
@@ -927,7 +927,7 @@ class Experiment:
             Number of acquired complex F2 samples to retain. By default, retain the
             available samples up to the FFT size.
         correct_digital_filter : bool
-            Compensate the Bruker digital group delay on the F2 frequency grid.
+            Compensate the recorded digital group delay on the F2 frequency grid.
         echo_window : tuple of float, optional
             Shifted Gaussian window as (slope, sigma), with sigma in seconds.
         mqecho : tuple of float, optional
@@ -942,7 +942,7 @@ class Experiment:
         from .processing.mqmas import prepare_xfshear  # noqa: PLC0415
 
         if self.is_multi_dataset:
-            raise ValueError("XFSHEAR requires a single Bruker acquisition")
+            raise ValueError("XFSHEAR requires a single States acquisition")
         return prepare_xfshear(
             self.dataset,
             size=size,

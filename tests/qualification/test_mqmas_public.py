@@ -134,7 +134,11 @@ def test_xf2_without_decimation_has_zero_group_delay(echo_window, stored_delay):
     raw = scp.nmr.read(ser, local_only=True)
     raw.meta.readonly = False
     acquisition = dict(raw.meta.acquisition)
-    acquisition["digital_filter"] = {"applied": False}
+    acquisition["digital_filter"] = {
+        "applied": False,
+        "group_delay_points": 0.0,
+        "delay_source": "no decimation",
+    }
     raw.meta.acquisition = acquisition
     source = dict(raw.meta.source_metadata)
     source["acqus"] = {**source["acqus"], "DECIM": 1, "GRPDLY": stored_delay}
@@ -186,7 +190,7 @@ def test_invalid_xf2_reference_is_rejected_before_inplace_fft():
         pytest.skip("requires the PST-5 SER")
     raw = scp.nmr.read(ser, local_only=True)[..., :128]
     raw.meta.readonly = False
-    raw.meta.sf[-1] *= 0
+    raw.meta.acquisition["reference_frequency_mhz"] = (None, 0.0)
     samples = raw.data.copy()
     with pytest.raises(ValueError, match="finite positive F2 reference"):
         raw.fft(dim="x", size=256, convention="topspin-xf2", inplace=True)
