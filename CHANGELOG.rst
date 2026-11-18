@@ -22,6 +22,7 @@ Unreleased
   channels containing RR/RI/IR/II, with the same Hilbert reconstruction,
   first-point weighting and central RR correction as MQMAS. Extract a
   real component or build a magnitude view before plotting.
+  (`#148 <https://github.com/spectrochempy/spectrochempy_nmr/pull/148>`_)
 
 * Read uniformly sampled States pairs for STMAS through ``scp.nmr.read()``
   with an explicit ``indirect_dwell`` in seconds or from ``IN[0]`` and optional
