@@ -7,6 +7,14 @@ distribution. The sections below describe changes in each plugin release.
 Unreleased
 ----------
 
+* Read Multiplex SPAM phase cycles with ``read(..., phase_cycle="paired")``
+  and select 3Q/5Q through ``Experiment.select_coherence()`` before the common
+  XF2, phase and XFSHEAR workflow. The reader retains every complete acquired
+  cycle without projecting a coherence; selection uses physical descriptors,
+  independent of pulse-program names and archived vendor parameters.
+  Automatic shearing inherits the selected order. ``read_multiplex_spam()``
+  remains a compatibility shortcut with unchanged numerical output.
+
 * Unify STMAS with the complete MQMAS XFSHEAR reconstruction. Supply
   ``ratio`` and ``f1_scale`` together to ``Experiment.xfshear()`` for explicit
   physical coefficients. ``experiment="3QMAS"``, ``"5QMAS"``, ``"STMAS"``

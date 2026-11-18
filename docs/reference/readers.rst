@@ -20,6 +20,12 @@ format. See :doc:`/userguide/reading_data` for supported inputs and examples.
    read_simpson
    read_csdf
 
+For Multiplex SPAM, prefer ``read(path, phase_cycle="paired")`` followed by
+``Experiment(raw).select_coherence()``. Reading retains acquired phases;
+selection and the common XF2 workflow perform reconstruction.
+``read_multiplex_spam()`` is a compatibility shortcut. See
+:doc:`/userguide/multiplex_spam`.
+
 JEOL 2D acquisition branches
 ~~~~~~~~~~~~~~~~~~~~~~~~~~~~
 

@@ -747,6 +747,13 @@ def read_topspin(*paths, **kwargs):
     quadrature : {"qf", "states", "states-tppi", "echo-antiecho"}, optional
         Supply the F1 acquisition mode for a SER with missing or undefined
         acquisition and processing mode parameters.
+    phase_cycle : {"paired"}, optional
+        Read uniform excitation phases and adjacent 0/180 SPAM scans without
+        selecting a coherence. Use ``Experiment.select_coherence()`` next.
+        F1 dwell defaults to IN[0]. Qualified layouts contain 7 or 11 phases.
+    allow_partial : bool, optional
+        With ``phase_cycle="paired"``, explicitly discard one incomplete cycle
+        after the declared increments. Counts are recorded in acquisition metadata.
     indirect_dwell : float or {"IN[0]"}, optional
         Calibrate the F1 time step of a uniform States SER, in seconds.
         ``"IN[0]"`` explicitly selects the first acquisition increment.
@@ -803,6 +810,28 @@ def read_topspin(*paths, **kwargs):
     """
     if not isinstance(kwargs.get("use_tdeff", False), bool):
         raise TypeError("use_tdeff must be a boolean")
+    phase_cycle = kwargs.get("phase_cycle")
+    if phase_cycle is not None:
+        if phase_cycle != "paired":
+            raise ValueError("phase_cycle must be 'paired'")
+        if any(
+            kwargs.get(key)
+            for key in (
+                "processed",
+                "use_tdeff",
+                "use_list",
+                "quadrature",
+                "remove_dc_offset",
+                "remove_digital_filter",
+            )
+        ):
+            raise ValueError(
+                "Read paired phase cycles uncorrected without quadrature or pair selection"
+            )
+    if not isinstance(kwargs.get("allow_partial", False), bool):
+        raise TypeError("allow_partial must be a boolean")
+    if kwargs.get("allow_partial") and phase_cycle is None:
+        raise ValueError("allow_partial requires phase_cycle='paired'")
     dwell = kwargs.get("indirect_dwell")
     if dwell is not None and not (
         isinstance(dwell, str)
@@ -1343,6 +1372,23 @@ def _bruker_nus_schedule(directory, indirect, trace_count, *, paired):
 def _read_topspin(*args, **kwargs):
     _check_nmrglue_installation()
     dataset, path = args
+    if kwargs.get("phase_cycle") == "paired":
+        if path.name != "ser":
+            raise SpectroChemPyError("Paired phase-cycle reading requires a raw SER")
+        from .multiplex_spam import read_paired_fids
+
+        try:
+            dataset = read_paired_fids(
+                path,
+                procno=kwargs.get("procno", "1"),
+                allow_partial=kwargs.get("allow_partial", False),
+                indirect_dwell=kwargs.get("indirect_dwell"),
+            )
+        except (ValueError, FileNotFoundError) as exc:
+            raise SpectroChemPyError(str(exc)) from exc
+        apply_reader_metadata_options(dataset, kwargs, default_origin="topspin")
+        dataset.meta.readonly = True
+        return dataset
     if kwargs.get("indirect_dwell") is not None or kwargs.get("use_tdeff", False):
         if path.name != "ser":
             raise SpectroChemPyError("States pair selection requires a raw SER")

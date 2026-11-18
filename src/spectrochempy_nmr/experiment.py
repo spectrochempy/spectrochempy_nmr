@@ -772,6 +772,32 @@ class Experiment:
             self.dataset, self.rsr, reference_row, per_row, exclude, options
         )
 
+    def select_coherence(self, coherence_order=3):
+        """Select 3Q or 5Q from paired phase-cycle FIDs read with ``read()``.
+
+        The excitation phases and 0/180 scan pairs are projected onto the
+        requested harmonic. The returned complex States E1/E2 dataset is
+        normalized per excitation phase and supports the common XF2 workflow.
+        The input phase-cycle dataset remains available for other selections.
+
+        Parameters
+        ----------
+        coherence_order : int
+            3Q (default), or 5Q for eleven excitation phases.
+
+        Returns
+        -------
+        NDDataset
+            Uncorrected time-domain States E1/E2 FIDs.
+        """
+        from .processing.phase_cycle import select_coherence
+
+        if self.is_multi_dataset:
+            raise ValueError(
+                "select_coherence requires a single phase-cycle acquisition"
+            )
+        return select_coherence(self.dataset, coherence_order=coherence_order)
+
     def xf2(
         self,
         *,
@@ -1142,6 +1168,10 @@ class Experiment:
         """
 
         ds = self._dataset
+        if ds.meta.get("quadrature_mode") == "paired-phase-cycle-2d":
+            raise ValueError(
+                "Call Experiment.select_coherence() before processing phase-cycle FIDs"
+            )
         if ds.meta.get("bruker_nus") is not None:
             raise NotImplementedError(
                 "Bruker NUS F1 requires schedule-aware reconstruction"

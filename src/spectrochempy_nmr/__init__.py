@@ -426,8 +426,10 @@ def _resolve_topspin_directory_target(filename, **kwargs):
         return None
     if filename.name in _VALID_TOPSPIN_FILENAMES:
         return None
-    raw_states = kwargs.get("indirect_dwell") is not None or kwargs.get(
-        "use_tdeff", False
+    raw_states = (
+        kwargs.get("phase_cycle") is not None
+        or kwargs.get("indirect_dwell") is not None
+        or kwargs.get("use_tdeff", False)
     )
 
     if (

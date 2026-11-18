@@ -10,9 +10,14 @@ from nmrglue import bruker
 @pytest.fixture
 def spam_ser(tmp_path):
     """Two asymmetric phase harmonics, with complex and unequal SPAM scans."""
+    return make_spam_ser(tmp_path)
+
+
+def make_spam_ser(tmp_path, count=11):
+    """Write a paired phase cycle with independent harmonic amplitudes."""
     a = np.array([[32 + 14j, 51 - 9j], [15 - 31j, -10 + 4j]])
     b = np.array([[8 + 3j, -4 + 11j], [5 - 2j, 9 + 10j]])
-    theta = 2 * np.pi * np.arange(11) / 11
+    theta = 2 * np.pi * np.arange(count) / count
     plus = 2 * (
         a[:, None, :] * np.exp(-3j * theta[None, :, None])
         + b[:, None, :] * np.exp(-5j * theta[None, :, None])
@@ -22,20 +27,20 @@ def spam_ser(tmp_path):
     (tmp_path / "pdata/1").mkdir(parents=True)
     for name, params in {
         "acqus": {
-            "PULPROG": "MQMultiplex52",
+            "PULPROG": "MQMultiplex52" if count == 11 else "MQMultiplex32",
             "PARMODE": 2,
             "AQ_mod": 1,
             "TD": 4,
             "IN": [0.0001, 0.0002],
             "SW_h": 50000.0,
             "SFO1": 104.3,
-            "NUC1": "27Al",
+            "NUC1": "27Al" if count == 11 else "87Rb",
             "GRPDLY": 2.0,
             "BYTORDA": 1,
             "DTYPA": 2,
         },
         "acqu2s": {"TD": 2},
-        "acqu3s": {"TD": 22},
+        "acqu3s": {"TD": 2 * count},
         "pdata/1/procs": {"SF": 104.29},
     }.items():
         bruker.write_jcamp(
@@ -43,10 +48,11 @@ def spam_ser(tmp_path):
         )
     # Float64 storage with a 1024-byte stride. Nonzero padding words
     # distinguish the physical complex points from the stored row length.
-    words = np.ones((45, 128), dtype=">f8")
-    words[:44, :4:2] = traces.reshape(44, 2).real
-    words[:44, 1:4:2] = traces.reshape(44, 2).imag
-    words[44, :4] = 2
+    rows = 4 * count
+    words = np.ones((rows + 1, 128), dtype=">f8")
+    words[:rows, :4:2] = traces.reshape(rows, 2).real
+    words[:rows, 1:4:2] = traces.reshape(rows, 2).imag
+    words[rows, :4] = 2
     words.tofile(tmp_path / "ser")
     return tmp_path, a, b
 
@@ -83,5 +89,7 @@ def test_msm_branches_and_coherence_alias_guard(spam_ser):
 
     acqus = path / "acqus"
     acqus.write_text(acqus.read_text().replace("27Al", "87Rb"))
-    with pytest.raises(ValueError, match="does not match MQMultiplex52"):
-        read(path, allow_partial=True)
+    # Oversampling is a physical layout, independent of the pulse-program name.
+    rb = read(path, allow_partial=True)
+    np.testing.assert_allclose(rb.data, three.data)
+    assert scp.nmr.Experiment(rb).nuclei == ("87Rb", "87Rb")
