@@ -261,6 +261,13 @@ def test_qsim_pknl_uses_the_fractional_delay_on_the_final_fft_grid(delay, size):
 def _tppi_fid():
     from copy import copy
 
+    from spectrochempy_nmr.processing.fft_validation import _require_fft_prevalidation
+
+    try:
+        _require_fft_prevalidation()
+    except NotImplementedError as exc:
+        pytest.skip(str(exc))
+
     source = _normalized(
         np.arange(32).reshape(4, 8) + 1j * np.arange(32, 64).reshape(4, 8)
     )
