@@ -310,15 +310,16 @@ def _from_2d(result, data):
             == tuple("complex" if dim == "F2" else "real" for dim in dimensions)
         )
         and float_components
-        and (encoding, branches)
-        in (
-            (("real", "complex"), ("rr", "ri")),
-            (("complex", "real"), ("rr", "ir")),
-        )
+        and encoding in (("real", "complex"), ("complex", "real"))
+        and len(branches) == 2
+        and set(branches) == ({"rr", "ri"} if encoding[0] == "real" else {"rr", "ir"})
     ):
         complex_axis = dimensions[encoding.index("complex")]
         plane = np.empty(data.shape[1:], dtype=np.result_type(data.dtype, np.complex64))
-        plane.real, plane.imag = data
+        order = _component_order(
+            branches, ("rr", "ri") if encoding[0] == "real" else ("rr", "ir")
+        )
+        plane.real, plane.imag = data[list(order)]
     elif (
         not time_qf
         and stored_components
@@ -475,6 +476,46 @@ def _set_ser_fft_presentation(dataset, result):
     dataset.meta.pivot = [0] * dataset.ndim
 
 
+def _component_order(labels, expected):
+    labels = tuple(labels)
+    if len(labels) != len(expected) or set(labels) != set(expected):
+        raise ValueError("Invalid normalized component labels")
+    return tuple(labels.index(name) for name in expected)
+
+
+def _normalize_states_components(dataset):
+    acquisition = dataset.meta.get("acquisition", {})
+    transform = acquisition.get("states_fft_input_transform")
+    if transform is None:
+        return dataset
+    if transform != "conjugate-and-negate-second-branch":
+        raise ValueError("Unsupported normalized States component arrangement")
+    if dataset.meta.get("quadrature_mode") not in ("states", "states-tppi"):
+        return dataset
+    result = dataset.copy()
+    result.meta.readonly = False
+    result.data = result.data.conj()
+    result.data[1] *= -1
+    result.meta.acquisition["states_fft_input_transform"] = None
+    result.meta.applied_operations = (
+        *result.meta.get("applied_operations", ()),
+        {
+            "name": "normalize-indirect-quadrature-components",
+            "stage": "quadrature-normalization",
+            "input_dimensions": ("channels", "F1", "F2"),
+            "output_dimensions": ("channels", "F1", "F2"),
+            "axis": "channels",
+            "scale": None,
+            "conjugation": "conjugate",
+            "sign": (1, -1),
+            "permutation": None,
+            "evidence": "declared input component convention",
+        },
+    )
+    result.meta.readonly = dataset.meta.readonly
+    return result
+
+
 def _from_states(result, data, profile):
     """Preserve E1/E2 in the explicitly declared States-family profile."""
     mode = "States-TPPI" if profile == "states-tppi" else "States"
@@ -484,7 +525,8 @@ def _from_states(result, data, profile):
         or tuple(result.dimensions) != ("channels", "F1", "F2")
         or tuple(result.domains) != ("time", "time")
         or tuple(result.encoding) != ("complex", "complex")
-        or tuple(result.branch_order) != ("rr", "ri", "ir", "ii")
+        or set(result.branch_order) != {"rr", "ri", "ir", "ii"}
+        or len(result.branch_order) != 4
         or result.quadrature_mode != "stored-components-2d"
         or result.normalization_state != "storage-normalized"
         or not isinstance(channel_axis, (int, np.integer))
@@ -510,6 +552,7 @@ def _from_states(result, data, profile):
 
         _require_fft_prevalidation()
 
+    data = data[list(_component_order(result.branch_order, ("rr", "ri", "ir", "ii")))]
     channels = np.empty(
         (2, *data.shape[1:]), dtype=np.result_type(data.dtype, np.complex64)
     )
@@ -533,7 +576,8 @@ def _from_echo_antiecho(result, data):
         or tuple(result.dimensions) != ("channels", "F1", "F2")
         or tuple(result.domains) != ("time", "time")
         or tuple(result.encoding) != ("echo-antiecho", "complex")
-        or tuple(result.branch_order) != ("first", "second")
+        or set(result.branch_order) != {"first", "second"}
+        or len(result.branch_order) != 2
         or result.normalization_state != "storage-normalized"
         or not isinstance(channel_axis, (int, np.integer))
         or isinstance(channel_axis, bool)
@@ -550,7 +594,12 @@ def _from_echo_antiecho(result, data):
         )
     from .processing.bruker_filter import imported_bruker_filter
 
-    dataset = _raw_channel_dataset(result, data.copy(), tuple(result.branch_order))
+    dataset = _raw_channel_dataset(
+        result,
+        data[list(_component_order(result.branch_order, ("first", "second")))].copy(),
+        ("first", "second"),
+    )
+    dataset.meta.acquisition["echo_antiecho_reconstruction"] = "rance-kay"
     dataset.meta.acquisition = imported_bruker_filter(
         dataset.meta.acquisition, dataset.meta.source_metadata
     )
@@ -602,7 +651,7 @@ def _from_stored_states(result, data):
         dataset.meta.encoding[-1] = "UNVALIDATED:STATES"
         if mode == "states-tppi":
             dataset.meta.tppi_alternation_state = "encoded"
-    return dataset
+    return _normalize_states_components(dataset)
 
 
 def _raw_time_or_index_coordinate(axis, size, dim):

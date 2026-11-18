@@ -738,11 +738,22 @@ def extract_nmr_metadata(meta, *, ndim=None) -> NMRMetadata:
             and meta.get("normalization_state") == "storage-normalized"
         ):
             display = _extract_fid_display_metadata(meta)
-            return replace(
+            display = replace(
                 display,
                 pulse_program=display.pulse_program
                 or acquisition.get("legacy_presentation", {}).get("pulse_program"),
             )
+            if quadrature == "tppi-stored-2d":
+                widths = acquisition.get("spectral_widths_hz")
+                return replace(
+                    display,
+                    normalized_interop=True,
+                    encoding=("TPPI", "QSIM"),
+                    spectral_width_hz=tuple(widths)
+                    if isinstance(widths, (tuple, list))
+                    else None,
+                )
+            return display
         if (
             quadrature == "simpson-stored-complex-2d"
             and physical == dimensions == ("F1", "F2")
@@ -780,6 +791,7 @@ def extract_nmr_metadata(meta, *, ndim=None) -> NMRMetadata:
             ("time", None),
             ("mixed", None),
             ("frequency", "bruker-rance-kay"),
+            ("frequency", "rance-kay"),
             ("frequency", "public-branch-fft"),
         )
         if (

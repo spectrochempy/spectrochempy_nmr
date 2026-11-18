@@ -8,9 +8,11 @@ axis. Keep it first when reordering the physical axes.
 See :doc:`../compatibility` for the core version required by native
 channel workflows.
 
-Raw Bruker States, States-TPPI and Echo-Antiecho trace pairs use channel labels
-``branch_0`` and ``branch_1``. Transform F2 (``x``) before F1 (``y``). The
-indirect transform reconstructs the appropriate complex pairs; its resulting
+The reader supplies the component arrangement for the declared quadrature;
+see the :doc:`raw 2D contract <../reference/interop>`. States-family inputs
+use two complex branches; echo/anti-echo inputs retain the ordered
+``first`` and ``second`` branches for Rance–Kay reconstruction.
+Transform F2 (``x``) before F1 (``y``). The indirect transform reconstructs the appropriate complex pairs; its resulting
 channels are labelled ``F1_R`` and ``F1_I``. Component meanings depend on the
 processing stage and must not be inferred solely from the array shape.
 

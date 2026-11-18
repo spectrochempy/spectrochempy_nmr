@@ -349,16 +349,19 @@ class Experiment:
     @property
     def _supports_qf_fft(self) -> bool:
         return (
-            self.ndim == 2 and self._nmr_meta.normalized_interop and self.is_time_domain
+            self.ndim == 2
+            and self._nmr_meta.normalized_interop
+            and self.is_time_domain
+            and self.encoding in (("QF", "DQD"), ("DQD", "QF"))
         )
 
     @property
-    def _supports_agilent_tppi_fft(self) -> bool:
+    def _supports_tppi_fft(self) -> bool:
         return (
             self.ndim == 2
             and self.is_time_domain
-            and self._meta().get("normalization_profile") == "agilent-tppi-2d-v1"
-            and self.encoding == ("UNVALIDATED:AGILENT-TPPI", "QSIM")
+            and self._nmr_meta.normalized_interop
+            and self.encoding == ("TPPI", "QSIM")
         )
 
     @property
@@ -450,8 +453,8 @@ class Experiment:
             report.add_info("Raw 1D FID detected.")
         elif self.source_kind == "ser":
             report.add_info("Raw 2D SER detected.")
-            if self._supports_agilent_tppi_fft:
-                report.add_info("Native Agilent TPPI FFT processing is available.")
+            if self._supports_tppi_fft:
+                report.add_info("TPPI FFT processing is available.")
             elif self._supports_qf_fft:
                 report.add_info("Normalized 2D QF FFT processing is available.")
             elif self._supports_states_fft:
@@ -459,9 +462,7 @@ class Experiment:
                     f"Normalized {self.encoding[0]} 2D FFT processing is available."
                 )
             elif self._supports_echo_antiecho_fft:
-                report.add_info(
-                    "Echo/anti-echo FFT requires an explicit reconstruction."
-                )
+                report.add_info("Echo/anti-echo FFT processing is available.")
             else:
                 report.add_warning(
                     "Multi-dimensional NMR processing is not part of the current "
@@ -1065,9 +1066,10 @@ class Experiment:
             Explicit normalized frequency-axis candidate. Interop spectra stay
             on the core Hz grid when omitted; no chemical zero is guessed.
         echo_antiecho : str, optional
-            Select ``"bruker-rance-kay"`` for stored pairs compatible with
-            Bruker Rance–Kay shuffling with no additional F1 sign alternation.
-            An explicit selection is required for imported echo/anti-echo data.
+            The normalized echo/anti-echo component arrangement uses
+            Rance–Kay reconstruction with no additional F1 sign alternation.
+            ``"rance-kay"`` can be supplied explicitly; the historical
+            ``"bruker-rance-kay"`` spelling remains an alias.
         digital_filter : str, optional
             Select "time" to correct and shorten a supported Bruker 1D
             FID or echo/anti-echo SER, or "phase" for NMRPipe FT -df on
@@ -1191,10 +1193,12 @@ class Experiment:
             )
 
         supports_echo = self._supports_echo_antiecho_fft
-        if supports_echo and echo_antiecho != "bruker-rance-kay":
-            raise ValueError(
-                'echo/anti-echo processing requires echo_antiecho="bruker-rance-kay"'
-            )
+        if supports_echo and echo_antiecho not in (
+            None,
+            "rance-kay",
+            "bruker-rance-kay",
+        ):
+            raise ValueError("Unsupported echo/anti-echo reconstruction")
         if echo_antiecho is not None and not supports_echo:
             raise ValueError(
                 "echo_antiecho requires an imported raw echo/anti-echo FID"
@@ -1212,11 +1216,9 @@ class Experiment:
             raise ValueError(
                 "bruker_group_delay requires an imported raw echo/anti-echo FID"
             )
-        if tppi_reference is not None and not self._supports_agilent_tppi_fft:
-            raise ValueError(
-                "tppi_reference requires a native Agilent TPPI acquisition"
-            )
-        if self._supports_agilent_tppi_fft:
+        if tppi_reference is not None and not self._supports_tppi_fft:
+            raise ValueError("tppi_reference requires a TPPI acquisition")
+        if self._supports_tppi_fft:
             if (
                 any(
                     value is not None
@@ -1235,12 +1237,10 @@ class Experiment:
                 or phc0
                 or phc1
             ):
-                raise ValueError(
-                    "Agilent TPPI processing supports FFT and referencing only"
-                )
-            from .processing.agilent_tppi import process_agilent_tppi  # noqa: PLC0415
+                raise ValueError("TPPI processing supports FFT and referencing only")
+            from .processing.tppi import process_tppi  # noqa: PLC0415
 
-            result = process_agilent_tppi(ds, tppi_reference)
+            result = process_tppi(ds, self._nmr_meta.spectral_width_hz, tppi_reference)
             requested = (
                 {} if tppi_reference is None else {"tppi_reference": tppi_reference}
             )
@@ -1270,11 +1270,14 @@ class Experiment:
             ):
                 raise ValueError("normalized 2D processing supports FFT only")
             if self._supports_states_fft or supports_echo:
-                from .processing.bruker_filter import resolve_bruker_delay  # noqa: PLC0415
+                from .processing.digital_filter import resolve_group_delay  # noqa: PLC0415
                 from .processing.channel_interop import process_echo_antiecho_fft  # noqa: PLC0415
                 from .processing.channel_interop import process_states_fft  # noqa: PLC0415
 
                 widths = self._nmr_meta.spectral_width_hz
+                from .interop import _normalize_states_components  # noqa: PLC0415
+
+                ds = _normalize_states_components(ds)
                 reconstruction = {}
                 indirect_fft = direct_fft = "NMRPipe FT -nodf"
                 filter_trace = {}
@@ -1284,7 +1287,7 @@ class Experiment:
                         method = "phase"
                     delay, delay_source = None, None
                     if method is not None:
-                        delay, delay_source = resolve_bruker_delay(
+                        delay, delay_source = resolve_group_delay(
                             ds, bruker_group_delay
                         )
                     result = process_echo_antiecho_fft(
@@ -1294,23 +1297,25 @@ class Experiment:
                         group_delay=delay,
                         delay_source=delay_source,
                     )
-                    reconstruction["echo_antiecho"] = echo_antiecho
+                    if echo_antiecho is not None:
+                        reconstruction["echo_antiecho"] = echo_antiecho
+                    if result.meta.get("digital_filter") is not None:
+                        result.meta.bruker_digital_filter = dict(
+                            result.meta.digital_filter
+                        )
                     if digital_filter is not None:
                         reconstruction["digital_filter"] = digital_filter
                     if bruker_group_delay is not None:
                         reconstruction["bruker_group_delay"] = float(bruker_group_delay)
                     if method is not None:
                         filter_trace["digital_filter"] = dict(
-                            result.meta.bruker_digital_filter
+                            result.meta.digital_filter
                         )
                     if method == "phase":
                         direct_fft = "NMRPipe FT -df"
                 else:
                     alternate = self.encoding[0] == "STATES-TPPI"
                     result = process_states_fft(ds, widths, alternate=alternate)
-                    transform = ds.meta.acquisition.get("states_fft_input_transform")
-                    if transform is not None:
-                        reconstruction["fft_input_transform"] = transform
                     if alternate:
                         indirect_fft = "NMRPipe FT -alt"
                 return self._attach_scp_processing_trace(
@@ -1319,6 +1324,7 @@ class Experiment:
                     applied={
                         **reconstruction,
                         **filter_trace,
+                        **({"echo_antiecho": "rance-kay"} if supports_echo else {}),
                         "fft": True,
                         "fft_order": ("F2", "F1"),
                         "fft_convention": (
@@ -2084,8 +2090,8 @@ class Experiment:
         if self.encoding:
             lines.append(f"  encoding: {' × '.join(self.encoding)}")
         lines.append(f"  processable: {'yes' if self.is_processable else 'no'}")
-        if self._supports_agilent_tppi_fft:
-            lines.append("  public processing: native Agilent TPPI FFT")
+        if self._supports_tppi_fft:
+            lines.append("  public processing: TPPI FFT")
         elif self._supports_qf_fft:
             lines.append("  public processing: normalized 2D QF FFT only")
         elif self._supports_states_fft:
@@ -2093,9 +2099,7 @@ class Experiment:
                 f"  public processing: normalized {self.encoding[0]} 2D FFT only"
             )
         elif self._supports_echo_antiecho_fft:
-            lines.append(
-                "  public processing: echo/anti-echo with explicit reconstruction"
-            )
+            lines.append("  public processing: echo/anti-echo FFT")
         elif self.ndim >= 2:
             lines.append("  public processing: 1D only")
         return "\n".join(lines)

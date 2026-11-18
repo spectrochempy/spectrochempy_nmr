@@ -16,7 +16,9 @@
 # ======================
 #
 # Use the plugin's :doc:`reader <reading_data>` to load the 2D dataset.
-# The acquisition and quadrature determine which operations are available.
+# The reader arranges the components and records the physical quadrature.
+# The common processing path uses this information, independently of the
+# instrument, source format, or experiment name (COSY, HSQC, and so on).
 # See :doc:`/concepts/quadrature` for the supported conventions and
 # :ref:`nmr-processing-validation` for the distinction between runtime checks
 # and qualification against reference data.
@@ -94,7 +96,7 @@ spectrum = fid.fft(dim="x").fft(dim="y")
 # ~~~~~~~~~~~~~~
 #
 # Echo/anti-echo records two coherence pathways in each increment. For the
-# Bruker Rance–Kay profile, the plugin first forms ``E - A`` and
+# normalized Rance–Kay arrangement, the plugin first forms ``E - A`` and
 # ``1j * (E + A)`` from the two stored branches. For instance,
 # ``E = 2 + 3j`` and ``A = 1 + 1j`` give ``1 + 2j`` and ``-4 + 3j``.
 # After F2, the two reconstructed branches are cross-paired by real and
@@ -102,9 +104,7 @@ spectrum = fid.fft(dim="x").fft(dim="y")
 
 # %% tags=["skip-execution"]
 fid = scp.nmr.read_topspin("path/to/echo-antiecho/ser")
-spectrum = scp.nmr.Experiment(fid).process(
-    echo_antiecho="bruker-rance-kay", digital_filter="phase"
-)
+spectrum = scp.nmr.Experiment(fid).process(digital_filter="phase")
 
 # %% [raw] raw_mimetype="text/restructuredtext"
 # TPPI
@@ -143,7 +143,7 @@ _ = cosy.plot(method="contour", levels=levels, figsize=(6, 6))
 # A direct FFT uses the supplied samples, including the original group delay
 # when reading a Bruker SER without import correction. TopSpin XFB replay applies
 # the recorded correction for supported acquisitions. For echo/anti-echo,
-# ``Experiment.process(echo_antiecho="bruker-rance-kay", digital_filter="phase")``
+# ``Experiment.process(digital_filter="phase")``
 # compensates the digital-filter delay in F2. Use ``digital_filter="time"`` for
 # time-domain correction instead. The ordinary QF, States, and States-TPPI
 # FFT workflows transform the supplied traces without filter correction.
