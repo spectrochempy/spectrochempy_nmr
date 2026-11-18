@@ -219,7 +219,12 @@ class CzjzekRFLibrary:
         result = []
         for event in scan:
             if isinstance(event, pulsar.Coherence):
-                result.append(["coherence", index(event.order)])
+                if not isinstance(event.symmetric, (bool, np.bool_)):
+                    raise TypeError("Coherence symmetric must be boolean.")
+                encoded = ["coherence", index(event.order)]
+                if event.symmetric:
+                    encoded.append(True)
+                result.append(encoded)
             elif isinstance(event, pulsar.Delay):
                 (duration,) = pulsar._real_scalars(event.duration_s)
                 result.append(["delay", duration, bool(event.decouple_j)])

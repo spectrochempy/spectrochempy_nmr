@@ -13,6 +13,12 @@ Unreleased
   profile local populations across candidate MAS widths.
   (`#149 <https://github.com/spectrochempy/spectrochempy_nmr/pull/149>`_)
 
+* Construct sheared MQMAS maps with analytical F1 positions and finite-RF
+  excitation/conversion weights using ``pulsar.simulate_mqmas()``.
+  ``pulsar.MQMASModel`` retains the RF-weighted F2 quadratures for repeated
+  maps with different grids and widths. ``Coherence(..., symmetric=True)``
+  selects the symmetric multiple-quantum pair for explicit comparisons.
+
 * Unify STMAS with the complete MQMAS XFSHEAR reconstruction. Supply
   ``ratio`` and ``f1_scale`` together to ``Experiment.xfshear()`` for explicit
   physical coefficients. ``experiment="3QMAS"``, ``"5QMAS"``, ``"STMAS"``
