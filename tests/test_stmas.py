@@ -286,3 +286,57 @@ def test_stmas_compares_isotope_identity_not_label(states_path, alias):
     np.testing.assert_array_equal(actual.data, expected.data)
     np.testing.assert_array_equal(actual.x.data, expected.x.data)
     np.testing.assert_array_equal(actual.y.data, expected.y.data)
+
+
+@pytest.mark.parametrize("procno", [2, "2"])
+@pytest.mark.parametrize("relative", [False, True])
+def test_states_directory_selects_raw_ser_and_requested_status(
+    states_path, procno, relative
+):
+    import shutil
+
+    path, _, _ = states_path
+    shutil.copytree(path / "pdata/1", path / "pdata/2")
+    file = path / "pdata/2/procs"
+    file.write_text(file.read_text().replace("129.999", "129.998"))
+    file = path / "pdata/2/proc2s"
+    file.write_text(file.read_text().replace("TDeff= 32", "TDeff= 30"))
+    options = {"directory": path.parent} if relative else {}
+    source = path.name if relative else path
+    raw = scp.nmr.read(
+        source, procno=procno, use_tdeff=True, indirect_dwell="IN[0]", **options
+    )
+    assert raw.shape == (2, 15, 16)
+    assert raw.meta.acquisition["reference_frequency_mhz"] == (129.998, 129.998)
+    shortcut = scp.nmr.read_stmas(path, procno=int(procno), use_tdeff=True)
+    np.testing.assert_array_equal(raw.data, shortcut.data)
+    np.testing.assert_array_equal(raw.x.data, shortcut.x.data)
+    np.testing.assert_array_equal(raw.y.data, shortcut.y.data)
+
+
+def test_states_selection_does_not_silently_read_processed_data(states_path):
+    path, _, _ = states_path
+    with pytest.raises(ValueError, match="raw SER"):
+        scp.nmr.read(path, processed=True, use_tdeff=True, indirect_dwell="IN[0]")
+
+
+def test_states_dataset_root_respects_experiment_and_processing_selection(states_path):
+    import shutil
+
+    path, _, _ = states_path
+    target = path / "dataset" / "42"
+    target.parent.mkdir()
+    target.mkdir()
+    for name in ("acqus", "acqu2s", "ser"):
+        shutil.copy2(path / name, target / name)
+    shutil.copytree(path / "pdata/1", target / "pdata/2")
+    raw = scp.nmr.read(
+        target.parent,
+        expno=42,
+        procno=2,
+        use_tdeff=True,
+        indirect_dwell="IN[0]",
+    )
+    expected = scp.nmr.read_stmas(target, procno=2, use_tdeff=True)
+    np.testing.assert_array_equal(raw.data, expected.data)
+    assert raw.shape == (2, 16, 16)

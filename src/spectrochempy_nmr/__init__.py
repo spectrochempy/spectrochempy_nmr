@@ -426,6 +426,9 @@ def _resolve_topspin_directory_target(filename, **kwargs):
         return None
     if filename.name in _VALID_TOPSPIN_FILENAMES:
         return None
+    raw_states = kwargs.get("indirect_dwell") is not None or kwargs.get(
+        "use_tdeff", False
+    )
 
     if (
         kwargs.get("expno") is None
@@ -433,7 +436,7 @@ def _resolve_topspin_directory_target(filename, **kwargs):
         and kwargs.get("glob") is None
         and ((filename / "acqus").is_file() or (filename / "acqu").is_file())
     ):
-        procno = kwargs.get("procno")
+        procno = None if raw_states else kwargs.get("procno")
         if procno is not None or kwargs.get("processed", False):
             processed = filename / "pdata" / str(procno if procno is not None else 1)
             candidates = (processed / name for name in ("3rrr", "2rr", "1r"))
@@ -456,7 +459,7 @@ def _resolve_topspin_directory_target(filename, **kwargs):
             files_.extend(filename.glob("**/3rrr"))
     else:
         expno = kwargs.get("expno")
-        procno = kwargs.get("procno")
+        procno = None if raw_states else kwargs.get("procno")
 
         if expno is None:
             expnos = sorted(filename.glob("[0-9]*"))

@@ -821,6 +821,10 @@ def read_topspin(*paths, **kwargs):
         "echo-antiecho",
     ):
         raise ValueError("quadrature must be qf, states, states-tppi or echo-antiecho")
+    if (dwell is not None or kwargs.get("use_tdeff", False)) and kwargs.get(
+        "processed", False
+    ):
+        raise ValueError("States pair selection requires a raw SER")
     kwargs["filetypes"] = ["TopSpin files (1r, 1i, *dir/*, 1r/*)"]
     kwargs["protocol"] = ["topspin"]
     importer = Importer()
