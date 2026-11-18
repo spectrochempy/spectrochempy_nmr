@@ -24,17 +24,30 @@
 # Acquisition and States pairs
 # -----------------------------
 #
-# The spin-3/2 ⁸⁷Rb example uses the ``dqf-stmas-old.av`` pulse program supported by the reader.
-# The reader checks the observed nucleus against the SpectroChemPy isotope
-# table and requires spin 3/2. The workflow was validated on ⁸⁷Rb.
+# The spin-3/2 ⁸⁷Rb example was acquired with ``dqf-stmas-old.av``.
+# The reader decodes States pairs independently of the pulse-program name
+# and nuclear spin. The explicitly selected ``Experiment.stmas_shear()``
+# operation checks the observed isotope and requires spin 3/2. This DQF
+# pathway was validated on ⁸⁷Rb; reading another acquisition does not qualify
+# its transfer pathway for the same shear.
 # The double-quantum filter selects the transfer pathway, and States
 # phase cycling records two adjacent FIDs for each indirect increment.
 # The archived experiment RbNO₃/15 has 111 acquired traces in 128 stored
 # slots. Its processing status gives ``TDeff = 110``. Pass ``use_tdeff=True`` to
-# ``scp.nmr.read_stmas()`` to select those 55 complete pairs. The last
+# ``scp.nmr.read()`` to select those 55 complete pairs. The last
 # acquired trace has no partner and the
 # remaining slots are padding. Keep the acquisition status, pulse program
 # and processing status together to distinguish these counts.
+#
+# Pass ``indirect_dwell="IN[0]"`` to calibrate F1 with the acquisition
+# increment used in this dataset. A positive number supplies the time step
+# directly in seconds. With ``use_tdeff=True`` and no dwell override, the
+# reader uses the indirect acquisition spectral width. These are physical
+# calibration choices, not experiment selectors. This explicit States read
+# keeps uncorrected samples without scan/gain scaling; corrections belong
+# in the subsequent processing. The selected counts, step, frequency
+# references and isotope are retained in the common acquisition metadata.
+# ``read_stmas()`` remains a compatibility shortcut for the ``IN[0]`` read.
 #
 # Transform, shear and reference
 # ------------------------------
@@ -51,7 +64,7 @@
 # and apply the F1 Fourier transform after the phase ramp.
 #
 # The :doc:`short STMAS workflow </examples/gallery/nmr/plot_stmas>`
-# uses the plugin's ``read_stmas()``, ``xf2()``, ``xf2p()`` and
+# uses the common ``read()`` entry point, followed by ``xf2()``, ``xf2p()`` and
 # ``stmas_shear()`` API. The shear implements the spin-3/2 DQF pathway
 # and returns the complex F1 spectrum; the example plots its magnitude.
 # Inspect phase and references before transferring the settings to another
@@ -68,7 +81,7 @@ import spectrochempy as scp
 
 root = os.environ.get("SCP_RBNO3_DATA")
 if root:
-    states = scp.nmr.read_stmas(Path(root) / "15", use_tdeff=True)
+    states = scp.nmr.read(Path(root) / "15", use_tdeff=True, indirect_dwell="IN[0]")
     xf2 = scp.nmr.Experiment(states).xf2(size=1024)
     peak = xf2.data[abs(xf2).argmax()]
     phased = scp.nmr.Experiment(xf2).xf2p(phc0=-degrees(phase_angle(peak)))

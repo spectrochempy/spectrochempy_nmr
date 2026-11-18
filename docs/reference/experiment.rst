@@ -26,7 +26,11 @@ processing does not reread the source parameters or choose a kernel from the
 file profile. Read native SCP saves through ``scp.nmr.read()`` to complete
 missing physical descriptors in older States saves at the reader boundary.
 For spin-3/2 DQF-STMAS, use ``Experiment.stmas_shear()`` after the common
-phase. See :doc:`/userguide/stmas`.
+phase. The operation checks the normalized observed isotope for spin 3/2;
+no reader-specific STMAS marker or pulse-program name selects the calculation.
+Read States pairs through ``read()``; an explicit ``indirect_dwell`` selects
+the F1 time calibration and ``use_tdeff=True`` selects complete traces from
+the processing status. See :doc:`/userguide/stmas`.
 For polynomial baseline correction along F1 or F2 and numbered trace
 extraction, see :ref:`topspin-slice-and-baseline`.
 

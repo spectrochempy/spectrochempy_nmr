@@ -17,7 +17,7 @@ import spectrochempy as scp
 
 root = os.environ.get("SCP_RBNO3_DATA")
 if root:
-    states = scp.nmr.read_stmas(Path(root) / "15", use_tdeff=True)
+    states = scp.nmr.read(Path(root) / "15", use_tdeff=True, indirect_dwell="IN[0]")
     xf2 = scp.nmr.Experiment(states).xf2(size=1024)
     peak = xf2.data[abs(xf2).argmax()]
     phased = scp.nmr.Experiment(xf2).xf2p(phc0=-degrees(phase_angle(peak)))
