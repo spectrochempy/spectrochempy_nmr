@@ -7,6 +7,11 @@ distribution. The sections below describe changes in each plugin release.
 Unreleased
 ----------
 
+* Derive automatic STMAS spin and shear geometry from the observed F2 nucleus,
+  allowing unused default isotopes in archived F1 headers. Preserve the
+  indirect sampling interval, source metadata, and ZQ-TROSY references.
+  (`#159 <https://github.com/spectrochempy/spectrochempy_nmr/pull/159>`_)
+
 * Read reusable PULSAR pulse programs with ``pulsar.read_sequence()`` and
   ``pulsar.parse_sequence()``. Bind external parameters with explicit units,
   optional arithmetic, nested loops and per-channel RF/phase/offset settings.

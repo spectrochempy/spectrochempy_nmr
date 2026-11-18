@@ -6,7 +6,7 @@ from numbers import Real
 
 import numpy as np
 
-from ..isotopes import Isotope, nuclear_spin
+from ..isotopes import nuclear_spin
 
 
 def _mqmas_geometry(spin, coherence_order):
@@ -114,16 +114,9 @@ def _automatic_shear(dataset, plan, experiment, spin, coherence_order):
         denominator = 3 * (4 * spin * (spin + 1) - 3)
         scale = 68 / denominator
         ratio = (denominator - 68) / denominator
-        nuclei = dataset.meta.get("acquisition", {}).get("nuclei") or ()
-        if (
-            len(nuclei) == 2
-            and all(value is not None for value in nuclei)
-            and nuclei[0] != nuclei[1]
-        ):
-            if Isotope(nuclei[0]) != Isotope(nuclei[1]):
-                raise ValueError(
-                    "STMAS shear requires the same observed isotope in F1 and F2"
-                )
+        # STMAS evolves transitions of the observed F2 nucleus. Archived F1
+        # isotope fields can be unused defaults; spin and the sheared F1
+        # reference come from the observed nucleus, not that field.
     else:
         order, ratio, scale = _mqmas_geometry(spin, order)
         kind = f"{order}qmas"

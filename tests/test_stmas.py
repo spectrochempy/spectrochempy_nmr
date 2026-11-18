@@ -230,8 +230,14 @@ def test_selection_retains_indirect_nucleus_and_frequency(states_path):
     assert raw.meta.acquisition["acquisition_frequency_mhz"] == (500, 130)
     mixed = scp.nmr.Experiment(raw).xf2(size=16, correct_digital_filter=False)
     phased = scp.nmr.Experiment(mixed).xf2p()
-    with pytest.raises(ValueError, match="same observed isotope"):
-        scp.nmr.Experiment(phased).stmas_shear(size=32)
+    actual = scp.nmr.Experiment(phased).stmas_shear(size=32)
+    expected = scp.nmr.Experiment(phased).xfshear(
+        size=32, ratio=-8 / 9, f1_scale=17 / 9
+    )
+    np.testing.assert_array_equal(actual.data, expected.data)
+    np.testing.assert_array_equal(actual.y.data, expected.y.data)
+    assert actual.meta.mqmas_shearing["spin"] == 1.5
+    assert raw.meta.acquisition["nuclei"] == ("1H", "87Rb")
 
 
 @pytest.mark.parametrize(
@@ -282,7 +288,7 @@ def test_processing_quadrature_fallback_is_respected(states_path, mc2):
 
 
 @pytest.mark.parametrize("alias", ["Rb-87", "Rb87", "87rb"])
-def test_stmas_compares_isotope_identity_not_label(states_path, alias):
+def test_stmas_ignores_indirect_isotope_alias(states_path, alias):
     path, _, _ = states_path
     expected = _workflow(
         scp.nmr.read(path, use_tdeff=True, indirect_dwell="IN[0]"), shift=0.1
