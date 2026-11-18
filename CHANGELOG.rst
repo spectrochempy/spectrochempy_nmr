@@ -14,6 +14,7 @@ Unreleased
   the historical ``echo_antiecho="bruker-rance-kay"`` argument remains valid.
   Digital-filter correction in this path consumes the imported delay
   descriptor or a caller override.
+  (`#144 <https://github.com/spectrochempy/spectrochempy_nmr/pull/144>`_)
 
 * Simulate indirect evolution series with ``scp.nmr.pulsar.simulate_t1_series()``.
   Reuse RF preparation across indirect times and return complex F2 spectra
