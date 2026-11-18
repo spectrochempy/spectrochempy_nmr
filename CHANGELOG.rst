@@ -7,6 +7,22 @@ distribution. The sections below describe changes in each plugin release.
 Unreleased
 ----------
 
+* Unify STMAS with the complete MQMAS XFSHEAR reconstruction. Supply
+  ``ratio`` and ``f1_scale`` together to ``Experiment.xfshear()`` for explicit
+  physical coefficients. ``experiment="3QMAS"``, ``"5QMAS"``, ``"STMAS"``
+  and ``"ZQ-TROSY"`` select automatic coefficients; spin comes from normalized
+  metadata or isotope lookup, with an explicit fallback only when absent.
+  ZQ-TROSY retains its independent F1 reference. Automatic MQMAS coefficients
+  remain unchanged.
+  States-TPPI alternation and echo/anti-echo Rance–Kay conversion are applied
+  once by ``xf2()`` before the common path. Real echo/anti-echo XFSHEAR
+  qualification remains open; equivalence is validated on synthetic data.
+  ``stmas_shear()`` delegates with spin-dependent inner-satellite coefficients, retaining its
+  historical F1 shift direction. **STMAS output changes** to two complex
+  channels containing RR/RI/IR/II, with the same Hilbert reconstruction,
+  first-point weighting and central RR correction as MQMAS. Extract a
+  real component or build a magnitude view before plotting.
+
 * Read uniformly sampled States pairs for STMAS through ``scp.nmr.read()``
   with an explicit ``indirect_dwell`` in seconds or from ``IN[0]`` and optional
   ``use_tdeff=True`` trace selection. ``read_stmas()`` remains a compatibility

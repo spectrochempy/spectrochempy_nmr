@@ -850,8 +850,18 @@ class Experiment:
             raise ValueError("XF2 phase requires one complex XF2 dataset")
         return xf2p(self.dataset, phc0=phc0, phc1=phc1, pivot=pivot)
 
-    def xfshear(self, *, size, spin=None, coherence_order=3, f1_shift=0.0):
-        """Shear phased MQMAS data, reconstruct F2 quadrature, and transform F1.
+    def xfshear(
+        self,
+        *,
+        size,
+        spin=None,
+        coherence_order=None,
+        f1_shift=0.0,
+        ratio=None,
+        f1_scale=None,
+        experiment=None,
+    ):
+        """Shear phased States data, reconstruct F2 quadrature, and transform F1.
 
         Supply the F1 FFT size. The optional F1 shift uses isotropic ppm. The result contains all four spectral components.
 
@@ -860,12 +870,26 @@ class Experiment:
         size : int
             F1 FFT size in points.
         spin : float, optional
-            Defaults to the spin of the recorded isotope. An explicit value
-            must agree with the isotope table.
-        coherence_order : int
-            Multiple-quantum coherence order. The default is 3.
+            Resolved from normalized ``acquisition.nuclear_spin`` (or ``spin``)
+            and the observed isotope. Supply only when neither is available.
+            Contradictory spin information is rejected.
+        coherence_order : int, optional
+            MQMAS order when ``experiment`` is omitted (default 3). An explicit
+            order must agree with the selected experiment.
+        experiment : {"MQMAS", "3QMAS", "5QMAS", "STMAS", "ZQ-TROSY"}, optional
+            Select automatic coefficients and F1 calibration. The default is
+            MQMAS, using ``coherence_order``. This does not select quadrature
+            reconstruction, which is determined by the acquisition.
         f1_shift : float
-            Shift of the spectrum within the F1 window, in isotropic ppm.
+            F1 shift in isotropic ppm for MQMAS/STMAS. ZQ-TROSY follows the AU
+            convention: shift in F2-carrier ppm while retaining the F1 reference.
+        ratio : float, optional
+            Advanced signed shear coefficient, supplied with ``f1_scale`` to
+            override automatic coefficients. No spin is needed in this mode;
+            omit ``spin`` and ``coherence_order``. ``experiment="ZQ-TROSY"``
+            still selects its independent F1 reference.
+        f1_scale : float, optional
+            Advanced positive F1 scale divisor, supplied together with ``ratio``.
 
         Returns
         -------
@@ -882,19 +906,26 @@ class Experiment:
             spin=spin,
             coherence_order=coherence_order,
             f1_shift=f1_shift,
+            ratio=ratio,
+            f1_scale=f1_scale,
+            experiment=experiment,
         )
 
-    def stmas_shear(self, *, size, f1_shift=0.0):
-        """Shear phased States XF2 for spin-3/2 DQF-STMAS.
+    def stmas_shear(self, *, size, f1_shift=0.0, spin=None):
+        """Shear phased XF2 with automatic inner-satellite STMAS coefficients.
 
         Select the F1 FFT size and an isotropic shift in ppm. The output
-        is a complex 2D spectrum with the F1 quadrature combined.
+        contains the same four spectral components as ``xfshear()``.
+        Coefficients follow the resolved quadrupolar spin; supply ``spin``
+        only if absent from metadata and isotope lookup. Its historical shift
+        direction is retained: ``f1_shift=a`` maps to
+        ``xfshear(experiment="STMAS", f1_shift=-a)``.
         """
         from .processing.mqmas import stmas_shear
 
         if self.is_multi_dataset:
             raise ValueError("STMAS shear requires one phased XF2 dataset")
-        return stmas_shear(self.dataset, size=size, f1_shift=f1_shift)
+        return stmas_shear(self.dataset, size=size, f1_shift=f1_shift, spin=spin)
 
     def prepare_xfshear(
         self,

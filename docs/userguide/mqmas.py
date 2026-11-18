@@ -126,7 +126,7 @@ unsheared_rr = scp.NDDataset(
 
 # %%
 spectrum = scp.nmr.Experiment(phased).xfshear(
-    size=f1_size, spin=2.5, coherence_order=3, f1_shift=-20.0
+    size=f1_size, experiment="3QMAS", f1_shift=-20.0
 )
 rr = scp.nmr.Experiment(spectrum).rr()
 region = rr[52.0:25.0, 65.0:20.0]
