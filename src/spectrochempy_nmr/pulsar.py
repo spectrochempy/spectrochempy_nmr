@@ -810,9 +810,13 @@ class Delay:
 
 @dataclass(frozen=True)
 class Coherence:
-    """Keep the matrix elements whose row minus column spin projection is order."""
+    """Keep elements with row-minus-column spin projection equal to order.
+
+    symmetric=True retains only the pair m=+order/2 and m=-order/2.
+    """
 
     order: int
+    symmetric: bool = False
 
 
 @dataclass(frozen=True)
@@ -908,6 +912,10 @@ def _prepare_events(
             if abs(order) > projections.max() - projections.min():
                 raise ValueError("Coherence order is outside the spin manifold.")
             mask = (coherence_order == order) & (partner_order == 0)
+            if not isinstance(event.symmetric, (bool, np.bool_)):
+                raise TypeError("Coherence symmetric must be boolean.")
+            if event.symmetric:
+                mask &= projections[:, None] + projections[None, :] == 0
             if partner is None:
                 prepared.append(("mask", mask))
             else:
@@ -1714,6 +1722,353 @@ def simulate_rectangular_pulse(
         deposition=deposition,
         rf_solver=rf_solver,
         workers=workers,
+    )
+
+
+def _mqmas_rf_profiles(preparation, conversion, coherence_order, **settings):
+    """Compute both States quadratures with one excitation/readout per block."""
+    spin = settings["spin"]
+    spinning = settings["spinning_hz"]
+    points, accuracy, sidebands, workers = (
+        index(settings[name]) for name in ("points", "accuracy", "sidebands", "workers")
+    )
+    width, max_step, receiver_phase = _real_scalars(
+        settings["spectral_width_hz"],
+        settings["max_rf_step_s"],
+        settings["receiver_phase_deg"],
+    )
+    if max_step <= 0:
+        raise ValueError("max_rf_step_s must be positive.")
+    t2 = settings["t2_s"]
+    if t2 is not None:
+        (t2,) = _real_scalars(t2)
+        if t2 <= 0:
+            raise ValueError("t2_s must be positive.")
+    _validate_grid(width, spinning, points, accuracy, sidebands)
+    _validate_output("spectrum", sidebands, workers)
+    bandwidth = _validate_probe_bandwidth(settings["probe_bandwidth_hz"])
+    count = _rf_rotor_count(width, spinning, accuracy, sidebands, int(2 * spin + 1))
+    directions, weights, triangles = _powder_mesh(accuracy, hemisphere=True)
+    angle = np.arccos(1 / np.sqrt(3))
+    slots = directions.shape[1] * (int(2 * spin) * 4 + 2 * (2 * sidebands + 1))
+    if slots * np.dtype(complex).itemsize > 64 * 1024**2:
+        raise ValueError(
+            "MQMAS RF work arrays exceed 64 MiB. Reduce accuracy or sidebands."
+        )
+    table = np.stack(
+        [
+            terms.T
+            for _, _, terms in _transition_harmonics(
+                directions,
+                settings["cq_hz"],
+                settings["eta"],
+                angle,
+                spin,
+                settings["larmor_hz"],
+                0,
+            )
+        ],
+        axis=1,
+    )
+    offsets = table[..., 0].real + settings["shift_hz"]
+    terms = np.ascontiguousarray(table[..., 1:])
+    del table
+    ct = int(spin - 0.5)
+    strength = (spin + 0.5) ** 2
+    axis = np.linspace(-width / 2, width / 2, points)
+    if (
+        offsets[:, ct].min() - sidebands * spinning < axis[0]
+        or offsets[:, ct].max() + sidebands * spinning > axis[-1]
+    ):
+        raise ValueError("The spectral window must contain the requested transitions.")
+    ix, iy, iz = _spin_operators(spin)
+    pulse_args = ix, iy, iz, spinning, max_step, t2
+    solver = _resolve_rf_solver(settings["rf_solver"])
+    scans = _prepare_scans(preparation, *pulse_args, rf_solver=solver, allow_empty=True)
+    conversion = _prepare_events(
+        conversion, *pulse_args, rf_solver=solver, allow_empty=True
+    )
+    upper, lower = int(spin - coherence_order / 2), int(spin + coherence_order / 2)
+    orders = np.arange(-sidebands, sidebands + 1)
+    signals = np.zeros((2, offsets.shape[0], orders.size), dtype=complex)
+    errors, callback = np.geterr(), np.geterrcall()
+
+    def process(lo, hi):
+        with np.errstate(call=callback, **errors):
+            for block, coefficient, density, gamma_start in _sequence_state_blocks(
+                offsets[lo:hi], terms[lo:hi], iz, scans, spinning, count
+            ):
+                observed, gamma_end = _conversion_readout(
+                    offsets[lo:hi][block],
+                    terms[lo:hi][block],
+                    conversion,
+                    spinning,
+                    gamma_start,
+                    np.array([ct]),
+                )
+                positive = density[..., upper, lower] * observed[0, ..., lower, upper]
+                negative = density[..., lower, upper] * observed[0, ..., upper, lower]
+                quadratures = (
+                    -1j
+                    * np.sqrt(strength)
+                    * np.stack(
+                        ((positive + negative) / 2, (positive - negative) / (2j))
+                    )
+                )
+                wave = np.exp(
+                    1j
+                    * _phase_integral(
+                        terms[lo:hi][block, ct : ct + 1], gamma_end, spinning
+                    )[..., 0]
+                )
+                detection = np.fft.fft(wave, axis=-1)[..., orders] / count
+                prepared = np.fft.ifft(quadratures * wave.conj(), axis=-1)[..., orders]
+                signals[:, lo + block.start : lo + min(block.stop, hi - lo)] += (
+                    coefficient * detection * prepared
+                )
+
+    workers = min(workers, offsets.shape[0])
+    edges = np.linspace(0, offsets.shape[0], workers + 1, dtype=int)
+    if workers == 1:
+        process(0, offsets.shape[0])
+    else:
+        with ThreadPoolExecutor(max_workers=workers) as pool:
+            jobs = [
+                pool.submit(process, lo, hi)
+                for lo, hi in zip(edges[:-1], edges[1:], strict=True)
+            ]
+            for job in jobs:
+                job.result()
+    signals *= np.exp(1j * np.deg2rad(receiver_phase))
+    deposit = _resolve_deposition(settings["deposition"])
+    profiles = np.zeros((2, points), dtype=complex)
+    for i, order in enumerate(orders):
+        frequency = offsets[:, ct] + order * spinning
+        for profile, quadrature in zip(profiles, signals, strict=True):
+            mass = _probe_weights(frequency, weights * quadrature[:, i], bandwidth)
+            profile.real += deposit(axis, frequency, mass.real, triangles)
+            profile.imag += deposit(axis, frequency, mass.imag, triangles)
+    profiles /= strength / 2 * weights[triangles].sum()
+    return [_as_dataset(axis, profile, "MQMAS RF transfer") for profile in profiles]
+
+
+class MQMASModel:
+    """Reusable RF-weighted F2 profiles for a direct, sheared MQMAS model.
+
+    Preparation and conversion use the same event objects as
+    simulate_pulse_sequence. The transfer is calculated at t1=0 for the
+    symmetric +/-q/2 pair, with both States quadratures. Rebuild the model
+    when changing the spin system, carrier offset or pulse sequence.
+    spectrum() reuses these profiles for F1 grids and F1/F2 widths.
+
+    The fixed-transfer approximation assumes rotor-synchronized MQ
+    evolution. Conversion-phase modulation and rotor micromotion along t1
+    require comparison with explicit sequence calculations. Frequencies,
+    Pq, Cq and offsets are in Hz. RF phase and absolute transfer losses
+    relative to an ideal central-transition x90 are retained.
+    Requested F2 sidebands share the principal F1 ridge; correlations of
+    rotational sidebands between F1 and F2 are omitted.
+    Finite indirect-acquisition truncation is not modeled by the Gaussian.
+    """
+
+    def __init__(
+        self,
+        preparation,
+        conversion,
+        *,
+        spin,
+        larmor_hz,
+        spinning_hz,
+        spectral_width_hz,
+        cq_hz=0.0,
+        pq_hz=None,
+        eta=0.0,
+        shift_hz=0.0,
+        coherence_order=3,
+        points=8192,
+        accuracy=16,
+        sidebands=0,
+        max_rf_step_s=2e-6,
+        t2_s=None,
+        receiver_phase_deg=0.0,
+        probe_bandwidth_hz=None,
+        rf_solver="dense",
+        deposition="numpy",
+        workers=1,
+    ):
+        from .processing.mqmas import _mqmas_geometry
+
+        coherence_order, ratio, scale = _mqmas_geometry(spin, coherence_order)
+        spin, larmor_hz, spinning_hz, cq_hz, eta, shift_hz = _real_scalars(
+            spin, larmor_hz, spinning_hz, cq_hz, eta, shift_hz
+        )
+        if not 1.5 <= spin <= 15.5 or larmor_hz <= 0 or spinning_hz <= 0:
+            raise ValueError(
+                "Use a half-integer spin from 3/2 to 31/2 and positive Larmor and MAS frequencies."
+            )
+        if not 0 <= eta <= 1:
+            raise ValueError("eta must lie between 0 and 1.")
+        if pq_hz is not None:
+            (pq_hz,) = _real_scalars(pq_hz)
+            if pq_hz < 0 or cq_hz != 0:
+                raise ValueError("Use a nonnegative Pq, with Cq left at zero.")
+            cq_hz = pq_hz / np.sqrt(1 + eta**2 / 3)
+        else:
+            pq_hz = abs(cq_hz) * np.sqrt(1 + eta**2 / 3)
+        quadrupolar_shift = (
+            -3
+            * (spin * (spin + 1) - 0.75)
+            * pq_hz**2
+            / (40 * spin**2 * (2 * spin - 1) ** 2 * larmor_hz)
+        )
+        if isinstance(preparation, PhaseCycle):
+            scans = tuple(tuple(scan) for scan in preparation.scans)
+            coefficients = _phase_cycle_coefficients(scans, preparation.coefficients)
+        else:
+            scans, coefficients = (tuple(preparation),), (1.0,)
+        conversion = tuple(conversion)
+        settings = dict(
+            spin=spin,
+            larmor_hz=larmor_hz,
+            cq_hz=cq_hz,
+            eta=eta,
+            shift_hz=shift_hz,
+            spectral_width_hz=spectral_width_hz,
+            points=points,
+            accuracy=accuracy,
+            spinning_hz=spinning_hz,
+            sidebands=sidebands,
+            max_rf_step_s=max_rf_step_s,
+            t2_s=t2_s,
+            receiver_phase_deg=receiver_phase_deg,
+            probe_bandwidth_hz=probe_bandwidth_hz,
+            rf_solver=rf_solver,
+            deposition=deposition,
+            workers=workers,
+        )
+        self._profiles = _mqmas_rf_profiles(
+            PhaseCycle(scans, coefficients), conversion, coherence_order, **settings
+        )
+        self._parameters = dict(
+            approximation="fixed RF transfer with analytical F1 line",
+            spin=spin,
+            coherence_order=coherence_order,
+            larmor_hz=larmor_hz,
+            cq_hz=cq_hz,
+            pq_hz=pq_hz,
+            eta=eta,
+            shift_hz=shift_hz,
+            isotropic_f1_hz=shift_hz - 10 * quadrupolar_shift / 17,
+            central_transition_qis_hz=quadrupolar_shift,
+            shear_ratio=ratio,
+            f1_scale=scale,
+            transfer_reference_t1_s=0.0,
+            spinning_hz=spinning_hz,
+        )
+
+    @property
+    def f1_position_hz(self):
+        """Analytical F1 position with unit chemical-shift sensitivity."""
+        return self._parameters["isotropic_f1_hz"]
+
+    def spectrum(
+        self,
+        *,
+        f1_spectral_width_hz,
+        f1_points=256,
+        f1_offset_hz=0.0,
+        f1_gaussian_fwhm_hz=100.0,
+        f2_gaussian_fwhm_hz=0.0,
+    ):
+        """Construct a complex F1/F2 map using the stored RF transfer.
+
+        F1 uses a unit-area Gaussian absorption line and its periodic
+        Hilbert dispersion, weighted by the two States RF quadratures.
+        F2 broadening is optional. Values are bin masses and neither
+        RF profile is peak- or area-normalized. The F1 window can truncate
+        the Gaussian tails. Both frequency axes are in Hz.
+        """
+        from scipy.signal import hilbert
+        from scipy.special import ndtr
+
+        from spectrochempy.core.dataset.coord import Coord
+        from spectrochempy.core.dataset.nddataset import NDDataset
+
+        f1_points = index(f1_points)
+        width, center, fwhm1, fwhm2 = _real_scalars(
+            f1_spectral_width_hz,
+            f1_offset_hz,
+            f1_gaussian_fwhm_hz,
+            f2_gaussian_fwhm_hz,
+        )
+        if f1_points < 2 or width <= 0 or fwhm1 <= 0:
+            raise ValueError(
+                "Use at least two F1 points and positive F1 width and Gaussian FWHM."
+            )
+        if fwhm2 < 0:
+            raise ValueError("F2 Gaussian FWHM must be nonnegative.")
+        step = width / f1_points
+        axis = center + (np.arange(f1_points) - f1_points // 2) * step
+        position = self.f1_position_hz
+        if position < axis[0] - step / 2 or position > axis[-1] + step / 2:
+            raise ValueError(
+                "The F1 window must contain the analytical isotropic position."
+            )
+        sigma = fwhm1 / np.sqrt(8 * np.log(2))
+        edges = np.r_[axis - step / 2, axis[-1] + step / 2]
+        absorption = np.diff(ndtr((edges - position) / sigma))
+        dispersion = hilbert(absorption).imag
+        profiles = self._profiles
+        if fwhm2:
+            profiles = [
+                broaden(profile, gaussian_fwhm_hz=fwhm2) for profile in profiles
+            ]
+        result = NDDataset(
+            absorption[:, None] * profiles[0].data[None, :]
+            + dispersion[:, None] * profiles[1].data[None, :],
+            name="PULSAR analytical MQMAS",
+        )
+        result.set_coordset(
+            x=profiles[0].x.copy(),
+            y=Coord(
+                axis,
+                units="Hz",
+                title="F1 isotropic frequency offset",
+                rounding=False,
+                sigdigits=15,
+            ),
+        )
+        result.meta.mqmas_model = dict(
+            self._parameters,
+            f1_gaussian_fwhm_hz=fwhm1,
+            f2_gaussian_fwhm_hz=fwhm2,
+        )
+        return result
+
+
+def simulate_mqmas(
+    preparation,
+    conversion,
+    *,
+    f1_spectral_width_hz,
+    f1_points=256,
+    f1_offset_hz=0.0,
+    f1_gaussian_fwhm_hz=100.0,
+    f2_gaussian_fwhm_hz=0.0,
+    **settings,
+):
+    """Build a direct MQMAS model and return its sheared F1/F2 spectrum.
+
+    settings are those of MQMASModel. For repeated maps with different
+    F1 grids or widths, construct MQMASModel once and call spectrum().
+    """
+    model = MQMASModel(preparation, conversion, **settings)
+    return model.spectrum(
+        f1_spectral_width_hz=f1_spectral_width_hz,
+        f1_points=f1_points,
+        f1_offset_hz=f1_offset_hz,
+        f1_gaussian_fwhm_hz=f1_gaussian_fwhm_hz,
+        f2_gaussian_fwhm_hz=f2_gaussian_fwhm_hz,
     )
 
 

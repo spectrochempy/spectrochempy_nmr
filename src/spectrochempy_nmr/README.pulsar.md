@@ -378,6 +378,67 @@ transfer, phases and rotor timing. A direct construction of a sheared MQMAS
 map from isotropic positions, F2 profiles and reusable RF transfer weights
 can support routine interpretation and fitting.
 
+### Direct MQMAS maps
+
+`MQMASModel` calculates the excitation and conversion transfer at
+`t1=0`, for the symmetric pair `m=+q/2, -q/2`. The two States
+quadratures give complex, RF-weighted central-transition F2 profiles.
+The `spectrum()` method combines them with Gaussian absorption and its
+periodic Hilbert dispersion in F1. It retains signed RF intensities and
+phase. Each output value is a bin mass. F2 broadening preserves its
+integral, and a finite F1 window can truncate the Gaussian tails.
+
+For a half-integer spin `I`, define
+
+$$
+P_Q = |C_Q|\sqrt{1+\eta_Q^2/3},\qquad
+\nu_{\mathrm{QIS}} =
+-\frac{3[I(I+1)-3/4]}{40I^2(2I-1)^2}\frac{P_Q^2}{\nu_0}.
+$$
+
+On the isotropic axis with unit chemical-shift sensitivity, the ridge is
+at `shift_hz - (10/17)*nu_QIS`. The shear ratio and scale use the same
+spin/order coefficients as the processing module. Frequencies are in Hz.
+F1 coordinates are bin centers on an FFT-style grid. F2 coordinates keep
+the existing PULSAR grid. The model uses the exact magic angle.
+
+```python
+p = scp.nmr.pulsar
+model = p.MQMASModel(
+    [p.Pulse(12e-6, 110e3)],
+    [p.Pulse(4e-6, 85e3), p.Coherence(1)],
+    spin=2.5, larmor_hz=104.46851646e6, spinning_hz=12500,
+    pq_hz=2.94e6, eta=0.136, shift_hz=1000,
+    spectral_width_hz=24000, points=2048, accuracy=8,
+)
+map_2d = model.spectrum(
+    f1_spectral_width_hz=10000, f1_points=512,
+    f1_gaussian_fwhm_hz=600, f2_gaussian_fwhm_hz=100,
+)
+```
+
+`simulate_mqmas(preparation, conversion, **settings)` builds the model
+and returns one map. Reuse a `MQMASModel` to change grids and widths
+without recalculating RF transfer. Rebuild it when changing Cq, eta,
+isotropic offset or pulses. A Pq input implies positive Cq; supply a
+signed Cq explicitly when its sign matters to the RF response.
+
+The fixed-transfer approximation represents the principal isotropic
+ridge. It assumes rotor-synchronized indirect evolution and omits
+conversion-phase modulation and rotor micromotion along t1. F2 sidebands,
+if requested, share this ridge; correlations of rotational sidebands
+between F1 and F2 are omitted. The F1 Gaussian width is a model parameter;
+finite indirect-acquisition truncation is not modeled. When comparing with
+a finite t1 series, choose an apodization that decays before its last point.
+Use `simulate_t1_series` to qualify these approximations for a sequence.
+Its `Coherence(q, symmetric=True)` selects the same symmetric pair.
+The benchmark script `tools/benchmark_pulsar_mqmas.py` compares both
+complex States quadratures after the same shearing and F1 Gaussian
+apodization, including a deliberately unsynchronized control.
+
+The frequency and shearing conventions follow
+[Frydman, Fundamentals of MQMAS (2002)](https://www.weizmann.ac.il/chembiophys/Frydman_group/sites/chemphys.Frydman_group/files/publications/paper34.pdf).
+
 `simulate_pulse_sequence` takes an ordered list of immutable events.
 `Pulse(duration_s, rf_hz, phase_deg, offset_hz)` is rectangular;
 `IdealPulse(flip_deg, phase_deg)` is an instantaneous rotation;
