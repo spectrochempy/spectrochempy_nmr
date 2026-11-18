@@ -16,10 +16,10 @@ Transform F2 (``x``) before F1 (``y``). The indirect transform reconstructs the 
 channels are labelled ``F1_R`` and ``F1_I``. Component meanings depend on the
 processing stage and must not be inferred solely from the array shape.
 
-Bruker processed 2D components use ``S_R = RR + i IR`` and
-``S_I = RI + i II``. The experimental Agilent NOESY adapter returns the same
-explicit mathematical component mapping; its physical acquisition convention
-and calibrated frequency axes remain experimental.
+Processed 2D data can use the complex channels ``S_R = RR + i IR`` and
+``S_I = RI + i II`` or four real planes labelled ``rr``, ``ri``, ``ir`` and
+``ii``. Use ``Experiment.RR``, ``RI``, ``IR`` and ``II`` to extract the
+components through their declared mapping.
 
 For Agilent pairs with ``phase=[1,2]``, use the
 :doc:`reader guide <../userguide/reading_data>` to select or verify the

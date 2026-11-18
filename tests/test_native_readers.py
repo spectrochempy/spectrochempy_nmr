@@ -210,32 +210,13 @@ def test_agilent_storage_decoding_does_not_claim_quadrature_normalization(
     assert result.meta.normalization_state == "storage-decoded"
     with pytest.raises(NotImplementedError, match='quadrature="states"'):
         result.fft(dim="x").fft(dim="y")
-    annotated = scp.NDDataset(
-        raw,
-        meta={
-            "seqfil": "NOESY",
-            "phase": (1, 2),
-            "ni": 3,
-            "np": 8,
-            "arraydim": 6,
-            "ntraces": 1,
-        },
-    )
-    expected = scp.nmr.process_agilent_noesy_states_tppi(annotated)
-    experimental = scp.nmr.process_agilent_noesy_states_tppi(result)
-    np.testing.assert_allclose(experimental.data, expected.data)
-    assert experimental.meta.processing_profile == "states-tppi-experimental"
+    with pytest.raises(NotImplementedError, match='quadrature="states-tppi"'):
+        scp.nmr.Experiment(result).process()
     f2 = result.fft(dim="x")
     assert result.meta.stage == "acquisition"
     assert result.meta.isfreq == [False, False, False]
     assert f2.meta.stage == "F2-spectrum"
     assert f2.meta.isfreq == [False, False, True]
-    with pytest.raises(ValueError, match="time-domain"):
-        scp.nmr.process_agilent_noesy_states_tppi(f2)
-    f2.meta.readonly = False
-    f2.meta.stage = "acquisition"
-    with pytest.raises(ValueError, match="time-domain"):
-        scp.nmr.process_agilent_noesy_states_tppi(f2)
 
 
 def test_jeol_retains_decoded_matrix_without_fabricating_channels(

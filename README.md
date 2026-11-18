@@ -81,67 +81,30 @@ The compatibility aliases `scp.nmr.read_topspin(...)` and
 it is not exposed as `dataset.read_topspin(...)` or
 `dataset.nmr.read_topspin(...)`.
 
-### Experimental Agilent NOESY States-TPPI
+### Common 2D processing
 
-An opt-in prototype is available for explicitly annotated raw Agilent/Varian
-NOESY States data:
-
-```python
-result = scp.nmr.process_agilent_noesy_states_tppi(
-    raw_dataset,
-    transport="none",  # or explicitly "var2pipe"
-)
-```
-
-The input must declare `seqfil='NOESY'`, `phase=(1, 2)`, `ni`, `np` and
-`arraydim`, with a matching complex `(arraydim, np // 2)` matrix. The
-prototype performs two ordinary complex FFTs and returns two complex channels
-in the explicitly declared **mathematical** `(RR, RI, IR, II)` order. These
-labels are not a claim that the physical Agilent quadrature convention has been
-validated. It does not perform apodization, phasing, linear
-prediction, or universal vendor interpretation. Other Agilent sequences and
-encodings are rejected. This is experimental and is not part of the validated
-public processing workflow. The input must also declare `ntraces=1`; returned
-coordinates are provisional index coordinates and are not a calibrated physical
-frequency claim. Raw acquisition values are retained under `raw_acquisition`.
-
-The returned native channels have an explicit component view:
+For a supported paired acquisition with an established States-TPPI mode,
+use the public reader and the same `Experiment` entry point:
 
 ```python
-channels = scp.nmr.process_agilent_noesy_states_tppi(raw_dataset)
-components = scp.nmr.extract_noesy_components(channels)
+fid = scp.nmr.read("path/to/acquisition.fid", quadrature="states-tppi")
+spectrum = scp.nmr.Experiment(fid).process()
+rr = scp.nmr.Experiment(spectrum).RR
 ```
 
-`channels` is a standard complex `NDDataset` with dimensions `("c", "y",
-"x")` and channel labels `S_R`, `S_I`. The `c` axis is mathematical and
-non-physical. The component mapping is explicit: `RR=Re(S_R)`, `RI=Re(S_I)`,
-`IR=Im(S_R)`, and `II=Im(S_I)`. This path uses ordinary core FFTs and does not
-use quaternion storage. Time-domain input must be unmasked; masks may be
-applied to the final spectrum and are retained by component extraction and
-native NDDataset persistence. The Agilent metadata and transport operation are
-an adapter boundary; the common channel engine receives only the normalized
-3D dataset and an explicit reconstruction profile.
+Pass `quadrature` explicitly when the acquisition does not establish it.
+The experiment name, such as NOESY or COSY, does not determine the Fourier
+processing. The reader supplies the component arrangement, physical time axes
+and acquisition widths. The ordinary processing path uses that information
+and returns carrier-relative frequency axes. This does not establish a ppm
+reference or qualify an unknown acquisition convention.
 
-States-TPPI is the indirect-dimension acquisition mode; NOESY is only the
-first experimentally validated sequence using this adapter. The common engine
-does not select its calculation from the sequence or vendor identity. The
-normalized contract records `quadrature_mode="states-tppi"`, explicit `E1/E2`
-branch order, the validated `f1coef`, TPPI alternation state, normalization
-state and F2 transform convention. Other sequences are not thereby claimed to
-be experimentally validated.
-
-The implementation is split into three layers:
-
-- `processing/complex_channels.py` owns the normalized NDDataset contract,
-  the two core FFT calls and channel/component views;
-- `processing/quadrature.py` owns the single validated `states-tppi`
-  reconstruction equation;
-- `adapters/agilent_noesy.py` owns the provisional Agilent metadata validation,
-  transport conversion and branch demultiplexing.
-
-The Agilent adapter is transitional. The common engine does not import readers,
-vendor adapters or `spectrochempy_hypercomplex`; future `nmrglue-ng`
-normalization will feed it through the same normalized-channel boundary.
+Use `Experiment.RR`, `RI`, `IR` and `II` to extract the available spectral
+components in the TopSpin convention. The four-plane labels in the dataset
+use physical F1/F2 order. See the
+[2D component contract](https://www.spectrochempy.fr/projects/nmr/latest/reference/interop.html)
+for the supported quadratures and component arrangement. Unknown quadrature
+and unreconstructed NUS remain unsupported for a complete F1 transform.
 
 ### Experimental neutral interop conversion
 
@@ -213,8 +176,6 @@ and interop support. The read-only prevalidation hook rejects unsupported
 FFT/IFFT requests before in-place changes. All readers and processing paths
 use ordinary numeric arrays. The optional
 `hypercomplex` extra and the legacy quaternion phasing handler have been removed.
-The former `_channels` NOESY function is consolidated into
-`process_agilent_noesy_states_tppi`.
 
 CI covers ordinary numeric/1D and interop support on released cores 1.1.0
 and 1.1.4 without a representation plugin. Native reader profiles, in-place
