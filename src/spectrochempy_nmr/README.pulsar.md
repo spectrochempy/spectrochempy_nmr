@@ -357,6 +357,27 @@ elements for at least one powder vertex.
 
 ## Pulse sequences and free evolution
 
+`simulate_t1_series(preparation, t1_s, conversion, **settings)` returns a
+complex spectrum for every indirect time. Powder integration processes
+groups of triangles and retains amplitudes only for detected transitions.
+The full series can therefore share preparation at fine powder meshes.
+
+For MAS schedules on a bounded common rotor grid, the conversion is
+applied once to the detection operators in reverse order. Trace duality
+then evaluates each prepared density against those operators. Phase
+indices select the appropriate conversion for each indirect time without
+interpolation. Coherence selections and the eventwise relaxation masks
+are included in this calculation. When the common grid or its matrix
+batch would be too large, each time uses ordinary density propagation.
+Each call applies this choice automatically. Static sequences also use
+ordinary density propagation.
+
+For MQMAS, this explicit sequence model provides a numerical reference for
+validating faster spectral models and for studying sequence-specific RF
+transfer, phases and rotor timing. A direct construction of a sheared MQMAS
+map from isotropic positions, F2 profiles and reusable RF transfer weights
+can support routine interpretation and fitting.
+
 `simulate_pulse_sequence` takes an ordered list of immutable events.
 `Pulse(duration_s, rf_hz, phase_deg, offset_hz)` is rectangular;
 `IdealPulse(flip_deg, phase_deg)` is an instantaneous rotation;

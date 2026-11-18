@@ -1430,3 +1430,170 @@ def test_orientation_workers_preserve_numpy_error_policy(workers):
             accuracy=1,
             workers=workers,
         )
+
+
+@pytest.mark.parametrize("transitions", ["central", "satellites", "all"])
+@pytest.mark.parametrize("workers", [1, 2])
+def test_t1_conversion_readout_matches_composite_rf_loop(
+    transitions, workers, monkeypatch
+):
+    settings = dict(
+        spin=1.5,
+        larmor_hz=80e6,
+        cq_hz=1.4e6,
+        eta=0.32,
+        csa_anisotropy_hz=1200,
+        csa_eta=0.2,
+        csa_rotation=((0, -1, 0), (1, 0, 0), (0, 0, 1)),
+        spinning_hz=8000,
+        spectral_width_hz=200_000,
+        points=256,
+        accuracy=1,
+        sidebands=2,
+        transitions=transitions,
+        receiver_phase_deg=-27,
+        t2_s=75e-6,
+        j_partners=(PassiveJ(0.5, 150),),
+        workers=workers,
+    )
+    scans = (
+        (Pulse(5e-6, 42e3, 23, 175), Coherence(3)),
+        (Pulse(7e-6, 37e3, -41, -225), Coherence(-3)),
+    )
+    weights = (0.25 + 0.1j, -0.5j)
+    conversion = (
+        Pulse(3e-6, 31e3, 37, 640),
+        Coherence(1),
+        Delay(2.5e-6),
+        IdealPulse(25, -19),
+        Pulse(2e-6, 26e3, -52, -350),
+    )
+    times = np.array([0, 1 / 32000, 2 / 32000, 1 / 32000])
+    calls = []
+    original = pulsar._conversion_readout
+
+    def record(*args):
+        calls.append(args[4].size)
+        return original(*args)
+
+    monkeypatch.setattr(pulsar, "_conversion_readout", record)
+    series = simulate_t1_series(
+        PhaseCycle(scans, weights), times, conversion, **settings
+    )
+    assert calls
+    reference = [
+        simulate_pulse_sequence(
+            PhaseCycle(
+                tuple((*scan, Delay(t), *conversion) for scan in scans), weights
+            ),
+            **settings,
+        ).data
+        for t in times
+    ]
+    np.testing.assert_allclose(series.data, reference, rtol=1e-10, atol=1e-13)
+    monkeypatch.setattr(pulsar, "_t1_rotor_grid", lambda *args: None)
+    fallback = simulate_t1_series(
+        PhaseCycle(scans, weights), times, conversion, **settings
+    )
+    np.testing.assert_allclose(series.data, fallback.data, rtol=1e-10, atol=1e-13)
+
+
+@pytest.mark.parametrize("solver", ["dense", "tridiagonal"])
+def test_t1_conversion_reuses_rf_solves_for_48_states_increments(solver, monkeypatch):
+    settings = dict(
+        spin=2.5,
+        larmor_hz=104.46851646e6,
+        cq_hz=2.923e6,
+        eta=0.136,
+        spinning_hz=12500,
+        spectral_width_hz=120000,
+        points=256,
+        accuracy=1,
+        sidebands=3,
+        transitions="central",
+        rf_solver=solver,
+    )
+    scans = ((Pulse(12e-6, 110e3), Coherence(3)), (Pulse(12e-6, 110e3), Coherence(-3)))
+    conversion = (Pulse(4e-6, 85e3), Coherence(1))
+    times = np.arange(48) * 7.5e-6
+    for weights in ((0.5, 0.5), (-0.5j, 0.5j)):
+        series = simulate_t1_series(
+            PhaseCycle(scans, weights), times, conversion, **settings
+        )
+        reference = [
+            simulate_pulse_sequence(
+                PhaseCycle(
+                    tuple((*scan, Delay(t), *conversion) for scan in scans), weights
+                ),
+                **settings,
+            ).data
+            for t in times
+        ]
+        np.testing.assert_allclose(series.data, reference, rtol=1e-10, atol=1e-13)
+    readouts = []
+    original = pulsar._conversion_readout
+
+    def count(*args):
+        readouts.append(1)
+        return original(*args)
+
+    monkeypatch.setattr(pulsar, "_conversion_readout", count)
+    simulate_t1_series(PhaseCycle(scans), times, conversion, **settings)
+    full = len(readouts)
+    readouts.clear()
+    simulate_t1_series(PhaseCycle(scans), times[:2], conversion, **settings)
+    assert full == len(readouts)
+
+
+def test_t1_series_streams_triangles_without_changing_the_complex_spectrum(monkeypatch):
+    settings = dict(
+        spin=0.5,
+        larmor_hz=100e6,
+        csa_anisotropy_hz=1200,
+        spinning_hz=5000,
+        spectral_width_hz=40000,
+        points=256,
+        accuracy=1,
+        sidebands=2,
+        workers=2,
+    )
+    times = np.arange(5) * 10e-6
+    prep = (Pulse(4e-6, 25000, 35),)
+    conversion = (Pulse(2e-6, 35000, -27),)
+    reference = [
+        simulate_pulse_sequence((*prep, Delay(t), *conversion), **settings).data
+        for t in times
+    ]
+    mesh = pulsar._powder_interactions
+
+    def many_triangles(*args, **kwargs):
+        directions, weights, triangles, *rest = mesh(*args, **kwargs)
+        return directions, weights, np.tile(triangles, (45, 1)), *rest
+
+    monkeypatch.setattr(pulsar, "_powder_interactions", many_triangles)
+    result = simulate_t1_series(prep, times, conversion, **settings)
+    np.testing.assert_allclose(result.data, reference, rtol=1e-10, atol=1e-13)
+
+
+@pytest.mark.parametrize("times", [(0, np.sqrt(2) * 1e-5), (0, 1e6)])
+def test_t1_series_irregular_grid_uses_density_fallback(times, monkeypatch):
+    def fail(*args):
+        pytest.fail("Irregular schedule should use the density propagation")
+
+    monkeypatch.setattr(pulsar, "_conversion_readout", fail)
+    settings = dict(
+        spin=0.5,
+        larmor_hz=1e8,
+        spectral_width_hz=40000,
+        spinning_hz=5000,
+        accuracy=1,
+        points=256,
+        sidebands=1,
+    )
+    prep, conversion = (IdealPulse(90),), (Pulse(2e-6, 35000),)
+    result = simulate_t1_series(prep, times, conversion, **settings)
+    reference = [
+        simulate_pulse_sequence((*prep, Delay(t), *conversion), **settings).data
+        for t in times
+    ]
+    np.testing.assert_allclose(result.data, reference, rtol=1e-10, atol=1e-13)

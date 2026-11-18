@@ -1211,6 +1211,323 @@ def _t1_state_blocks(offsets, terms, initial, scans, spinning_hz, count, tails):
             yield row, block, coefficient, density, gamma_end
 
 
+def _t1_rotor_grid(times, spinning_hz, count):
+    """Find a bounded common rotor grid without interpolating the RF dynamics."""
+    from fractions import Fraction
+    from math import lcm
+
+    turns = np.asarray(times) * spinning_hz
+    if np.max(turns) > 4096:
+        return None
+    shifts = np.remainder(turns, 1) * count
+    multiple = 1
+    for shift in shifts:
+        fraction = Fraction(float(shift)).limit_denominator(32)
+        if abs(float(fraction) - shift) > 1e-12:
+            return None
+        multiple = lcm(multiple, fraction.denominator)
+        if multiple > 8 or multiple * count > 4096:
+            return None
+    grid_count = multiple * count
+    indices = np.rint(shifts * multiple).astype(np.intp) % grid_count
+    return grid_count, indices
+
+
+def _conversion_readout(offsets, terms, events, spinning_hz, gamma, selected):
+    """Pull detected coherences back through the conversion by trace duality."""
+    size = offsets.shape[-1] + 1
+    if (
+        events
+        and events[0][0] == "pulse"
+        and all(event[0] == "mask" for event in events[1:])
+    ):
+        # A single RF conversion followed by selections/relaxation needs
+        # only two rows of its complete propagator per detected transition.
+        _, duration, rf, offset, count, frame, basis, solve = events[0]
+        step = duration / count
+        step_phase = 2 * np.pi * spinning_hz * step
+        steps = _mas_pulse_steps(
+            offsets, terms, rf, offset, gamma, step, step_phase, count, solve
+        )
+        pulse = next(steps)
+        for propagator in steps:
+            pulse = propagator @ pulse
+        pulse *= frame[:, 0][:, None]
+        if basis is not None:
+            pulse *= basis[:, 0].conj()[None, :]
+        observable = np.einsum(
+            "vgsi,vgsj->svgij",
+            pulse[..., selected + 1, :].conj(),
+            pulse[..., selected, :],
+        )
+        for _, mask in events[1:]:
+            observable *= mask[selected, selected + 1][:, None, None, None, None]
+        return observable, gamma + count * step_phase
+    shape = (selected.size, offsets.shape[0], gamma.size, size, size)
+    observable = np.zeros(shape, dtype=complex)
+    observable[np.arange(selected.size), :, :, selected + 1, selected] = 1
+    omega = 2 * np.pi * spinning_hz
+    angles = gamma
+    starts = []
+    for kind, *args in events:
+        starts.append(angles)
+        if kind == "delay":
+            angles = angles + omega * args[0]
+        elif kind == "pulse":
+            duration, _, _, count, *_ = args
+            angles = angles + count * (omega * (duration / count))
+    gamma_end = angles
+    for (kind, *args), start in zip(reversed(events), reversed(starts), strict=True):
+        if kind == "mask":
+            observable *= args[0].T
+        elif kind == "ideal":
+            axis, duration = args
+            propagator = _propagator(axis, duration)
+            observable = _apply_propagator(
+                observable, propagator.conj().swapaxes(-1, -2)
+            )
+        elif kind == "delay":
+            duration, decoupled = args
+            end = start + omega * duration
+            phase = (
+                2 * np.pi * (offsets - decoupled)[:, None, :] * duration
+                + _phase_integral(terms, end, spinning_hz)
+                - _phase_integral(terms, start, spinning_hz)
+            )
+            levels = np.concatenate(
+                (np.zeros_like(phase[..., :1]), phase.cumsum(axis=-1)), axis=-1
+            )
+            evolution = np.exp(1j * levels)
+            observable *= evolution[..., :, None] * evolution[..., None, :].conj()
+        else:
+            duration, rf, offset, count, frame, basis, solve = args
+            step = duration / count
+            step_phase = omega * step
+            observable *= frame.T
+            for index in range(count - 1, -1, -1):
+                propagator = next(
+                    _mas_pulse_steps(
+                        offsets,
+                        terms,
+                        rf,
+                        offset,
+                        start + index * step_phase,
+                        step,
+                        step_phase,
+                        1,
+                        solve,
+                    )
+                )
+                observable = _apply_propagator(
+                    observable, propagator.conj().swapaxes(-1, -2)
+                )
+            if basis is not None:
+                observable *= basis.conj().T
+    return observable, gamma_end
+
+
+def _t1_conversion_signals(
+    offsets,
+    terms,
+    strengths,
+    initial,
+    scans,
+    spinning_hz,
+    count,
+    sidebands,
+    evolutions,
+    conversion,
+    selected,
+    grid,
+):
+    """Yield one bounded block of band amplitudes for all indirect times."""
+    grid_count, shifts = grid
+    size = initial.shape[0]
+    block_size = max(1, min(64, 131072 // (grid_count * size**2 * selected.size)))
+    band_orders = np.arange(-sidebands, sidebands + 1)
+    base = np.arange(count) * (grid_count // count)
+    take = (shifts[:, None] + base) % grid_count
+    for start in range(0, offsets.shape[0], block_size):
+        block = slice(start, min(start + block_size, offsets.shape[0]))
+        block_offsets, block_terms = offsets[block], terms[block]
+        signals = np.zeros(
+            (len(evolutions), block_offsets.shape[0], selected.size, band_orders.size),
+            dtype=complex,
+        )
+        readout_start = None
+        for _, coefficient, prepared, gamma_start in _sequence_state_blocks(
+            block_offsets, block_terms, initial, scans, spinning_hz, count
+        ):
+            if readout_start != gamma_start[0]:
+                gamma = gamma_start[0] + 2 * np.pi * np.arange(grid_count) / grid_count
+                observable, gamma_end = _conversion_readout(
+                    block_offsets, block_terms, conversion, spinning_hz, gamma, selected
+                )
+                wave = np.exp(
+                    1j
+                    * _phase_integral(block_terms[:, selected], gamma_end, spinning_hz)
+                ).swapaxes(-1, -2)
+                readout_start = gamma_start[0]
+            active_rows, active_cols = np.nonzero(np.any(prepared != 0, axis=(0, 1)))
+            initial_coherences = prepared[..., active_rows, active_cols]
+            readout = observable[..., active_cols, active_rows]
+            phase_begin = _phase_integral(block_terms, gamma_start, spinning_hz)
+            phase_end = _phase_integral(block_terms, gamma, spinning_hz)
+            levels_begin = np.concatenate(
+                (np.zeros_like(phase_begin[..., :1]), phase_begin.cumsum(axis=-1)),
+                axis=-1,
+            )
+            levels_end = np.concatenate(
+                (np.zeros_like(phase_end[..., :1]), phase_end.cumsum(axis=-1)), axis=-1
+            )
+            levels_iso = np.concatenate(
+                (np.zeros_like(block_offsets[..., :1]), block_offsets.cumsum(axis=-1)),
+                axis=-1,
+            )
+            initial_phase = (
+                levels_begin[..., active_rows] - levels_begin[..., active_cols]
+            )
+            rotor_phase = levels_end[..., active_rows] - levels_end[..., active_cols]
+            frequency = levels_iso[..., active_rows] - levels_iso[..., active_cols]
+            for row, (events, indices) in enumerate(zip(evolutions, take, strict=True)):
+                time = events[0][1]
+                phase = (
+                    2 * np.pi * time * frequency[:, None, :]
+                    + rotor_phase[:, indices]
+                    - initial_phase
+                )
+                coherences = initial_coherences * np.exp(-1j * phase)
+                for _, mask in events[1:]:
+                    coherences *= mask[active_rows, active_cols]
+                coherence = np.einsum(
+                    "svgn,vgn->vsg", readout[:, :, indices], coherences
+                )
+                signal = -1j * np.sqrt(strengths[selected])[None, :, None] * coherence
+                detected = wave[..., indices]
+                detection = np.fft.fft(detected, axis=-1)[..., band_orders] / count
+                preparation = np.fft.ifft(signal * detected.conj(), axis=-1)[
+                    ..., band_orders
+                ]
+                signals[row] += coefficient * detection * preparation
+        yield block, signals
+
+
+def _t1_spectrum(
+    axis,
+    offsets,
+    terms,
+    strengths,
+    initial,
+    scans,
+    spinning_hz,
+    count,
+    sidebands,
+    evolutions,
+    conversion,
+    selected,
+    grid,
+    weights,
+    triangles,
+    bandwidth,
+    deposit,
+    receiver,
+    passive_offsets,
+    workers,
+):
+    """Stream triangle groups so the full series need not retain every orientation."""
+    profiles = np.zeros((len(evolutions), axis.size), dtype=complex)
+    # Each triangle contributes independently, including shared vertex weights.
+    # Retaining only the vertices of each group bounds the signal workspace.
+    slots = len(evolutions) * selected.size * (2 * sidebands + 1)
+    if 3 * slots * np.dtype(complex).itemsize > 32 * 1024**2:
+        raise ValueError(
+            "Series band amplitudes exceed 32 MiB per triangle. Split the times."
+        )
+    vertex_limit = max(3, (32 * 1024**2) // (16 * slots))
+    triangle_count = max(1, min(4096, vertex_limit // 3))
+    errors, callback = np.geterr(), np.geterrcall()
+    for start in range(0, triangles.shape[0], triangle_count):
+        vertices, remap = np.unique(
+            triangles[start : start + triangle_count], return_inverse=True
+        )
+        local_triangles = remap.reshape(-1, 3)
+        local_terms = None if terms is None else terms[vertices]
+        local_offsets = offsets[vertices]
+        signals = np.empty(
+            (len(evolutions), vertices.size, selected.size, 2 * sidebands + 1),
+            dtype=complex,
+        )
+        for offset, population in passive_offsets:
+            shifted = local_offsets + offset
+            signals.fill(0)
+            if grid is None:
+                tails = [events + conversion for events in evolutions]
+                signals = _sequence_signals(
+                    shifted,
+                    local_terms,
+                    strengths[selected],
+                    initial,
+                    scans,
+                    spinning_hz,
+                    count,
+                    sidebands,
+                    readout=(selected, selected + 1),
+                    readout_terms=None if terms is None else local_terms[:, selected],
+                    workers=workers,
+                    tails=tails,
+                    out=signals,
+                )
+            else:
+                edges = np.linspace(
+                    0, vertices.size, min(workers, vertices.size) + 1, dtype=int
+                )
+
+                def process(lo, hi, output):
+                    with np.errstate(call=callback, **errors):
+                        for block, values in _t1_conversion_signals(
+                            shifted[lo:hi],
+                            local_terms[lo:hi],
+                            strengths,
+                            initial,
+                            scans,
+                            spinning_hz,
+                            count,
+                            sidebands,
+                            evolutions,
+                            conversion,
+                            selected,
+                            grid,
+                        ):
+                            output[:, lo + block.start : lo + block.stop] = values
+
+                if workers == 1:
+                    process(0, vertices.size, signals)
+                else:
+                    with ThreadPoolExecutor(max_workers=workers) as pool:
+                        jobs = [
+                            pool.submit(process, lo, hi, signals)
+                            for lo, hi in zip(edges[:-1], edges[1:], strict=True)
+                        ]
+                        for job in jobs:
+                            job.result()
+            signals *= receiver * population
+            for i, transition in enumerate(selected):
+                for j, order in enumerate(range(-sidebands, sidebands + 1)):
+                    frequency = shifted[:, transition] + order * spinning_hz
+                    for profile, row in zip(profiles, signals, strict=True):
+                        signal = _probe_weights(
+                            frequency, weights[vertices] * row[:, i, j], bandwidth
+                        )
+                        profile.real += deposit(
+                            axis, frequency, signal.real, local_triangles
+                        )
+                        profile.imag += deposit(
+                            axis, frequency, signal.imag, local_triangles
+                        )
+        del row, signals
+    return profiles
+
+
 def _powder_density(
     offsets,
     terms,
@@ -1415,9 +1732,10 @@ def simulate_t1_series(preparation, t1_s, conversion, **settings):
     reconstruction, since core dataset copies can linearize nearly uniform
     coordinates.
 
-    Each call retains the orientation-resolved band amplitudes for all
-    requested times until powder integration. If those arrays and the
-    rotor harmonics exceed 64 MiB, split the times into smaller batches.
+    Powder integration streams groups of triangles with bounded band-amplitude
+    storage. For indirect times that share a bounded rotor grid, conversion
+    readouts are reused across the series without phase interpolation.
+    Other schedules use the ordinary density propagation for each time.
     """
     times = _real_scalars(*t1_s)
     if not times or min(times) < 0:
@@ -1550,7 +1868,7 @@ def simulate_pulse_sequence(
     order_count = 2 * sidebands + 1 if output == "spectrum" else 0
     if spinning_hz or series is not None:
         # Bound the persistent harmonics and signal arrays before allocating either.
-        slots = (4 if spinning_hz else 0) + row_count * order_count
+        slots = (4 if spinning_hz else 0) + (0 if series is not None else order_count)
         if offsets.size * slots * np.dtype(complex).itemsize > 64 * 1024**2:
             raise ValueError(
                 "Pulse work arrays exceed 64 MiB. Reduce accuracy, sidebands "
@@ -1578,8 +1896,8 @@ def simulate_pulse_sequence(
         conversion = _prepare_events(
             series.conversion, *pulse_args, rf_solver=solver, allow_empty=True
         )
-        tails = [
-            _prepare_events((Delay(time),), *pulse_args, rf_solver=solver) + conversion
+        evolutions = [
+            _prepare_events((Delay(time),), *pulse_args, rf_solver=solver)
             for time in series.times
         ]
     passive_offsets = _passive_offsets(j_partners)
@@ -1606,6 +1924,34 @@ def simulate_pulse_sequence(
         raise ValueError("The spectral window must contain the requested transitions.")
     receiver = np.exp(1j * np.deg2rad(receiver_phase_deg))
     deposit = _resolve_deposition(deposition)
+    if series is not None:
+        grid = _t1_rotor_grid(series.times, spinning_hz, count) if spinning_hz else None
+        if grid is not None and grid[0] * iz.size * selected.sum() > 131072:
+            grid = None
+        profiles = _t1_spectrum(
+            axis,
+            offsets,
+            harmonics if spinning_hz else None,
+            strengths,
+            iz,
+            prepared,
+            spinning_hz,
+            count if spinning_hz else 1,
+            sidebands,
+            evolutions,
+            conversion,
+            np.flatnonzero(selected),
+            grid,
+            weights,
+            triangles,
+            bandwidth,
+            deposit,
+            receiver,
+            passive_offsets,
+            workers,
+        )
+        profiles /= strengths[selected].sum() / 2 * weights[triangles].sum()
+        return _as_dataset(axis, profiles, "PULSAR t1 series", times=series.times)
     profiles = np.zeros((row_count, points), dtype=complex)
     signals = None
     for offset, population in passive_offsets:

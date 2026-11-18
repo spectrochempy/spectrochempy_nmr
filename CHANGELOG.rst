@@ -63,6 +63,11 @@ Unreleased
   descriptor or a caller override.
   (`#144 <https://github.com/spectrochempy/spectrochempy_nmr/pull/144>`_)
 
+* Reuse RF conversion readouts across indirect times on a common rotor grid
+  in PULSAR series simulations. Stream powder integration with the detected
+  transitions so that fine meshes can retain preparation across all times.
+  (`#142 <https://github.com/spectrochempy/spectrochempy_nmr/pull/142>`_)
+
 * Simulate indirect evolution series with ``scp.nmr.pulsar.simulate_t1_series()``.
   Reuse RF preparation across indirect times and return complex F2 spectra
   for each time in a single dataset.
