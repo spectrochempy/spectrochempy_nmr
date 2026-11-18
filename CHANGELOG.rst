@@ -16,6 +16,7 @@ Unreleased
   not retain the prototype's transport option or provisional index axes.
   Agilent acquisition directories ending in ``.fid`` are now recognized
   before applying SIMPSON file-extension routing.
+  (`#145 <https://github.com/spectrochempy/spectrochempy_nmr/pull/145>`_)
 
 * Normalize qualified raw 2D component arrangements at import and select
   ordinary Fourier processing by QF, States, States-TPPI, TPPI or
