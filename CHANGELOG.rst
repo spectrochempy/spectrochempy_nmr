@@ -1,6 +1,5 @@
 Changelog
-==  (`#151 <https://github.com/spectrochempy/spectrochempy_nmr/pull/151>`_)
-
+=========
 
 This changelog covers the independently versioned ``spectrochempy-nmr``
 distribution. The sections below describe changes in each plugin release.
