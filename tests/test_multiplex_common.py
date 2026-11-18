@@ -240,3 +240,52 @@ def test_no_decimation_preserves_zero_filter_delay(spam_ser, delay, dedicated):
     corrected = scp.nmr.Experiment(states).xf2(size=8)
     uncorrected = scp.nmr.Experiment(states).xf2(size=8, correct_digital_filter=False)
     np.testing.assert_array_equal(corrected.data, uncorrected.data)
+
+
+@pytest.mark.parametrize("count,order,spin", [(7, 3, 1.5), (11, 3, 2.5), (11, 5, 2.5)])
+@pytest.mark.parametrize("indirect_nucleus", ["1H", "15N", "off"])
+def test_multiplex_shear_uses_observed_nucleus(
+    tmp_path, count, order, spin, indirect_nucleus
+):
+    from nmrglue.fileio import bruker
+
+    path, _, _ = make_spam_ser(tmp_path, count)
+
+    def process(raw):
+        selected = scp.nmr.Experiment(raw).select_coherence(order)
+        mixed = scp.nmr.Experiment(selected).xf2(size=8)
+        phased = scp.nmr.Experiment(mixed).xf2p(phc0=23, phc1=-41, pivot=2)
+        return scp.nmr.Experiment(phased).xfshear(size=4)
+
+    expected = process(_read(path))
+    bruker.write_jcamp(
+        {
+            "_coreheader": [],
+            "_comments": [],
+            "TD": 2,
+            "NUC1": indirect_nucleus,
+            "SFO1": 500,
+        },
+        path / "acqu2s",
+        overwrite=True,
+    )
+    bruker.write_jcamp(
+        {"_coreheader": [], "_comments": [], "SF": 499.99},
+        path / "pdata/1/proc2s",
+        overwrite=True,
+    )
+    raw = _read(path)
+    data, grid = raw.data.copy(), raw.y.data.copy()
+    metadata = raw.meta.copy()
+    stored = (path / "ser").read_bytes()
+    actual = process(raw)
+    np.testing.assert_array_equal(actual.data, expected.data)
+    np.testing.assert_array_equal(actual.x.data, expected.x.data)
+    np.testing.assert_array_equal(actual.y.data, expected.y.data)
+    assert actual.meta.mqmas_shearing["spin"] == spin
+    assert actual.meta.mqmas_shearing["coherence_order"] == order
+    assert raw.meta.acquisition["nuclei"][0] == indirect_nucleus
+    np.testing.assert_array_equal(raw.data, data)
+    np.testing.assert_array_equal(raw.y.data, grid)
+    assert raw.meta == metadata
+    assert (path / "ser").read_bytes() == stored

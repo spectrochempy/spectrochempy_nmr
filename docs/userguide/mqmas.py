@@ -32,6 +32,10 @@
 # and shear then consume these descriptors without selecting a calculation
 # from the instrument, file profile or experiment name. This separation does
 # not qualify additional acquisition conventions.
+# The observed F2 nucleus determines the spin, shear coefficients and sheared
+# F1 reference. An unused default isotope in the indirect header is retained
+# as metadata and does not constrain MQMAS processing. The acquired F1 time
+# increment still determines the indirect frequency spacing.
 # %% [raw] raw_mimetype="text/restructuredtext"
 # See :cite:t:`frydman1995mqmas` for the original MQMAS experiment
 # and :cite:t:`fernandez2011quadrupolar` for experimental strategies

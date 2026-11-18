@@ -101,11 +101,14 @@ def test_stmas_spin_table_is_resolved_from_isotope(raw, nucleus, ratio, scale):
     assert result.meta.mqmas_shearing["scale_divisor"] == pytest.approx(scale)
 
 
+@pytest.mark.parametrize("experiment", ["3QMAS", "5QMAS", "STMAS"])
 @pytest.mark.parametrize("mode", ["states", "states-tppi", "echo-antiecho"])
 @pytest.mark.parametrize("indirect_nucleus", ["1H", "15N", "off", None])
-def test_stmas_ignores_unused_indirect_isotope(raw, mode, indirect_nucleus):
+def test_quadrupolar_shear_ignores_unused_indirect_isotope(
+    raw, mode, indirect_nucleus, experiment
+):
     expected = scp.nmr.Experiment(_phase(_encoded(raw, mode))).xfshear(
-        size=32, experiment="STMAS", f1_shift=-0.1
+        size=32, experiment=experiment, f1_shift=-0.1
     )
     raw.meta.acquisition["nuclei"] = (indirect_nucleus, "27Al")
     raw.meta.acquisition["nuclear_spin"] = (0.5, 2.5)
@@ -114,7 +117,7 @@ def test_stmas_ignores_unused_indirect_isotope(raw, mode, indirect_nucleus):
     encoded = _encoded(raw, mode)
     before = deepcopy(dict(encoded.meta.acquisition))
     actual = scp.nmr.Experiment(_phase(encoded)).xfshear(
-        size=32, experiment="STMAS", f1_shift=-0.1
+        size=32, experiment=experiment, f1_shift=-0.1
     )
     np.testing.assert_array_equal(actual.data, expected.data)
     np.testing.assert_array_equal(actual.x.data, expected.x.data)
