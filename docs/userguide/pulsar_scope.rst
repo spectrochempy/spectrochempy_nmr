@@ -3,10 +3,13 @@ PULSAR history and scope
 
 PULSAR began as a method for computing powder spectra under sample
 rotation without explicit RF pulse propagation, as described in the
-original paper :cite:p:`amoureux1995pulsar`. A Fortran implementation in
-:cite:t:`masai` circulated mainly within the Laboratoire Catalyse et
-Spectrochimie (LCS). SpectroChemPy NMR ported the method to Python and
-added optimizations such as reusable powder grids, optional compiled
+original paper :cite:p:`amoureux1995pulsar`. The historical PyPulsar
+application by Jean-Paul Amoureux and Christian Fernandez combines a
+Fortran simulation engine with a Python scripting interface
+:cite:p:`pypulsar`. Originally hosted on `SourceForge
+<https://sourceforge.net/projects/pypulsar/>`_, its SVN r385 source snapshot
+is now preserved on GitHub. SpectroChemPy NMR ported the method to Python
+and added optimizations such as reusable powder grids, optional compiled
 deposition via Numba, and parallel powder averaging for pulse sequences.
 
 Which model to use
