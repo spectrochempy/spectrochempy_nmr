@@ -59,6 +59,8 @@ def _shear_spin(dataset, plan, spin, *, required=True):
             raise ValueError(
                 "Shearing spin must be a finite positive integer or half-integer"
             )
+    if known is not None and spin is not None and spin != known:
+        raise ValueError(f"XFSHEAR spin {spin} does not match {nucleus} (spin {known})")
     if values and any(value != values[0] for value in values[1:]):
         raise ValueError(
             "Shearing spin does not match the normalized spin metadata or isotope"

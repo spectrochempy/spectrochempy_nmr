@@ -185,6 +185,11 @@ def test_normalized_spin_conflicting_with_isotope_is_rejected(raw):
         scp.nmr.Experiment(_phase(raw)).xfshear(size=32, experiment="3QMAS")
 
 
+def test_explicit_spin_conflict_retains_the_isotope_diagnostic(raw):
+    with pytest.raises(ValueError, match="spin 1.5 does not match 27Al"):
+        scp.nmr.Experiment(_phase(raw)).xfshear(size=32, spin=1.5)
+
+
 def test_zq_trosy_does_not_require_an_unneeded_spin(raw):
     raw.meta.acquisition["nuclei"] = (None, None)
     result = scp.nmr.Experiment(_phase(raw)).xfshear(size=32, experiment="ZQ-TROSY")
