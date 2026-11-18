@@ -23,6 +23,7 @@ __all__ = ["read_topspin"]
 import contextlib
 import re
 from datetime import datetime
+from numbers import Real
 
 import numpy as np
 
@@ -746,6 +747,14 @@ def read_topspin(*paths, **kwargs):
     quadrature : {"qf", "states", "states-tppi", "echo-antiecho"}, optional
         Supply the F1 acquisition mode for a SER with missing or undefined
         acquisition and processing mode parameters.
+    indirect_dwell : float or {"IN[0]"}, optional
+        Calibrate the F1 time step of a uniform States SER, in seconds.
+        ``"IN[0]"`` explicitly selects the first acquisition increment.
+        This reads uncorrected States pairs without scan/gain scaling.
+    use_tdeff : bool, optional, default: False
+        Select the complete States traces declared by ``proc2s TDeff``.
+        With this option, F1 calibration uses ``indirect_dwell`` when given,
+        otherwise the indirect acquisition spectral width.
     use_list : bool or str, optional, default: False
         Use a list of values in seconds for the indirect coordinate of
         pseudo-2D data. Set to ``True`` for ``vdlist`` or give the list filename
@@ -792,6 +801,18 @@ def read_topspin(*paths, **kwargs):
     The first coordinate is 253.0909 ppm.
 
     """
+    if not isinstance(kwargs.get("use_tdeff", False), bool):
+        raise TypeError("use_tdeff must be a boolean")
+    dwell = kwargs.get("indirect_dwell")
+    if dwell is not None and not (
+        isinstance(dwell, str)
+        and dwell == "IN[0]"
+        or isinstance(dwell, Real)
+        and not isinstance(dwell, (bool, np.bool_))
+        and np.isfinite(dwell)
+        and dwell > 0
+    ):
+        raise ValueError("indirect_dwell must be positive seconds or 'IN[0]'")
     quadrature = kwargs.get("quadrature")
     if quadrature is not None and quadrature not in (
         "qf",
@@ -800,6 +821,10 @@ def read_topspin(*paths, **kwargs):
         "echo-antiecho",
     ):
         raise ValueError("quadrature must be qf, states, states-tppi or echo-antiecho")
+    if (dwell is not None or kwargs.get("use_tdeff", False)) and kwargs.get(
+        "processed", False
+    ):
+        raise ValueError("States pair selection requires a raw SER")
     kwargs["filetypes"] = ["TopSpin files (1r, 1i, *dir/*, 1r/*)"]
     kwargs["protocol"] = ["topspin"]
     importer = Importer()
@@ -1318,6 +1343,32 @@ def _bruker_nus_schedule(directory, indirect, trace_count, *, paired):
 def _read_topspin(*args, **kwargs):
     _check_nmrglue_installation()
     dataset, path = args
+    if kwargs.get("indirect_dwell") is not None or kwargs.get("use_tdeff", False):
+        if path.name != "ser":
+            raise SpectroChemPyError("States pair selection requires a raw SER")
+        if kwargs.get("use_list") or kwargs.get("quadrature") not in (None, "states"):
+            raise SpectroChemPyError(
+                "States pair selection requires uniform States quadrature"
+            )
+        if kwargs.get("remove_digital_filter") or kwargs.get("remove_dc_offset"):
+            raise SpectroChemPyError(
+                "Read States pairs uncorrected, then process with Experiment"
+            )
+        from .states_fids import read_states_fids
+
+        try:
+            dataset = read_states_fids(
+                path,
+                procno=kwargs.get("procno", "1"),
+                use_tdeff=kwargs.get("use_tdeff", False),
+                indirect_dwell=kwargs.get("indirect_dwell"),
+                quadrature=kwargs.get("quadrature"),
+            )
+        except (ValueError, FileNotFoundError) as exc:
+            raise SpectroChemPyError(str(exc)) from exc
+        apply_reader_metadata_options(dataset, kwargs, default_origin="topspin")
+        dataset.meta.readonly = True
+        return dataset
 
     # is-it a processed dataset file (1r, 2rr ....) ?
     processed = bool(path.match("pdata/*/*"))

@@ -7,6 +7,16 @@ distribution. The sections below describe changes in each plugin release.
 Unreleased
 ----------
 
+* Read uniformly sampled States pairs for STMAS through ``scp.nmr.read()``
+  with an explicit ``indirect_dwell`` in seconds or from ``IN[0]`` and optional
+  ``use_tdeff=True`` trace selection. ``read_stmas()`` remains a compatibility
+  shortcut. Reading no longer selects a pulse program or requires spin 3/2;
+  the explicitly chosen ``Experiment.stmas_shear()`` operation checks the
+  normalized observed isotope instead. The DQF shear, complex F1 output and
+  referencing are unchanged. Normalized States data can be processed without
+  any reader-specific STMAS marker.
+  (`#147 <https://github.com/spectrochempy/spectrochempy_nmr/pull/147>`_)
+
 * Process MQMAS States data with ``Experiment.xf2()``, ``xf2p()`` and
   ``xfshear()`` using physical acquisition descriptors instead of a Bruker
   file profile or archived source parameters. Readers retain the acquired

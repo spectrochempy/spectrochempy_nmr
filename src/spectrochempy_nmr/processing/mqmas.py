@@ -6,7 +6,7 @@ from numbers import Real
 
 import numpy as np
 
-from ..isotopes import nuclear_spin
+from ..isotopes import Isotope, nuclear_spin
 
 
 def _mqmas_geometry(spin, coherence_order):
@@ -422,8 +422,6 @@ def xfshear(dataset, *, size, spin, coherence_order, f1_shift):
 
     plan = _validated_xf2(dataset)
     acquisition = dataset.meta.get("acquisition", {})
-    if "stmas" in acquisition:
-        raise ValueError("Use stmas_shear() for STMAS States data")
     nucleus = plan.get("observed_nucleus") or (acquisition.get("nuclei") or (None,))[-1]
     acquired_spin = nuclear_spin(nucleus)
     if acquired_spin is None:
@@ -559,8 +557,18 @@ def stmas_shear(dataset, *, size, f1_shift):
 
     plan = _validated_xf2(dataset)
     acquisition = dataset.meta.get("acquisition", {})
-    if "stmas" not in acquisition:
-        raise ValueError("STMAS shear requires States data from read_stmas()")
+    nucleus = plan.get("observed_nucleus") or (acquisition.get("nuclei") or (None,))[-1]
+    if nuclear_spin(nucleus) != 1.5:
+        raise ValueError(
+            f"STMAS shear requires a known spin-3/2 nucleus; got {nucleus!r}"
+        )
+    nuclei = acquisition.get("nuclei") or ()
+    if (
+        len(nuclei) == 2
+        and nuclei[0] is not None
+        and Isotope(nuclei[0]) != Isotope(nucleus)
+    ):
+        raise ValueError("STMAS shear requires the same observed isotope in F1 and F2")
     if "f2_phase" not in plan:
         raise ValueError("Apply a common F2 phase with xf2p() before STMAS shear")
     _, ny, nx = dataset.shape
@@ -601,6 +609,14 @@ def stmas_shear(dataset, *, size, f1_shift):
             "data_domain": "frequency",
             "isfreq": [True, True],
             "iscomplex": [True, False],
+            "interop_dimensions": ("channels", "F1", "F2"),
+            "interop_physical_dimensions": ("F1", "F2"),
+            "interop_domains": ("frequency", "frequency"),
+            "axis_roles": ("F1", "F2"),
+            "interop_encoding": ("complex", "real"),
+            "interop_complex_axis": "F1",
+            "quadrature_mode": "stored-components-2d",
+            "normalization_state": "storage-normalized",
             "acquisition": acquisition,
             "provenance": dataset.meta.get("provenance"),
             "stmas_shear": {
