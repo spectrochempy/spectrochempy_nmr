@@ -6,6 +6,7 @@ from itertools import product
 import numpy as np
 from scipy.linalg import cholesky
 from scipy.linalg import solve_triangular
+from scipy.optimize import brentq
 from scipy.optimize import minimize_scalar
 from scipy.optimize import nnls
 
@@ -212,6 +213,8 @@ def _solve(matrix, rhs, constraint):
     system = matrix + 1e-12 * diagonal * np.eye(rhs.size)
     if constraint is not None:
         region, mass = constraint
+        norm = np.linalg.norm(region)
+        region, mass = region / norm, mass / norm
         strength = 5 * diagonal
         system += strength * np.outer(region, region)
     factor = cholesky(system, lower=True)
@@ -225,14 +228,26 @@ def _solve(matrix, rhs, constraint):
 
     if constraint is None:
         return solve(rhs)
-    multiplier = 0.0
-    for _ in range(16):
-        weights = solve(rhs + (strength * mass - multiplier) * region)
-        error = region @ weights - mass
-        if abs(error) <= 1e-5 * max(1, mass):
-            return weights
-        multiplier += strength * error
-    raise RuntimeError("Could not satisfy the requested local population.")
+    target = rhs + strength * mass * region
+    multiplier_scale = max(np.linalg.norm(target), diagonal * mass)
+
+    def error(multiplier):
+        weights = solve(target - multiplier * multiplier_scale * region)
+        return region @ weights - mass
+
+    start = error(0.0)
+    if start == 0:
+        return solve(target)
+    bound = np.copysign(1.0, start)
+    for _ in range(64):
+        if start * error(bound) <= 0:
+            break
+        bound *= 2
+    else:
+        raise RuntimeError("Could not bracket the local population constraint.")
+    low, high = sorted((0.0, bound))
+    multiplier = brentq(error, low, high, xtol=1e-12, rtol=1e-12)
+    return solve(target - multiplier * multiplier_scale * region)
 
 
 def _selection(kernel, local_region):
