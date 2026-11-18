@@ -140,6 +140,9 @@ jobs:
         if: matrix.spectrochempy-version == '1.2.0'
         run: |
           OPENBLAS_NUM_THREADS=1 python -I -m pytest -ra tests/test_pulsar.py -k orientation_workers
+      - name: Verify Czjzek receiver and two-stage fits without Numba
+        if: matrix.spectrochempy-version == '1.2.0'
+        run: OPENBLAS_NUM_THREADS=1 python -I -m pytest -ra tests/test_czjzek.py tests/test_czjzek_fit.py tests/test_czjzek_receiver.py
       - name: Qualify the optional Numba backends
         if: matrix.spectrochempy-version == '1.2.0'
         run: |
@@ -148,6 +151,7 @@ jobs:
           python -I -c "from spectrochempy_nmr._pulsar_tridiagonal import get_tridiagonal_solver; assert get_tridiagonal_solver() is not None"
           python -I -c "from spectrochempy_nmr._pulsar_numba_deposition import get_numba_depositor; assert get_numba_depositor() is not None"
           python -I -m pytest -ra tests/test_pulsar.py -k "tridiagonal or numba_deposition"
+          OPENBLAS_NUM_THREADS=1 python -I -m pytest -ra tests/test_czjzek.py tests/test_czjzek_fit.py tests/test_czjzek_receiver.py
       - name: Qualify guarded Bruker SER reads on older cores
         if: startsWith(matrix.spectrochempy-version, '1.1.')
         run: python -I -m pytest -ra tests/qualification/test_bruker_ser_migration.py -k core_without_prevalidation
@@ -377,4 +381,4 @@ jobs:
           python -m pip install "spectrochempy==1.1.4" pytest
           python -m pip install dist/*.whl
           python -m pip check
-          OPENBLAS_NUM_THREADS=1 python -I -m pytest -q tests/test_pulsar.py tests/test_czjzek.py tests/test_mqmas_inversion.py tests/test_mqmas_simulation.py tests/test_mqmas_fast_inversion.py
+          OPENBLAS_NUM_THREADS=1 python -I -m pytest -q tests/test_pulsar.py tests/test_czjzek.py tests/test_czjzek_fit.py tests/test_czjzek_receiver.py tests/test_mqmas_inversion.py tests/test_mqmas_simulation.py tests/test_mqmas_fast_inversion.py
