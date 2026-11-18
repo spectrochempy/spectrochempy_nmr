@@ -101,3 +101,8 @@ section_ref = "examples-importer-index"
 path = "simulation/plot_csa_static_mas.py"
 section = "NMR simulation"
 section_ref = "examples-simulation-index"
+
+[[examples]]
+path = "simulation/plot_pypulsar_hahn.py"
+section = "NMR simulation"
+section_ref = "examples-simulation-index"
