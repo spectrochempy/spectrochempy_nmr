@@ -47,12 +47,13 @@ def _fft_validate_input(dataset, *, dim, inv=False, **kwargs):
             inv
             or dim != "x"
             or tuple(dataset.dims) != ("c", "y", "x")
-            or dataset.meta.get("normalization_profile") != "bruker-ser-states-2d-v1"
+            or dataset.meta.get("quadrature_mode") != "states"
+            or dataset.meta.get("normalization_state") != "storage-normalized"
+            or tuple(dataset.meta.get("component_labels", ())) != ("E1", "E2")
         ):
-            raise ValueError(
-                "TopSpin XF2 convention requires direct Bruker States F2 data"
-            )
+            raise ValueError("XF2 convention requires normalized direct States F2 data")
         _topspin_xf2_reference(dataset)
+        return
     component = getattr(dataset.meta, "component_axis", None)
     if component == "c":
         if dim == component:

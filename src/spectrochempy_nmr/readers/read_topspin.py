@@ -1828,6 +1828,9 @@ def _read_topspin(*args, **kwargs):
         dataset.meta.update(meta)
         dataset.set_coordset(*tuple(coords))
     if normalized_ser:
+        from ._metadata import complete_states_metadata
+
+        complete_states_metadata(dataset)
         from ..processing.topspin_xfb import capture_xfb_plan  # noqa: PLC0415
 
         profile = dataset.meta.nmr_processing.get("vendor_profile")

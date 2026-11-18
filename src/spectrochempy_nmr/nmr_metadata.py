@@ -816,9 +816,12 @@ def extract_nmr_metadata(meta, *, ndim=None) -> NMRMetadata:
                 domains=domains,
                 source_kind=infer_source_kind(2, domains),
                 encoding=(quadrature.removesuffix("-stored-2d").upper(), "DQD"),
-                nuclei=display.nuclei,
+                nuclei=tuple(acquisition.get("nuclei") or ()) or display.nuclei,
                 pulse_program=display.pulse_program,
-                spectrometer_freq_mhz=display.spectrometer_freq_mhz,
+                spectrometer_freq_mhz=tuple(
+                    acquisition.get("acquisition_frequency_mhz") or ()
+                )
+                or display.spectrometer_freq_mhz,
                 iscomplex=(True, True),
                 spectral_width_hz=tuple(widths)
                 if isinstance(widths, (tuple, list))
@@ -843,9 +846,13 @@ def extract_nmr_metadata(meta, *, ndim=None) -> NMRMetadata:
                 source_kind=infer_source_kind(2, domains),
                 encoding=display.encoding or ("complex", "complex"),
                 iscomplex=display.iscomplex or (True, True),
-                spectrometer_freq_mhz=display.spectrometer_freq_mhz
-                or tuple(acquisition.get("acquisition_frequency_mhz", ()))
-                or None,
+                spectral_width_hz=tuple(acquisition.get("spectral_width_hz") or ())
+                or display.spectral_width_hz,
+                nuclei=tuple(acquisition.get("nuclei") or ()) or display.nuclei,
+                spectrometer_freq_mhz=tuple(
+                    acquisition.get("acquisition_frequency_mhz") or ()
+                )
+                or display.spectrometer_freq_mhz,
             )
         if (
             ndim == 2

@@ -31,3 +31,95 @@ def apply_reader_metadata_options(dataset, kwargs, *, default_origin):
 
 
 __all__ = ["apply_reader_metadata_options"]
+
+
+def complete_states_metadata(dataset):
+    """Complete physical States descriptors at the reader boundary."""
+    from collections.abc import Mapping
+    from numbers import Real
+
+    from ..processing.bruker_filter import imported_bruker_filter
+
+    if dataset.ndim != 3 or dataset.meta.get("quadrature_mode") != "states":
+        return dataset
+    meta = dataset.meta
+    acquisition = dict(meta.get("acquisition", {}))
+    correction = acquisition.get("digital_filter", {})
+    if (
+        all(
+            acquisition.get(key) is not None
+            for key in (
+                "acquired_shape",
+                "nuclei",
+                "acquisition_frequency_mhz",
+                "reference_frequency_mhz",
+            )
+        )
+        and isinstance(correction, Mapping)
+        and correction.get("group_delay_points") is not None
+    ):
+        return dataset
+    source = meta.get("source_metadata") or {}
+    source = source if isinstance(source, Mapping) else {}
+
+    def parameters(*names):
+        merged = {}
+        for name in names:
+            values = source.get(name)
+            if isinstance(values, Mapping):
+                merged.update(values)
+        return merged
+
+    axes = (parameters("acqu2", "acqu2s"), parameters("acqu", "acqus"))
+    processed = (parameters("proc2", "proc2s"), parameters("proc", "procs"))
+    for key, legacy, fields, source_key, units in (
+        ("acquisition_frequency_mhz", "sfo1", axes, "SFO1", "MHz"),
+        ("reference_frequency_mhz", "sf", processed, "SF", "MHz"),
+        ("nuclei", "nuc1", axes, "NUC1", None),
+    ):
+        if acquisition.get(key) is not None:
+            continue
+        values = meta.get(legacy)
+        values = (
+            values[-2:]
+            if isinstance(values, (tuple, list)) and len(values) >= 2
+            else (None, None)
+        )
+        resolved = []
+        for value, fields_for_axis in zip(values, fields, strict=True):
+            if units is not None:
+                if hasattr(value, "to"):
+                    value = value.to(units).magnitude
+                if not isinstance(value, Real) or isinstance(value, bool):
+                    value = None
+            if value is None:
+                value = fields_for_axis.get(source_key)
+            resolved.append(value)
+        acquisition[key] = tuple(resolved)
+    if acquisition.get("acquired_shape") is None:
+        counts = meta.get("tdeff")
+        acquisition["acquired_shape"] = (
+            tuple(counts[-2:])
+            if isinstance(counts, (tuple, list)) and len(counts) >= 2
+            else tuple(dataset.shape[-2:])
+        )
+    correction = acquisition.get("digital_filter", {})
+    if isinstance(correction, Mapping):
+        acquisition = imported_bruker_filter(acquisition, source)
+        correction = acquisition.get("digital_filter", {})
+        direct = axes[-1]
+        if (
+            correction.get("group_delay_points") is None
+            and direct.get("DECIM") == 1
+            and direct.get("GRPDLY") in (None, -1, 0)
+        ):
+            acquisition["digital_filter"] = {
+                **correction,
+                "group_delay_points": 0.0,
+                "delay_source": "no decimation",
+            }
+    readonly = meta.readonly
+    meta.readonly = False
+    meta.acquisition = acquisition
+    meta.readonly = readonly
+    return dataset

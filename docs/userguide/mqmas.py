@@ -27,6 +27,11 @@
 # This tutorial uses a Bruker States acquisition of PST-5 to show the
 # tilted line shapes after two Fourier transforms, the effect of the
 # shear, and how apodization and baseline correction change the result.
+# The reader supplies the States components, acquired point counts, physical
+# axes, frequency references, isotope and digital-filter delay. XF2, phase
+# and shear then consume these descriptors without selecting a calculation
+# from the instrument, file profile or experiment name. This separation does
+# not qualify additional acquisition conventions.
 # %% [raw] raw_mimetype="text/restructuredtext"
 # See :cite:t:`frydman1995mqmas` for the original MQMAS experiment
 # and :cite:t:`fernandez2011quadrupolar` for experimental strategies

@@ -7,6 +7,14 @@ distribution. The sections below describe changes in each plugin release.
 Unreleased
 ----------
 
+* Process MQMAS States data with ``Experiment.xf2()``, ``xf2p()`` and
+  ``xfshear()`` using physical acquisition descriptors instead of a Bruker
+  file profile or archived source parameters. Readers retain the acquired
+  point counts, frequency references, isotope and digital-filter delay.
+  ``scp.nmr.read()`` also opens native SCP saves and completes missing
+  descriptors in older States acquisitions at reading. The qualified
+  Fourier, phase and shearing conventions are unchanged.
+
 * Remove the experimental ``process_agilent_noesy_states_tppi()`` and
   ``extract_noesy_components()`` entry points. Read supported acquisitions
   with ``scp.nmr.read(path, quadrature="states-tppi")`` when the mode must

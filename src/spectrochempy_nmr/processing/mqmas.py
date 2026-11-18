@@ -1,4 +1,4 @@
-"""Hybrid-domain TopSpin XFSHEAR for Bruker States acquisitions."""
+"""Hybrid-domain MQMAS and STMAS operations on normalized States components."""
 
 from math import isfinite
 from numbers import Integral
@@ -84,15 +84,20 @@ def xf2(
 ):
     """Compute complex XF2 branches for inspecting the phase before shearing."""
     from spectrochempy.core.units import ur  # noqa: PLC0415
-    from spectrochempy_nmr.processing.bruker_filter import resolve_bruker_delay  # noqa: PLC0415
+    from .digital_filter import resolve_group_delay  # noqa: PLC0415
+    from ..nmr_metadata import extract_nmr_metadata  # noqa: PLC0415
+    from .fft_postprocess import _topspin_xf2_reference  # noqa: PLC0415
 
     meta = dataset.meta
     acquisition = meta.get("acquisition") or {}
+    physical = extract_nmr_metadata(meta, ndim=dataset.ndim)
     if (
         tuple(dataset.dims) != ("c", "y", "x")
         or meta.get("stage") != "acquisition"
         or meta.get("data_domain") != "time"
-        or meta.get("normalization_profile") != "bruker-ser-states-2d-v1"
+        or not physical.normalized_interop
+        or physical.encoding != ("STATES", "DQD")
+        or physical.domains != ("time", "time")
         or dataset.c is None
         or dataset.c.labels is None
         or tuple(dataset.c.labels) != ("E1", "E2")
@@ -102,8 +107,8 @@ def xf2(
         )
     ):
         raise ValueError(
-            "XFSHEAR requires an uncorrected, normalized Bruker States SER. "
-            "Read the SER without import corrections."
+            "XFSHEAR requires an uncorrected, normalized States acquisition. "
+            "Read the acquisition without import corrections."
         )
     data = np.asarray(dataset.data)
     if not np.iscomplexobj(data) or np.any(dataset.mask) or not np.isfinite(data).all():
@@ -113,7 +118,23 @@ def xf2(
     sx = int(size)
     sy = None if f1_size is None else int(f1_size)
     _, ny, nx = data.shape
-    acquired_y, acquired_x = meta.tdeff[-2:]
+    sampling = acquisition.get("sampling")
+    if sampling is not None and (
+        not isinstance(sampling, (tuple, list))
+        or tuple(sampling) != ("regular", "regular")
+    ):
+        raise ValueError("XF2 requires uniform acquisition sampling")
+    acquired_shape = acquisition.get("acquired_shape")
+    if (
+        not isinstance(acquired_shape, (tuple, list))
+        or len(acquired_shape) != 2
+        or any(
+            isinstance(n, bool) or not isinstance(n, Integral) or n < 2
+            for n in acquired_shape
+        )
+    ):
+        raise ValueError("XF2 requires the acquired F1/F2 point counts")
+    acquired_y, acquired_x = acquired_shape
     if direct_points is None:
         direct_points = min(sx, nx, acquired_x)
     if (
@@ -126,10 +147,18 @@ def xf2(
         raise ValueError(
             "XFSHEAR requires all F1 increments and enough acquired F2 samples"
         )
-    sw1, sw2 = (float(w.to("Hz").magnitude) for w in meta.sw_h[-2:])
+    widths = physical.spectral_width_hz
+    if widths is None or len(widths) != 2:
+        raise ValueError("XF2 requires the acquisition spectral widths")
+    sw1, sw2 = widths
     for axis, n, width in ((dataset.y, ny, sw1), (dataset.x, nx, sw2)):
         if (
-            not np.isfinite(width)
+            axis is None
+            or axis.units is None
+            or not axis.units.is_compatible_with(ur.s)
+            or isinstance(width, (bool, np.bool_))
+            or not isinstance(width, Real)
+            or not np.isfinite(width)
             or width <= 0
             or not np.allclose(
                 axis.data,
@@ -139,10 +168,7 @@ def xf2(
             )
         ):
             raise ValueError("XFSHEAR requires the original uniform acquisition grids")
-    sf = float(meta.sf[-1].to("MHz").magnitude)
-    carrier = float(meta.sfo1[-1].to("MHz").magnitude)
-    if not np.isfinite(sf) or sf <= 0 or not np.isfinite(carrier) or carrier <= 0:
-        raise ValueError("XFSHEAR requires the direct processing reference")
+    _, sf, carrier = _topspin_xf2_reference(dataset)
 
     if echo_window is not None and (
         not isinstance(echo_window, (tuple, list))
@@ -178,16 +204,14 @@ def xf2(
         if not np.isfinite(slope) or not np.isfinite(lb_hz) or lb_hz <= 0:
             raise ValueError(message)
     if correct_digital_filter or echo_window is not None or mqecho is not None:
-        acqus = meta.get("source_metadata", {}).get("acqus", {})
-        recorded_delay = acquisition["digital_filter"].get("group_delay_points")
-        no_decimation = (
-            acqus.get("DECIM") == 1
-            and acqus.get("GRPDLY") in (None, -1, 0)
-            and recorded_delay in (None, 0)
-        )
-        delay, source = resolve_bruker_delay(dataset, 0.0 if no_decimation else None)
-        if not np.isfinite(delay) or delay < 0:
-            raise ValueError("XFSHEAR requires a finite nonnegative Bruker group delay")
+        delay, source = resolve_group_delay(dataset, None)
+        if (
+            isinstance(delay, (bool, np.bool_))
+            or not isinstance(delay, Real)
+            or not np.isfinite(delay)
+            or delay < 0
+        ):
+            raise ValueError("XFSHEAR requires a finite nonnegative group delay")
     retained = data[..., :direct_points]
     window_metadata = None
     if echo_window is not None:
@@ -224,9 +248,18 @@ def xf2(
     else:
         prepared = dataset[..., :direct_points]
         prepared.data = retained.copy()
+        prepared.meta.readonly = False
+        encoding = list(
+            prepared.meta.get("encoding")
+            or ("CHANNELS", "UNVALIDATED:STATES", "DIRECT:DQD")
+        )
+        encoding[-1] = "DIRECT:DQD"
+        prepared.meta.encoding = encoding
         result = prepared.fft(dim="x", size=sx, convention="topspin-xf2", inplace=True)
         if result.shape[-1] != sx or result.x.units != ur.ppm:
             raise ValueError("XF2 did not produce the requested F2 frequency grid")
+    if result.y.units != ur.s:
+        result.y = result.y.to("s")
     filter_correction = {"applied": False}
     if correct_digital_filter and delay > 0:
         result.data = result.data * np.exp(-2j * np.pi * delay * np.arange(sx) / sx)
@@ -256,6 +289,8 @@ def xf2(
             "mqmas_xf2": {
                 "size": (sy, sx),
                 "direct_points": int(direct_points),
+                "acquired_shape": tuple(acquired_shape),
+                "observed_nucleus": (acquisition.get("nuclei") or (None,))[-1],
                 "widths_hz": (sw1, sw2),
                 "sf_mhz": sf,
                 "carrier_mhz": carrier,
@@ -282,8 +317,17 @@ def _validated_xf2(dataset, *, check_phase=True):
     sf, carrier = plan["sf_mhz"], plan["carrier_mhz"]
     data = np.asarray(dataset.data)
     ny = dataset.shape[-2]
+    acquired = plan.get("acquired_shape") or dataset.meta.get("acquisition", {}).get(
+        "acquired_shape"
+    )
     if (
-        tuple(dataset.dims) != ("c", "y", "x")
+        not isinstance(acquired, (tuple, list))
+        or len(acquired) != 2
+        or any(
+            isinstance(n, bool) or not isinstance(n, Integral) or n < 2
+            for n in acquired
+        )
+        or tuple(dataset.dims) != ("c", "y", "x")
         or data.shape != (2, ny, sx)
         or dataset.c is None
         or dataset.c.labels is None
@@ -292,7 +336,7 @@ def _validated_xf2(dataset, *, check_phase=True):
         or dataset.y.units != ur.s
         or dataset.x is None
         or dataset.x.units != ur.ppm
-        or ny != dataset.meta.tdeff[-2]
+        or ny != acquired[0]
         or not np.iscomplexobj(data)
         or np.any(dataset.mask)
         or not np.isfinite(data).all()
@@ -380,9 +424,7 @@ def xfshear(dataset, *, size, spin, coherence_order, f1_shift):
     acquisition = dataset.meta.get("acquisition", {})
     if "stmas" in acquisition:
         raise ValueError("Use stmas_shear() for STMAS States data")
-    source = dataset.meta.get("source_metadata") or {}
-    nuclei = dataset.meta.get("nuc1")
-    nucleus = source.get("acqus", {}).get("NUC1") or (nuclei[-1] if nuclei else None)
+    nucleus = plan.get("observed_nucleus") or (acquisition.get("nuclei") or (None,))[-1]
     acquired_spin = nuclear_spin(nucleus)
     if acquired_spin is None:
         raise ValueError(f"XFSHEAR requires a known observed isotope; got {nucleus!r}")
