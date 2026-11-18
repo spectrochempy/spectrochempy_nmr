@@ -14,6 +14,7 @@ Unreleased
   ``scp.nmr.read()`` also opens native SCP saves and completes missing
   descriptors in older States acquisitions at reading. The qualified
   Fourier, phase and shearing conventions are unchanged.
+  (`#146 <https://github.com/spectrochempy/spectrochempy_nmr/pull/146>`_)
 
 * Remove the experimental ``process_agilent_noesy_states_tppi()`` and
   ``extract_noesy_components()`` entry points. Read supported acquisitions
