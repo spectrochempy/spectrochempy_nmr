@@ -11,6 +11,7 @@ Unreleased
   grids through ``scp.nmr.mqmas_inversion``. Average PULSAR kernels over
   asymmetry, fit MQMAS with an optional shared-population MAS spectrum, and
   profile local populations across candidate MAS widths.
+  (`#149 <https://github.com/spectrochempy/spectrochempy_nmr/pull/149>`_)
 
 * Unify STMAS with the complete MQMAS XFSHEAR reconstruction. Supply
   ``ratio`` and ``f1_scale`` together to ``Experiment.xfshear()`` for explicit
