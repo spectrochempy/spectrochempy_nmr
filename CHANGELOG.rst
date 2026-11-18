@@ -18,6 +18,7 @@ Unreleased
   ``pulsar.MQMASModel`` retains the RF-weighted F2 quadratures for repeated
   maps with different grids and widths. ``Coherence(..., symmetric=True)``
   selects the symmetric multiple-quantum pair for explicit comparisons.
+  (`#152 <https://github.com/spectrochempy/spectrochempy_nmr/pull/152>`_)
 
 * Unify STMAS with the complete MQMAS XFSHEAR reconstruction. Supply
   ``ratio`` and ``f1_scale`` together to ``Experiment.xfshear()`` for explicit
