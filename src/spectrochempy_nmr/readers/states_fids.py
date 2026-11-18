@@ -102,19 +102,8 @@ def read_states_fids(
     return dataset
 
 
-def states_fids(
-    stored,
-    branches,
-    *,
-    kind,
-    selection,
-    operation,
-    scale,
-    sign,
-    history,
-    indirect_dwell=None,
-):
-    metadata = stored.metadata
+def fid_calibration(metadata, shape, indirect_dwell=None):
+    """Decode plain physical calibration at the storage boundary."""
     direct = metadata["acqus"]
     indirect = metadata.get("acqu2s", {})
     delays = direct.get("IN")
@@ -132,6 +121,39 @@ def states_fids(
     carrier = _positive(direct.get("SFO1"), "SFO1 carrier")
     reference = _positive(metadata["procs"].get("SF"), "SF reference")
     nucleus = direct.get("NUC1")
+    return {
+        "spectral_width_hz": widths,
+        "acquired_shape": tuple(shape),
+        "acquisition_frequency_mhz": (indirect.get("SFO1", carrier), carrier),
+        "reference_frequency_mhz": (
+            metadata.get("proc2s", {}).get("SF", reference),
+            reference,
+        ),
+        "nuclei": (indirect.get("NUC1", nucleus), nucleus),
+    }
+
+
+def states_fids(
+    stored,
+    branches,
+    *,
+    kind,
+    selection,
+    operation,
+    scale,
+    sign,
+    history,
+    indirect_dwell=None,
+):
+    metadata = stored.metadata
+    direct = metadata["acqus"]
+    indirect = metadata.get("acqu2s", {})
+    calibration = fid_calibration(metadata, branches.shape[1:], indirect_dwell)
+    widths = calibration["spectral_width_hz"]
+    dwell = 1 / widths[0]
+    carrier = calibration["acquisition_frequency_mhz"][-1]
+    reference = calibration["reference_frequency_mhz"][-1]
+    nucleus = calibration["nuclei"][-1]
     axes = tuple(
         interop.Axis(
             values=np.arange(size) / width,
@@ -145,7 +167,7 @@ def states_fids(
     dimensions = ("channels", "F1", "F2")
     acquisition = imported_bruker_filter(
         {
-            "spectral_width_hz": widths,
+            **calibration,
             "indirect_sampling": "states",
             "dc_offset": {"applied": False},
             "digital_filter": {"applied": False},

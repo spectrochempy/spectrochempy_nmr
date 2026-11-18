@@ -53,6 +53,12 @@ than the former complex F1 map. No vendor or pulse-program name selects the kern
 Read States pairs through ``read()``; an explicit ``indirect_dwell`` selects
 the F1 time calibration and ``use_tdeff=True`` selects complete traces from
 the processing status. See :doc:`/userguide/stmas`.
+Multiplex SPAM uses the same entry points: ``read(path, phase_cycle="paired")``
+retains all excitation phases and scan pairs, then
+``Experiment(raw).select_coherence(3)`` (or 5 for eleven phases) returns States
+E1/E2 FIDs. Continue with XF2, phase and XFSHEAR; automatic shearing inherits
+this selection. See :doc:`/userguide/multiplex_spam`.
+
 For polynomial baseline correction along F1 or F2 and numbered trace
 extraction, see :ref:`topspin-slice-and-baseline`.
 

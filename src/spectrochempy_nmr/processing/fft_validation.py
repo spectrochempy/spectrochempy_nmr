@@ -40,6 +40,10 @@ def _require_known_f1_quadrature(encoding):
 
 def _fft_validate_input(dataset, *, dim, inv=False, **kwargs):
     """Reject unsupported transforms without modifying the original dataset."""
+    if dataset.meta.get("quadrature_mode") == "paired-phase-cycle-2d":
+        raise ValueError(
+            "Call Experiment.select_coherence() before Fourier transformation"
+        )
     if kwargs.get("convention") == "topspin-xf2":
         from .fft_postprocess import _topspin_xf2_reference  # noqa: PLC0415
 
