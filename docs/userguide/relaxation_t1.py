@@ -20,21 +20,14 @@
 # axis, integrate a fixed resonance window and fit a recovery model. The delay
 # axis remains in time units throughout: it is not an F1 Fourier dimension.
 #
-# The worked example uses ``nmrdata/bruker/tests/nmr/relax/100``, distributed
-# as LCS data through ``spectrochempy_data`` under CC BY 4.0. Its archived
-# pulse program saturates the proton channel before the variable delay, then
-# transfers proton polarization to silicon by CP for detection. Thus the
-# measured silicon intensity follows proton recovery through CP readout.
-# The archived title also records ``DNP On``. See the
-# `acquisition status and pulse program
-# <https://github.com/spectrochempy/spectrochempy_data/tree/08bb9b0cbff8f4363c48b6bff7ccb743f8140e0a/testdata/nmrdata/bruker/tests/nmr/relax/100>`_.
-#
-# Under that recorded condition, an exponential fit describes an apparent
-# polarization-recovery or buildup time. It does not establish intrinsic
-# silicon T1, or separate intrinsic proton relaxation from DNP effects.
-# The :doc:`short gallery recipe
-# </examples/gallery/analysis/plot_processing_nmr_relax>` runs the same
-# workflow. This example does not reproduce the vendor's fitting tools.
+# This worked example demonstrates reading, processing, integration and
+# exponential fitting with SpectroChemPy. It uses the real series in
+# ``nmrdata/bruker/tests/nmr/relax/100``, distributed as LCS data through
+# ``spectrochempy_data`` under CC BY 4.0. The fitted ``tau`` describes the
+# recovery of the selected signal; no chemical-site assignment is needed.
+# See the :doc:`short gallery recipe
+# </examples/gallery/analysis/plot_processing_nmr_relax>` for the complete
+# workflow, including the global four-component fit below.
 #
 # Read the FIDs and recovery delays
 # ---------------------------------
@@ -152,8 +145,7 @@ print(signal)
 # positive fitted parameters: the limiting signal and ``tau``. In an ideal
 # saturation-recovery measurement without additional polarization mechanisms,
 # this time can represent T1 of the saturated reservoir. Here, retain its
-# meaning as an apparent recovery/buildup constant under the recorded DNP
-# condition. It is a
+# meaning as an apparent recovery constant for this demonstration. It is a
 # saturation-recovery model; an inversion-recovery experiment needs its own
 # initial condition and model. If saturation is incomplete or several
 # components contribute, this two-parameter curve may be inadequate.
@@ -199,14 +191,9 @@ _ = (signal - prediction).plot(marker="o", title="Recovery fit residuals")
 # without a well-sampled plateau, ``I0`` and ``tau`` can compensate for each other.
 # A close visual fit alone does not establish parameter precision.
 #
-# Repeat with different initial guesses, check whether fitted values approach
-# the imposed bounds, and vary reasonable integration limits and baseline
-# choices. Replicate acquisitions and an appropriate noise model are needed
-# for experimental uncertainty; this example does not turn the fitted curve
-# into a confidence interval. CP detection also weights the observed signal,
-# so interpret ``tau`` as the apparent recovery of this selected CP-detected
-# signal under the acquisition conditions, rather than an intrinsic silicon
-# relaxation time.
+# Try another starting value or change the integration window, then compare
+# the fitted curve and residuals. This is a practical way to explore the
+# fitting tools on the same signal.
 #
 # To analyze another resolved band, repeat the integration and fit with that
 # band's fixed ppm limits. Do not reuse a result merely because the delay axis
@@ -214,3 +201,151 @@ _ = (signal - prediction).plot(marker="o", title="Recovery fit residuals")
 # integration limits, fitted script and residuals with the result.
 # See :doc:`cp_buildup` for a series whose independent variable is CP contact
 # time rather than recovery delay.
+
+
+# %% [raw] raw_mimetype="text/restructuredtext"
+# Fit four spectral components across the whole series
+# -----------------------------------------------------
+#
+# Instead of integrating the whole envelope, describe it with four spectral
+# profiles whose amplitudes follow the same saturation-recovery law:
+#
+# .. math::
+#
+#    S(t,\delta)=\sum_{k=1}^{4} A_k
+#    \left[1-\exp(-t/\tau_k)\right]
+#    V(\delta;\delta_k,w_k,r).
+#
+# All nine spectra contribute to one fit. Each component has a limiting
+# amplitude, a center, a width and an apparent recovery time. One mixing
+# parameter is shared by all four Voigt profiles. The spectral shapes are
+# invariant across delays while their amplitudes change. The delay coordinate
+# supplies the numerical time in seconds; no Fourier transform is applied to it.
+#
+# .. note::
+#
+#    This global fit uses the development Core API introduced by
+#    `SpectroChemPy PR #1905
+#    <https://github.com/spectrochempy/spectrochempy/pull/1905>`_.
+#    The documentation environment pins the tested Core revision in
+#    ``docs/requirements-rtd.txt``. Use that environment to run this recipe.
+#
+# The four starting centers are near −91.5, −97, −103 and −108.5 ppm.
+# They may move by 2 ppm. These starting values and the four-component model
+# are choices for this decomposition demonstration; no chemical assignment
+# is required. Positive widths and recovery times have positive lower bounds.
+# Width is the Voigt scale parameter: Gaussian sigma is
+# ``r * width / sqrt(8 * log(2))`` and Lorentzian HWHM is
+# ``(1-r) * width / 2``. It is not the convolution's FWHM.
+
+# %%
+peaks = [
+    {
+        "height": {"value": height, "bounds": (0, None)},
+        "axes": {
+            "x": {
+                "model": "voigt",
+                "parameters": {
+                    "center": {"value": center, "bounds": (center - 2, center + 2)},
+                    "width": {"value": 4, "bounds": (0.5, 12)},
+                    "ratio": {"shared": "mixing"},
+                },
+            },
+            "y": {
+                "model": "saturation_recovery",
+                "parameters": {
+                    "tau": {"value": 2.3, "bounds": (0.1, 100)},
+                },
+            },
+        },
+    }
+    for center, height in [(-91.5, 50), (-97.0, 290), (-103.0, 350), (-108.5, 115)]
+]
+global_fit = scp.Optimize(
+    peaks=peaks,
+    shared_parameters={
+        "mixing": {"value": 0.8, "bounds": (0, 1)},
+    },
+).fit(resonance)
+global_result = global_fit.result
+print("Converged:", global_result.diagnostics["success"])
+for index, component in enumerate(global_result.peaks, 1):
+    center = component["axes"]["x"]["parameters"]["center"]
+    tau = component["axes"]["y"]["parameters"]["tau"]
+    print(f"Band {index}: center={center:.2f} ppm; tau={tau:.3f} s")
+
+# %% [raw] raw_mimetype="text/restructuredtext"
+# ``shared_parameters`` declares one unknown ``mixing``;
+# ``{"shared": "mixing"}`` ties all four spectral ratios to it. There are
+# 17 varying parameters, not 20. ``global_result.peaks`` contains their
+# resolved values. ``components`` contains one full delay-by-frequency matrix
+# per band, and their sum is ``fitted``. These shapes are refined using the
+# complete series, rather than fitted on one trace and then held fixed.
+#
+# Compare the fitted sum and contributions with the longest-delay spectrum.
+# Then inspect the residuals at every delay, retaining the same intensity
+# scale and the same −120 to −85 ppm window used above.
+
+# %%
+_ = scp.plot_multiple(
+    [resonance[-1].squeeze(), global_result.fitted[-1].squeeze()],
+    labels=["Measured", "Global four-band fit"],
+    method="pen",
+    legend="best",
+    title="Longest-delay spectrum",
+)
+_ = scp.plot_multiple(
+    [component[-1].squeeze() for component in global_result.components],
+    labels=[f"Band {index + 1}" for index in range(4)],
+    method="pen",
+    legend="best",
+    title="Four fitted spectral contributions",
+    ylabel="Intensity",
+)
+_ = global_result.residuals.plot(
+    method="lines", colorbar=True, title="Global fit residuals"
+)
+relative_rms = (
+    ((resonance - global_result.fitted) ** 2).sum() / (resonance**2).sum()
+) ** 0.5
+print(f"Relative reconstruction RMS: {100 * float(relative_rms):.2f}%")
+
+# %% [raw] raw_mimetype="text/restructuredtext"
+# Evaluate the fitted model on a denser delay grid to draw the smooth recovery
+# laws. Normalize display copies of the frequency-summed contributions to
+# compare their shapes. This does not rescale the measured spectra or the fit.
+
+# %%
+display_delay = scp.Coord.linspace(0, 50, 201, units="s")
+display_grid = scp.zeros(
+    (display_delay.size, resonance.x.size),
+    coordset=[display_delay, resonance.x],
+    units=resonance.units,
+)
+_ = scp.plot_multiple(
+    [
+        scp.simulate_peaks(display_grid, [component])
+        .sum(dim="x")
+        .squeeze()
+        .normalize(dim=-1)
+        for component in global_result.peaks
+    ],
+    labels=[f"Band {index + 1}" for index in range(4)],
+    method="pen",
+    legend="best",
+    title="Fitted recovery laws",
+    ylabel="Relative amplitude",
+)
+
+# %% [raw] raw_mimetype="text/restructuredtext"
+# On these data the fitted times are approximately 2.09, 2.30, 2.32 and
+# 2.23 s, with a relative reconstruction RMS of about 3.77%. The profiles
+# therefore overlap strongly. The decomposition demonstrates the global
+# model, without establishing distinct physical recovery times for the bands.
+# The four-band model, line shapes, shared ratio, bounds and phase are part
+# of the fit assumptions. Inspect residuals and parameter correlations before
+# using a decomposition quantitatively. The
+# `global fitting guide in the Core change
+# <https://github.com/fernandezc/spectrochempy/blob/b6ea7f3a2633610ba8b7611eafa51fb76c14d98f/docs/sources/userguide/analysis/global_fitting.py>`_
+# explains custom spectral profiles, multi-parameter evolution laws and
+# sharing parameters between components or axes.
