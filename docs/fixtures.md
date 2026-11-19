@@ -37,6 +37,15 @@ python docs/fetch_gallery_data.py
 No fixture is copied into the NMR repository or published as a new data
 distribution.
 
+The fetch command also runs `docs/generate_reader_inputs.py`. This creates
+small, deterministic Agilent/Varian, SIMPSON and nmrML inputs below
+`nmrdata/synthetic` in the selected datadir. These are generated examples,
+not redistributed acquisitions. The generator can also be downloaded from
+the reader-workflows guide and run separately. The nmrML example needs
+`xmltodict`, installed by the documentation requirements. The Bruker 2D
+gallery uses the same licensed PST-5 HMQC input as the interrupted-sampling
+guide; it applies the common processor rather than the archived replay.
+
 ## JEOL COSY magnitude qualification
 
 The optional tests in `tests/qualification/test_jeol_cosy_magnitude.py`

@@ -1,9 +1,7 @@
-# ======================================================================================
-# Copyright (©) 2014-2026 Laboratoire Catalyse et Spectrochimie (LCS), Caen, France.
+# ===============================================================================# Copyright (©) 2014-2026 Laboratoire Catalyse et Spectrochimie (LCS), Caen, France.
 # CeCILL-B FREE SOFTWARE LICENSE AGREEMENT
 # See full LICENSE agreement in the root directory.
-# ======================================================================================
-# ruff: noqa: S101, S603
+# ===============================================================================# ruff: noqa: S101, S603
 
 """Targeted checks for the public NMR example gallery."""
 
@@ -43,14 +41,25 @@ def _has_nmr_example_data(example: Path) -> bool:
         "plot_finite_pulse_excitation",
         "plot_rf_pulse_optimization",
         "plot_mqmas_pulse_optimization",
+        "plot_nmr_baseline_2d",
     }:
         return True
     root = Path(scp.preferences.datadir) / "nmrdata"
+    synthetic = {
+        "plot_read_agilent": "agilent.fid/fid",
+        "plot_read_simpson": "simpson.fid",
+        "plot_read_nmrml": "signal.nmrML",
+        "plot_nmr_apk2d": "simpson.fid",
+    }
+    if example.stem in synthetic:
+        return (root / "synthetic" / synthetic[example.stem]).is_file()
     if example.stem in JEOL_DATA:
         return (root / "jeol" / JEOL_DATA[example.stem]).is_file()
     if example.stem in {"plot_read_nmrpipe_2d", "plot_analyze_cosy_2d"}:
         return (root / "nmrpipe" / "nmrpipe_2d_cosy_example.ft2").is_file()
     bruker = root / "bruker" / "tests" / "nmr"
+    if example.stem == "plot_bruker_2d":
+        return (bruker / "topspin_2d" / "1" / "ser").is_file()
     if example.stem == "plot_replay_mqmas_pst5":
         return (bruker / "MQMAS_27AL_PST5" / "51" / "ser").is_file()
     if example.stem == "plot_processing_cp_nmr":

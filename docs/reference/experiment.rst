@@ -69,8 +69,9 @@ The legacy ``process_jeol_cosy_magnitude()`` name is retained for compatibility.
 New workflows use ``read()`` and the instrument-independent ``Experiment``
 operations above.
 
-For polynomial baseline correction along F1 or F2 and numbered trace
-extraction, see :ref:`topspin-slice-and-baseline`.
+For polynomial baseline correction along F1 or F2, see
+:ref:`topspin-slice-and-baseline`. For numbered trace extraction, see
+:doc:`/userguide/components_2d`.
 
 .. currentmodule:: spectrochempy_nmr
 
