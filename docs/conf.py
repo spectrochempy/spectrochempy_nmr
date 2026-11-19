@@ -40,6 +40,7 @@ exclude_patterns = [
     "_static",
     "conf.py",
     "fetch_gallery_data.py",
+    "generate_reader_inputs.py",
     "**.ipynb_checkpoints",
     # Sphinx-Gallery renders the paired RST for these downloads.
     "examples/gallery/**/*.ipynb",

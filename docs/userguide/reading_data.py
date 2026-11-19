@@ -75,6 +75,8 @@ agilent = scp.nmr.read("path/to/fid", protocol="agilent")
 #      - Supported NMR profiles, such as ``"jcampdx-spectrum-1d"``
 #
 # See :doc:`exchanging_spectra` for export and round-trip examples.
+# See :doc:`reader_workflows` for complete Agilent/Varian, SIMPSON and nmrML
+# reading and Fourier-processing examples with reproducible inputs.
 #
 # See :ref:`reading-exchange-formats-through-interop` for the profile and
 # convention options for exchange formats.

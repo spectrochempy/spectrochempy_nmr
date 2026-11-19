@@ -32,6 +32,52 @@
 # processing explicitly on a supported dataset, you can inspect the
 # mixed-domain result after F2 before transforming F1.
 
+# %% [raw] raw_mimetype="text/restructuredtext"
+# Process an acquired Bruker HMQC
+# --------------------------------
+#
+# The PST-5 aluminium/phosphorus HMQC in the common datadir has a qualified
+# States-TPPI reconstruction. Reading retains its complete acquired pairs,
+# corrects the direct digital-filter delay once, and supplies the common
+# representation. Apply the windows to the acquired samples before the two
+# transforms. This workflow uses SpectroChemPy processing settings, rather
+# than replaying the archived TopSpin recipe.
+
+# %%
+import spectrochempy as scp
+
+path = scp.preferences.datadir / "nmrdata/bruker/tests/nmr/topspin_2d/1/ser"
+raw = scp.nmr.read(path, remove_digital_filter=True)
+weighted = raw.sp(ssb=2, pow=2, dim="x").sp(ssb=2, pow=2, dim="y")
+spectrum = scp.nmr.Experiment(weighted).process()
+magnitude = (spectrum**2).sum(dim="c") ** 0.5
+_ = magnitude.plot(
+    method="contour",
+    start=0.15,
+    nlevels=12,
+    negative=False,
+    xlabel="F2 offset (Hz)",
+    ylabel="F1 offset (Hz)",
+    figsize=(7, 5),
+)
+
+# %% [raw] raw_mimetype="text/restructuredtext"
+# The result has four real spectral components. Their Euclidean norm gives
+# the displayed hypercomplex magnitude without choosing phase angles.
+# Squared cosine windows (``ssb=2, pow=2``) retain the start of each FID.
+# Magnitude loses phase and sign information; retain ``spectrum`` and phase
+# the components before extracting RR for absorptive peak integration.
+# Both coordinates are carrier-relative frequency offsets in Hz. The reader
+# retains 73 complete F1 pairs from this interrupted uniform acquisition.
+# Windowing and the FFT use that acquired prefix, without constructing
+# missing samples. See :doc:`bruker_indirect_sampling` for the stored counts
+# and the distinct archived-recipe replay. Data: Christian Fernandez, LCS,
+# CC BY 4.0, distributed through spectrochempy_data.
+#
+# The :doc:`short gallery workflow </examples/gallery/nmr/plot_bruker_2d>`
+# runs these same operations. Subsequent sections explain the individual
+# quadrature modes and their alternatives.
+
 #
 # .. toctree::
 #    :maxdepth: 1
@@ -46,9 +92,6 @@
 # indirect transform. The examples below show how to select a workflow
 # for an acquisition whose mode is known. Replace the example paths with
 # your own data.
-
-# %%
-import spectrochempy as scp
 
 # %% [raw] raw_mimetype="text/restructuredtext"
 # QF magnitude
@@ -300,13 +343,36 @@ spectrum = scp.nmr.Experiment(fid).process(
 # across the series. Inspect individual estimates when the signal becomes
 # weak, especially at high diffusion weightings. The estimator uses the same options as ``scp.nmr.apk()``.
 
-# %% tags=["skip-execution"]
-phased = scp.nmr.Experiment(series).apk2d(reference_row=1, order=0)  # noqa: F821
+# %%
+path = scp.preferences.datadir / "nmrdata/synthetic/simpson.fid"
+reference = scp.nmr.Experiment(scp.nmr.read(path)).process()
+shifted = reference.pk(phc0=35.0)
+series = scp.NDDataset(
+    [scale * shifted.data for scale in (1.0, 0.6, 0.3)],
+    coordset=[scp.Coord([1, 2, 3], title="Trace"), shifted.x],
+)
+series.meta.isfreq = [False, True]
+phased = scp.nmr.Experiment(series).apk2d(reference_row=1, order=0)
+_ = scp.plot_multiple(
+    [series[0].squeeze().real, phased[0].squeeze().real],
+    labels=["Before", "After common F2 phase"],
+    legend="best",
+    xlim=(-800, -200),
+)
 
 # %% [raw] raw_mimetype="text/restructuredtext"
 # For MQMAS, pass the complex result of ``xf2()``. The common phase applies
 # to both States branches. The output can go directly to ``xfshear()``.
 # An unsuccessful estimate raises an error identifying the row.
+#
+# For an executable before/after comparison with a known common phase error,
+# see :doc:`/examples/gallery/analysis/plot_nmr_apk2d`. The secondary axis in
+# that example indexes spectra, rather than a second Fourier dimension.
+# A common reference-row phase preserves relative amplitudes across a series.
+# Independent per-row estimates can become unstable on weak spectra; use
+# them only when there is evidence that phase actually varies between rows.
+# ``apk2d`` estimates F2 phase, not the phase of the indirect dimension.
+# Generate the synthetic input once as described in :doc:`reader_workflows`.
 #
 # Related concepts
 # ----------------
