@@ -10,6 +10,8 @@ from urllib.request import urlopen
 
 import spectrochempy as scp
 
+from generate_reader_inputs import generate
+
 
 ROOT = Path(__file__).parent
 MANIFEST = ROOT / "gallery-fixtures.toml"
@@ -38,6 +40,7 @@ def main() -> None:
             )
         target.write_bytes(payload)
         total += len(payload)
+    generate(destination)
     print(
         f"Fetched and verified {len(manifest['files'])} fixtures "
         f"({total} bytes) into {destination}"
