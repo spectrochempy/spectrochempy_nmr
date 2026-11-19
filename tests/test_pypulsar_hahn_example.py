@@ -24,10 +24,20 @@ def hahn_example():
 def test_hahn_example_complex_t2_attenuation(hahn_example, increment):
     example = hahn_example
     count = example["rotor_counts"][increment]
-    events = example["hahn_events"](count)
+    tau = (count * example["rotor_period"]).m_as("s")
+    p90 = example["p90"].m_as("s")
+    p180 = example["p180"].m_as("s")
+    rf = example["rf"].m_as("Hz")
+    events = (
+        pulsar.Pulse(p90, rf),
+        pulsar.Coherence(-1),
+        pulsar.Delay(tau - p90 / 2 - p180 / 2),
+        pulsar.Pulse(p180, rf, phase_deg=90),
+        pulsar.Delay(tau - p180 / 2),
+    )
     reference = pulsar.simulate_pulse_sequence(events, **example["settings"])
-    elapsed = 2 * count * example["rotor_period"] + example["p90"] / 2
-    expected = reference.data * np.exp(-elapsed / example["t2"])
+    elapsed = 2 * tau + p90 / 2
+    expected = reference.data * np.exp(-elapsed / example["t2"].m_as("s"))
     np.testing.assert_allclose(
         example["spectra"][increment].data, expected, rtol=1e-10, atol=1e-12
     )

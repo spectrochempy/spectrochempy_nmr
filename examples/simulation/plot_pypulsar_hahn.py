@@ -6,15 +6,28 @@ Simulate a Hahn echo on the central transition of a spin-5/2 aluminium
 site under 10 kHz magic-angle spinning. Increasing the echo delay reduces
 the signal through T2 relaxation. The four spectra share the same
 intensity scale so that this attenuation remains visible.
+
+Download :download:`hahn.seq <hahn.seq>` beside this script or notebook.
+The sequence stays unchanged while its parameters vary in Python.
+
+.. literalinclude:: hahn.seq
+   :language: text
 """
+
+from pathlib import Path
 
 import spectrochempy as scp
 from spectrochempy.nmr import pulsar
 
 # %%
-# Define the site and the finite RF pulses. The scale factors keep durations
-# readable in microseconds while passing seconds to the simulation engine.
-us, ms, kHz = 1e-6, 1e-3, 1e3
+# Load the pulse program once. It contains the pulses, coherence selection
+# and delays; their values are supplied below.
+folder = Path(__file__).parent if "__file__" in globals() else Path.cwd()
+program = pulsar.read_sequence(folder / "hahn.seq")
+
+# %%
+# Set the sample and independent pulse lengths, with explicit units.
+us, ms, kHz = scp.ur.us, scp.ur.ms, scp.ur.kHz
 spinning = 10 * kHz
 rotor_period = 1 / spinning
 rf = 10 * kHz
@@ -27,44 +40,31 @@ settings = {
     "larmor_hz": 104.228e6,
     "cq_hz": 2.5e6,
     "eta": 0.3,
-    "spinning_hz": spinning,
+    "spinning_hz": spinning.m_as("Hz"),
     "rotor_angle_deg": 54.735610,
-    "spectral_width_hz": 10 * kHz,
+    "spectral_width_hz": 10000,
     "transitions": "central",
     "points": 1024,
     "accuracy": 5,
 }
+parameters = {"p1": p90, "p2": p180, "rf1": rf, "ph1": 0, "ph2": 90, "l1": 1}
 
 # %%
-# Synchronise the echo with the rotor, accounting for the finite pulse
-# durations. Order -1 before the refocusing pulse leads to the detected
-# +1 coherence after the y180 pulse.
-
-
-def hahn_events(rotor_count):
-    """Build one rotor-synchronised Hahn echo."""
-    tau = rotor_count * rotor_period
-    return (
-        pulsar.Pulse(p90, rf),
-        pulsar.Coherence(-1),
-        pulsar.Delay(tau - p90 / 2 - p180 / 2),
-        pulsar.Pulse(p180, rf, phase_deg=90),
-        pulsar.Delay(tau - p180 / 2),
-    )
-
-
+# Synchronise the echo with the rotor, accounting for finite pulse lengths.
+# Reuse the same program for each delay, retaining the absolute intensity.
 spectra = []
 for rotor_count in rotor_counts:
-    spectrum = pulsar.simulate_pulse_sequence(
-        hahn_events(rotor_count), t2_s=t2, **settings
+    tau = rotor_count * rotor_period
+    events = program.build(
+        {**parameters, "d1": tau - p90 / 2 - p180 / 2, "d2": tau - p180 / 2}
     )
+    spectrum = pulsar.simulate_pulse_sequence(events, t2_s=t2.m_as("s"), **settings)
     spectrum.x.ito("kHz")
     spectra.append(spectrum)
 
 # %%
 # Display the real component and zoom into the central-transition profile.
-# Longer delays produce weaker echoes; no individual normalisation is used.
-labels = [f"τ = {count * rotor_period / ms:.1f} ms" for count in rotor_counts]
+labels = [f"τ = {(count * rotor_period).m_as('ms'):.1f} ms" for count in rotor_counts]
 _ = scp.plot_multiple(
     [spectrum.real for spectrum in spectra],
     labels=labels,
