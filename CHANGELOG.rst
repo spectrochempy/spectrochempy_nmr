@@ -10,6 +10,7 @@ Unreleased
 * Add an installed pulse-program library with ``pulsar.available_sequences()``
   and ``pulsar.load_sequence(name)``. New finite-RF, RF-duration and 3QMAS
   pulse-optimisation galleries reuse parameterized templates across scans.
+  (`#167 <https://github.com/spectrochempy/spectrochempy_nmr/pull/167>`_)
 
 * Derive automatic STMAS spin and shear geometry from the observed F2 nucleus,
   allowing unused default isotopes in archived F1 headers. Preserve the
