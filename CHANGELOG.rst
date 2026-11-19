@@ -7,6 +7,10 @@ distribution. The sections below describe changes in each plugin release.
 Unreleased
 ----------
 
+* Add an installed pulse-program library with ``pulsar.available_sequences()``
+  and ``pulsar.load_sequence(name)``. New finite-RF, RF-duration and 3QMAS
+  pulse-optimisation galleries reuse parameterized templates across scans.
+
 * Derive automatic STMAS spin and shear geometry from the observed F2 nucleus,
   allowing unused default isotopes in archived F1 headers. Preserve the
   indirect sampling interval, source metadata, and ZQ-TROSY references.

@@ -116,3 +116,18 @@ section_ref = "examples-processing-nmr-index"
 path = "core/c_importer/plot_read_jeol_processed_2d.py"
 section = "Import / Export"
 section_ref = "examples-importer-index"
+
+[[examples]]
+path = "simulation/plot_finite_pulse_excitation.py"
+section = "NMR simulation"
+section_ref = "examples-simulation-index"
+
+[[examples]]
+path = "simulation/plot_mqmas_pulse_optimization.py"
+section = "NMR simulation"
+section_ref = "examples-simulation-index"
+
+[[examples]]
+path = "simulation/plot_rf_pulse_optimization.py"
+section = "NMR simulation"
+section_ref = "examples-simulation-index"

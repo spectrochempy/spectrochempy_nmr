@@ -1,0 +1,8 @@
+# Excitation, indirect evolution and conversion; q is +3 or -3 for 3QMAS.
+set rf=rf_exc
+pulse p1 phase=ph1
+coherence q
+delay d0
+set rf=rf_conv
+pulse p2 phase=ph2
+coherence 1

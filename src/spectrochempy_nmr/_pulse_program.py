@@ -334,3 +334,37 @@ def read_sequence(path):
     with path.open(encoding="utf-8") as stream:
         text = stream.read(1024**2 + 1)
     return parse_sequence(text, source=str(path))
+
+
+def available_sequences():
+    """Return sorted names of pulse programs included in the installed plugin."""
+    from importlib.resources import files
+
+    library = files("spectrochempy_nmr").joinpath("sequences")
+    return tuple(
+        sorted(
+            item.name[:-4]
+            for item in library.iterdir()
+            if item.is_file() and item.name.endswith(".seq")
+        )
+    )
+
+
+def load_sequence(name):
+    """Load an installed program by name, without a file extension.
+
+    Call :func:`available_sequences` for names. Bind sample-specific values
+    with ``program.build(parameters)``. Use :func:`read_sequence` instead
+    to read a program from an external path.
+    """
+    from importlib.resources import files
+
+    if not isinstance(name, str):
+        raise TypeError("sequence name must be a string")
+    names = available_sequences()
+    if name not in names:
+        raise ValueError(f"Unknown sequence {name!r}; available: {', '.join(names)}")
+    resource = files("spectrochempy_nmr").joinpath("sequences", f"{name}.seq")
+    return parse_sequence(
+        resource.read_text(encoding="utf-8"), source=f"library:{name}"
+    )

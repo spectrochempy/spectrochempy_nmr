@@ -21,6 +21,8 @@ from operator import index
 
 import numpy as np
 
+from spectrochempy_nmr._pulse_program import available_sequences as available_sequences
+from spectrochempy_nmr._pulse_program import load_sequence as load_sequence
 from spectrochempy_nmr._pulse_program import PulseProgram as PulseProgram
 from spectrochempy_nmr._pulse_program import SequenceError as SequenceError
 from spectrochempy_nmr._pulse_program import parse_sequence as parse_sequence
