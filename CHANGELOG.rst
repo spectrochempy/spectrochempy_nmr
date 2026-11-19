@@ -33,6 +33,7 @@ Unreleased
   helper delegates to read and common processing; it no longer chooses the
   reconstruction from the pulse-program name. Four-section and listed JDFs
   remain unsupported for a complete reconstruction.
+  (`#162 <https://github.com/spectrochempy/spectrochempy_nmr/pull/162>`_)
 
 * Read Multiplex SPAM phase cycles with ``read(..., phase_cycle="paired")``
   and select 3Q/5Q through ``Experiment.select_coherence()`` before the common
