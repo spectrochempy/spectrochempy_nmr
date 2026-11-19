@@ -40,3 +40,6 @@ extend-exclude = ["tests/data"]
 
 [tool.spectrochempy]
 official-plugin = true
+
+[tool.setuptools.package-data]
+spectrochempy_nmr = ["sequences/*.seq"]

@@ -1,0 +1,9 @@
+# Pulse lengths and delays are supplied by the caller.
+set rf=rf1
+repeat l1
+    pulse p1 phase=ph1
+    coherence -1
+    delay d1
+    pulse p2 phase=ph2
+    delay d2
+end

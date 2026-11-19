@@ -7,6 +7,80 @@ call ``program.build(parameters)`` whenever the parameters change. The
 result is a tuple of the existing ``Pulse``, ``Delay`` and ``Coherence``
 objects, usable by the single-spin and coupled-spin simulators.
 
+Installed sequence library
+----------------------------
+
+The plugin includes a small library of reusable programs. List and load them
+without locating files in a checkout::
+
+    pulsar.available_sequences()
+    program = pulsar.load_sequence("rectangular")
+    events = program.build({"p1": "0.5 us", "rf1": "100 kHz", "ph1": 0})
+
+Programs contain events and parameter names, not sample properties or fixed
+experimental durations. Use ``read_sequence(path)`` for your own files and
+``load_sequence(name)`` for installed templates. Library errors identify the
+template, for example ``library:rectangular:3``.
+
+.. list-table::
+   :header-rows: 1
+   :widths: 22 40 38
+
+   * - Name
+     - Preparation
+     - Main external parameters
+   * - ``rectangular``
+     - One finite pulse
+     - ``p1``, ``rf1``, ``ph1``
+   * - ``hahn``
+     - Selected Hahn echo, optionally repeated
+     - ``p1``, ``p2``, ``d1``, ``d2``, ``rf1``, ``ph1``, ``ph2``, ``l1``
+   * - ``mqmas``
+     - Excitation, indirect delay and conversion
+     - ``p1``, ``p2``, ``rf_exc``, ``rf_conv``, ``ph1``, ``ph2``, ``q``, ``d0``
+   * - ``mqmas_zfilter``
+     - MQMAS with a z filter and readout pulse
+     - MQMAS parameters plus ``p3``, ``rf_read``, ``ph3``, ``dz``
+   * - ``two_channel``
+     - Simultaneous pulses, then separate-channel intervals
+     - ``p1``, ``p2``, ``p3``, ``rf1``, ``rf2``, ``ph1``, ``ph2``, ``o1``, ``o2``
+
+The :doc:`finite-pulse gallery
+<../examples/gallery/simulation/plot_finite_pulse_excitation>`,
+:doc:`RF-duration scan
+<../examples/gallery/simulation/plot_rf_pulse_optimization>` and
+:doc:`MQMAS pulse optimisation
+<../examples/gallery/simulation/plot_mqmas_pulse_optimization>` show how one
+program can serve many simulations with different parameters.
+
+Historical examples and model limits
+~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+
+These workflows rewrite PyPulsar's ``RealPulse.tpl``, ``popt.tpl``,
+``MQMas.tpl`` and ``MQMas-p2.tpl`` using the modern API. The historical
+sources are preserved in the `PyPulsar repository
+<https://github.com/fernandezc/pypulsar/tree/sourceforge-r385/pypulsar/workspace/models>`_.
+The Al and Na Larmor frequencies follow its rounded isotope table at a
+400 MHz proton frequency. The MQMAS gallery uses the modern -3 to +1
+pathway; select ``q=3`` to calculate the other branch separately. Both
+pulse lengths remain independent.
+
+The finite-pulse example widens the historical window from 20 to 30 kHz
+to contain two requested sidebands at 5 kHz MAS. The Na RF-duration scan
+focuses on the central transition rather than the original all-transition
+selection; it uses a 50 kHz window and one sideband order. It does not apply
+the historical probe-Q setting. Both workflows retain raw amplitudes and
+omit the old Lorentzian display broadening and per-spectrum peak
+normalisation. Powder accuracies are demonstration settings, not convergence
+qualifications. No historical binary parity is claimed.
+
+The historical ideal-pulse ``Simple.tpl`` and multisite ``TwoNuclei.tpl``
+remain future adaptations of the ideal-preparation/site-mixture workflow.
+The two ``CP`` templates require dipolar cross polarisation, which the
+current secular-J coupled-spin simulator does not model. Simultaneous RF
+support alone does not supply that Hamiltonian. ``two_channel`` is a generic
+RF template, not a claim of dipolar CP simulation.
+
 Parameters and expressions
 ---------------------------
 
@@ -102,7 +176,7 @@ Simultaneous pulses on two nuclei
 ----------------------------------
 
 For ``simulate_coupled_sequence``, one pulse can drive both RF-active nuclei
-(:download:`two-channel example <../../examples/pulse_programs/two_channel.seq>`)::
+(:download:`two-channel example <../../src/spectrochempy_nmr/sequences/two_channel.seq>`)::
 
     set rf=rf_observed
     set partner_rf=rf_partner
@@ -148,7 +222,7 @@ branches can be calculated as follows::
             rows.append(spectrum.data)
         branches.append(np.stack(rows))
 
-A :download:`z-filter MQMAS program <../../examples/pulse_programs/mqmas_zfilter.seq>`
+A :download:`z-filter MQMAS program <../../src/spectrochempy_nmr/sequences/mqmas_zfilter.seq>`
 also illustrates multiple RF settings and an indirect delay.
 
 Each branch has shape ``(48, points)`` with complex values and represents

@@ -7,8 +7,8 @@ import pytest
 from spectrochempy.nmr import pulsar
 
 
-PROGRAMS = Path(__file__).resolve().parents[1] / "examples/pulse_programs"
-HAHN = (PROGRAMS.parent / "simulation/hahn.seq").read_text()
+PROGRAMS = Path(__file__).resolve().parents[1] / "src/spectrochempy_nmr/sequences"
+HAHN = (PROGRAMS / "hahn.seq").read_text()
 
 
 def test_hahn_file_matches_manual_complex_echo_for_four_increments(tmp_path):
