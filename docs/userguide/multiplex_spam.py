@@ -87,6 +87,10 @@
 # F2 phase before interpreting the map. The shear inherits the selected MQ
 # order; spin is resolved from physical metadata or the observed isotope.
 # Supply ``spin`` only if neither is available.
+# The observed nucleus is the one detected in F2. An unused F1 isotope
+# default does not select the coherence or the shear geometry: the phase
+# cycle determines the available orders, and the observed spin determines
+# their shearing coefficients. The original F1 time grid remains required.
 
 # %%
 import os
