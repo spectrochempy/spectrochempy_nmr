@@ -1,7 +1,9 @@
-# ===============================================================================# Copyright (©) 2014-2026 Laboratoire Catalyse et Spectrochimie (LCS), Caen, France.
+# ======================================================================================
+# Copyright (©) 2014-2026 Laboratoire Catalyse et Spectrochimie (LCS), Caen, France.
 # CeCILL-B FREE SOFTWARE LICENSE AGREEMENT
 # See full LICENSE agreement in the root directory.
-# ===============================================================================# ruff: noqa: S101, S603
+# ======================================================================================
+# ruff: noqa: S101, S603
 
 """Targeted checks for the public NMR example gallery."""
 
