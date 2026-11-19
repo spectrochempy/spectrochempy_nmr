@@ -10,7 +10,7 @@ objects, usable by the single-spin and coupled-spin simulators.
 Parameters and expressions
 ---------------------------
 
-Download :download:`hahn.seq <../../examples/pulse_programs/hahn.seq>`
+Download :download:`hahn.seq <../../examples/simulation/hahn.seq>`
 or save this Hahn echo as ``hahn.seq``::
 
     set rf=rf1

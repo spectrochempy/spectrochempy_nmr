@@ -202,6 +202,7 @@ sphinx_gallery_conf = {
     "abort_on_example_error": True,
     "only_warn_on_example_error": False,
     "download_all_examples": False,
+    "copyfile_regex": r".*\.seq$",
     "remove_config_comments": True,
 }
 
