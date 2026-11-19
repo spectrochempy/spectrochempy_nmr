@@ -293,6 +293,7 @@ _ = scp.plot_multiple(
     method="pen",
     legend="best",
     title="Longest-delay spectrum",
+    ylabel="Intensity / count",
 )
 _ = scp.plot_multiple(
     [component[-1].squeeze() for component in global_result.components],
@@ -316,7 +317,7 @@ print(f"Relative reconstruction RMS: {100 * float(relative_rms):.2f}%")
 # compare their shapes. This does not rescale the measured spectra or the fit.
 
 # %%
-display_delay = scp.Coord.linspace(0, 50, 201, units="s")
+display_delay = scp.Coord.linspace(0, 50, 201, units="s", title="Recovery delay")
 display_grid = scp.zeros(
     (display_delay.size, resonance.x.size),
     coordset=[display_delay, resonance.x],
@@ -346,6 +347,6 @@ _ = scp.plot_multiple(
 # of the fit assumptions. Inspect residuals and parameter correlations before
 # using a decomposition quantitatively. The
 # `global fitting guide in the Core change
-# <https://github.com/fernandezc/spectrochempy/blob/b6ea7f3a2633610ba8b7611eafa51fb76c14d98f/docs/sources/userguide/analysis/global_fitting.py>`_
+# <https://github.com/spectrochempy/spectrochempy/blob/6f580f29fb9e197b39a61df399c9c02274c82f25/docs/sources/userguide/analysis/global_fitting.py>`_
 # explains custom spectral profiles, multi-parameter evolution laws and
 # sharing parameters between components or axes.

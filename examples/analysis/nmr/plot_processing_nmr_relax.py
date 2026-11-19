@@ -67,4 +67,5 @@ _ = scp.plot_multiple(
     method="pen",
     legend="best",
     title="Four-component recovery fit",
+    ylabel="Intensity / count",
 )
