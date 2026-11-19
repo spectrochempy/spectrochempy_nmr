@@ -60,14 +60,21 @@ _ = scp.plot_multiple(
 # The :doc:`short SNIP gallery example </examples/gallery/analysis/plot_nmr_snip>`
 # reproduces this comparison from the original FID.
 #
+# .. _topspin-slice-and-baseline:
+#
 # Correct a 2D spectrum
 # ---------------------
 #
 # For a phased 2D spectrum with a baseline that varies by trace, the
 # plugin's ``Experiment.abs2()`` fits a polynomial along each F2 row.
 # Use ``Experiment.abs1()`` to correct along F1 columns. These TopSpin-style
-# operations correct the RR plane. See :ref:`topspin-slice-and-baseline`
-# for limits, fit regions, and a worked call.
+# operations correct only the RR plane and preserve the other components.
+# The default polynomial degree is 5. Without explicit fit ranges, the fit
+# iteratively excludes positive and negative peaks using a residual-noise
+# estimate. Masked points are excluded, including with explicit fit ranges.
+# A limited correction interval requires a strictly monotonic coordinate.
+# Automatic fit-point selection can differ from TopSpin. See
+# :doc:`components_2d` for extracting and inspecting individual traces.
 #
 # Use known peak-free intervals when they are available. The next example
 # adds a plane with slopes along both axes to a separable Gaussian peak.

@@ -5,7 +5,7 @@ Apply one automatic F2 phase to a spectral series
 Introduce the same 35-degree phase error into three synthetic spectra,
 then estimate one correction from the first row and apply it to every row.
 Generate the input as described in :doc:`/userguide/reader_workflows`.
-See :doc:`/userguide/processing_2d` for common and individual row phases.
+See :doc:`/userguide/phase_2d` for common and individual row phases.
 """
 
 import spectrochempy as scp
