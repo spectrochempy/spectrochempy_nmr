@@ -22,7 +22,12 @@ The Bruker PST-5 aluminium-27 MQMAS acquisition (experiment 51) comes from
 The dataset is licensed under CC BY 4.0 and attributed to Christian Fernandez,
 LCS. The fixture contains the SER and the parameters used to read it.
 
-The selected files total about 8.5 MiB. Run the same fetch as the RTD
+The raw epicatechin COSY JDF and its processed JCAMP-DX export are fetched
+from [spectrochempy_data revision 34448ef](https://github.com/spectrochempy/spectrochempy_data/tree/34448ef343f17a2ee57d2bc06661ac90e2d1ff48/testdata/nmrdata/jeol),
+also under CC0 1.0. They support the common QF guide and the two COSY gallery
+examples. Their hashes and source provenance are recorded in that dataset.
+
+The selected files total about 22.8 MiB. Run the same fetch as the RTD
 pre-build job locally with:
 
 ```console

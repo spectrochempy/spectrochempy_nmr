@@ -334,3 +334,17 @@ size = 2200
 path = "nmrdata/bruker/tests/nmr/topspin_2d/1/pdata/1/proc2s"
 sha256 = "3124c8af9239e417a34165278e4aca9124bb5e3dbace50c9245588e4afab67cd"
 size = 2162
+
+# Epicatechin COSY, nmrXiv P33/S192, CC0 1.0 (data PR31).
+
+[[files]]
+path = "nmrdata/jeol/epicatechin_cosy.jdf"
+url = "https://raw.githubusercontent.com/spectrochempy/spectrochempy_data/34448ef343f17a2ee57d2bc06661ac90e2d1ff48/testdata/nmrdata/jeol/epicatechin_cosy.jdf"
+sha256 = "f109351f2102435faa7d302659e073b77ecc1184f1c3ef8817087ca91b9df3aa"
+size = 5271680
+
+[[files]]
+path = "nmrdata/jeol/epicatechin_cosy.jdx"
+url = "https://raw.githubusercontent.com/spectrochempy/spectrochempy_data/34448ef343f17a2ee57d2bc06661ac90e2d1ff48/testdata/nmrdata/jeol/epicatechin_cosy.jdx"
+sha256 = "b77cd1fe72cea1f6d820e40279d91cfdff3424333ca4d669e89b129c566c1152"
+size = 8182161

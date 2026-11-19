@@ -59,6 +59,16 @@ retains all excitation phases and scan pairs, then
 E1/E2 FIDs. Continue with XF2, phase and XFSHEAR; automatic shearing inherits
 this selection. See :doc:`/userguide/multiplex_spam`.
 
+For QF acquisitions, ``process(size=(n1, n2))`` zero-fills both Fourier axes.
+The generic processor uses physical frequency offsets and Nyquist grid choices
+retained by the reader; no file profile selects the numerical kernel.
+``Experiment(abs(spectrum)).symmetrize()`` takes the minimum at exchanged
+physical frequencies on Hz axes. See :doc:`/userguide/qf_2d`.
+
+The legacy ``process_jeol_cosy_magnitude()`` name is retained for compatibility.
+New workflows use ``read()`` and the instrument-independent ``Experiment``
+operations above.
+
 For polynomial baseline correction along F1 or F2 and numbered trace
 extraction, see :ref:`topspin-slice-and-baseline`.
 

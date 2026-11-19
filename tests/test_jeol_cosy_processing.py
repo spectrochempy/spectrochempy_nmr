@@ -1,54 +1,31 @@
 """Check the opt-in JEOL COSY processing contract without external datasets."""
 
-from nmrglue import jeol
 import numpy as np
 import pytest
 
 from spectrochempy_nmr import process_jeol_cosy_magnitude
 
 
+from test_jeol_common import qf_jdf as _qf_jdf
+
+
 @pytest.fixture
-def cosy_reader(monkeypatch):
-    header = {
-        "data_format": "two_d",
-        "data_axis_type": ["real_complex"] * 2,
-        "reversed": [False, True],
-        "data_axis_ranged": ["ranged"] * 2,
-        "data_points": [16, 8],
-        "data_offset_start": [0, 0],
-        "data_offset_stop": [15, 7],
-        "units": [("none", 1, "second")] * 2,
-        "data_axis_start": [0.0, 0.0],
-        "data_axis_stop": [15 / 16, 7 / 8],
-    }
-    parameters = {
-        "experiment": "cosy.jxp",
-        "x_domain": "1H",
-        "y_domain": "1H",
-        "x_points": 16,
-        "y_points": 8,
-        "x_sweep": 16,
-        "y_sweep": 8,
-        "x_freq": 400e6,
-        "y_freq": 400e6,
-        "x_offset": 0.5 / 400,
-        "y_offset": 0,
-    }
-    # Reciprocal lines at (0, 3) and (3, 0) Hz, with the second line stronger.
-    # The direct carrier cancels the half-dwell grid shift in this fixture.
+def cosy_reader(tmp_path, monkeypatch):
+    path, stored, _, _ = _qf_jdf.__wrapped__(tmp_path, monkeypatch)
     t1, t2 = np.indices((8, 16))
     fid = np.exp(2j * np.pi * (3 * t2 / 16))
     fid += 3 * np.exp(2j * np.pi * (-3 * t1 / 8))
-    monkeypatch.setattr(
-        jeol, "read", lambda path: ({"header": header, "parameters": parameters}, fid)
-    )
-    return header
+    stored.metadata["parameters"].update(x_offset=0.5 / 400, y_offset=0)
+    from nmrglue import jeol
+
+    monkeypatch.setattr(jeol, "read", lambda *a, **kw: (stored.metadata, fid.copy()))
+    return stored.metadata["header"], path
 
 
 def test_magnitude_makes_reciprocal_amplitudes_equal(cosy_reader):
     frequencies = [0.0, 3.0]
     result = process_jeol_cosy_magnitude(
-        "cosy.jdf", frequency_grid=(frequencies, frequencies)
+        cosy_reader[1], frequency_grid=(frequencies, frequencies)
     )
     assert result.meta.physical_f1_mode == "indeterminate"
     assert result.data[0, 1] > 0
@@ -60,9 +37,9 @@ def test_magnitude_makes_reciprocal_amplitudes_equal(cosy_reader):
 
 
 def test_magnitude_rejects_listed_sampling(cosy_reader):
-    cosy_reader["data_axis_ranged"][1] = "listed"
+    cosy_reader[0]["data_axis_ranged"][1] = "listed"
     with pytest.raises(ValueError, match="supported two-section"):
-        process_jeol_cosy_magnitude("cosy.jdf")
+        process_jeol_cosy_magnitude(cosy_reader[1])
 
 
 @pytest.mark.parametrize(
@@ -75,4 +52,4 @@ def test_magnitude_rejects_listed_sampling(cosy_reader):
 )
 def test_magnitude_rejects_nonphysical_coordinates(cosy_reader, axis):
     with pytest.raises(ValueError, match="real, unmasked"):
-        process_jeol_cosy_magnitude("cosy.jdf", frequency_grid=(axis, [1, 2]))
+        process_jeol_cosy_magnitude(cosy_reader[1], frequency_grid=(axis, [1, 2]))

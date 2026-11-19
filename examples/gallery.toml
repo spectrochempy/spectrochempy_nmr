@@ -106,3 +106,13 @@ section_ref = "examples-simulation-index"
 path = "simulation/plot_pypulsar_hahn.py"
 section = "NMR simulation"
 section_ref = "examples-simulation-index"
+
+[[examples]]
+path = "processing/nmr/plot_qf_2d.py"
+section = "NMR processing"
+section_ref = "examples-processing-nmr-index"
+
+[[examples]]
+path = "core/c_importer/plot_read_jeol_processed_2d.py"
+section = "Import / Export"
+section_ref = "examples-importer-index"

@@ -26,8 +26,24 @@ selection and the common XF2 workflow perform reconstruction.
 ``read_multiplex_spam()`` is a compatibility shortcut. See
 :doc:`/userguide/multiplex_spam`.
 
-JEOL 2D acquisition branches
-~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+JEOL 2D acquisitions
+~~~~~~~~~~~~~~~~~~~~
+
+For the qualified uniform two-section layout, explicitly declare the acquisition
+quadrature and use the common processing workflow::
+
+   raw = scp.nmr.read("acquisition.jdf", quadrature="qf")
+   spectrum = scp.nmr.Experiment(raw).process(size=(2048, 2048))
+
+This override does not infer quadrature from the experiment name. See
+:doc:`/userguide/qf_2d` for windows, magnitude and symmetrization.
+
+.. warning::
+
+   The four-section and listed acquisition branches below are incomplete and
+   unsupported for a complete two-dimensional reconstruction by the plugin.
+   Reading stored sections does not establish their physical F1 quadrature.
+
 
 For a supported JDF acquisition, select interop to keep the stored section
 pairs as separate complex components:

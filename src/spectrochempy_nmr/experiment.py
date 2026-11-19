@@ -772,6 +772,27 @@ class Experiment:
             self.dataset, self.rsr, reference_row, per_row, exclude, options
         )
 
+    def symmetrize(self, *, frequency_grid=None):
+        """Take the symmetric minimum of a real magnitude spectrum on Hz axes.
+
+        Parameters
+        ----------
+        frequency_grid : pair of array-like, optional
+            Output F1 and F2 frequencies in Hz. By default retain both axes.
+            Interpolation precedes the symmetric minimum. Exchanged frequencies
+            outside the acquired spectral grid contribute zero.
+
+        Returns
+        -------
+        NDDataset
+            Real magnitude spectrum with symmetric amplitudes.
+        """
+        from .processing.symmetrize import symmetrize_minimum
+
+        if self.is_multi_dataset:
+            raise ValueError("Symmetrization requires a single spectrum")
+        return symmetrize_minimum(self.dataset, frequency_grid=frequency_grid)
+
     def select_coherence(self, coherence_order=3):
         """Select 3Q or 5Q from paired phase-cycle FIDs read with ``read()``.
 
@@ -1324,8 +1345,9 @@ class Experiment:
             if (
                 any(
                     value is not None
-                    for value in (apodization, lb, gb, ssb, pow, size, phase, reference)
+                    for value in (apodization, lb, gb, ssb, pow, phase, reference)
                 )
+                or (size is not None and not self._supports_qf_fft)
                 or phc0
                 or phc1
             ):
@@ -1397,10 +1419,10 @@ class Experiment:
                 )
             from .processing.qf_interop import process_qf_fft  # noqa: PLC0415
 
-            result = process_qf_fft(ds, self._nmr_meta.spectral_width_hz)
+            result = process_qf_fft(ds, self._nmr_meta.spectral_width_hz, size=size)
             return self._attach_scp_processing_trace(
                 result,
-                requested={},
+                requested={} if size is None else {"size": tuple(result.shape)},
                 applied={
                     "fft": True,
                     "fft_order": ("F2", "F1"),

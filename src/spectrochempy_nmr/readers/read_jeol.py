@@ -69,6 +69,12 @@ def read_jeol(*paths, **kwargs):
 
     Other Parameters
     ----------------
+    quadrature : {"qf"}, optional
+        Explicitly declare QF for a qualified uniform two-section acquisition.
+        The file header does not establish the indirect quadrature. The reader
+        arranges complex F2 traces and physical references; ``Experiment``
+        performs the two Fourier transforms. Four-section and listed inputs
+        are not supported by this override.
     description : `str`, optional
         A custom description.
     directory : `~pathlib.Path`, optional
@@ -91,6 +97,8 @@ def read_jeol(*paths, **kwargs):
         scp.nmr.read("path/to/experiment.jdf")
 
     """
+    if kwargs.get("quadrature") not in (None, "qf"):
+        raise ValueError("The qualified JEOL quadrature override is 'qf'")
     kwargs["filetypes"] = ["JEOL JDF files (*.jdf)"]
     kwargs["protocol"] = ["jeol"]
     importer = SingleAcquisitionImporter()
@@ -223,6 +231,17 @@ def _read_jdf(*args, **kwargs):
     if not path.exists():
         warning_(f"File not found: {path}")
         return None
+
+    if kwargs.get("quadrature") == "qf":
+        from spectrochempy.utils.exceptions import SpectroChemPyError
+        from .jeol_qf import read_jeol_qf
+
+        try:
+            normalized = read_jeol_qf(path)
+        except (ValueError, OSError) as exc:
+            raise SpectroChemPyError(str(exc)) from exc
+        apply_reader_metadata_options(normalized, kwargs, default_origin="jeol")
+        return normalized
 
     normalized = (
         _read_normalized_jeol(path)
