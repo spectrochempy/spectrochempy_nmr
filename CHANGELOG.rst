@@ -25,6 +25,16 @@ Unreleased
   joint MAS/MQMAS fits.
   (`#154 <https://github.com/spectrochempy/spectrochempy_nmr/pull/154>`_)
 
+* Read uniform two-section JEOL JDF acquisitions with an explicit
+  ``quadrature="qf"`` declaration and process both Fourier dimensions through
+  ``Experiment``. The common QF path supports FFT sizes and physical frequency
+  references independently of the source format. Add generic minimum
+  symmetrization on exchanged frequencies. The historical JEOL magnitude
+  helper delegates to read and common processing; it no longer chooses the
+  reconstruction from the pulse-program name. Four-section and listed JDFs
+  remain unsupported for a complete reconstruction.
+  (`#162 <https://github.com/spectrochempy/spectrochempy_nmr/pull/162>`_)
+
 * Read Multiplex SPAM phase cycles with ``read(..., phase_cycle="paired")``
   and select 3Q/5Q through ``Experiment.select_coherence()`` before the common
   XF2, phase and XFSHEAR workflow. The reader retains every complete acquired

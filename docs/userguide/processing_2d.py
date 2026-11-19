@@ -33,6 +33,11 @@
 # mixed-domain result after F2 before transforming F1.
 
 #
+# .. toctree::
+#    :maxdepth: 1
+#
+#    qf_2d
+#
 # Transform F2 and F1
 # -------------------
 #
@@ -48,6 +53,8 @@ import spectrochempy as scp
 # %% [raw] raw_mimetype="text/restructuredtext"
 # QF magnitude
 # ~~~~~~~~~~~~
+#
+# See :doc:`qf_2d` for a complete, instrument-independent worked workflow.
 #
 # QF records one trace per F1 increment. There is no cosine/sine pair
 # to combine. For the supported Bruker COSY replay, transform the complex

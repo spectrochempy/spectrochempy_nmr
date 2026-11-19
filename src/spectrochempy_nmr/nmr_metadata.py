@@ -922,6 +922,11 @@ def extract_nmr_metadata(meta, *, ndim=None) -> NMRMetadata:
                     ndim=2,
                     domains=domains,
                     source_kind=infer_source_kind(2, domains),
+                    nuclei=tuple(acquisition.get("nuclei", ())) or None,
+                    spectrometer_freq_mhz=tuple(
+                        acquisition.get("acquisition_frequency_mhz", ())
+                    )
+                    or None,
                     encoding=tuple("QF" if dim == "F1" else "DQD" for dim in physical),
                     iscomplex=tuple(dim == "F2" for dim in physical),
                     spectral_width_hz=tuple(widths)
