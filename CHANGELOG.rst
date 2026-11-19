@@ -19,6 +19,7 @@ Unreleased
   and add static and MAS ¹H–¹³C cross-polarization examples with contact-time
   and Hartmann–Hahn matching curves. The model accepts general heteronuclear
   spin-½ pairs; homonuclear dynamics remain unsupported.
+  (`#168 <https://github.com/spectrochempy/spectrochempy_nmr/pull/168>`_)
 
 * Derive automatic STMAS spin and shear geometry from the observed F2 nucleus,
   allowing unused default isotopes in archived F1 headers. Preserve the
