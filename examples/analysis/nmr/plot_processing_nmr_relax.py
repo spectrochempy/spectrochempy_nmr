@@ -1,10 +1,13 @@
 """
-Fit a saturation-recovery T1 curve
-===================================
+Fit a saturation-recovery curve
+================================
 
 Process the direct axis, integrate one resonance and fit its recovery.
 See :doc:`/userguide/relaxation_t1` for the delay coordinate, phase,
-model assumptions, units and residual diagnostics.
+model assumptions, units and residual diagnostics. This acquisition saturates
+protons and detects silicon through CP, with the archived title recording
+``DNP On``. The fitted ``tau`` is an apparent recovery/buildup time,
+not an intrinsic silicon T1.
 """
 
 import spectrochempy as scp
@@ -19,16 +22,16 @@ spectrum = spectrum.pk(phc0=phase.estimate.p0 * scp.ur.deg, phc1=0 * scp.ur.deg)
 signal = spectrum[:, -120.0:-85.0].real.simpson(dim="x")
 
 
-def recovery(t, I0, T1):
-    return I0 * (1 - scp.exp(-t / T1))
+def recovery(t, I0, tau):
+    return I0 * (1 - scp.exp(-t / tau))
 
 
 fit = scp.Optimize(method="leastsq", usermodels={"recovery": recovery})
 fit.script = """
-MODEL: T1
+MODEL: RECOVERY
 shape: recovery
   $ I0: 4000.0, 1.0, none
-  $ T1: 2.0, 0.1, none
+  $ tau: 2.0, 0.1, none
 """
 _ = fit.fit(signal)
 print(fit.script)

@@ -12,20 +12,29 @@
 # ---
 
 # %% [raw] raw_mimetype="text/restructuredtext"
-# Saturation-recovery T1 series
-# =============================
+# Saturation recovery with silicon CP readout
+# ===========================================
 #
 # A saturation-recovery series measures signal as a function of recovery delay.
 # Read the delay list as a physical coordinate, process only the direct FID
 # axis, integrate a fixed resonance window and fit a recovery model. The delay
 # axis remains in time units throughout: it is not an F1 Fourier dimension.
 #
-# The worked example uses ``nmrdata/bruker/tests/nmr/relax/100``, a silicon
-# CP/MAS saturation-recovery acquisition distributed as LCS data through
-# ``spectrochempy_data`` under CC BY 4.0. The :doc:`short gallery recipe
-# </examples/gallery/analysis/plot_processing_nmr_relax>` runs the same workflow.
-# The comparison here concerns these measured signals and the stated model;
-# it does not reproduce the vendor's fitting tools.
+# The worked example uses ``nmrdata/bruker/tests/nmr/relax/100``, distributed
+# as LCS data through ``spectrochempy_data`` under CC BY 4.0. Its archived
+# pulse program saturates the proton channel before the variable delay, then
+# transfers proton polarization to silicon by CP for detection. Thus the
+# measured silicon intensity follows proton recovery through CP readout.
+# The archived title also records ``DNP On``. See the
+# `acquisition status and pulse program
+# <https://github.com/spectrochempy/spectrochempy_data/tree/08bb9b0cbff8f4363c48b6bff7ccb743f8140e0a/testdata/nmrdata/bruker/tests/nmr/relax/100>`_.
+#
+# Under that recorded condition, an exponential fit describes an apparent
+# polarization-recovery or buildup time. It does not establish intrinsic
+# silicon T1, or separate intrinsic proton relaxation from DNP effects.
+# The :doc:`short gallery recipe
+# </examples/gallery/analysis/plot_processing_nmr_relax>` runs the same
+# workflow. This example does not reproduce the vendor's fitting tools.
 #
 # Read the FIDs and recovery delays
 # ---------------------------------
@@ -45,7 +54,7 @@ print(raw.y)
 # %% [raw] raw_mimetype="text/restructuredtext"
 # Check the delay values and their units before fitting another acquisition.
 # Each row must correspond to one list entry. These data use seconds, so the
-# fitted T1 below is in seconds. Confirm from the acquisition that the list
+# fitted recovery constant below is in seconds. Confirm from the acquisition that the list
 # represents recovery delays, rather than another pulse-sequence parameter.
 # Keep acquisition conditions and intensity scaling comparable across rows.
 #
@@ -133,35 +142,39 @@ print(signal)
 # Fit a saturation-recovery model
 # --------------------------------
 #
-# For ideal saturation followed by a single exponential recovery, use
+# Describe the measured recovery with one apparent exponential time:
 #
 # .. math::
 #
-#    I(t)=I_0\left(1-\exp(-t/T_1)\right).
+#    I(t)=I_0\left(1-\exp(-t/\tau)\right).
 #
 # The model fixes ``I(0)=0`` and approaches ``I0`` at long delay. It has two
-# positive fitted parameters: the limiting signal and T1. It is a
+# positive fitted parameters: the limiting signal and ``tau``. In an ideal
+# saturation-recovery measurement without additional polarization mechanisms,
+# this time can represent T1 of the saturated reservoir. Here, retain its
+# meaning as an apparent recovery/buildup constant under the recorded DNP
+# condition. It is a
 # saturation-recovery model; an inversion-recovery experiment needs its own
 # initial condition and model. If saturation is incomplete or several
 # components contribute, this two-parameter curve may be inadequate.
 #
 # The user model receives the numerical delay values. Because the coordinate
-# is in seconds, both the starting value 2.0 and the lower bound 0.1 for ``T1``
+# is in seconds, both the starting value 2.0 and the lower bound 0.1 for ``tau``
 # are in seconds. The amplitude bounds are expressed on the measured area
 # scale. They are example settings to inspect for each acquisition.
 
 
 # %%
-def recovery(t, I0, T1):
-    return I0 * (1 - scp.exp(-t / T1))
+def recovery(t, I0, tau):
+    return I0 * (1 - scp.exp(-t / tau))
 
 
 fitter = scp.Optimize(method="leastsq", usermodels={"recovery": recovery})
 fitter.script = """
-MODEL: T1
+MODEL: RECOVERY
 shape: recovery
   $ I0: 4000.0, 1.0, none
-  $ T1: 2.0, 0.1, none
+  $ tau: 2.0, 0.1, none
 """
 _ = fitter.fit(signal)
 print(fitter.script)
@@ -172,18 +185,18 @@ _ = ax.legend()
 _ = (signal - prediction).plot(marker="o", title="Recovery fit residuals")
 
 # %% [raw] raw_mimetype="text/restructuredtext"
-# Read T1 from the printed fitted script in seconds. The estimate depends
+# Read ``tau`` from the printed fitted script in seconds (about 2.27 s here). The estimate depends
 # on the phase and integration settings above. The fitted line connects
 # predictions at the measured delays. Residuals are measured minus fitted
 # areas at those same, potentially nonuniform delays.
 #
-# Assess the fit before interpreting T1
-# -------------------------------------
+# Assess the fit before interpreting the recovery time
+# -----------------------------------------------------
 #
 # Inspect early and late delays separately. A systematic residual can indicate
 # an inappropriate initial condition, baseline error or a recovery that is not
 # single exponential. Compare the longest delays with the fitted plateau;
-# without a well-sampled plateau, ``I0`` and T1 can compensate for each other.
+# without a well-sampled plateau, ``I0`` and ``tau`` can compensate for each other.
 # A close visual fit alone does not establish parameter precision.
 #
 # Repeat with different initial guesses, check whether fitted values approach
@@ -191,8 +204,9 @@ _ = (signal - prediction).plot(marker="o", title="Recovery fit residuals")
 # choices. Replicate acquisitions and an appropriate noise model are needed
 # for experimental uncertainty; this example does not turn the fitted curve
 # into a confidence interval. CP detection also weights the observed signal,
-# so interpret the fitted T1 as the recovery of this selected signal under
-# the acquisition conditions.
+# so interpret ``tau`` as the apparent recovery of this selected CP-detected
+# signal under the acquisition conditions, rather than an intrinsic silicon
+# relaxation time.
 #
 # To analyze another resolved band, repeat the integration and fit with that
 # band's fixed ppm limits. Do not reuse a result merely because the delay axis
