@@ -100,6 +100,11 @@ def _rotated_csa_harmonics(directions, anisotropy_hz, eta, angle, rotation):
     """Project the CSA tensor in the common quadrupolar rotor frame."""
     eigenvalues = anisotropy_hz * np.array([-(1 + eta) / 2, -(1 - eta) / 2, 1])
     tensor = (rotation * eigenvalues) @ rotation.T
+    return _tensor_harmonics(directions, tensor, angle)
+
+
+def _tensor_harmonics(directions, tensor, angle):
+    """Project a real symmetric Cartesian tensor onto rotor harmonics."""
     x, y, z = directions
     sine = np.hypot(x, y)
     cos_phi = np.divide(x, sine, out=np.ones_like(x), where=sine > 0)
@@ -1036,7 +1041,7 @@ def _phase_integral(terms, gamma, spinning_hz):
 
 
 def _shared_pulse_keys(scans, spinning_hz, gamma):
-    """Find matching real RF pulses at the same sampled rotor trajectory."""
+    """Find matching RF pulses at the same sampled rotor trajectory."""
     if not spinning_hz or len(scans) < 2:
         return ({},) * len(scans)
 
@@ -1052,16 +1057,15 @@ def _shared_pulse_keys(scans, spinning_hz, gamma):
             elif kind == "pulse":
                 duration, rf, offset, count, *_ = args
                 step = duration / count
-                if np.isrealobj(rf):
-                    key = (
-                        angles.tobytes(),
-                        count,
-                        step,
-                        rf.tobytes(),
-                        offset.tobytes(),
-                    )
-                    keys[event_index] = key
-                    counts[key] = counts.get(key, 0) + 1
+                key = (
+                    angles.tobytes(),
+                    count,
+                    step,
+                    rf.tobytes(),
+                    offset.tobytes(),
+                )
+                keys[event_index] = key
+                counts[key] = counts.get(key, 0) + 1
                 angles = angles + count * (omega * step)
         keys_by_scan.append(keys)
     return tuple(
@@ -2470,7 +2474,9 @@ def simulate_coupled_sequence(
     *,
     observed,
     partner,
-    j_hz,
+    j_hz=0.0,
+    dipolar_hz=0.0,
+    dipolar_axis=(0.0, 0.0, 1.0),
     spectral_width_hz,
     points=8192,
     accuracy=8,
@@ -2486,7 +2492,18 @@ def simulate_coupled_sequence(
     deposition="numpy",
     workers=1,
 ):
-    """Simulate two RF-active spins with a secular isotropic J coupling.
+    """Simulate two RF-active spins with secular J and dipolar coupling.
+
+    dipolar_hz adds D * (3*cos(theta)**2 - 1) * Iz*Sz in Hz,
+    where dipolar_axis is a real unit bond vector in the common sample
+    frame and theta is its angle to the field. This signed D follows
+    historical PyPulsar, not a full dipolar tensor's zz component (2*D).
+    Nonzero D requires a heteronuclear spin-1/2 pair
+    with well-separated Larmor frequencies. Homonuclear flip-flop terms
+    are not included. Under MAS theta follows the rotor trajectory during
+    RF, delays and acquisition. Select sidebands and converge accuracy
+    and max_rf_step_s for the experiment. Delay(decouple_j=True) removes
+    J only, leaving the dipolar interaction active.
 
     The observed spin is detected with the partner projection unchanged.
     Each site's EFG rotation maps its principal axes into the common
@@ -2502,12 +2519,18 @@ def simulate_coupled_sequence(
     points, accuracy, sidebands = index(points), index(accuracy), index(sidebands)
     (
         j_hz,
+        dipolar_hz,
         spectral_width_hz,
         spinning_hz,
         max_rf_step_s,
         receiver_phase_deg,
     ) = _real_scalars(
-        j_hz, spectral_width_hz, spinning_hz, max_rf_step_s, receiver_phase_deg
+        j_hz,
+        dipolar_hz,
+        spectral_width_hz,
+        spinning_hz,
+        max_rf_step_s,
+        receiver_phase_deg,
     )
     if max_rf_step_s <= 0:
         raise ValueError("max_rf_step_s must be positive.")
@@ -2517,6 +2540,24 @@ def simulate_coupled_sequence(
     bandwidth = _validate_probe_bandwidth(probe_bandwidth_hz)
     site_a, site_b = _site_parameters(observed), _site_parameters(partner)
     spin_a, spin_b = site_a[0], site_b[0]
+    bond = np.asarray(dipolar_axis)
+    if (
+        bond.shape != (3,)
+        or bond.dtype.kind not in "fiu"
+        or not np.isfinite(bond).all()
+        or not np.isclose(np.linalg.norm(bond), 1.0, rtol=0, atol=1e-7)
+    ):
+        raise ValueError("dipolar_axis must be a real unit vector with three entries.")
+    bond = bond.astype(float)
+    bond /= np.linalg.norm(bond)
+    if dipolar_hz:
+        if spin_a != 0.5 or spin_b != 0.5:
+            raise ValueError("Dipolar coupling currently requires two spin-1/2 sites.")
+        if np.isclose(site_a[1], site_b[1], rtol=1e-6, atol=0):
+            raise ValueError(
+                "Dipolar coupling requires a heteronuclear pair with "
+                "well-separated Larmor frequencies."
+            )
     size_a, size_b = int(2 * spin_a + 1), int(2 * spin_b + 1)
     size = size_a * size_b
     if size > 64:
@@ -2531,9 +2572,10 @@ def simulate_coupled_sequence(
         selected = selected[central if transitions == "central" else ~central]
 
     rotated = any(value is not None for value in (*site_a[7:9], *site_b[7:9]))
+    rotated = rotated or bool(dipolar_hz and np.any(bond[:2]))
     directions, weights, triangles = _powder_mesh(
         accuracy,
-        bool(spinning_hz or rotated),
+        bool(spinning_hz or rotated or dipolar_hz),
         full_sphere=bool(spinning_hz and rotated),
     )
     angle = _rotor_angle(rotor_angle_deg, spinning_hz)
@@ -2565,12 +2607,17 @@ def simulate_coupled_sequence(
     ops_a = tuple(np.kron(op, np.eye(size_b)) for op in _spin_operators(spin_a))
     ops_b = tuple(np.kron(np.eye(size_a), op) for op in _spin_operators(spin_b))
     initial = ops_a[2] + (site_b[1] / site_a[1]) * ops_b[2]
-    coupling_levels = j_hz * np.diag(ops_a[2]) * np.diag(ops_b[2])
+    coupling = np.zeros((weights.size, harmonic_count), dtype=complex)
+    coupling[:, 0] = j_hz
+    if dipolar_hz:
+        tensor = dipolar_hz * (3 * np.outer(bond, bond) - np.eye(3))
+        coupling += _tensor_harmonics(directions, tensor, angle)[:harmonic_count].T
+    products = np.diag(ops_a[2]) * np.diag(ops_b[2])
     level_a, level_b = _level_harmonics(a), _level_harmonics(b)
     levels = (level_a[:, :, None, :] + level_b[:, None, :, :]).reshape(
         weights.size, size, harmonic_count
     )
-    levels[..., 0] += coupling_levels
+    levels += coupling[:, None, :] * products[None, :, None]
     level_differences = np.diff(levels, axis=1)
     product_offsets = level_differences[..., 0].real
     product_terms = level_differences[..., 1:] if spinning_hz else None
@@ -2582,7 +2629,7 @@ def simulate_coupled_sequence(
         site_a[-1],
         partner=ops_b,
         partner_t2_s=site_b[-1],
-        coupling_offsets=np.diff(coupling_levels),
+        coupling_offsets=np.diff(j_hz * products),
     )
     passive_offsets = _passive_offsets(j_partners)
     passive_shift = -np.diff(np.diag(ops_a[2]))
@@ -2602,10 +2649,16 @@ def simulate_coupled_sequence(
 
     partner_projections = np.arange(spin_b, -spin_b - 1, -1)
     frequency = (
-        a[:, selected, 0].real[..., None] - j_hz * partner_projections
+        a[:, selected, 0].real[..., None]
+        - coupling[:, 0].real[:, None, None] * partner_projections
     ).reshape(weights.size, -1)
     detected_terms = (
-        np.repeat(a[:, selected, 1:], size_b, axis=1) if spinning_hz else None
+        (
+            a[:, selected, None, 1:]
+            - coupling[:, None, None, 1:] * partner_projections[None, None, :, None]
+        ).reshape(weights.size, -1, harmonic_count - 1)
+        if spinning_hz
+        else None
     )
     rows = (selected[:, None] * size_b + np.arange(size_b)).ravel()
     readout = rows, rows + size_b

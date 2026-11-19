@@ -17,7 +17,8 @@
 # PULSAR simulates one-dimensional solid-state NMR powder spectra for
 # quadrupolar transitions and chemical shift anisotropy (CSA). It supports static
 # powder, magic-angle spinning and variable-angle spinning. Finite RF
-# sequences can include secular isotropic J coupling.
+# sequences can include secular isotropic J coupling and, for
+# heteronuclear spin-½ pairs, static or MAS dipolar coupling and cross polarization.
 #
 # %% [raw] raw_mimetype="text/restructuredtext"
 # See :doc:`pulsar_scope` for the history, model limits, and comparisons
@@ -104,8 +105,8 @@ _ = scp.multiplot(
 # `simulate_pulse_sequence()` accepts an
 # ordered list of finite or ideal RF pulses, delays and coherence
 # selections. Use `simulate_coupled_sequence()`
-# for two RF-active spins coupled by isotropic J. Dipolar coupling is
-# outside the model. For example, this static spin-1/2 echo uses the
+# for two RF-active spins coupled by isotropic J, optionally with a
+# heteronuclear spin-½ dipolar interaction. This spin-1/2 echo uses the
 # receiver phase to place the refocused signal in positive absorption.
 
 # %%
@@ -141,6 +142,39 @@ _ = scp.plot_multiple(
 # `output="density"` to obtain the powder-averaged deviation density
 # matrix at the end of preparation.
 #
+# ## Dipolar coupling and cross polarization
+#
+# Add `dipolar_hz=5000` for a heteronuclear spin-½ pair. The
+# interaction in Hz is `D * (3*cos(theta)**2 - 1) * Iz*Sz`, using the
+# historical PyPulsar convention. `dipolar_axis` gives a unit bond vector
+# in the common sample frame, defaulting to `(0, 0, 1)`. Both pulse
+# propagation and acquisition include the orientation-dependent coupling.
+# In static samples, simultaneous RF contacts transfer magnetization near
+# the Hartmann–Hahn condition, where the two RF amplitudes match.
+#
+# Set `spinning_hz` for MAS. The rotor modulation continues during RF,
+# delays and acquisition, producing dipolar sidebands. Under MAS the
+# first-order RF difference or sum matches one or two rotor frequencies.
+# The rank-two mean vanishes at the exact magic angle, but the modulation
+# still affects RF transfer and acquisition. Select enough `sidebands`
+# for spectral output, and converge `accuracy` and `max_rf_step_s`.
+#
+# The model describes an isolated pair, with ¹H–¹³C as one example rather
+# than an isotope restriction. It does not include homonuclear flip-flop terms,
+# a proton bath, spin diffusion or rotating-frame relaxation.
+# `Delay(decouple_j=True)`
+# removes J only; it leaves the dipolar interaction active.
+#
+# %% [raw] raw_mimetype="text/restructuredtext"
+# The :doc:`static CP example
+# <../examples/gallery/simulation/plot_pypulsar_cp_static>` shows contact-time
+# and Hartmann–Hahn curves with a two-scan cycle that isolates transferred
+# proton magnetization from directly excited carbon signal.
+# The :doc:`MAS CP example
+# <../examples/gallery/simulation/plot_pypulsar_cp_mas>` compares the first
+# rotor-sideband match with equal RF fields and sweeps the RF matching profile.
+
+# %% [markdown]
 # ## Fit a central transition
 #
 # Pass a PULSAR line shape to `scp.Optimize` as a user model. The model

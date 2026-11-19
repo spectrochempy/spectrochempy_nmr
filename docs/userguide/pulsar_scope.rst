@@ -48,8 +48,10 @@ Which model to use
 * **PULSAR** produces one-dimensional powder spectra for CSA and
   quadrupolar interactions in static, MAS and variable-angle settings.
   It also models finite RF preparation and detection, with up to two
-  RF-active spins coupled by secular isotropic J. The coupled model
-  excludes dipolar coupling. Results are SpectroChemPy datasets.
+  RF-active spins coupled by secular isotropic J. Heteronuclear spin-½
+  pairs also support dipolar coupling and cross polarization in static
+  and MAS settings. Homonuclear dipolar dynamics remain outside this model.
+  Results are SpectroChemPy datasets.
 * **MRSimulator** builds spectra from spin systems and measurement methods.
   Its library covers one- and two-dimensional solid-state NMR, including
   MQVAS and STVAS. The comparison below uses its ideal central-transition
