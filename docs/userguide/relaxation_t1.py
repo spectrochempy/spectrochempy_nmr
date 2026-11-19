@@ -347,6 +347,6 @@ _ = scp.plot_multiple(
 # of the fit assumptions. Inspect residuals and parameter correlations before
 # using a decomposition quantitatively. The
 # `global fitting guide in the Core change
-# <https://github.com/spectrochempy/spectrochempy/blob/6f580f29fb9e197b39a61df399c9c02274c82f25/docs/sources/userguide/analysis/global_fitting.py>`_
+# <https://github.com/spectrochempy/spectrochempy/blob/0c11a061a18a941454d93a657deabacdb4dea9d1/docs/sources/userguide/analysis/global_fitting.py>`_
 # explains custom spectral profiles, multi-parameter evolution laws and
 # sharing parameters between components or axes.
