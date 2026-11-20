@@ -44,6 +44,8 @@ def _has_nmr_example_data(example: Path) -> bool:
         "plot_rf_pulse_optimization",
         "plot_mqmas_pulse_optimization",
         "plot_nmr_baseline_2d",
+        "plot_pypulsar_cp_static",
+        "plot_pypulsar_cp_mas",
     }:
         return True
     root = Path(scp.preferences.datadir) / "nmrdata"

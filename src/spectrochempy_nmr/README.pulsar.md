@@ -564,7 +564,7 @@ $I_z+(\nu_S/\nu_I)S_z$. A `Pulse` can apply both RF channels
 simultaneously using the `partner_rf_hz`, `partner_phase_deg`
 and `partner_offset_hz` fields. `IdealPulse` accepts an
 independent partner flip and phase. `Delay(decouple_j=True)`
-removes the active coupling for that delay. Coherence selection acts
+removes the isotropic J coupling for that delay. Coherence selection acts
 on the observed spin and retains the unaffected partner marginal.
 
 Acquisition detects observed-spin coherences at fixed partner
@@ -574,8 +574,81 @@ The result averages the partner states and can include additional
 passive partners coupled to the observed spin. The manifold limit is
 64 product levels, with further work-array limits in MAS. Tests
 recover the passive limit and check refocusing by a partner π pulse
-or a decoupled delay. Dipolar coupling and nonsecular terms are outside
-this model.
+or a decoupled delay. Nonsecular terms are outside this model.
+
+## Heteronuclear dipolar coupling and cross polarization
+
+For two spin-1/2 sites with well-separated Larmor frequencies, add
+`dipolar_hz=D` and optionally `dipolar_axis=(ux, uy, uz)` to
+`simulate_coupled_sequence`. The axis must be a real unit bond vector in
+the **common sample frame**, independently of either site's EFG/CSA
+rotations. Its default is `(0, 0, 1)`. The secular interaction, in Hz, is
+
+$$H_{IS}/h = [J + D(3(\mathbf{u}\cdot\mathbf{n})^2-1)] I_z S_z,$$
+
+where $\mathbf{n}$ is the field direction for each powder orientation,
+following the rotor trajectory $\mathbf{n}(t)$ in a spinning sample.
+The model uses site parameters rather than isotope names: ¹H–¹³C is
+an example of the general heteronuclear spin-1/2 pair.
+This is the signed **historical PyPulsar** `set_dipole(dip=...)`
+convention: the dipolar tensor's principal values are $(-D,-D,2D)$.
+It differs in sign from the frequently used definition
+$d=-\mu_0\gamma_I\gamma_S\hbar/(8\pi^2r^3)$, for which
+$H_{IS}/h=d(3\cos^2\theta-1)I_zS_z$. State the Hamiltonian when importing
+a coupling from another simulator. The static spin-1/2 doublet splitting
+is $|J+D(3\cos^2\theta-1)|$; with J=0 its powder edges are $\pm|D|$
+and its Pake singularities are at $\pm|D|/2$.
+
+Both finite-pulse propagation and acquisition include this orientation
+dependent interaction. Simultaneous RF on both channels therefore supports
+static cross polarization near the Hartmann–Hahn condition
+$\nu_{1,I}=\nu_{1,S}$. Under MAS, the rank-two modulation includes
+harmonics at $\nu_r$ and $2\nu_r$; first-order zero- and double-quantum
+matches occur at $\nu_{1,I}\pm\nu_{1,S}=n\nu_r$, $n=\pm1,\pm2$.
+See the [RF inhomogeneity study, section 5.2](https://mr.copernicus.org/articles/2/523/2021/mr-2-523-2021.html).
+These conditions emerge from propagating the Hamiltonian; no RF matching
+condition is enforced in code. This is coherent dynamics of an isolated pair:
+there is no proton spin bath, spin diffusion, or $T_{1\rho}$ model.
+It is not a bulk-sample CP build-up/decay model.
+`Delay(decouple_j=True)` leaves the dipolar interaction active. An ideal
+partner π pulse can refocus the static interaction in an echo.
+Nonzero `dipolar_hz` rejects spins other than 1/2; the
+heteronuclear secular approximation must not be used for homonuclear pairs.
+
+Set `spinning_hz` for MAS or variable-angle spinning. At the exact magic
+angle, $\arccos(1/\sqrt{3})$, the dipolar zeroth harmonic vanishes;
+the mean interaction is then J, but the nonzero harmonics still affect
+contacts and acquisition. The detector includes each partner projection's
+dipolar harmonics as well as its mean shift. Select enough `sidebands`
+to capture the spectrum; `sidebands=0` keeps only the central band.
+Spectral sequence amplitudes retain excitation losses and are not
+renormalized after truncating the selected bands. Converge `accuracy`
+(powder mesh and initial rotor phases) and `max_rf_step_s` (RF midpoint
+step) for the chosen coupling, pulse lengths and RF fields. Free delays
+integrate the harmonics analytically and advance the rotor phase.
+
+The [static CP example](../../../examples/simulation/plot_pypulsar_cp_static.py)
+adapts the historical `CP-contact.tpl` and `CP-HartmanHahn.tpl` with a
+5 kHz dipolar coupling. A two-scan phase subtraction reverses only the
+initial proton magnetization, removing the directly excited carbon
+contribution. It plots contact-time and RF-matching curves relative to
+the initial donor magnetization, without per-curve normalization.
+Preparation uses an ideal proton 90° rotation, followed by finite contact
+pulses. Historical broadening and receiver-bandwidth weighting are omitted.
+Tests check the Pake moments and the exact two-spin spin-lock solution,
+integrated independently over uniform $\cos\theta$, plus relative tensor
+orientations. They do not compare against an executed historical binary.
+
+The [MAS CP example](../../../examples/simulation/plot_pypulsar_cp_mas.py)
+uses a 5 kHz dipolar coupling, 10 kHz MAS and 30 kHz proton RF. A carbon
+RF sweep shows first and second rotor-sideband matches near 10, 20, 40
+and 50 kHz. The demonstration uses accuracy 2 and a 1 µs RF step.
+At the 20/30 kHz match and 200 µs contact, increasing accuracy to 4
+changes the donor-normalized transfer by about 0.0014; halving the RF
+step changes it by about 0.00008. These checks apply to that point,
+not all contacts or RF powers. MAS tests compare sideband intensities
+with a direct Cartesian time-domain powder integral, and RF plus delay
+propagation with an independent adaptive density-matrix ODE integration.
 
 ## Density matrix after preparation
 

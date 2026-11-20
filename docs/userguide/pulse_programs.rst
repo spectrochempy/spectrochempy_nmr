@@ -76,10 +76,12 @@ qualifications. No historical binary parity is claimed.
 
 The historical ideal-pulse ``Simple.tpl`` and multisite ``TwoNuclei.tpl``
 remain future adaptations of the ideal-preparation/site-mixture workflow.
-The two ``CP`` templates require dipolar cross polarisation, which the
-current secular-J coupled-spin simulator does not model. Simultaneous RF
-support alone does not supply that Hamiltonian. ``two_channel`` is a generic
-RF template, not a claim of dipolar CP simulation.
+The two historical ``CP`` templates are adapted in the
+:doc:`static CP example <../examples/gallery/simulation/plot_pypulsar_cp_static>`
+and :doc:`MAS CP example <../examples/gallery/simulation/plot_pypulsar_cp_mas>`.
+They supply ``dipolar_hz`` to ``simulate_coupled_sequence`` for an isolated
+heteronuclear spin-½ pair. ``two_channel`` remains a generic RF template;
+the interaction is supplied through the simulation settings.
 
 Parameters and expressions
 ---------------------------

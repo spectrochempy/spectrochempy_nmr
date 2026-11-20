@@ -143,6 +143,16 @@ section = "NMR simulation"
 section_ref = "examples-simulation-index"
 
 [[examples]]
+path = "simulation/plot_pypulsar_cp_static.py"
+section = "NMR simulation"
+section_ref = "examples-simulation-index"
+
+[[examples]]
+path = "simulation/plot_pypulsar_cp_mas.py"
+section = "NMR simulation"
+section_ref = "examples-simulation-index"
+
+[[examples]]
 path = "processing/nmr/plot_qf_2d.py"
 section = "NMR processing"
 section_ref = "examples-processing-nmr-index"

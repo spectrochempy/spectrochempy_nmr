@@ -12,6 +12,15 @@ Unreleased
   pulse-optimisation galleries reuse parameterized templates across scans.
   (`#167 <https://github.com/spectrochempy/spectrochempy_nmr/pull/167>`_)
 
+* Restore heteronuclear dipolar coupling for two spin-½ sites in
+  ``pulsar.simulate_coupled_sequence()``, including finite two-channel RF
+  propagation and dipolar powder spectra in static and spinning samples.
+  Include dipolar rotor modulation during preparation and acquisition,
+  and add static and MAS ¹H–¹³C cross-polarization examples with contact-time
+  and Hartmann–Hahn matching curves. The model accepts general heteronuclear
+  spin-½ pairs; homonuclear dynamics remain unsupported.
+  (`#168 <https://github.com/spectrochempy/spectrochempy_nmr/pull/168>`_)
+
 * Derive automatic STMAS spin and shear geometry from the observed F2 nucleus,
   allowing unused default isotopes in archived F1 headers. Preserve the
   indirect sampling interval, source metadata, and ZQ-TROSY references.
