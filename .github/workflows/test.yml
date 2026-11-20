@@ -258,17 +258,30 @@ jobs:
           python -I -m pytest -ra tests/qualification/test_bruker_pdata_2d.py -k "synthetic and public_reader"
           python -I -m pytest -ra tests/qualification/test_bruker_ser_migration.py -k synthetic
 
-      - name: Qualify saved TopSpin XFB replay against the public COSY reference
+      - name: Qualify Bruker QF COSY and echo/anti-echo with public fixtures
         if: matrix.python-version == '3.13'
         env:
-          NMR_TOPSPIN_XFB_QF_REFERENCE: ${{ runner.temp }}/topspin-xfb-cosy
+          NMR_BRUKER_FFT_DATA: ${{ runner.temp }}/bruker-fft
+          NMR_TOPSPIN_XFB_QF_REFERENCE: ${{ runner.temp }}/bruker-fft/exam2d_HH/1
         run: |
-          reference_url="https://raw.githubusercontent.com/spectrochempy/spectrochempy_data/13a7809e239ee7bff81e509975deadd211bdaf0e/testdata/nmrdata/bruker/tests/nmr/exam2d_HH/1"
-          mkdir -p "$NMR_TOPSPIN_XFB_QF_REFERENCE/pdata/1"
-          for file in ser acqus acqu2s pdata/1/2rr pdata/1/procs pdata/1/proc2s; do
-            curl --fail --silent --show-error --location --retry 3 \
-              "$reference_url/$file" --output "$NMR_TOPSPIN_XFB_QF_REFERENCE/$file"
-          done
+          reference_url="https://raw.githubusercontent.com/spectrochempy/spectrochempy_data/13a7809e239ee7bff81e509975deadd211bdaf0e/testdata/nmrdata/bruker/tests/nmr"
+          fetch_reference() {
+            local experiment="$1"
+            shift
+            local target="$NMR_BRUKER_FFT_DATA/$experiment"
+            local file
+            mkdir -p "$target/pdata/1"
+            for file in "$@"; do
+              curl --fail --silent --show-error --location --retry 3 \
+                "$reference_url/$experiment/$file" --output "$target/$file"
+              test -s "$target/$file"
+            done
+          }
+          fetch_reference exam2d_HH/1 ser acqus acqu2 acqu2s pdata/1/2rr pdata/1/procs pdata/1/proc2s
+          fetch_reference exam2d_HC/3 ser acqus acqu2s pdata/1/procs pdata/1/proc2s
+          python -I -m pytest -ra \
+            tests/test_fft_2d_validation.py::TestExam2DHHQFCOSY \
+            tests/test_fft_2d_validation.py::TestEmFFT2DBrukerEchoAntiecho::test_experiment_uses_normalized_echo_antiecho_reconstruction
           python -I -m pytest -ra tests/qualification/test_topspin_xfb_roundtrip.py
 
   pinned-core:
