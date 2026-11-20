@@ -61,10 +61,10 @@ def _qualify(source, oracle, monkeypatch, *, group_delay=None):
         np.testing.assert_allclose(coord.data, oracle[f"hz_{dim}"], atol=5e-4, rtol=0)
     assert Experiment(result).source_kind == "processed_2d"
     assert source.meta.echo_antiecho_reconstruction is None
-    assert result.meta.echo_antiecho_reconstruction == PROFILE
+    assert result.meta.echo_antiecho_reconstruction == "rance-kay"
     trace = result.meta.nmr_processing["scp_processing"]
     assert trace["requested"]["echo_antiecho"] == PROFILE
-    assert trace["applied"]["echo_antiecho"] == PROFILE
+    assert trace["applied"]["echo_antiecho"] == "rance-kay"
     if group_delay is not None:
         assert trace["requested"]["bruker_group_delay"] == group_delay
         assert trace["applied"]["bruker_group_delay"] == group_delay
@@ -100,14 +100,17 @@ def test_synthetic_echo_antiecho_checkpoints(monkeypatch, tmp_path, digital_filt
         source = from_interop(normalized)
 
         experiment = Experiment(source)
-        with pytest.raises(ValueError, match="requires echo_antiecho"):
-            experiment.process()
+        default = experiment.process()
+        explicit = experiment.process(echo_antiecho=PROFILE)
+        np.testing.assert_array_equal(default.data, explicit.data)
+        with pytest.raises(ValueError, match="Unsupported echo/anti-echo"):
+            experiment.process(echo_antiecho="unknown")
         with pytest.raises(ValueError, match="supports FFT only"):
             experiment.process(echo_antiecho=PROFILE, size=256)
         for delay in (0, -1, np.inf, np.nan, True, "3", data.shape[-1]):
             with pytest.raises(ValueError, match="group delay"):
                 experiment.process(echo_antiecho=PROFILE, bruker_group_delay=delay)
-        with pytest.raises(ValueError, match="Unknown Bruker group delay"):
+        with pytest.raises(ValueError, match="Unknown group delay"):
             experiment.process(echo_antiecho=PROFILE, digital_filter="phase")
         with pytest.raises(ValueError, match="fewer than two"):
             experiment.process(
@@ -118,9 +121,13 @@ def test_synthetic_echo_antiecho_checkpoints(monkeypatch, tmp_path, digital_filt
             source.meta.source_metadata = {
                 "acqus": {"GRPDLY": 2.5, "DSPFVS": 12, "DECIM": 24}
             }
-            automatic = Experiment(source).process(
-                echo_antiecho=PROFILE, digital_filter="phase"
-            )
+            with pytest.raises(ValueError, match="Unknown group delay"):
+                Experiment(source).process(
+                    echo_antiecho=PROFILE, digital_filter="phase"
+                )
+            normalized.metadata = source.meta.source_metadata
+            imported = from_interop(normalized)
+            automatic = Experiment(imported).process(digital_filter="phase")
             manual = Experiment(source).process(
                 echo_antiecho=PROFILE, bruker_group_delay=2.5
             )
@@ -231,6 +238,8 @@ def test_official_hsqc_echo_antiecho_checkpoints(monkeypatch, digital_filter):
         )
         metadata = {"acqus": ng.bruker.read_jcamp(acqus_file)}
         source.meta.source_metadata = metadata
+        normalized.metadata = metadata
+        source = from_interop(normalized)
         # nmrglue-ng's positive post-FFT phase ramp requires the conjugation
         # adapter documented in nmrglue-ng #194 for the positive-exponent FFT.
         with np.load(path) as oracle:

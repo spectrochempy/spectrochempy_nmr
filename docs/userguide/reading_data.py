@@ -61,6 +61,9 @@ agilent = scp.nmr.read("path/to/fid", protocol="agilent")
 #    * - SIMPSON
 #      - :py:func:`scp.nmr.read_simpson(path) <spectrochempy_nmr.read_simpson>`
 #      - Simulated FIDs and spectra, or a simulation input with a sibling output
+#    * - CSDF
+#      - ``scp.nmr.read_csdf(path)`` or ``scp.nmr.read(path)``
+#      - Self-contained processed 1D or 2D spectra on linear frequency axes
 #    * - NMRPipe
 #      - :py:func:`scp.nmr.read(path, protocol="interop") <spectrochempy_nmr.read>`
 #      - Supported time- and frequency-domain files
@@ -70,6 +73,10 @@ agilent = scp.nmr.read("path/to/fid", protocol="agilent")
 #    * - NMR JCAMP-DX
 #      - :py:func:`scp.nmr.read(path, protocol="interop", profile=...) <spectrochempy_nmr.read>`
 #      - Supported NMR profiles, such as ``"jcampdx-spectrum-1d"``
+#
+# See :doc:`exchanging_spectra` for export and round-trip examples.
+# See :doc:`reader_workflows` for complete Agilent/Varian, SIMPSON and nmrML
+# reading and Fourier-processing examples with reproducible inputs.
 #
 # See :ref:`reading-exchange-formats-through-interop` for the profile and
 # convention options for exchange formats.
@@ -113,6 +120,9 @@ _ = spectrum.real.plot()
 # Older core versions require a supported mode and valid F1 width at import.
 # For an undetermined mode with a valid width, supply ``quadrature="qf"``
 # if the acquisition used QF.
+#
+# See :doc:`bruker_indirect_sampling` for interrupted States-TPPI
+# acquisitions and nonuniformly sampled (NUS) SER files.
 #
 # Agilent/Varian States quadrature
 # --------------------------------

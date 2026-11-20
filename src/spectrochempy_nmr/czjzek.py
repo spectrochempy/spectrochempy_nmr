@@ -19,6 +19,7 @@ from .pulsar import _as_dataset
 from .pulsar import _central_transition_profile
 from .pulsar import _normalize_profile
 from .pulsar import _real_scalars
+from .pulsar import _validate_probe_bandwidth
 from .pulsar import simulate_pulse_sequence
 
 # Unit Frobenius norms make independent equal-variance coefficients an
@@ -174,6 +175,7 @@ def simulate_czjzek(
     transitions="central",
     events=None,
     max_rf_step_s=2e-6,
+    probe_bandwidth_hz=None,
 ):
     """Integrate a Czjzek ensemble into a one-dimensional powder NDDataset.
 
@@ -184,6 +186,10 @@ def simulate_czjzek(
     phase. The frequency origin and bin conventions follow PULSAR.
     Increasing ``samples`` refines the distribution independently of the
     powder orientation ``accuracy``. Work is streamed one tensor at a time.
+    ``probe_bandwidth_hz`` applies PULSAR's real Lorentzian receiver
+    response about the simulation carrier before deposition. ``None``
+    keeps a flat response. Ideal spectra are still normalized after
+    reception; finite-sequence spectra retain absolute attenuation.
     """
     if not isinstance(distribution, CzjzekDistribution):
         raise TypeError("distribution must be a CzjzekDistribution.")
@@ -205,7 +211,13 @@ def simulate_czjzek(
         rotor_angle_deg=rotor_angle_deg,
         sidebands=sidebands,
         transitions=transitions,
+        probe_bandwidth_hz=_validate_probe_bandwidth(probe_bandwidth_hz),
     )
+    if sequence is not None:
+        # Reconstruct the simulator's canonical grid before coordinate display
+        # rounding, using the same scalar conversion as RF propagation.
+        (width,) = _real_scalars(spectral_width_hz)
+        axis = np.linspace(-width / 2, width / 2, index(points))
     total = None
     for cq, eta, shift, weight in zip(
         members.cq_hz, members.eta, members.shift_hz, members.weights, strict=True
@@ -216,11 +228,6 @@ def simulate_czjzek(
         else:
             result = simulate_pulse_sequence(
                 sequence, **parameters, max_rf_step_s=max_rf_step_s
-            )
-            # The dataset coordinates are rounded for display. Recover the
-            # uniform simulator grid before constructing the final dataset.
-            axis = np.linspace(
-                -spectral_width_hz / 2, spectral_width_hz / 2, index(points)
             )
             profile = result.data
         if total is None:

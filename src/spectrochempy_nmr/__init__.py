@@ -108,7 +108,11 @@ def _read_interop(
 
     stored = interop.read(path, profile=profile, **(read_options or {}))
     normalized = interop.normalize(stored, **(normalize_options or {}))
-    return from_interop(normalized, profile=conversion_profile)
+    from .readers._metadata import complete_states_metadata
+
+    return complete_states_metadata(
+        from_interop(normalized, profile=conversion_profile)
+    )
 
 
 def _resolve_read():
@@ -154,6 +158,18 @@ def _resolve_read():
         read_simpson : Read SIMPSON data.
         """
         protocol = kwargs.get("protocol")
+        if (
+            protocol is None
+            and len(paths) == 1
+            and isinstance(paths[0], (str, PathLike))
+            and Path(paths[0]).suffix.lower() == ".scp"
+            and not Path(paths[0]).is_dir()
+        ):
+            import spectrochempy as scp
+
+            from .readers._metadata import complete_states_metadata
+
+            return complete_states_metadata(scp.read(paths[0], **kwargs))
         if protocol == "csdf" or (
             protocol is None
             and paths
@@ -188,17 +204,16 @@ def _resolve_read():
             first = paths[0]
             try:
                 path = Path(first)
+                if path.is_dir():
+                    if (path / "fid").exists() and (path / "procpar").exists():
+                        return read_agilent(*paths, **kwargs)
+                    return read_topspin(*paths, **kwargs)
                 # SIMPSON files use .spe/.fid/.in extensions
                 if path.suffix.lower() in {".spe", ".fid", ".in"}:
                     return read_simpson(*paths, **kwargs)
                 # JEOL files have .jdf extension
                 if path.suffix.lower() == ".jdf":
                     return read_jeol(*paths, **kwargs)
-                if path.is_dir():
-                    # An Agilent directory contains fid + procpar.
-                    if (path / "fid").exists() and (path / "procpar").exists():
-                        return read_agilent(*paths, **kwargs)
-                    return read_topspin(*paths, **kwargs)
                 if (
                     path.name == "fid"
                     and path.parent.exists()
@@ -411,6 +426,11 @@ def _resolve_topspin_directory_target(filename, **kwargs):
         return None
     if filename.name in _VALID_TOPSPIN_FILENAMES:
         return None
+    raw_states = (
+        kwargs.get("phase_cycle") is not None
+        or kwargs.get("indirect_dwell") is not None
+        or kwargs.get("use_tdeff", False)
+    )
 
     if (
         kwargs.get("expno") is None
@@ -418,7 +438,7 @@ def _resolve_topspin_directory_target(filename, **kwargs):
         and kwargs.get("glob") is None
         and ((filename / "acqus").is_file() or (filename / "acqu").is_file())
     ):
-        procno = kwargs.get("procno")
+        procno = None if raw_states else kwargs.get("procno")
         if procno is not None or kwargs.get("processed", False):
             processed = filename / "pdata" / str(procno if procno is not None else 1)
             candidates = (processed / name for name in ("3rrr", "2rr", "1r"))
@@ -441,7 +461,7 @@ def _resolve_topspin_directory_target(filename, **kwargs):
             files_.extend(filename.glob("**/3rrr"))
     else:
         expno = kwargs.get("expno")
-        procno = kwargs.get("procno")
+        procno = None if raw_states else kwargs.get("procno")
 
         if expno is None:
             expnos = sorted(filename.glob("[0-9]*"))
@@ -664,8 +684,16 @@ def __getattr__(name: str):
         "write_csdf",
     }:
         _check_nmrglue_installation()
-    if name in {"pulsar", "czjzek"}:
+    if name in {"pulsar", "czjzek", "czjzek_library", "mqmas_inversion"}:
         return import_module(f".{name}", __name__)
+    if name in {"CzjzekFitResult", "CzjzekFitStage", "fit_czjzek"}:
+        from . import czjzek_fit
+
+        return getattr(czjzek_fit, name)
+    if name == "CzjzekRFLibrary":
+        from .czjzek_library import CzjzekRFLibrary
+
+        return CzjzekRFLibrary
     if name in {"CzjzekDistribution", "CzjzekSamples", "simulate_czjzek"}:
         from . import czjzek
 
@@ -700,18 +728,10 @@ def __getattr__(name: str):
         from .experiment import Experiment  # noqa: PLC0415
 
         return Experiment
-    if name == "process_agilent_noesy_states_tppi":
-        from .adapters.agilent_noesy import (  # noqa: PLC0415
-            process_agilent_noesy_states_tppi,
-        )
+    if name == "process_jeol_cosy_magnitude":
+        from .processing.jeol_cosy import process_jeol_cosy_magnitude
 
-        return process_agilent_noesy_states_tppi
-    if name == "extract_noesy_components":
-        from .processing.complex_channels import (  # noqa: PLC0415
-            extract_complex_components,
-        )
-
-        return extract_complex_components
+        return process_jeol_cosy_magnitude
     if name == "from_interop":
         from .interop import from_interop  # noqa: PLC0415
 
@@ -754,14 +774,18 @@ def __dir__() -> list[str]:
         "Experiment",
         "Isotope",
         "pulsar",
+        "mqmas_inversion",
         "czjzek",
         "CzjzekDistribution",
+        "CzjzekFitResult",
+        "CzjzekFitStage",
+        "CzjzekRFLibrary",
         "CzjzekSamples",
         "simulate_czjzek",
+        "fit_czjzek",
         "apk",
         "autophase",
-        "process_agilent_noesy_states_tppi",
-        "extract_noesy_components",
+        "process_jeol_cosy_magnitude",
         "from_interop",
         "reference_agilent_1d",
         "reference_interop_1d",

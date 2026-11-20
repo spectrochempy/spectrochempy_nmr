@@ -65,31 +65,42 @@ def test_extended_second_moment_and_reproducibility():
     )
 
 
-def test_zero_disorder_matches_single_tensor():
+@pytest.mark.parametrize("bandwidth", [None, 20e3])
+def test_zero_disorder_matches_single_tensor(bandwidth):
     model = CzjzekDistribution(0, cq_hz=-2e6, eta=0.4, shift_hz=1000)
     nodes = model.sample(128)
     assert len(nodes.cq_hz) == 1
     expected = simulate_quadrupolar(
-        cq_hz=-2e6, eta=0.4, shift_hz=1000, transitions="central", **SETTINGS
+        cq_hz=-2e6,
+        eta=0.4,
+        shift_hz=1000,
+        transitions="central",
+        **{**SETTINGS, "probe_bandwidth_hz": bandwidth},
     )
-    actual = simulate_czjzek(model, **SETTINGS)
+    actual = simulate_czjzek(model, **{**SETTINGS, "probe_bandwidth_hz": bandwidth})
     np.testing.assert_allclose(actual.data, expected.data)
 
 
-def test_ideal_normalization_is_over_the_ensemble():
+@pytest.mark.parametrize("bandwidth", [None, 20e3])
+def test_ideal_normalization_is_over_the_ensemble(bandwidth):
     model = CzjzekDistribution(0.9e6, cq_hz=3e6, eta=0.6)
     nodes = model.sample(8)
     raw = []
     normalized = []
     for cq, eta in zip(nodes.cq_hz, nodes.eta, strict=True):
         _, mass = _central_transition_profile(
-            cq_hz=cq, eta=eta, **SETTINGS, _normalize=False
+            cq_hz=cq,
+            eta=eta,
+            **{**SETTINGS, "probe_bandwidth_hz": bandwidth},
+            _normalize=False,
         )
         raw.append(mass)
         normalized.append(mass / mass.sum())
     expected = np.sum(raw, axis=0)
     expected /= expected.sum()
-    actual = simulate_czjzek(model, samples=8, **SETTINGS)
+    actual = simulate_czjzek(
+        model, samples=8, **{**SETTINGS, "probe_bandwidth_hz": bandwidth}
+    )
     np.testing.assert_allclose(actual.data, expected, atol=1e-14)
     assert np.max(np.abs(actual.data - np.mean(normalized, axis=0))) > 1e-5
 
@@ -143,3 +154,210 @@ def test_shift_disorder_preserves_local_tensor_at_eta_one():
     nodes = CzjzekDistribution(0, cq_hz=-2, eta=1, shift_sigma_hz=0.1).sample(8)
     np.testing.assert_array_equal(nodes.cq_hz, -2)
     np.testing.assert_array_equal(nodes.eta, 1)
+
+
+@pytest.mark.parametrize("bandwidth", [None, 20e3])
+def test_rf_library_exact_nodes_roundtrip_and_model_validation(tmp_path, bandwidth):
+    from fractions import Fraction
+
+    from spectrochempy_nmr import CzjzekRFLibrary
+    from spectrochempy_nmr.pulsar import Delay
+    from spectrochempy_nmr.pulsar import Pulse
+
+    events = (Pulse(7e-6, 24e3, 23), Delay(13e-6))
+    settings = dict(
+        probe_bandwidth_hz=bandwidth,
+        spin=2.5,
+        larmor_hz=104.468516e6,
+        spectral_width_hz=48e3,
+        spinning_hz=8e3,
+        points=513,
+        accuracy=1,
+        sidebands=2,
+    )
+    grid = dict(
+        cq_grid_hz=[2.8e6, 3e6], eta_grid=[0.2, 0.5], shift_hz=325, shift_bins=3
+    )
+    library = CzjzekRFLibrary.build(
+        events,
+        **grid,
+        **{**settings, "spin": Fraction(5, 2), "larmor_hz": np.longdouble("104468516")},
+    )
+    step = settings["spectral_width_hz"] / (settings["points"] - 1)
+    for offset in (-3, 3):
+        target = CzjzekDistribution(0, 3e6, 0.5, 325 + offset * step)
+        expected = simulate_czjzek(target, events=events, **settings)
+        actual = library.simulate(target)
+        np.testing.assert_array_equal(actual.x.data, expected.x.data)
+        np.testing.assert_allclose(actual.data, expected.data, rtol=1e-12, atol=1e-14)
+
+    target = CzjzekDistribution(0, 2.9e6, 0.35, 368)
+    filename = tmp_path / "library.npz"
+    library.save(filename)
+    equivalent_events = (Pulse(7e-6, 24e3, np.int64(23), offset_hz=-0.0), events[1])
+    loaded = CzjzekRFLibrary.load(filename, equivalent_events, **grid, **settings)
+    np.testing.assert_array_equal(
+        loaded.simulate(target).data, library.simulate(target).data
+    )
+    with pytest.raises(ValueError, match="does not match"):
+        CzjzekRFLibrary.load(
+            filename, events, **grid, **{**settings, "spinning_hz": 9000}
+        )
+    with pytest.raises(ValueError, match="does not match"):
+        CzjzekRFLibrary.load(filename, (Pulse(7e-6, 24e3, 20),), **grid, **settings)
+
+    invalid_grid = {**grid, "cq_grid_hz": np.asarray(grid["cq_grid_hz"]) + 1j}
+    with pytest.raises(TypeError, match="real"):
+        CzjzekRFLibrary.load(filename, events, **invalid_grid, **settings)
+    with pytest.raises(TypeError, match="real"):
+        CzjzekRFLibrary.build(events, **invalid_grid, **settings)
+
+    invalid_cycle = PhaseCycle((events,), ("1",))
+    with pytest.raises(ValueError, match="Supply one numeric coefficient"):
+        CzjzekRFLibrary.load(filename, invalid_cycle, **grid, **settings)
+
+
+@pytest.mark.parametrize("bandwidth", [None, 20e3])
+def test_rf_library_uses_direct_response_outside_supported_region(bandwidth):
+    from spectrochempy_nmr import CzjzekRFLibrary
+    from spectrochempy_nmr.pulsar import Pulse
+
+    events = (Pulse(7e-6, 24e3, 23),)
+    settings = dict(
+        probe_bandwidth_hz=bandwidth,
+        spin=2.5,
+        larmor_hz=104.468516e6,
+        spectral_width_hz=np.float32(48001),
+        spinning_hz=8e3,
+        points=513,
+        accuracy=1,
+        sidebands=2,
+    )
+    library = CzjzekRFLibrary.build(
+        events,
+        cq_grid_hz=[2.8e6, 3e6],
+        eta_grid=[0.2, 0.5],
+        shift_hz=325,
+        shift_bins=3,
+        **settings,
+    )
+    targets = (
+        CzjzekDistribution(0, -2.9e6, 0.35, 325),
+        CzjzekDistribution(0, 2.9e6, 0.35, 800),
+        CzjzekDistribution(30e3, 2.9e6, 0.35, 2500, 35),
+    )
+    for target in targets:
+        expected = simulate_czjzek(
+            target, samples=8, seed=17, events=events, **settings
+        )
+        actual = library.simulate(target, samples=8, seed=17)
+        np.testing.assert_array_equal(actual.x.data, expected.x.data)
+        np.testing.assert_array_equal(actual.data, expected.data)
+
+
+@pytest.mark.parametrize("bandwidth", [None, 20e3])
+def test_rf_library_combines_interpolated_and_direct_members(bandwidth):
+    from spectrochempy_nmr import CzjzekRFLibrary
+    from spectrochempy_nmr.pulsar import Pulse
+
+    events = (Pulse(7e-6, 24e3, 23),)
+    settings = dict(
+        probe_bandwidth_hz=bandwidth,
+        spin=2.5,
+        larmor_hz=104.468516e6,
+        spectral_width_hz=48e3,
+        spinning_hz=8e3,
+        points=513,
+        accuracy=1,
+        sidebands=2,
+    )
+    target = CzjzekDistribution(85e3, 2.9e6, 0.35, 606.25)
+    members = target.sample(2, seed=17)
+    inside = np.argmax(members.cq_hz)
+    cq, eta = members.cq_hz[inside], members.eta[inside]
+    assert members.cq_hz[1 - inside] < cq
+    library = CzjzekRFLibrary.build(
+        events,
+        cq_grid_hz=[cq, cq + 100e3],
+        eta_grid=[0, eta],
+        shift_hz=325,
+        shift_bins=3,
+        **settings,
+    )
+    expected = simulate_czjzek(target, samples=2, seed=17, events=events, **settings)
+    actual = library.simulate(target, samples=2, seed=17)
+    np.testing.assert_allclose(actual.data, expected.data, rtol=1e-12, atol=1e-14)
+
+
+@pytest.mark.parametrize("outside", [False, True])
+@pytest.mark.parametrize("bandwidth", [None, 20e3])
+def test_rf_library_interpolates_sampled_shift_dispersion(
+    monkeypatch, outside, bandwidth
+):
+    from spectrochempy_nmr import CzjzekRFLibrary
+    from spectrochempy_nmr.pulsar import Pulse
+
+    events = (Pulse(7e-6, 24e3, 23),)
+    settings = {
+        **{**SETTINGS, "probe_bandwidth_hz": bandwidth},
+        "points": 513,
+        "accuracy": 1,
+    }
+    step = settings["spectral_width_hz"] / (settings["points"] - 1)
+    seed = 17
+    unit_shifts = CzjzekDistribution(0, 3e6, 0.5, 0, 1).sample(2, seed).shift_hz
+    low, high = np.sort(unit_shifts)
+    span = 6 * step
+    sigma = span / (high - low)
+    target = CzjzekDistribution(0, 3e6, 0.5, 325 - span / 2 - low * sigma, sigma)
+    expected = simulate_czjzek(target, events=events, samples=2, seed=seed, **settings)
+    library = CzjzekRFLibrary.build(
+        events,
+        cq_grid_hz=[2.8e6, 3e6],
+        eta_grid=[0.2, 0.5],
+        shift_hz=325 - (span if outside else 0),
+        shift_bins=3,
+        **settings,
+    )
+    direct = library._direct
+    fallbacks = []
+
+    def track_fallback(cq, eta, shift):
+        fallbacks.append(shift)
+        return direct(cq, eta, shift)
+
+    monkeypatch.setattr(library, "_direct", track_fallback)
+    actual = library.simulate(target, samples=2, seed=seed)
+    expected_fallbacks = [target.shift_hz + sigma * high] if outside else []
+    assert fallbacks == expected_fallbacks
+    np.testing.assert_array_equal(actual.x.data, expected.x.data)
+    np.testing.assert_allclose(actual.data, expected.data, rtol=1e-12, atol=1e-14)
+
+
+def test_rf_library_rejects_out_of_window_transition_inside_eta_cell():
+    from spectrochempy_nmr import CzjzekRFLibrary
+    from spectrochempy_nmr.pulsar import Pulse
+
+    events = (Pulse(7e-6, 24e3, 23),)
+    settings = dict(
+        spin=1,
+        larmor_hz=104e6,
+        spectral_width_hz=2600,
+        points=4097,
+        accuracy=1,
+        spinning_hz=8000,
+        transitions="all",
+    )
+    library = CzjzekRFLibrary.build(
+        events,
+        cq_grid_hz=[3e6, 3000010],
+        eta_grid=[0.05, 0.15],
+        shift_hz=-7068,
+        shift_bins=1,
+        **settings,
+    )
+    target = CzjzekDistribution(0, 3e6, 0.10, -7068)
+    with pytest.raises(ValueError, match="spectral window"):
+        simulate_czjzek(target, events=events, **settings)
+    with pytest.raises(ValueError, match="spectral window"):
+        library.simulate(target)

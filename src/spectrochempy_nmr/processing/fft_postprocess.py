@@ -89,11 +89,24 @@ def _apply_interop_fft_presentation(dataset, dim, *, ppm, physical, acquisition=
 
 
 def _topspin_xf2_reference(dataset):
-    sw = dataset.meta.sw_h[-1].to("Hz").magnitude
-    sf = dataset.meta.sf[-1].to("MHz").magnitude
-    carrier = dataset.meta.sfo1[-1].to("MHz").magnitude
-    if not all(np.isfinite(v) and v > 0 for v in (sw, sf, carrier)):
-        raise ValueError("TopSpin XF2 requires a finite positive F2 reference")
+    acquisition = dataset.meta.get("acquisition", {})
+    try:
+        sw = acquisition["spectral_width_hz"][-1]
+        sf = acquisition["reference_frequency_mhz"][-1]
+        carrier = acquisition["acquisition_frequency_mhz"][-1]
+        valid = all(
+            not isinstance(value, (bool, np.bool_))
+            and isinstance(value, (int, float, np.integer, np.floating))
+            and np.isfinite(value)
+            and value > 0
+            for value in (sw, sf, carrier)
+        )
+    except (KeyError, TypeError, IndexError):
+        valid = False
+    if not valid:
+        raise ValueError(
+            "XF2 requires a finite positive F2 reference in normalized acquisition"
+        )
     return sw, sf, carrier
 
 
@@ -107,7 +120,7 @@ def _topspin_xf2_axis(dataset, size):
         rounding=False,
         sigdigits=15,
     )
-    axis.meta["reference_frequency"] = dataset.meta.sf[-1]
+    axis.meta["reference_frequency"] = sf * ur.MHz
     return axis
 
 

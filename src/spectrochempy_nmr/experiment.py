@@ -349,16 +349,19 @@ class Experiment:
     @property
     def _supports_qf_fft(self) -> bool:
         return (
-            self.ndim == 2 and self._nmr_meta.normalized_interop and self.is_time_domain
+            self.ndim == 2
+            and self._nmr_meta.normalized_interop
+            and self.is_time_domain
+            and self.encoding in (("QF", "DQD"), ("DQD", "QF"))
         )
 
     @property
-    def _supports_agilent_tppi_fft(self) -> bool:
+    def _supports_tppi_fft(self) -> bool:
         return (
             self.ndim == 2
             and self.is_time_domain
-            and self._meta().get("normalization_profile") == "agilent-tppi-2d-v1"
-            and self.encoding == ("UNVALIDATED:AGILENT-TPPI", "QSIM")
+            and self._nmr_meta.normalized_interop
+            and self.encoding == ("TPPI", "QSIM")
         )
 
     @property
@@ -450,8 +453,8 @@ class Experiment:
             report.add_info("Raw 1D FID detected.")
         elif self.source_kind == "ser":
             report.add_info("Raw 2D SER detected.")
-            if self._supports_agilent_tppi_fft:
-                report.add_info("Native Agilent TPPI FFT processing is available.")
+            if self._supports_tppi_fft:
+                report.add_info("TPPI FFT processing is available.")
             elif self._supports_qf_fft:
                 report.add_info("Normalized 2D QF FFT processing is available.")
             elif self._supports_states_fft:
@@ -459,9 +462,7 @@ class Experiment:
                     f"Normalized {self.encoding[0]} 2D FFT processing is available."
                 )
             elif self._supports_echo_antiecho_fft:
-                report.add_info(
-                    "Echo/anti-echo FFT requires an explicit reconstruction."
-                )
+                report.add_info("Echo/anti-echo FFT processing is available.")
             else:
                 report.add_warning(
                     "Multi-dimensional NMR processing is not part of the current "
@@ -771,6 +772,53 @@ class Experiment:
             self.dataset, self.rsr, reference_row, per_row, exclude, options
         )
 
+    def symmetrize(self, *, frequency_grid=None):
+        """Take the symmetric minimum of a real magnitude spectrum on Hz axes.
+
+        Parameters
+        ----------
+        frequency_grid : pair of array-like, optional
+            Output F1 and F2 frequencies in Hz. By default retain both axes.
+            Interpolation precedes the symmetric minimum. Exchanged frequencies
+            outside the acquired spectral grid contribute zero.
+
+        Returns
+        -------
+        NDDataset
+            Real magnitude spectrum with symmetric amplitudes.
+        """
+        from .processing.symmetrize import symmetrize_minimum
+
+        if self.is_multi_dataset:
+            raise ValueError("Symmetrization requires a single spectrum")
+        return symmetrize_minimum(self.dataset, frequency_grid=frequency_grid)
+
+    def select_coherence(self, coherence_order=3):
+        """Select 3Q or 5Q from paired phase-cycle FIDs read with ``read()``.
+
+        The excitation phases and 0/180 scan pairs are projected onto the
+        requested harmonic. The returned complex States E1/E2 dataset is
+        normalized per excitation phase and supports the common XF2 workflow.
+        The input phase-cycle dataset remains available for other selections.
+
+        Parameters
+        ----------
+        coherence_order : int
+            3Q (default), or 5Q for eleven excitation phases.
+
+        Returns
+        -------
+        NDDataset
+            Uncorrected time-domain States E1/E2 FIDs.
+        """
+        from .processing.phase_cycle import select_coherence
+
+        if self.is_multi_dataset:
+            raise ValueError(
+                "select_coherence requires a single phase-cycle acquisition"
+            )
+        return select_coherence(self.dataset, coherence_order=coherence_order)
+
     def xf2(
         self,
         *,
@@ -780,7 +828,7 @@ class Experiment:
         echo_window=None,
         mqecho=None,
     ):
-        """Transform F2 of a calibrated Bruker States MQMAS or STMAS acquisition.
+        """Transform F2 of a calibrated normalized States MQMAS or STMAS acquisition.
 
         Supply the F2 FFT size and optionally the number of acquired F2
         points to retain. By default, compensate the digital group delay
@@ -798,7 +846,7 @@ class Experiment:
             Number of acquired complex F2 samples to retain. By default, retain the
             available samples up to the FFT size.
         correct_digital_filter : bool
-            Compensate the Bruker digital group delay on the F2 frequency grid.
+            Compensate the recorded digital group delay on the F2 frequency grid.
         echo_window : tuple of float, optional
             Shifted Gaussian window as (slope, sigma), with sigma in seconds.
         mqecho : tuple of float, optional
@@ -813,7 +861,7 @@ class Experiment:
         from .processing.mqmas import xf2  # noqa: PLC0415
 
         if self.is_multi_dataset:
-            raise ValueError("XF2 requires a single Bruker acquisition")
+            raise ValueError("XF2 requires a single States acquisition")
         return xf2(
             self.dataset,
             size=size,
@@ -849,8 +897,18 @@ class Experiment:
             raise ValueError("XF2 phase requires one complex XF2 dataset")
         return xf2p(self.dataset, phc0=phc0, phc1=phc1, pivot=pivot)
 
-    def xfshear(self, *, size, spin=None, coherence_order=3, f1_shift=0.0):
-        """Shear phased MQMAS data, reconstruct F2 quadrature, and transform F1.
+    def xfshear(
+        self,
+        *,
+        size,
+        spin=None,
+        coherence_order=None,
+        f1_shift=0.0,
+        ratio=None,
+        f1_scale=None,
+        experiment=None,
+    ):
+        """Shear phased States data, reconstruct F2 quadrature, and transform F1.
 
         Supply the F1 FFT size. The optional F1 shift uses isotropic ppm. The result contains all four spectral components.
 
@@ -859,12 +917,26 @@ class Experiment:
         size : int
             F1 FFT size in points.
         spin : float, optional
-            Defaults to the spin of the recorded isotope. An explicit value
-            must agree with the isotope table.
-        coherence_order : int
-            Multiple-quantum coherence order. The default is 3.
+            Resolved from normalized ``acquisition.nuclear_spin`` (or ``spin``)
+            and the observed isotope. Supply only when neither is available.
+            Contradictory spin information is rejected.
+        coherence_order : int, optional
+            MQMAS order when ``experiment`` is omitted (default 3). An explicit
+            order must agree with the selected experiment.
+        experiment : {"MQMAS", "3QMAS", "5QMAS", "STMAS", "ZQ-TROSY"}, optional
+            Select automatic coefficients and F1 calibration. The default is
+            MQMAS, using ``coherence_order``. This does not select quadrature
+            reconstruction, which is determined by the acquisition.
         f1_shift : float
-            Shift of the spectrum within the F1 window, in isotropic ppm.
+            F1 shift in isotropic ppm for MQMAS/STMAS. ZQ-TROSY follows the AU
+            convention: shift in F2-carrier ppm while retaining the F1 reference.
+        ratio : float, optional
+            Advanced signed shear coefficient, supplied with ``f1_scale`` to
+            override automatic coefficients. No spin is needed in this mode;
+            omit ``spin`` and ``coherence_order``. ``experiment="ZQ-TROSY"``
+            still selects its independent F1 reference.
+        f1_scale : float, optional
+            Advanced positive F1 scale divisor, supplied together with ``ratio``.
 
         Returns
         -------
@@ -881,19 +953,26 @@ class Experiment:
             spin=spin,
             coherence_order=coherence_order,
             f1_shift=f1_shift,
+            ratio=ratio,
+            f1_scale=f1_scale,
+            experiment=experiment,
         )
 
-    def stmas_shear(self, *, size, f1_shift=0.0):
-        """Shear phased States XF2 for spin-3/2 DQF-STMAS.
+    def stmas_shear(self, *, size, f1_shift=0.0, spin=None):
+        """Shear phased XF2 with automatic inner-satellite STMAS coefficients.
 
         Select the F1 FFT size and an isotropic shift in ppm. The output
-        is a complex 2D spectrum with the F1 quadrature combined.
+        contains the same four spectral components as ``xfshear()``.
+        Coefficients follow the resolved quadrupolar spin; supply ``spin``
+        only if absent from metadata and isotope lookup. Its historical shift
+        direction is retained: ``f1_shift=a`` maps to
+        ``xfshear(experiment="STMAS", f1_shift=-a)``.
         """
         from .processing.mqmas import stmas_shear
 
         if self.is_multi_dataset:
             raise ValueError("STMAS shear requires one phased XF2 dataset")
-        return stmas_shear(self.dataset, size=size, f1_shift=f1_shift)
+        return stmas_shear(self.dataset, size=size, f1_shift=f1_shift, spin=spin)
 
     def prepare_xfshear(
         self,
@@ -926,7 +1005,7 @@ class Experiment:
             Number of acquired complex F2 samples to retain. By default, retain the
             available samples up to the FFT size.
         correct_digital_filter : bool
-            Compensate the Bruker digital group delay on the F2 frequency grid.
+            Compensate the recorded digital group delay on the F2 frequency grid.
         echo_window : tuple of float, optional
             Shifted Gaussian window as (slope, sigma), with sigma in seconds.
         mqecho : tuple of float, optional
@@ -941,7 +1020,7 @@ class Experiment:
         from .processing.mqmas import prepare_xfshear  # noqa: PLC0415
 
         if self.is_multi_dataset:
-            raise ValueError("XFSHEAR requires a single Bruker acquisition")
+            raise ValueError("XFSHEAR requires a single States acquisition")
         return prepare_xfshear(
             self.dataset,
             size=size,
@@ -1065,9 +1144,10 @@ class Experiment:
             Explicit normalized frequency-axis candidate. Interop spectra stay
             on the core Hz grid when omitted; no chemical zero is guessed.
         echo_antiecho : str, optional
-            Select ``"bruker-rance-kay"`` for stored pairs compatible with
-            Bruker Rance–Kay shuffling with no additional F1 sign alternation.
-            An explicit selection is required for imported echo/anti-echo data.
+            The normalized echo/anti-echo component arrangement uses
+            Rance–Kay reconstruction with no additional F1 sign alternation.
+            ``"rance-kay"`` can be supplied explicitly; the historical
+            ``"bruker-rance-kay"`` spelling remains an alias.
         digital_filter : str, optional
             Select "time" to correct and shorten a supported Bruker 1D
             FID or echo/anti-echo SER, or "phase" for NMRPipe FT -df on
@@ -1109,6 +1189,10 @@ class Experiment:
         """
 
         ds = self._dataset
+        if ds.meta.get("quadrature_mode") == "paired-phase-cycle-2d":
+            raise ValueError(
+                "Call Experiment.select_coherence() before processing phase-cycle FIDs"
+            )
         if ds.meta.get("bruker_nus") is not None:
             raise NotImplementedError(
                 "Bruker NUS F1 requires schedule-aware reconstruction"
@@ -1191,10 +1275,12 @@ class Experiment:
             )
 
         supports_echo = self._supports_echo_antiecho_fft
-        if supports_echo and echo_antiecho != "bruker-rance-kay":
-            raise ValueError(
-                'echo/anti-echo processing requires echo_antiecho="bruker-rance-kay"'
-            )
+        if supports_echo and echo_antiecho not in (
+            None,
+            "rance-kay",
+            "bruker-rance-kay",
+        ):
+            raise ValueError("Unsupported echo/anti-echo reconstruction")
         if echo_antiecho is not None and not supports_echo:
             raise ValueError(
                 "echo_antiecho requires an imported raw echo/anti-echo FID"
@@ -1212,11 +1298,9 @@ class Experiment:
             raise ValueError(
                 "bruker_group_delay requires an imported raw echo/anti-echo FID"
             )
-        if tppi_reference is not None and not self._supports_agilent_tppi_fft:
-            raise ValueError(
-                "tppi_reference requires a native Agilent TPPI acquisition"
-            )
-        if self._supports_agilent_tppi_fft:
+        if tppi_reference is not None and not self._supports_tppi_fft:
+            raise ValueError("tppi_reference requires a TPPI acquisition")
+        if self._supports_tppi_fft:
             if (
                 any(
                     value is not None
@@ -1235,12 +1319,10 @@ class Experiment:
                 or phc0
                 or phc1
             ):
-                raise ValueError(
-                    "Agilent TPPI processing supports FFT and referencing only"
-                )
-            from .processing.agilent_tppi import process_agilent_tppi  # noqa: PLC0415
+                raise ValueError("TPPI processing supports FFT and referencing only")
+            from .processing.tppi import process_tppi  # noqa: PLC0415
 
-            result = process_agilent_tppi(ds, tppi_reference)
+            result = process_tppi(ds, self._nmr_meta.spectral_width_hz, tppi_reference)
             requested = (
                 {} if tppi_reference is None else {"tppi_reference": tppi_reference}
             )
@@ -1263,18 +1345,22 @@ class Experiment:
             if (
                 any(
                     value is not None
-                    for value in (apodization, lb, gb, ssb, pow, size, phase, reference)
+                    for value in (apodization, lb, gb, ssb, pow, phase, reference)
                 )
+                or (size is not None and not self._supports_qf_fft)
                 or phc0
                 or phc1
             ):
                 raise ValueError("normalized 2D processing supports FFT only")
             if self._supports_states_fft or supports_echo:
-                from .processing.bruker_filter import resolve_bruker_delay  # noqa: PLC0415
+                from .processing.digital_filter import resolve_group_delay  # noqa: PLC0415
                 from .processing.channel_interop import process_echo_antiecho_fft  # noqa: PLC0415
                 from .processing.channel_interop import process_states_fft  # noqa: PLC0415
 
                 widths = self._nmr_meta.spectral_width_hz
+                from .interop import _normalize_states_components  # noqa: PLC0415
+
+                ds = _normalize_states_components(ds)
                 reconstruction = {}
                 indirect_fft = direct_fft = "NMRPipe FT -nodf"
                 filter_trace = {}
@@ -1284,7 +1370,7 @@ class Experiment:
                         method = "phase"
                     delay, delay_source = None, None
                     if method is not None:
-                        delay, delay_source = resolve_bruker_delay(
+                        delay, delay_source = resolve_group_delay(
                             ds, bruker_group_delay
                         )
                     result = process_echo_antiecho_fft(
@@ -1294,23 +1380,25 @@ class Experiment:
                         group_delay=delay,
                         delay_source=delay_source,
                     )
-                    reconstruction["echo_antiecho"] = echo_antiecho
+                    if echo_antiecho is not None:
+                        reconstruction["echo_antiecho"] = echo_antiecho
+                    if result.meta.get("digital_filter") is not None:
+                        result.meta.bruker_digital_filter = dict(
+                            result.meta.digital_filter
+                        )
                     if digital_filter is not None:
                         reconstruction["digital_filter"] = digital_filter
                     if bruker_group_delay is not None:
                         reconstruction["bruker_group_delay"] = float(bruker_group_delay)
                     if method is not None:
                         filter_trace["digital_filter"] = dict(
-                            result.meta.bruker_digital_filter
+                            result.meta.digital_filter
                         )
                     if method == "phase":
                         direct_fft = "NMRPipe FT -df"
                 else:
                     alternate = self.encoding[0] == "STATES-TPPI"
                     result = process_states_fft(ds, widths, alternate=alternate)
-                    transform = ds.meta.acquisition.get("states_fft_input_transform")
-                    if transform is not None:
-                        reconstruction["fft_input_transform"] = transform
                     if alternate:
                         indirect_fft = "NMRPipe FT -alt"
                 return self._attach_scp_processing_trace(
@@ -1319,6 +1407,7 @@ class Experiment:
                     applied={
                         **reconstruction,
                         **filter_trace,
+                        **({"echo_antiecho": "rance-kay"} if supports_echo else {}),
                         "fft": True,
                         "fft_order": ("F2", "F1"),
                         "fft_convention": (
@@ -1330,10 +1419,10 @@ class Experiment:
                 )
             from .processing.qf_interop import process_qf_fft  # noqa: PLC0415
 
-            result = process_qf_fft(ds, self._nmr_meta.spectral_width_hz)
+            result = process_qf_fft(ds, self._nmr_meta.spectral_width_hz, size=size)
             return self._attach_scp_processing_trace(
                 result,
-                requested={},
+                requested={} if size is None else {"size": tuple(result.shape)},
                 applied={
                     "fft": True,
                     "fft_order": ("F2", "F1"),
@@ -2084,8 +2173,8 @@ class Experiment:
         if self.encoding:
             lines.append(f"  encoding: {' × '.join(self.encoding)}")
         lines.append(f"  processable: {'yes' if self.is_processable else 'no'}")
-        if self._supports_agilent_tppi_fft:
-            lines.append("  public processing: native Agilent TPPI FFT")
+        if self._supports_tppi_fft:
+            lines.append("  public processing: TPPI FFT")
         elif self._supports_qf_fft:
             lines.append("  public processing: normalized 2D QF FFT only")
         elif self._supports_states_fft:
@@ -2093,9 +2182,7 @@ class Experiment:
                 f"  public processing: normalized {self.encoding[0]} 2D FFT only"
             )
         elif self._supports_echo_antiecho_fft:
-            lines.append(
-                "  public processing: echo/anti-echo with explicit reconstruction"
-            )
+            lines.append("  public processing: echo/anti-echo FFT")
         elif self.ndim >= 2:
             lines.append("  public processing: 1D only")
         return "\n".join(lines)

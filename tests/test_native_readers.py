@@ -210,32 +210,13 @@ def test_agilent_storage_decoding_does_not_claim_quadrature_normalization(
     assert result.meta.normalization_state == "storage-decoded"
     with pytest.raises(NotImplementedError, match='quadrature="states"'):
         result.fft(dim="x").fft(dim="y")
-    annotated = scp.NDDataset(
-        raw,
-        meta={
-            "seqfil": "NOESY",
-            "phase": (1, 2),
-            "ni": 3,
-            "np": 8,
-            "arraydim": 6,
-            "ntraces": 1,
-        },
-    )
-    expected = scp.nmr.process_agilent_noesy_states_tppi(annotated)
-    experimental = scp.nmr.process_agilent_noesy_states_tppi(result)
-    np.testing.assert_allclose(experimental.data, expected.data)
-    assert experimental.meta.processing_profile == "states-tppi-experimental"
+    with pytest.raises(NotImplementedError, match='quadrature="states-tppi"'):
+        scp.nmr.Experiment(result).process()
     f2 = result.fft(dim="x")
     assert result.meta.stage == "acquisition"
     assert result.meta.isfreq == [False, False, False]
     assert f2.meta.stage == "F2-spectrum"
     assert f2.meta.isfreq == [False, False, True]
-    with pytest.raises(ValueError, match="time-domain"):
-        scp.nmr.process_agilent_noesy_states_tppi(f2)
-    f2.meta.readonly = False
-    f2.meta.stage = "acquisition"
-    with pytest.raises(ValueError, match="time-domain"):
-        scp.nmr.process_agilent_noesy_states_tppi(f2)
 
 
 def test_jeol_retains_decoded_matrix_without_fabricating_channels(
@@ -247,11 +228,26 @@ def test_jeol_retains_decoded_matrix_without_fabricating_channels(
     raw = np.arange(24).reshape(4, 6) + 1j * np.arange(24, 48).reshape(4, 6)
     dic = {
         "header": {"data_axis_type": ["complex", "complex"]},
-        "parameters": {"x_sweep": 1000.0, "y_sweep": 4000.0},
+        "parameters": {
+            "x_sweep": 1000.0,
+            "y_sweep": 4000.0,
+            "x_freq": 400e6,
+            "y_freq": 100e6,
+            "x_domain": "Proton",
+            "y_domain": "Carbon13",
+            "x_offset": 5.0,
+            "y_offset": 80.0,
+        },
     }
     monkeypatch.setattr(reader, "_read_jeol_raw", lambda *a: (dic, raw.copy()))
     result = reader._read_jdf(scp.NDDataset(), path)
     np.testing.assert_array_equal(result.data, raw)
+    np.testing.assert_array_equal(result.y.data, np.arange(4) * 250)
+    np.testing.assert_array_equal(result.x.data, np.arange(6) * 1000)
+    assert result.meta.sw == [4000.0, 1000.0]
+    assert result.meta.sfrq == [100.0, 400.0]
+    assert result.meta.nucleus == ["Carbon13", "Proton"]
+    assert result.meta.offset == [80.0, 5.0]
     assert result.meta.normalization_state == "storage-decoded"
     with pytest.raises(NotImplementedError, match="UNVALIDATED:JEOL"):
         result.fft(dim="y")

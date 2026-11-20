@@ -16,9 +16,10 @@
 
 # %% [raw] raw_mimetype="text/restructuredtext"
 # Multiplex SPAM stores each phase-cycle scan as a separate FID in the
-# Bruker ``ser``. Use ``scp.nmr.read_multiplex_spam()`` to select one MQ
-# coherence and reconstruct two States FIDs per indirect increment. The
-# returned dataset is ready for the staged :doc:`mqmas` workflow.
+# Bruker ``ser``. Read all scans with ``scp.nmr.read(..., phase_cycle="paired")``,
+# then select a coherence with ``scp.nmr.Experiment(raw).select_coherence(3)``.
+# The resulting States E1/E2 FIDs follow the common :doc:`mqmas` workflow.
+# A single read can supply both 3Q and 5Q selections from eleven phases.
 #
 # Acquisition and pulse program
 # -----------------------------
@@ -40,7 +41,7 @@
 # SER. The reader takes the indirect dwell from ``acqus:IN[0]``, the direct
 # width from ``acqus:SW_h`` and the direct reference from ``procs:SF``.
 #
-# For each increment, the reader projects the difference and sum of the
+# For each increment, ``Experiment.select_coherence()`` projects the difference and sum of the
 # two SPAM scans onto sine and cosine at the selected coherence order.
 # It recombines the projections with the relative complex phase used by
 # the MSM AU program. The division by the number of excitation phases
@@ -60,9 +61,20 @@
 #          +i(A_j+B_j)\cos\phi_j].
 #
 # Here :math:`N` is the number of excitation phases. The phase projection
-# distinguishes harmonics modulo :math:`N`. The reader accepts the MQ
-# orders supported by the archived pulse programs, 3Q for MQMultiplex32
-# and 3Q or 5Q for MQMultiplex52.
+# distinguishes harmonics modulo :math:`N`. The qualified selections are 3Q
+# for seven phases, and 3Q or 5Q for eleven phases. Other orders are rejected.
+# The explicit ``phase_cycle="paired"`` option declares the physical storage
+# layout; no pulse-program name selects the reconstruction. The reader derives
+# the phase count from ``acqu3s:TD`` and returns complex data with shape
+# ``(2*N, increments, F2_points)`` and dimensions ``(c, y, x)``. Channel labels
+# preserve excitation phase and pair order. It neither projects the phases nor
+# scales their amplitudes. Do not apply an FFT to these scans before selection.
+#
+# The normalized ``raw.meta.acquisition["phase_cycle"]`` descriptor records the
+# excitation angles, pair order and discarded traces. Physical descriptors also
+# retain time calibration, acquired sizes, references, isotope and filter delay.
+# After reading, processing uses these descriptors and the data, including after
+# an SCP save/reload, without consulting Bruker source parameters.
 #
 # Reconstruct and process a 3Q spectrum
 # -------------------------------------
@@ -72,8 +84,13 @@
 #
 # The :doc:`gallery workflow </examples/gallery/nmr/plot_multiplex_spam>`
 # runs the reconstruction, phases F2 and plots the RR plane. Inspect the
-# F2 phase before interpreting the map. For spin 5/2, use ``spin=2.5``
-# and select 3Q or 5Q consistently when reading and shearing.
+# F2 phase before interpreting the map. The shear inherits the selected MQ
+# order; spin is resolved from physical metadata or the observed isotope.
+# Supply ``spin`` only if neither is available.
+# The observed nucleus is the one detected in F2. An unused F1 isotope
+# default does not select the coherence or the shear geometry: the phase
+# cycle determines the available orders, and the observed spin determines
+# their shearing coefficients. The original F1 time grid remains required.
 
 # %%
 import os
@@ -90,13 +107,14 @@ from spectrochempy_nmr.processing.mqmas import _mqecho_weights
 
 path = os.environ.get("SCP_MSM_DATA")
 if path:
-    states = scp.nmr.read_multiplex_spam(path, coherence_order=3)
+    raw = scp.nmr.read(path, phase_cycle="paired")
+    states = scp.nmr.Experiment(raw).select_coherence(3)
     xf2 = scp.nmr.Experiment(states).xf2(size=4096)
     row = xf2[0, 0].squeeze()
     phc0 = -degrees(phase_angle(row.data[abs(row).argmax()]))
     phased = scp.nmr.Experiment(xf2).xf2p(phc0=phc0)
-    spectrum = scp.nmr.Experiment(phased).xfshear(size=256, spin=1.5, coherence_order=3)
-    spectrum[0].squeeze().real.plot(method="contour")
+    spectrum = scp.nmr.Experiment(phased).xfshear(size=256)
+    _ = scp.nmr.Experiment(spectrum).RR.plot(method="contour")
 else:
     print("Set SCP_MSM_DATA to the MQMultiplex32 experiment directory.")
 
@@ -104,8 +122,23 @@ else:
 # If the SER contains a single interrupted cycle after the declared
 # increments, ``allow_partial=True`` explicitly permits ignoring its
 # nonzero traces and the remaining padding. Check
-# ``states.meta.acquisition["multiplex_spam"]`` for the selection and the
-# count of skipped traces.
+# ``raw.meta.acquisition["phase_cycle"]`` for the count of skipped traces and
+# ``states.meta.acquisition["multiplex_spam"]`` for the selected coherence.
+# Complete extra cycles and noncontiguous tails are rejected.
+#
+# For an eleven-phase acquisition, select both coherences without rereading:
+#
+# %%
+if path and raw.shape[0] == 22:
+    three_q = scp.nmr.Experiment(raw).select_coherence(3)
+    five_q = scp.nmr.Experiment(raw).select_coherence(5)
+
+# %% [raw] raw_mimetype="text/restructuredtext"
+# ``read_multiplex_spam()`` remains a compatibility shortcut that performs the
+# same read and selection. Existing 3Q/5Q amplitudes, phase conventions and
+# subsequent XF2/XFSHEAR results are preserved. The new path is validated on
+# synthetic phase cycles; the earlier archived real-data qualification is
+# described below and has not been rerun for this refactor.
 #
 # The pulse program and method are described by :cite:t:`malicki2005multiplex`.
 #

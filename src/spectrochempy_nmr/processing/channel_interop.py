@@ -21,23 +21,13 @@ def _rance_kay(data):
 
 def process_states_fft(dataset, widths, *, alternate):
     mode = "States-TPPI" if alternate else "States"
-    transform = dataset.meta.acquisition.get("states_fft_input_transform")
-    if transform not in (None, "conjugate-and-negate-second-branch"):
-        raise ValueError("Unsupported States FFT input transform")
     return _process_channel_fft(
         dataset,
         widths,
         ("E1", "E2"),
         mode,
-        reconstruct=_conjugate_and_negate_second if transform else None,
         alternate=alternate,
     )
-
-
-def _conjugate_and_negate_second(data):
-    branches = data.conj()
-    branches[1] *= -1
-    return branches
 
 
 def process_echo_antiecho_fft(
@@ -49,7 +39,7 @@ def process_echo_antiecho_fft(
             or not isinstance(group_delay, Real)
             or not 0 < group_delay < dataset.shape[-1]
         ):
-            raise ValueError("Bruker group delay must be positive and shorter than F2")
+            raise ValueError("group delay must be positive and shorter than F2")
         group_delay = float(group_delay)
 
     result = _process_channel_fft(
@@ -61,9 +51,9 @@ def process_echo_antiecho_fft(
         digital_filter=digital_filter,
         group_delay=group_delay,
     )
-    result.meta.echo_antiecho_reconstruction = "bruker-rance-kay"
+    result.meta.echo_antiecho_reconstruction = "rance-kay"
     if digital_filter is not None:
-        result.meta.bruker_digital_filter = {
+        result.meta.digital_filter = {
             "method": digital_filter,
             "group_delay_points": group_delay,
             "delay_source": delay_source,
@@ -116,11 +106,11 @@ def _process_channel_fft(
         ):
             raise ValueError(f"{mode} FFT requires the declared uniform time grids")
     if digital_filter == "time":
-        from ..readers.read_topspin import _correct_digital_filter_time  # noqa: PLC0415
+        from .digital_filter import correct_delay_time
 
         if data.shape[-1] - int(group_delay) - 2 < 2:
-            raise ValueError("Bruker group delay leaves fewer than two F2 points")
-        data = _correct_digital_filter_time(data, group_delay)
+            raise ValueError("group delay leaves fewer than two F2 points")
+        data = correct_delay_time(data, group_delay)
 
     coordinates = {}
     for dim, size, width in zip(("y", "x"), data.shape[1:], widths, strict=True):

@@ -6,7 +6,7 @@ the complete SpectroChemPy data corpus. The manifest is
 
 The TopSpin source is `spectrochempy_data` revision
 `08bb9b0cbff8f4363c48b6bff7ccb743f8140e0a`. The provenance register identifies
-the TopSpin 1D, CP and relaxation measurements as LCS data released under CC BY
+the TopSpin 1D, 2D, CP and relaxation measurements as LCS data released under CC BY
 4.0, with attribution to Christian Fernandez, LCS. Pulse programs and generated
 `__index__` files are intentionally not fetched because they are excluded from
 that grant or are generated metadata.
@@ -22,7 +22,12 @@ The Bruker PST-5 aluminium-27 MQMAS acquisition (experiment 51) comes from
 The dataset is licensed under CC BY 4.0 and attributed to Christian Fernandez,
 LCS. The fixture contains the SER and the parameters used to read it.
 
-The selected files total about 8.5 MiB. Run the same fetch as the RTD
+The raw epicatechin COSY JDF and its processed JCAMP-DX export are fetched
+from [spectrochempy_data revision 34448ef](https://github.com/spectrochempy/spectrochempy_data/tree/34448ef343f17a2ee57d2bc06661ac90e2d1ff48/testdata/nmrdata/jeol),
+also under CC0 1.0. They support the common QF guide and the two COSY gallery
+examples. Their hashes and source provenance are recorded in that dataset.
+
+The selected files total about 22.8 MiB. Run the same fetch as the RTD
 pre-build job locally with:
 
 ```console
@@ -31,3 +36,31 @@ python docs/fetch_gallery_data.py
 
 No fixture is copied into the NMR repository or published as a new data
 distribution.
+
+The fetch command also runs `docs/generate_reader_inputs.py`. This creates
+small, deterministic Agilent/Varian, SIMPSON and nmrML inputs below
+`nmrdata/synthetic` in the selected datadir. These are generated examples,
+not redistributed acquisitions. The generator can also be downloaded from
+the reader-workflows guide and run separately. The nmrML example needs
+`xmltodict`, installed by the documentation requirements. The Bruker 2D
+gallery uses the same licensed PST-5 HMQC input as the interrupted-sampling
+guide; it applies the common processor rather than the archived replay.
+
+## JEOL COSY magnitude qualification
+
+The optional tests in `tests/qualification/test_jeol_cosy_magnitude.py`
+use JDF and JCAMP-DX COSY pairs from nmrXiv project P33 for
+[luteolin](https://doi.org/10.57992/nmrxiv.p33.s214),
+[epicatechin](https://doi.org/10.57992/nmrxiv.p33.s192), and
+[rutin](https://doi.org/10.57992/nmrxiv.p33.s188). The test module pins
+the file hashes. Keep the original filenames in study subdirectories
+and point `NMR_JEOL_COSY_DIR` at their common parent. The rejection test
+also uses the raw epicatechin HSQC from the same study.
+
+```console
+NMR_JEOL_COSY_DIR=/path/to/CENAPT python -m pytest -q tests/qualification/test_jeol_cosy_magnitude.py
+```
+
+The interrupted States-TPPI guide also fetches the PST-5 HMQC
+SER and acquisition/processing parameters from `topspin_2d/1` at the
+same pinned revision. The stored pulse program is excluded.

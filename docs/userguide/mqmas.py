@@ -27,6 +27,15 @@
 # This tutorial uses a Bruker States acquisition of PST-5 to show the
 # tilted line shapes after two Fourier transforms, the effect of the
 # shear, and how apodization and baseline correction change the result.
+# The reader supplies the States components, acquired point counts, physical
+# axes, frequency references, isotope and digital-filter delay. XF2, phase
+# and shear then consume these descriptors without selecting a calculation
+# from the instrument, file profile or experiment name. This separation does
+# not qualify additional acquisition conventions.
+# The observed F2 nucleus determines the spin, shear coefficients and sheared
+# F1 reference. An unused default isotope in the indirect header is retained
+# as metadata and does not constrain MQMAS processing. The acquired F1 time
+# increment still determines the indirect frequency spacing.
 # %% [raw] raw_mimetype="text/restructuredtext"
 # See :cite:t:`frydman1995mqmas` for the original MQMAS experiment
 # and :cite:t:`fernandez2011quadrupolar` for experimental strategies
@@ -121,7 +130,7 @@ unsheared_rr = scp.NDDataset(
 
 # %%
 spectrum = scp.nmr.Experiment(phased).xfshear(
-    size=f1_size, spin=2.5, coherence_order=3, f1_shift=-20.0
+    size=f1_size, experiment="3QMAS", f1_shift=-20.0
 )
 rr = scp.nmr.Experiment(spectrum).rr()
 region = rr[52.0:25.0, 65.0:20.0]

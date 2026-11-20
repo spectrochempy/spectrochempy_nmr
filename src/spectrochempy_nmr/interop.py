@@ -310,15 +310,16 @@ def _from_2d(result, data):
             == tuple("complex" if dim == "F2" else "real" for dim in dimensions)
         )
         and float_components
-        and (encoding, branches)
-        in (
-            (("real", "complex"), ("rr", "ri")),
-            (("complex", "real"), ("rr", "ir")),
-        )
+        and encoding in (("real", "complex"), ("complex", "real"))
+        and len(branches) == 2
+        and set(branches) == ({"rr", "ri"} if encoding[0] == "real" else {"rr", "ir"})
     ):
         complex_axis = dimensions[encoding.index("complex")]
         plane = np.empty(data.shape[1:], dtype=np.result_type(data.dtype, np.complex64))
-        plane.real, plane.imag = data
+        order = _component_order(
+            branches, ("rr", "ri") if encoding[0] == "real" else ("rr", "ir")
+        )
+        plane.real, plane.imag = data[list(order)]
     elif (
         not time_qf
         and stored_components
@@ -475,6 +476,46 @@ def _set_ser_fft_presentation(dataset, result):
     dataset.meta.pivot = [0] * dataset.ndim
 
 
+def _component_order(labels, expected):
+    labels = tuple(labels)
+    if len(labels) != len(expected) or set(labels) != set(expected):
+        raise ValueError("Invalid normalized component labels")
+    return tuple(labels.index(name) for name in expected)
+
+
+def _normalize_states_components(dataset):
+    acquisition = dataset.meta.get("acquisition", {})
+    transform = acquisition.get("states_fft_input_transform")
+    if transform is None:
+        return dataset
+    if transform != "conjugate-and-negate-second-branch":
+        raise ValueError("Unsupported normalized States component arrangement")
+    if dataset.meta.get("quadrature_mode") not in ("states", "states-tppi"):
+        return dataset
+    result = dataset.copy()
+    result.meta.readonly = False
+    result.data = result.data.conj()
+    result.data[1] *= -1
+    result.meta.acquisition["states_fft_input_transform"] = None
+    result.meta.applied_operations = (
+        *result.meta.get("applied_operations", ()),
+        {
+            "name": "normalize-indirect-quadrature-components",
+            "stage": "quadrature-normalization",
+            "input_dimensions": ("channels", "F1", "F2"),
+            "output_dimensions": ("channels", "F1", "F2"),
+            "axis": "channels",
+            "scale": None,
+            "conjugation": "conjugate",
+            "sign": (1, -1),
+            "permutation": None,
+            "evidence": "declared input component convention",
+        },
+    )
+    result.meta.readonly = dataset.meta.readonly
+    return result
+
+
 def _from_states(result, data, profile):
     """Preserve E1/E2 in the explicitly declared States-family profile."""
     mode = "States-TPPI" if profile == "states-tppi" else "States"
@@ -484,7 +525,8 @@ def _from_states(result, data, profile):
         or tuple(result.dimensions) != ("channels", "F1", "F2")
         or tuple(result.domains) != ("time", "time")
         or tuple(result.encoding) != ("complex", "complex")
-        or tuple(result.branch_order) != ("rr", "ri", "ir", "ii")
+        or set(result.branch_order) != {"rr", "ri", "ir", "ii"}
+        or len(result.branch_order) != 4
         or result.quadrature_mode != "stored-components-2d"
         or result.normalization_state != "storage-normalized"
         or not isinstance(channel_axis, (int, np.integer))
@@ -510,6 +552,7 @@ def _from_states(result, data, profile):
 
         _require_fft_prevalidation()
 
+    data = data[list(_component_order(result.branch_order, ("rr", "ri", "ir", "ii")))]
     channels = np.empty(
         (2, *data.shape[1:]), dtype=np.result_type(data.dtype, np.complex64)
     )
@@ -533,7 +576,8 @@ def _from_echo_antiecho(result, data):
         or tuple(result.dimensions) != ("channels", "F1", "F2")
         or tuple(result.domains) != ("time", "time")
         or tuple(result.encoding) != ("echo-antiecho", "complex")
-        or tuple(result.branch_order) != ("first", "second")
+        or set(result.branch_order) != {"first", "second"}
+        or len(result.branch_order) != 2
         or result.normalization_state != "storage-normalized"
         or not isinstance(channel_axis, (int, np.integer))
         or isinstance(channel_axis, bool)
@@ -550,7 +594,12 @@ def _from_echo_antiecho(result, data):
         )
     from .processing.bruker_filter import imported_bruker_filter
 
-    dataset = _raw_channel_dataset(result, data.copy(), tuple(result.branch_order))
+    dataset = _raw_channel_dataset(
+        result,
+        data[list(_component_order(result.branch_order, ("first", "second")))].copy(),
+        ("first", "second"),
+    )
+    dataset.meta.acquisition["echo_antiecho_reconstruction"] = "rance-kay"
     dataset.meta.acquisition = imported_bruker_filter(
         dataset.meta.acquisition, dataset.meta.source_metadata
     )
@@ -602,7 +651,7 @@ def _from_stored_states(result, data):
         dataset.meta.encoding[-1] = "UNVALIDATED:STATES"
         if mode == "states-tppi":
             dataset.meta.tppi_alternation_state = "encoded"
-    return dataset
+    return _normalize_states_components(dataset)
 
 
 def _raw_time_or_index_coordinate(axis, size, dim):
@@ -611,31 +660,112 @@ def _raw_time_or_index_coordinate(axis, size, dim):
     return _raw_time_coordinate(axis, size, dim)
 
 
-def _listed_pair_coordinate(axis, size, width, nominal_size):
+def _trace_widths(result):
+    widths = result.acquisition.get("spectral_width_hz", ())
+    if (
+        not isinstance(widths, (list, tuple))
+        or len(widths) != 2
+        or any(
+            not isinstance(width, (int, float, np.integer, np.floating))
+            or isinstance(width, (bool, np.bool_))
+            or not np.isfinite(width)
+            or width <= 0
+            for width in widths
+        )
+    ):
+        raise ValueError("Raw F2 traces require calibrated F1 and F2 sweep widths")
+    return widths
+
+
+def _sampled_f1_coordinate(axis, size, width, nominal_size, sampling, *, paired):
     coord = _axis_coordinate(axis, size, "y", linearize_below=0.0)
     values = coord.data
     if (
         axis.unit != "s"
-        or axis.direction != "unknown"
+        or axis.direction != ("unknown" if paired else "increasing")
         or axis.values is None
-        or size < 4
-        or size % 2
+        or size < (4 if paired else 2)
         or not isinstance(nominal_size, (int, np.integer))
-        or nominal_size <= size // 2
-        or not np.array_equal(values[::2], values[1::2])
+        or isinstance(nominal_size, (bool, np.bool_))
+        or (paired and (size % 2 or not np.array_equal(values[::2], values[1::2])))
     ):
-        raise ValueError("Listed F1 requires a time coordinate for each trace pair")
-    grid = values[::2] * width
-    indices = np.rint(grid)
-    if (
-        not np.isfinite(grid).all()
-        or np.any(grid < 0)
-        or np.any(indices >= nominal_size)
-        or np.any(np.diff(indices) <= 0)
-        or not np.allclose(grid, indices, rtol=0, atol=1e-7)
-    ):
-        raise ValueError("Listed F1 time pairs must follow the nominal sampling grid")
+        if paired:
+            raise ValueError("F1 requires a time coordinate for each trace pair")
+        raise ValueError("F1 requires a time coordinate for each acquired increment")
+    times = values[::2] if paired else values
+    grid = times * width
+    if sampling == "regular":
+        if nominal_size != times.size or not np.allclose(
+            grid, np.arange(times.size), rtol=1e-12, atol=0
+        ):
+            raise ValueError("Regular F1 times must match the full sampling grid")
+    else:
+        indices = np.rint(grid)
+        if (
+            nominal_size <= times.size
+            or not np.isfinite(grid).all()
+            or np.any(grid < 0)
+            or np.any(indices >= nominal_size)
+            or np.any(np.diff(indices) <= 0)
+            or not np.allclose(grid, indices, rtol=0, atol=1e-7)
+        ):
+            raise ValueError("Listed F1 times must follow the nominal sampling grid")
     return coord
+
+
+def _check_trace_dwell(coordinates, widths):
+    if any(
+        coord.size < 2 or not np.isclose(coord.data[1] * width, 1, rtol=1e-12, atol=0)
+        for coord, width in zip(coordinates, widths, strict=True)
+    ):
+        raise ValueError("Raw F2 traces require calibrated F1 and F2 sweep widths")
+
+
+def _from_jeol_section_pairs(result, data):
+    from .processing.fft_validation import _require_fft_prevalidation  # noqa: PLC0415
+
+    labels = ("section-0/1", "section-2/3")
+    channel_axis = getattr(result, "channel_axis", None)
+    if (
+        tuple(result.physical_dimensions) != ("F1", "F2")
+        or tuple(result.dimensions) != ("channels", "F1", "F2")
+        or tuple(result.domains) != ("time", "time")
+        or tuple(result.encoding) != ("complex", "complex")
+        or tuple(result.branch_order) != labels
+        or result.normalization_state != "storage-normalized"
+        or not isinstance(channel_axis, (int, np.integer))
+        or isinstance(channel_axis, (bool, np.bool_))
+        or channel_axis != 0
+        or len(result.axes) != 2
+        or data.ndim != 3
+        or data.shape[0] != 2
+        or 0 in data.shape
+        or data.dtype.kind != "c"
+        or data.dtype.itemsize not in (8, 16)
+        or not np.isfinite(data).all()
+    ):
+        raise ValueError("JEOL requires two normalized complex F1/F2 section pairs")
+    _require_fft_prevalidation()
+    sampling = result.acquisition.get("sampling")
+    nominal = result.acquisition.get("nominal_shape", ())
+    if (
+        sampling not in (("regular", "regular"), ("listed", "regular"))
+        or not isinstance(nominal, (tuple, list))
+        or len(nominal) != 2
+        or not isinstance(nominal[1], (int, np.integer))
+        or nominal[1] != data.shape[2]
+    ):
+        raise ValueError("JEOL section pairs require an explicit sampling shape")
+    f1_width, f2_width = _trace_widths(result)
+    y = _sampled_f1_coordinate(
+        result.axes[0], data.shape[1], f1_width, nominal[0], sampling[0], paired=False
+    )
+    x = _raw_time_coordinate(result.axes[1], data.shape[2], "x")
+    _check_trace_dwell((x,), (f2_width,))
+    dataset = _raw_channel_dataset(result, data.copy(), labels, coordinates=(y, x))
+    dataset.meta.encoding = ["CHANNELS", "UNVALIDATED:F1", "DIRECT:QSIM"]
+    dataset.meta.iscomplex = [False, True, True]
+    return dataset
 
 
 def _from_raw_trace_matrix(result, data):
@@ -645,19 +775,26 @@ def _from_raw_trace_matrix(result, data):
     from .processing.fft_validation import _require_fft_prevalidation  # noqa: PLC0415
 
     series = result.quadrature_mode == "series-stored-2d"
+    jeol_single = result.quadrature_mode == "jeol-stored-section-pairs"
     guarded_f2 = result.quadrature_mode in (
+        "jeol-stored-section-pairs",
         "f2-traces-stored-2d",
         "simpson-stored-complex-2d",
     )
     dimensions = ("trace", "F2") if series else ("F1", "F2")
     domains = ("unknown", "time") if series else ("time", "time")
-    encoding = ("unknown" if series or guarded_f2 else "tppi", "complex")
+    encoding = (
+        ("real_complex", "real_complex")
+        if jeol_single
+        else ("unknown" if series or guarded_f2 else "tppi", "complex")
+    )
+    branch_order = ("section-0/1",) if jeol_single else ("complex",)
     if (
         tuple(result.physical_dimensions) != dimensions
         or tuple(result.dimensions) != dimensions
         or tuple(result.domains) != domains
         or tuple(result.encoding) != encoding
-        or tuple(result.branch_order) != ("complex",)
+        or tuple(result.branch_order) != branch_order
         or result.normalization_state != "storage-normalized"
         or getattr(result, "channel_axis", None) is not None
         or len(result.axes) != 2
@@ -677,23 +814,22 @@ def _from_raw_trace_matrix(result, data):
         _require_fft_prevalidation()
     leading, direct = result.axes
     if guarded_f2:
-        widths = result.acquisition.get("spectral_width_hz", ())
-        if (
-            not isinstance(widths, (list, tuple))
-            or len(widths) != 2
-            or any(
-                not isinstance(width, (int, float, np.integer, np.floating))
-                or isinstance(width, (bool, np.bool_))
-                or not np.isfinite(width)
-                or width <= 0
-                for width in widths
-            )
-        ):
-            raise ValueError("Raw F2 traces require calibrated F1 and F2 sweep widths")
+        widths = _trace_widths(result)
         x = _raw_time_coordinate(direct, data.shape[1], "x")
         sampling = result.acquisition.get("sampling")
-        if sampling == ("listed-paired", "regular"):
-            nominal = result.acquisition.get("nominal_shape", ())
+        nominal = result.acquisition.get("nominal_shape", ())
+        if jeol_single and (
+            sampling != ("regular", "regular")
+            or not isinstance(nominal, (tuple, list))
+            or tuple(nominal) != data.shape
+            or any(
+                not isinstance(size, (int, np.integer))
+                or isinstance(size, (bool, np.bool_))
+                for size in nominal
+            )
+        ):
+            raise ValueError("JEOL section pair requires a full regular sampling grid")
+        if sampling in (("listed-paired", "regular"), ("regular-paired", "regular")):
             branches = result.acquisition.get("trace_branch_order", ())
             if (
                 not isinstance(nominal, (tuple, list))
@@ -701,25 +837,26 @@ def _from_raw_trace_matrix(result, data):
                 or any(not isinstance(size, (int, np.integer)) for size in nominal)
                 or nominal[1] != x.size
             ):
-                raise ValueError("Listed F1 requires a nominal sampling shape")
+                raise ValueError("Paired F1 requires a nominal sampling shape")
             if (
                 not isinstance(branches, (tuple, list))
                 or len(branches) != 2
                 or any(not isinstance(name, str) or not name for name in branches)
                 or branches[0] == branches[1]
             ):
-                raise ValueError("Listed F1 requires two distinct trace branch labels")
-            y = _listed_pair_coordinate(leading, data.shape[0], widths[0], nominal[0])
-            grids = ((x, widths[1]),)
+                raise ValueError("Paired F1 requires two distinct trace branch labels")
+            y = _sampled_f1_coordinate(
+                leading,
+                data.shape[0],
+                widths[0],
+                nominal[0],
+                sampling[0].removesuffix("-paired"),
+                paired=True,
+            )
+            _check_trace_dwell((x,), (widths[1],))
         else:
             y = _raw_time_coordinate(leading, data.shape[0], "y")
-            grids = zip((y, x), widths, strict=True)
-        if any(
-            coord.size < 2
-            or not np.isclose(coord.data[1] * width, 1, rtol=1e-12, atol=0)
-            for coord, width in grids
-        ):
-            raise ValueError("Raw F2 traces require calibrated F1 and F2 sweep widths")
+            _check_trace_dwell((y, x), widths)
     else:
         x = _raw_time_or_index_coordinate(direct, data.shape[1], "x")
         if series:
@@ -758,17 +895,21 @@ def _from_raw_trace_matrix(result, data):
     return dataset
 
 
-def _raw_channel_dataset(result, channels, labels, *, allow_unknown_time=False):
+def _raw_channel_dataset(
+    result, channels, labels, *, allow_unknown_time=False, coordinates=None
+):
     import spectrochempy as scp  # noqa: PLC0415
 
-    y, x = (
-        _raw_time_or_index_coordinate(axis, size, dim)
-        if allow_unknown_time
-        else _raw_time_coordinate(axis, size, dim)
-        for axis, size, dim in zip(
-            result.axes, channels.shape[1:], ("y", "x"), strict=True
+    if coordinates is None:
+        coordinates = tuple(
+            _raw_time_or_index_coordinate(axis, size, dim)
+            if allow_unknown_time
+            else _raw_time_coordinate(axis, size, dim)
+            for axis, size, dim in zip(
+                result.axes, channels.shape[1:], ("y", "x"), strict=True
+            )
         )
-    )
+    y, x = coordinates
     dataset = scp.NDDataset(channels, dtype=channels.dtype, dims=["c", "y", "x"])
     c = (
         scp.Coord.arange(2, dims="c", labels=list(labels))
@@ -808,6 +949,8 @@ def from_interop(result, *, profile=None):
     branch order and signs.
     Explicitly normalized echo/anti-echo input retains both complex branches
     in storage order. Stored States branches retain the indirect FFT guard.
+    JEOL section pairs retain an explicit component axis and the acquired
+    F1 times, including listed NUS times. Physical F1 quadrature is unknown.
     """
     required = (
         "data",
@@ -849,6 +992,10 @@ def from_interop(result, *, profile=None):
         result.domains
     ) == ("time", "time"):
         return _from_raw_trace_matrix(result, data)
+    if result.quadrature_mode == "jeol-stored-section-pairs":
+        if data.ndim == 2:
+            return _from_raw_trace_matrix(result, data)
+        return _from_jeol_section_pairs(result, data)
     if result.quadrature_mode == "states-stored-2d":
         return _from_stored_states(result, data)
     if result.quadrature_mode == "echo-antiecho-stored-2d":

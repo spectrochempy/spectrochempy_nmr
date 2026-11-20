@@ -23,6 +23,7 @@ __all__ = ["read_topspin"]
 import contextlib
 import re
 from datetime import datetime
+from numbers import Real
 
 import numpy as np
 
@@ -687,22 +688,9 @@ def _remove_digital_filter(dic, data):
 
 
 def _correct_digital_filter_time(data, phase):
-    """Apply the historical reader's integer shift and boundary treatment."""
-    phase = np.floor(phase)
-    si = data.shape[-1]
-    s = float(si)
+    from ..processing.digital_filter import correct_delay_time
 
-    pdata = np.fft.fft(np.fft.ifftshift(data, -1), axis=-1) / s
-    pdata = pdata * np.exp(2.0j * np.pi * phase * np.arange(s) / s)
-    pdata = np.fft.fftshift(np.fft.ifft(pdata, axis=-1), -1) * s
-
-    skip = int(np.floor(phase + 2.0))
-    add = int(max(skip - 6, 0))
-
-    if add > 0:
-        pdata[..., :add] = pdata[..., :add] + pdata[..., : -(add + 1) : -1]
-
-    return pdata[..., :-skip]
+    return correct_delay_time(data, phase)
 
 
 # ======================================================================================
@@ -759,6 +747,21 @@ def read_topspin(*paths, **kwargs):
     quadrature : {"qf", "states", "states-tppi", "echo-antiecho"}, optional
         Supply the F1 acquisition mode for a SER with missing or undefined
         acquisition and processing mode parameters.
+    phase_cycle : {"paired"}, optional
+        Read uniform excitation phases and adjacent 0/180 SPAM scans without
+        selecting a coherence. Use ``Experiment.select_coherence()`` next.
+        F1 dwell defaults to IN[0]. Qualified layouts contain 7 or 11 phases.
+    allow_partial : bool, optional
+        With ``phase_cycle="paired"``, explicitly discard one incomplete cycle
+        after the declared increments. Counts are recorded in acquisition metadata.
+    indirect_dwell : float or {"IN[0]"}, optional
+        Calibrate the F1 time step of a uniform States SER, in seconds.
+        ``"IN[0]"`` explicitly selects the first acquisition increment.
+        This reads uncorrected States pairs without scan/gain scaling.
+    use_tdeff : bool, optional, default: False
+        Select the complete States traces declared by ``proc2s TDeff``.
+        With this option, F1 calibration uses ``indirect_dwell`` when given,
+        otherwise the indirect acquisition spectral width.
     use_list : bool or str, optional, default: False
         Use a list of values in seconds for the indirect coordinate of
         pseudo-2D data. Set to ``True`` for ``vdlist`` or give the list filename
@@ -805,6 +808,40 @@ def read_topspin(*paths, **kwargs):
     The first coordinate is 253.0909 ppm.
 
     """
+    if not isinstance(kwargs.get("use_tdeff", False), bool):
+        raise TypeError("use_tdeff must be a boolean")
+    phase_cycle = kwargs.get("phase_cycle")
+    if phase_cycle is not None:
+        if phase_cycle != "paired":
+            raise ValueError("phase_cycle must be 'paired'")
+        if any(
+            kwargs.get(key)
+            for key in (
+                "processed",
+                "use_tdeff",
+                "use_list",
+                "quadrature",
+                "remove_dc_offset",
+                "remove_digital_filter",
+            )
+        ):
+            raise ValueError(
+                "Read paired phase cycles uncorrected without quadrature or pair selection"
+            )
+    if not isinstance(kwargs.get("allow_partial", False), bool):
+        raise TypeError("allow_partial must be a boolean")
+    if kwargs.get("allow_partial") and phase_cycle is None:
+        raise ValueError("allow_partial requires phase_cycle='paired'")
+    dwell = kwargs.get("indirect_dwell")
+    if dwell is not None and not (
+        isinstance(dwell, str)
+        and dwell == "IN[0]"
+        or isinstance(dwell, Real)
+        and not isinstance(dwell, (bool, np.bool_))
+        and np.isfinite(dwell)
+        and dwell > 0
+    ):
+        raise ValueError("indirect_dwell must be positive seconds or 'IN[0]'")
     quadrature = kwargs.get("quadrature")
     if quadrature is not None and quadrature not in (
         "qf",
@@ -813,6 +850,10 @@ def read_topspin(*paths, **kwargs):
         "echo-antiecho",
     ):
         raise ValueError("quadrature must be qf, states, states-tppi or echo-antiecho")
+    if (dwell is not None or kwargs.get("use_tdeff", False)) and kwargs.get(
+        "processed", False
+    ):
+        raise ValueError("States pair selection requires a raw SER")
     kwargs["filetypes"] = ["TopSpin files (1r, 1i, *dir/*, 1r/*)"]
     kwargs["protocol"] = ["topspin"]
     importer = Importer()
@@ -1331,6 +1372,49 @@ def _bruker_nus_schedule(directory, indirect, trace_count, *, paired):
 def _read_topspin(*args, **kwargs):
     _check_nmrglue_installation()
     dataset, path = args
+    if kwargs.get("phase_cycle") == "paired":
+        if path.name != "ser":
+            raise SpectroChemPyError("Paired phase-cycle reading requires a raw SER")
+        from .multiplex_spam import read_paired_fids
+
+        try:
+            dataset = read_paired_fids(
+                path,
+                procno=kwargs.get("procno", "1"),
+                allow_partial=kwargs.get("allow_partial", False),
+                indirect_dwell=kwargs.get("indirect_dwell"),
+            )
+        except (ValueError, FileNotFoundError) as exc:
+            raise SpectroChemPyError(str(exc)) from exc
+        apply_reader_metadata_options(dataset, kwargs, default_origin="topspin")
+        dataset.meta.readonly = True
+        return dataset
+    if kwargs.get("indirect_dwell") is not None or kwargs.get("use_tdeff", False):
+        if path.name != "ser":
+            raise SpectroChemPyError("States pair selection requires a raw SER")
+        if kwargs.get("use_list") or kwargs.get("quadrature") not in (None, "states"):
+            raise SpectroChemPyError(
+                "States pair selection requires uniform States quadrature"
+            )
+        if kwargs.get("remove_digital_filter") or kwargs.get("remove_dc_offset"):
+            raise SpectroChemPyError(
+                "Read States pairs uncorrected, then process with Experiment"
+            )
+        from .states_fids import read_states_fids
+
+        try:
+            dataset = read_states_fids(
+                path,
+                procno=kwargs.get("procno", "1"),
+                use_tdeff=kwargs.get("use_tdeff", False),
+                indirect_dwell=kwargs.get("indirect_dwell"),
+                quadrature=kwargs.get("quadrature"),
+            )
+        except (ValueError, FileNotFoundError) as exc:
+            raise SpectroChemPyError(str(exc)) from exc
+        apply_reader_metadata_options(dataset, kwargs, default_origin="topspin")
+        dataset.meta.readonly = True
+        return dataset
 
     # is-it a processed dataset file (1r, 2rr ....) ?
     processed = bool(path.match("pdata/*/*"))
@@ -1841,6 +1925,9 @@ def _read_topspin(*args, **kwargs):
         dataset.meta.update(meta)
         dataset.set_coordset(*tuple(coords))
     if normalized_ser:
+        from ._metadata import complete_states_metadata
+
+        complete_states_metadata(dataset)
         from ..processing.topspin_xfb import capture_xfb_plan  # noqa: PLC0415
 
         profile = dataset.meta.nmr_processing.get("vendor_profile")

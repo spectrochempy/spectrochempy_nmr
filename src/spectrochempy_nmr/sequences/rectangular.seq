@@ -1,0 +1,3 @@
+# One finite RF pulse; width, power and phase are independently bound.
+set rf=rf1
+pulse p1 phase=ph1

@@ -87,9 +87,16 @@ _ = region.plot(method="contour")
 #
 # For segmentation, peak simulation, and multidimensional fitting,
 # see the :external+core:doc:`core analysis guide <userguide/analysis/index>`.
-# For an example of fitting relaxation curves across a series, see
-# :doc:`/examples/gallery/analysis/plot_processing_nmr_relax`.
+# Analyze acquisition series
+# ---------------------------
 #
-# For an example of assembling separate Bruker FIDs and comparing
-# cross-polarization buildup by contact time, see
-# :doc:`/examples/gallery/analysis/plot_processing_cp_nmr`.
+# Keep the experimental variable as a series coordinate and process only
+# the spectral axis. The guides below explain how to keep a common phase
+# and intensity scale, integrate fixed regions and assess a fitted model.
+# Each guide links to a short executable gallery recipe.
+#
+# .. toctree::
+#    :maxdepth: 1
+#
+#    cp_buildup
+#    relaxation_t1

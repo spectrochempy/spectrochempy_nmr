@@ -521,16 +521,13 @@ class TestEmFFT2DBrukerEchoAntiecho:
         assert abs(y_peak - ref_y) < 1.0
         assert abs(x_peak - ref_x) < 1.0
 
-    def test_experiment_requires_explicit_echo_antiecho_reconstruction(self):
+    def test_experiment_uses_normalized_echo_antiecho_reconstruction(self):
         ds = scp.read_topspin(BRUKER_ECHOANTI_2D, expno=3, remove_digital_filter=True)
         experiment = scp.nmr.Experiment(ds)
 
-        with pytest.raises(
-            ValueError, match='requires echo_antiecho="bruker-rance-kay"'
-        ):
-            experiment.process()
-
-        spectrum = experiment.process(echo_antiecho="bruker-rance-kay")
+        spectrum = experiment.process()
+        legacy = experiment.process(echo_antiecho="bruker-rance-kay")
+        np.testing.assert_array_equal(spectrum.data, legacy.data)
         assert scp.nmr.Experiment(spectrum).domains == ("frequency", "frequency")
         assert tuple(spectrum.c.labels) == ("rr", "ri", "ir", "ii")
         assert spectrum.shape == (4, *ds.shape[-2:])

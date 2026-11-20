@@ -17,12 +17,24 @@
 # PULSAR simulates one-dimensional solid-state NMR powder spectra for
 # quadrupolar transitions and chemical shift anisotropy (CSA). It supports static
 # powder, magic-angle spinning and variable-angle spinning. Finite RF
-# sequences can include secular isotropic J coupling.
+# sequences can include secular isotropic J coupling and, for
+# heteronuclear spin-½ pairs, static or MAS dipolar coupling and cross polarization.
 #
-# ## Ideal-pulse spectra
+# %% [raw] raw_mimetype="text/restructuredtext"
+# See :doc:`pulsar_scope` for the history, model limits, and comparisons
+# with other simulators.
+
+# %% [markdown]
+# ## ²⁷Al in Al(acac)₃ at two MAS rates
 #
-# For a spin-5/2 central transition with two sidebands on each side,
-# use `simulate_central_transition()`.
+# For the spin-5/2 central transition, the first-order quadrupolar shift
+# vanishes. The second-order interaction still broadens and shifts the
+# line under MAS. At fixed spin and asymmetry its frequency scale is
+# proportional to Cq²/ν₀, where ν₀ is the Larmor frequency.
+#
+# Simulate one site with the same tensor and field at 0.5 and 1 kHz.
+# The model uses ideal excitation at the magic angle. Both profiles
+# receive the same 65 Hz Gaussian broadening for display.
 
 # %%
 import spectrochempy as scp
@@ -30,25 +42,53 @@ from spectrochempy.nmr import pulsar
 
 from spectrochempy_nmr.pulsar import Delay, IdealPulse
 
-spectrum = pulsar.simulate_central_transition(
+settings = dict(
     spin=2.5,
-    cq_hz=4e6,
-    eta=0.6,
-    larmor_hz=100e6,
-    spectral_width_hz=100e3,
-    shift_hz=4500,
-    spinning_hz=10e3,
-    sidebands=2,
+    cq_hz=2.923e6,
+    eta=0.136,
+    larmor_hz=104.46851646e6,
+    spectral_width_hz=48e3,
+    points=8192,
+    rotor_angle_deg=54.735610317,
+    accuracy=24,
+    sidebands=20,
 )
 
-spectrum.x.ito("kHz")
-_ = spectrum.plot(method="pen", figsize=(8, 3), ylabel="Intensity per bin")
+spectra = [
+    pulsar.broaden(
+        pulsar.simulate_central_transition(spinning_hz=rate, **settings),
+        gaussian_fwhm_hz=65,
+    )
+    for rate in (500, 1000)
+]
+for spectrum in spectra:
+    spectrum.x.ito("kHz")
+
+_ = scp.multiplot(
+    spectra,
+    labels=["Simulated MAS at 0.5 kHz", "Simulated MAS at 1 kHz"],
+    ncol=2,
+    sharex=True,
+    sharey=True,
+    method="pen",
+    figsize=(9, 3),
+    xlim=(-8, 8),
+    xlabel="Frequency offset (kHz)",
+    ylabel="Intensity per bin",
+)
 
 # %% [markdown]
-# The returned dataset has an increasing frequency offset axis in Hz.
-# Each intensity is the mass in a bin whose left edge is the coordinate.
-# The selected bands have unit total area. Choose a simulation window
-# wide enough to contain all selected bands and transitions.
+# Sideband orders are separated by the rotor frequency. At 0.5 kHz
+# they lie closer together and carry more of the total intensity.
+# The second-order shift moves the central band even though the
+# isotropic chemical-shift offset is set to zero.
+#
+# PULSAR returns frequency offsets in Hz at the left edges of the bins.
+# Each intensity is a bin mass. The masses sum to one across the selected
+# orders before broadening. Check the window, number of orders and powder
+# mesh before comparing relative intensities. Use the physical Larmor
+# frequency for the quadrupolar calculation and apply the chemical-shift
+# reference separately when aligning to a measured spectrum.
 #
 # Use `simulate_quadrupolar()` for satellites
 # or all transitions. This includes first- and second-order quadrupolar
@@ -65,8 +105,8 @@ _ = spectrum.plot(method="pen", figsize=(8, 3), ylabel="Intensity per bin")
 # `simulate_pulse_sequence()` accepts an
 # ordered list of finite or ideal RF pulses, delays and coherence
 # selections. Use `simulate_coupled_sequence()`
-# for two RF-active spins coupled by isotropic J. Dipolar coupling is
-# outside the model. For example, this static spin-1/2 echo uses the
+# for two RF-active spins coupled by isotropic J, optionally with a
+# heteronuclear spin-½ dipolar interaction. This spin-1/2 echo uses the
 # receiver phase to place the refocused signal in positive absorption.
 
 # %%
@@ -102,6 +142,39 @@ _ = scp.plot_multiple(
 # `output="density"` to obtain the powder-averaged deviation density
 # matrix at the end of preparation.
 #
+# ## Dipolar coupling and cross polarization
+#
+# Add `dipolar_hz=5000` for a heteronuclear spin-½ pair. The
+# interaction in Hz is `D * (3*cos(theta)**2 - 1) * Iz*Sz`, using the
+# historical PyPulsar convention. `dipolar_axis` gives a unit bond vector
+# in the common sample frame, defaulting to `(0, 0, 1)`. Both pulse
+# propagation and acquisition include the orientation-dependent coupling.
+# In static samples, simultaneous RF contacts transfer magnetization near
+# the Hartmann–Hahn condition, where the two RF amplitudes match.
+#
+# Set `spinning_hz` for MAS. The rotor modulation continues during RF,
+# delays and acquisition, producing dipolar sidebands. Under MAS the
+# first-order RF difference or sum matches one or two rotor frequencies.
+# The rank-two mean vanishes at the exact magic angle, but the modulation
+# still affects RF transfer and acquisition. Select enough `sidebands`
+# for spectral output, and converge `accuracy` and `max_rf_step_s`.
+#
+# The model describes an isolated pair, with ¹H–¹³C as one example rather
+# than an isotope restriction. It does not include homonuclear flip-flop terms,
+# a proton bath, spin diffusion or rotating-frame relaxation.
+# `Delay(decouple_j=True)`
+# removes J only; it leaves the dipolar interaction active.
+#
+# %% [raw] raw_mimetype="text/restructuredtext"
+# The :doc:`static CP example
+# <../examples/gallery/simulation/plot_pypulsar_cp_static>` shows contact-time
+# and Hartmann–Hahn curves with a two-scan cycle that isolates transferred
+# proton magnetization from directly excited carbon signal.
+# The :doc:`MAS CP example
+# <../examples/gallery/simulation/plot_pypulsar_cp_mas>` compares the first
+# rotor-sideband match with equal RF fields and sweeps the RF matching profile.
+
+# %% [markdown]
 # ## Fit a central transition
 #
 # Pass a PULSAR line shape to `scp.Optimize` as a user model. The model
@@ -109,7 +182,9 @@ _ = scp.plot_multiple(
 # the frequency coordinate contains offsets in Hz.
 #
 # The input is a simulated central transition with Gaussian broadening
-# of 115 Hz FWHM applied by `pulsar.broaden()`.
+# of 115 Hz FWHM applied by `pulsar.broaden()`. The half-bin offset moves
+# the model coordinates from the left edges to the bin centers before
+# interpolation onto the observation grid.
 
 # %%
 simulation = {
@@ -176,7 +251,10 @@ _ = result.residuals.plot(
 # `cq`, `shift` and `fwhm` in Hz. Read the optimized values from
 # `fit.script` and the spectra and fit diagnostics from `fit.result`.
 # Choose bounds that keep the selected transitions inside the simulation
-# window. Repeat the fit with a finer powder mesh to check stability.
+# window. This synthetic fit checks parameter recovery with the same
+# model used to generate the input. For measured data, inspect the
+# residuals and repeat the fit with different starting values and a
+# finer powder mesh before interpreting the parameters.
 #
 # ## Scope of the checks
 #
@@ -186,10 +264,3 @@ _ = result.residuals.plot(
 # predicted sideband peaks agree within one measured bin. The areas
 # still show larger differences, so the YAG check does not establish
 # quantitative experimental intensity accuracy.
-
-# %% [raw] raw_mimetype="text/restructuredtext"
-# Historical notes
-# ----------------
-#
-# * The original PULSAR paper is :cite:p:`amoureux1995pulsar`.
-# * See :cite:t:`masai` for the archived software.

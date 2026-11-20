@@ -1,132 +1,71 @@
-# %%
-# ======================================================================================
-# Copyright (©) 2014-2026 Laboratoire Catalyse et Spectrochimie (LCS), Caen, France.
-# CeCILL-B FREE SOFTWARE LICENSE AGREEMENT
-# See full LICENSE agreement in the root directory.
-# ======================================================================================
-# ruff: noqa
 """
-Processing a saturation-recovery relaxation series
-==================================================
+Fit four components across a recovery series
+=============================================
 
-This example processes a pseudo-2D series of 1D spectra acquired with a
-variable recovery delay and fits a simple saturation-recovery model to the
-dominant resonance.
-
-The bundled Bruker dataset stores the delays in ``vdlist`` and the pulse
-program indicates a CP/MAS saturation-recovery experiment. The example keeps a
-modest public scope:
-
-- process the 1D FIDs with explicit SpectroChemPy operations;
-- extract a signal trace from the dominant processed resonance;
-- fit a simple two-parameter recovery model to that trace.
-
-It does not claim replay of vendor processing, nor exact equivalence with the
-TopSpin fitting tools bundled alongside the dataset.
-
+Process F2 and fit four Voigt profiles with saturation-recovery amplitudes.
+The detailed :doc:`/userguide/relaxation_t1` explains processing, bounds,
+shared parameters and residuals. This recipe requires the development Core
+API from `PR #1905 <https://github.com/spectrochempy/spectrochempy/pull/1905>`_;
+the documentation environment pins its tested revision.
 """
 
-# %%
-# Import API
-# ----------
 import spectrochempy as scp
 
-# short version of the unit registry
-U = scp.ur
-
-# %%
-# Import a pseudo-2D delay series
-# -------------------------------
-# This pseudo-2D series uses the reader's explicit time-domain correction.
-dataset = scp.nmr.read(
-    "nmrdata/bruker/tests/nmr/relax/100/ser",
-    use_list="vdlist",
-    remove_digital_filter=True,
+path = scp.preferences.datadir / "nmrdata/bruker/tests/nmr/relax/100/ser"
+raw = scp.nmr.read(path, use_list="vdlist", remove_digital_filter=True)
+f2 = raw.em(lb=15 * scp.ur.Hz, dim="x").fft(dim="x")
+phase = scp.nmr.apk(f2[-1].squeeze()[-140.0:-80.0], order=0, apply=False)
+if not phase.estimate.success:
+    raise RuntimeError(phase.estimate.message)
+X = f2.pk(phc0=phase.estimate.p0 * scp.ur.deg, phc1=0 * scp.ur.deg)[
+    :, -120.0:-85.0
+].real
+peaks = [
+    {
+        "height": {"value": amplitude, "bounds": (0, None)},
+        "axes": {
+            "x": {
+                "model": "voigt",
+                "parameters": {
+                    "center": {"value": center, "bounds": (center - 2, center + 2)},
+                    "width": {"value": 4, "bounds": (0.5, 12)},
+                    "ratio": {"shared": "mixing"},
+                },
+            },
+            "y": {
+                "model": "saturation_recovery",
+                "parameters": {
+                    "tau": {"value": 2.3, "bounds": (0.1, 100)},
+                },
+            },
+        },
+    }
+    for center, amplitude in [(-91.5, 50), (-97.0, 290), (-103.0, 350), (-108.5, 115)]
+]
+result = (
+    scp.Optimize(
+        peaks=peaks,
+        shared_parameters={
+            "mixing": {"value": 0.8, "bounds": (0, 1)},
+        },
+    )
+    .fit(X)
+    .result
 )
-
-# %%
-# Analysing the data
-# ---------------------
-# Print dataset summary
-dataset
-
-# %%
-# Plot the processed spectra
-# --------------------------
-# The ``vdlist`` delays become the secondary coordinate of the pseudo-2D series.
-ds = dataset.em(lb=15 * U.Hz)
-ds = ds.fft()
-ds = ds.pk(phc0=35 * U.deg, phc1=0 * U.deg)
-
-# The dominant silicon resonance is near -103 ppm. Zoom in on it and
-# color the spectra by recovery delay to see how the peak grows.
-resonance = ds[:, -120.0:-90.0].real
-_ = resonance.plot(method="lines", palette="viridis", colorbar=True)
-
-# %%
-# Build a signal trace from the dominant resonance
-# ------------------------------------------------
-# Integrate the real signal in the displayed window for each delay.
-signal = resonance.simpson()
-_ = signal.plot(marker="^", ls=":")
-signal
-
-# %%
-# Fit a model
-# -----------
-# create an Optimize object using a simple leastsq method
-fitter = scp.Optimize(log_level="INFO", method="leastsq")
-
-
-# %%
-# Define the model to fit
-def T1_model(t, I0, T1):  # no underscore in parameters names.
-    # Simple saturation-recovery model.
-
-    I = I0 * (1 - scp.exp(-t / T1))
-    return I
-
-
-# %%
-# Add the model to the fitter usermodels as it it not a built-in model
-fitter.usermodels = {"T1_model": T1_model}
-
-# %%
-# Define the parameter variables using a script
-# (parameter: value, low_bound,  high_bound)
-# no underscore in parameters names.
-fitter.script = """
-MODEL: T1
-shape: T1_model
-  $ I0:  4000.0, 1, none
-  $ T1:  2.0,    0.1, none
-"""
-
-# %%
-# Perform the fit
-_ = fitter.fit(signal)
-
-# %%
-som = fitter.predict()
-som
-
-# %%
-# Plot the measured recovery points and the fitted curve separately so the
-# experimental series remains a true scatter plot.
-ax = signal.plot_scatter(
-    color="tab:blue",
-    marker="o",
-    markersize=5,
-    label="measured signal",
-    title="Saturation-recovery fit of the dominant resonance",
+print("Converged:", result.diagnostics["success"])
+print(
+    "Recovery times / s:",
+    [round(p["axes"]["y"]["parameters"]["tau"], 3) for p in result.peaks],
 )
-_ = som.plot(clear=False, color="tab:orange", lw=1.8, label="fitted curve")
-_ = ax.legend()
-
-# %%
-# Uncomment the following line to display all figures when running the script
-# directly with Python.
-
-# %%
-
-# scp.show()
+_ = scp.plot_multiple(
+    [
+        X[-1].squeeze(),
+        result.fitted[-1].squeeze(),
+        *[c[-1].squeeze() for c in result.components],
+    ],
+    labels=["Measured", "Global fit", "Band 1", "Band 2", "Band 3", "Band 4"],
+    method="pen",
+    legend="best",
+    title="Four-component recovery fit",
+    ylabel="Intensity / count",
+)

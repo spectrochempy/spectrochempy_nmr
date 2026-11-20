@@ -107,7 +107,7 @@ jobs:
       - name: Run synthetic tests against installed artifacts
         run: |
           python -I -m pytest -ra tests/test_linear_prediction.py tests/test_fft_encodings.py tests/test_fft_2d_characterization.py tests/test_nmrpipe_oracle_conventions.py tests/test_nmrpipe_states_tppi_oracle.py tests/test_nmrpipe_echo_antiecho_oracle.py tests/test_native_readers.py::test_jeol_real_qf_reader_preserves_fft_support tests/test_fft_prevalidation_compatibility.py
-      - name: Verify dense RF fallback without Numba
+      - name: Verify RF and deposition fallbacks without Numba
         if: matrix.spectrochempy-version == '1.2.0'
         run: |
           python -I - <<'PY'
@@ -127,14 +127,31 @@ jobs:
           fallback = simulate_rectangular_pulse(**parameters, rf_solver="tridiagonal")
           np.testing.assert_array_equal(fallback.x.data, dense.x.data)
           np.testing.assert_array_equal(fallback.data, dense.data)
+          fallback = simulate_rectangular_pulse(**parameters, deposition="numba")
+          np.testing.assert_array_equal(fallback.x.data, dense.x.data)
+          np.testing.assert_array_equal(fallback.data, dense.data)
+          threaded = simulate_rectangular_pulse(
+              **parameters, workers=2, rf_solver="tridiagonal", deposition="numba"
+          )
+          np.testing.assert_array_equal(threaded.x.data, dense.x.data)
+          np.testing.assert_array_equal(threaded.data, dense.data)
           PY
-      - name: Qualify the optional tridiagonal RF solver
+      - name: Verify the RF cache with two orientation workers
+        if: matrix.spectrochempy-version == '1.2.0'
+        run: |
+          OPENBLAS_NUM_THREADS=1 python -I -m pytest -ra tests/test_pulsar.py -k orientation_workers
+      - name: Verify Czjzek receiver and two-stage fits without Numba
+        if: matrix.spectrochempy-version == '1.2.0'
+        run: OPENBLAS_NUM_THREADS=1 python -I -m pytest -ra tests/test_czjzek.py tests/test_czjzek_fit.py tests/test_czjzek_receiver.py
+      - name: Qualify the optional Numba backends
         if: matrix.spectrochempy-version == '1.2.0'
         run: |
           wheel=(dist/*.whl)
           python -m pip install "${wheel[0]}[rf]"
           python -I -c "from spectrochempy_nmr._pulsar_tridiagonal import get_tridiagonal_solver; assert get_tridiagonal_solver() is not None"
-          python -I -m pytest -ra tests/test_pulsar.py -k tridiagonal
+          python -I -c "from spectrochempy_nmr._pulsar_numba_deposition import get_numba_depositor; assert get_numba_depositor() is not None"
+          python -I -m pytest -ra tests/test_pulsar.py -k "tridiagonal or numba_deposition"
+          OPENBLAS_NUM_THREADS=1 python -I -m pytest -ra tests/test_czjzek.py tests/test_czjzek_fit.py tests/test_czjzek_receiver.py
       - name: Qualify guarded Bruker SER reads on older cores
         if: startsWith(matrix.spectrochempy-version, '1.1.')
         run: python -I -m pytest -ra tests/qualification/test_bruker_ser_migration.py -k core_without_prevalidation
@@ -225,10 +242,10 @@ jobs:
           python -m pip check
       - name: Run synthetic tests against installed artifacts
         run: |
-          python -I -m pytest -ra tests/test_linear_prediction.py tests/test_fft_encodings.py tests/test_fft_2d_characterization.py tests/test_nmrpipe_oracle_conventions.py tests/test_nmrpipe_states_tppi_oracle.py tests/test_nmrpipe_echo_antiecho_oracle.py tests/test_topspin_xfb.py tests/test_native_readers.py tests/test_fft_prevalidation_compatibility.py tests/test_complex_channels.py tests/test_quadrature.py tests/test_agilent_noesy_processing.py tests/test_interop_conversion.py tests/test_agilent_interop_facade.py tests/test_agilent_reference.py tests/test_experiment_interop.py tests/test_processed_interop.py tests/test_processing_architecture.py
+          python -I -m pytest -ra tests/test_linear_prediction.py tests/test_fft_encodings.py tests/test_fft_2d_characterization.py tests/test_nmrpipe_oracle_conventions.py tests/test_nmrpipe_states_tppi_oracle.py tests/test_nmrpipe_echo_antiecho_oracle.py tests/test_topspin_xfb.py tests/test_native_readers.py tests/test_fft_prevalidation_compatibility.py tests/test_complex_channels.py tests/test_quadrature.py tests/test_complex_channel_contract.py tests/test_states_tppi_workflow.py tests/test_interop_conversion.py tests/test_agilent_interop_facade.py tests/test_agilent_reference.py tests/test_experiment_interop.py tests/test_processed_interop.py tests/test_processing_architecture.py tests/test_quadrature_contract.py
 
       - name: Test Multiplex SPAM, MQMAS and STMAS processing
-        run: python -I -m pytest -ra tests/test_multiplex_spam.py tests/test_mqmas.py tests/test_stmas.py tests/test_isotopes.py
+        run: python -I -m pytest -ra tests/test_multiplex_spam.py tests/test_multiplex_common.py tests/test_jeol_common.py tests/test_jeol_cosy_processing.py tests/test_mqmas.py tests/test_mqmas_common.py tests/test_shared_xfshear.py tests/test_automatic_xfshear.py tests/test_stmas.py tests/test_isotopes.py
 
       - name: Test CSDF exchange through the public plugin API
         run: python -I -m pytest -ra tests/test_csdf.py
@@ -377,4 +394,8 @@ jobs:
           python -m pip install "spectrochempy==1.1.4" pytest
           python -m pip install dist/*.whl
           python -m pip check
-          OPENBLAS_NUM_THREADS=1 python -I -m pytest -q tests/test_pulsar.py tests/test_czjzek.py
+          OPENBLAS_NUM_THREADS=1 python -I -m pytest -q tests/test_pulsar.py tests/test_czjzek.py tests/test_czjzek_fit.py tests/test_czjzek_receiver.py tests/test_mqmas_inversion.py tests/test_mqmas_simulation.py tests/test_mqmas_fast_inversion.py
+      - name: Test installed pulse programs and sequence resources
+        run: OPENBLAS_NUM_THREADS=1 python -I -m pytest -q tests/test_pulse_program.py tests/test_sequence_library.py
+      - name: Qualify static and MAS heteronuclear dipolar dynamics
+        run: OPENBLAS_NUM_THREADS=1 python -I -m pytest -q tests/test_pulsar_dipolar.py tests/test_pulsar_dipolar_mas.py

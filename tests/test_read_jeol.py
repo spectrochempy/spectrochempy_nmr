@@ -377,7 +377,7 @@ def test_public_jeol_cosy_preserves_f2_fft_and_calibrates_axes(monkeypatch):
     assert len(actual.meta.applied_operations) == 1
     assert actual.meta.experiment == historical.meta.experiment
     assert actual.meta.ns == historical.meta.ns
-    assert actual.meta.sw == historical.meta.sw[::-1]
+    assert actual.meta.sw == historical.meta.sw
     assert Experiment(actual).domain == "time"
     np.testing.assert_array_equal(actual.data, historical.data)
     for dim, width in zip(actual.dims, actual.meta.sw, strict=True):

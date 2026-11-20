@@ -1,4 +1,4 @@
-"""Hybrid-domain TopSpin XFSHEAR for Bruker States acquisitions."""
+"""Hybrid-domain MQMAS and STMAS operations on normalized States components."""
 
 from math import isfinite
 from numbers import Integral
@@ -33,6 +33,98 @@ def _mqmas_geometry(spin, coherence_order):
     ratio /= 9 * (4 * spin * (spin + 1) - 3)
     scale = order - ratio
     return order, ratio, scale
+
+
+def _shear_spin(dataset, plan, spin, *, required=True):
+    """Resolve a physical spin without inspecting archived vendor parameters."""
+    acquisition = dataset.meta.get("acquisition", {})
+    metadata_spins = []
+    for key in ("nuclear_spin", "spin"):
+        value = acquisition.get(key)
+        if isinstance(value, (tuple, list)):
+            value = value[-1] if value else None
+        if value is not None:
+            metadata_spins.append(value)
+    nucleus = plan.get("observed_nucleus") or (acquisition.get("nuclei") or (None,))[-1]
+    known = nuclear_spin(nucleus)
+    values = [*metadata_spins, *(value for value in (known, spin) if value is not None)]
+    for value in values:
+        if (
+            isinstance(value, (bool, np.bool_))
+            or not isinstance(value, Real)
+            or not isfinite(value)
+            or value < 0.5
+            or not float(2 * value).is_integer()
+        ):
+            raise ValueError(
+                "Shearing spin must be a finite positive integer or half-integer"
+            )
+    if known is not None and spin is not None and spin != known:
+        raise ValueError(f"XFSHEAR spin {spin} does not match {nucleus} (spin {known})")
+    if values and any(value != values[0] for value in values[1:]):
+        raise ValueError(
+            "Shearing spin does not match the normalized spin metadata or isotope"
+        )
+    if not values:
+        if required:
+            raise ValueError(
+                "No known observed isotope or spin metadata; pass spin= explicitly"
+            )
+        return None
+    return float(values[0])
+
+
+def _shear_kind(experiment):
+    if experiment is None:
+        kind = "mqmas"
+    elif isinstance(experiment, str):
+        kind = experiment.lower().replace("-", "").replace("_", "")
+    else:
+        kind = ""
+    if kind not in ("mqmas", "3qmas", "5qmas", "stmas", "zqtrosy"):
+        raise ValueError("experiment must be MQMAS, 3QMAS, 5QMAS, STMAS or ZQ-TROSY")
+    return kind
+
+
+def _automatic_shear(dataset, plan, experiment, spin, coherence_order):
+    """Select coefficients only; quadrature reconstruction is independent."""
+    if coherence_order is not None and (
+        isinstance(coherence_order, (bool, np.bool_))
+        or not isinstance(coherence_order, Integral)
+        or coherence_order < 1
+        or coherence_order % 2 == 0
+    ):
+        raise ValueError("coherence_order must be a positive odd integer")
+    kind = _shear_kind(experiment)
+    order = {"3qmas": 3, "5qmas": 5, "stmas": 1, "zqtrosy": 1}.get(kind)
+    if order is not None and coherence_order is not None and coherence_order != order:
+        raise ValueError(
+            "coherence_order conflicts with the selected shearing experiment"
+        )
+    selection = dataset.meta.get("acquisition", {}).get("multiplex_spam")
+    if order is None:
+        selected_order = selection["coherence_order"] if selection is not None else 3
+        order = selected_order if coherence_order is None else coherence_order
+    spin = _shear_spin(dataset, plan, spin, required=kind != "zqtrosy")
+    if kind == "zqtrosy":
+        ratio, scale = -1.0, 1.0
+    elif kind == "stmas":
+        if spin < 1.5 or int(2 * spin) % 2 == 0:
+            raise ValueError("STMAS requires a half-integer spin of at least 3/2")
+        denominator = 3 * (4 * spin * (spin + 1) - 3)
+        scale = 68 / denominator
+        ratio = (denominator - 68) / denominator
+        # STMAS evolves transitions of the observed F2 nucleus. Archived F1
+        # isotope fields can be unused defaults; spin and the sheared F1
+        # reference come from the observed nucleus, not that field.
+    else:
+        order, ratio, scale = _mqmas_geometry(spin, order)
+        kind = f"{order}qmas"
+    if selection is not None and order != selection["coherence_order"]:
+        raise ValueError(
+            "XFSHEAR coherence order must match the Multiplex SPAM reconstruction"
+        )
+    return kind, spin, order, ratio, scale
 
 
 def _mqecho_weights(t1, t2, slope, lb_hz):
@@ -84,26 +176,35 @@ def xf2(
 ):
     """Compute complex XF2 branches for inspecting the phase before shearing."""
     from spectrochempy.core.units import ur  # noqa: PLC0415
-    from spectrochempy_nmr.processing.bruker_filter import resolve_bruker_delay  # noqa: PLC0415
+    from spectrochempy.core.dataset.coord import Coord
+    from .digital_filter import resolve_group_delay  # noqa: PLC0415
+    from ..nmr_metadata import extract_nmr_metadata  # noqa: PLC0415
+    from .fft_postprocess import _topspin_xf2_reference  # noqa: PLC0415
 
     meta = dataset.meta
     acquisition = meta.get("acquisition") or {}
+    physical = extract_nmr_metadata(meta, ndim=dataset.ndim)
+    echo_antiecho = physical.encoding == ("ECHO-ANTIECHO", "DQD")
     if (
         tuple(dataset.dims) != ("c", "y", "x")
         or meta.get("stage") != "acquisition"
         or meta.get("data_domain") != "time"
-        or meta.get("normalization_profile") != "bruker-ser-states-2d-v1"
+        or not physical.normalized_interop
+        or physical.encoding
+        not in (("STATES", "DQD"), ("STATES-TPPI", "DQD"), ("ECHO-ANTIECHO", "DQD"))
+        or physical.domains != ("time", "time")
         or dataset.c is None
         or dataset.c.labels is None
-        or tuple(dataset.c.labels) != ("E1", "E2")
+        or tuple(dataset.c.labels)
+        != (("first", "second") if echo_antiecho else ("E1", "E2"))
         or any(
             acquisition.get(key, {}).get("applied") is not False
             for key in ("dc_offset", "digital_filter")
         )
     ):
         raise ValueError(
-            "XFSHEAR requires an uncorrected, normalized Bruker States SER. "
-            "Read the SER without import corrections."
+            "XFSHEAR requires an uncorrected, normalized States acquisition. "
+            "Read the acquisition without import corrections."
         )
     data = np.asarray(dataset.data)
     if not np.iscomplexobj(data) or np.any(dataset.mask) or not np.isfinite(data).all():
@@ -113,7 +214,23 @@ def xf2(
     sx = int(size)
     sy = None if f1_size is None else int(f1_size)
     _, ny, nx = data.shape
-    acquired_y, acquired_x = meta.tdeff[-2:]
+    sampling = acquisition.get("sampling")
+    if sampling is not None and (
+        not isinstance(sampling, (tuple, list))
+        or tuple(sampling) != ("regular", "regular")
+    ):
+        raise ValueError("XF2 requires uniform acquisition sampling")
+    acquired_shape = acquisition.get("acquired_shape")
+    if (
+        not isinstance(acquired_shape, (tuple, list))
+        or len(acquired_shape) != 2
+        or any(
+            isinstance(n, bool) or not isinstance(n, Integral) or n < 2
+            for n in acquired_shape
+        )
+    ):
+        raise ValueError("XF2 requires the acquired F1/F2 point counts")
+    acquired_y, acquired_x = acquired_shape
     if direct_points is None:
         direct_points = min(sx, nx, acquired_x)
     if (
@@ -126,10 +243,18 @@ def xf2(
         raise ValueError(
             "XFSHEAR requires all F1 increments and enough acquired F2 samples"
         )
-    sw1, sw2 = (float(w.to("Hz").magnitude) for w in meta.sw_h[-2:])
+    widths = physical.spectral_width_hz
+    if widths is None or len(widths) != 2:
+        raise ValueError("XF2 requires the acquisition spectral widths")
+    sw1, sw2 = widths
     for axis, n, width in ((dataset.y, ny, sw1), (dataset.x, nx, sw2)):
         if (
-            not np.isfinite(width)
+            axis is None
+            or axis.units is None
+            or not axis.units.is_compatible_with(ur.s)
+            or isinstance(width, (bool, np.bool_))
+            or not isinstance(width, Real)
+            or not np.isfinite(width)
             or width <= 0
             or not np.allclose(
                 axis.data,
@@ -139,10 +264,7 @@ def xf2(
             )
         ):
             raise ValueError("XFSHEAR requires the original uniform acquisition grids")
-    sf = float(meta.sf[-1].to("MHz").magnitude)
-    carrier = float(meta.sfo1[-1].to("MHz").magnitude)
-    if not np.isfinite(sf) or sf <= 0 or not np.isfinite(carrier) or carrier <= 0:
-        raise ValueError("XFSHEAR requires the direct processing reference")
+    _, sf, carrier = _topspin_xf2_reference(dataset)
 
     if echo_window is not None and (
         not isinstance(echo_window, (tuple, list))
@@ -178,17 +300,22 @@ def xf2(
         if not np.isfinite(slope) or not np.isfinite(lb_hz) or lb_hz <= 0:
             raise ValueError(message)
     if correct_digital_filter or echo_window is not None or mqecho is not None:
-        acqus = meta.get("source_metadata", {}).get("acqus", {})
-        recorded_delay = acquisition["digital_filter"].get("group_delay_points")
-        no_decimation = (
-            acqus.get("DECIM") == 1
-            and acqus.get("GRPDLY") in (None, -1, 0)
-            and recorded_delay in (None, 0)
-        )
-        delay, source = resolve_bruker_delay(dataset, 0.0 if no_decimation else None)
-        if not np.isfinite(delay) or delay < 0:
-            raise ValueError("XFSHEAR requires a finite nonnegative Bruker group delay")
+        delay, source = resolve_group_delay(dataset, None)
+        if (
+            isinstance(delay, (bool, np.bool_))
+            or not isinstance(delay, Real)
+            or not np.isfinite(delay)
+            or delay < 0
+        ):
+            raise ValueError("XFSHEAR requires a finite nonnegative group delay")
+    tppi = physical.encoding[0] == "STATES-TPPI"
     retained = data[..., :direct_points]
+    if echo_antiecho:
+        from .channel_interop import _rance_kay
+
+        retained = _rance_kay(retained)
+    if tppi:
+        retained = retained * (1 - 2 * (np.arange(ny) % 2))[None, :, None]
     window_metadata = None
     if echo_window is not None:
         slope, sigma = map(float, echo_window)
@@ -224,9 +351,22 @@ def xf2(
     else:
         prepared = dataset[..., :direct_points]
         prepared.data = retained.copy()
+        prepared.meta.readonly = False
+        encoding = list(
+            prepared.meta.get("encoding")
+            or ("CHANNELS", "UNVALIDATED:STATES", "DIRECT:DQD")
+        )
+        encoding[-1] = "DIRECT:DQD"
+        prepared.meta.encoding = encoding
+        prepared.meta.quadrature_mode = "states"
+        prepared.meta.component_labels = ("E1", "E2")
+        if echo_antiecho:
+            prepared.c = Coord(labels=["E1", "E2"])
         result = prepared.fft(dim="x", size=sx, convention="topspin-xf2", inplace=True)
         if result.shape[-1] != sx or result.x.units != ur.ppm:
             raise ValueError("XF2 did not produce the requested F2 frequency grid")
+    if result.y.units != ur.s:
+        result.y = result.y.to("s")
     filter_correction = {"applied": False}
     if correct_digital_filter and delay > 0:
         result.data = result.data * np.exp(-2j * np.pi * delay * np.arange(sx) / sx)
@@ -238,10 +378,15 @@ def xf2(
         }
     readonly = result.meta.readonly
     result.meta.readonly = False
+    if echo_antiecho:
+        result.c = Coord(labels=["E1", "E2"])
+        result.meta.component_labels = ("E1", "E2")
+        result.meta.echo_antiecho_reconstruction = "rance-kay"
     result.history = "Applied complex XF2 for MQMAS phase inspection"
     result.meta.update(
         {
             "stage": "mqmas_xf2",
+            "quadrature_mode": "states",
             "data_domain": "mixed",
             "isfreq": [False, False, True],
             # The XF2 phase reference starts at zero. Initialize pk's
@@ -256,6 +401,9 @@ def xf2(
             "mqmas_xf2": {
                 "size": (sy, sx),
                 "direct_points": int(direct_points),
+                "acquired_shape": tuple(acquired_shape),
+                "observed_nucleus": (acquisition.get("nuclei") or (None,))[-1],
+                "indirect_quadrature": physical.encoding[0],
                 "widths_hz": (sw1, sw2),
                 "sf_mhz": sf,
                 "carrier_mhz": carrier,
@@ -265,6 +413,8 @@ def xf2(
             },
         }
     )
+    if tppi:
+        result.meta.tppi_alternation_state = "applied"
     result.meta.readonly = readonly
     return result
 
@@ -282,8 +432,17 @@ def _validated_xf2(dataset, *, check_phase=True):
     sf, carrier = plan["sf_mhz"], plan["carrier_mhz"]
     data = np.asarray(dataset.data)
     ny = dataset.shape[-2]
+    acquired = plan.get("acquired_shape") or dataset.meta.get("acquisition", {}).get(
+        "acquired_shape"
+    )
     if (
-        tuple(dataset.dims) != ("c", "y", "x")
+        not isinstance(acquired, (tuple, list))
+        or len(acquired) != 2
+        or any(
+            isinstance(n, bool) or not isinstance(n, Integral) or n < 2
+            for n in acquired
+        )
+        or tuple(dataset.dims) != ("c", "y", "x")
         or data.shape != (2, ny, sx)
         or dataset.c is None
         or dataset.c.labels is None
@@ -292,7 +451,7 @@ def _validated_xf2(dataset, *, check_phase=True):
         or dataset.y.units != ur.s
         or dataset.x is None
         or dataset.x.units != ur.ppm
-        or ny != dataset.meta.tdeff[-2]
+        or ny != acquired[0]
         or not np.iscomplexobj(data)
         or np.any(dataset.mask)
         or not np.isfinite(data).all()
@@ -368,7 +527,17 @@ def replay_xfshear(dataset, *, spin, coherence_order, phc0, phc1, pivot, f1_shif
     )
 
 
-def xfshear(dataset, *, size, spin, coherence_order, f1_shift):
+def xfshear(
+    dataset,
+    *,
+    size,
+    spin,
+    coherence_order,
+    f1_shift,
+    ratio=None,
+    f1_scale=None,
+    experiment=None,
+):
     """Complete XFSHEAR on phased XF2 data, including the F1 FFT."""
     from scipy.signal import hilbert  # noqa: PLC0415
 
@@ -378,28 +547,30 @@ def xfshear(dataset, *, size, spin, coherence_order, f1_shift):
 
     plan = _validated_xf2(dataset)
     acquisition = dataset.meta.get("acquisition", {})
-    if "stmas" in acquisition:
-        raise ValueError("Use stmas_shear() for STMAS States data")
-    source = dataset.meta.get("source_metadata") or {}
-    nuclei = dataset.meta.get("nuc1")
-    nucleus = source.get("acqus", {}).get("NUC1") or (nuclei[-1] if nuclei else None)
-    acquired_spin = nuclear_spin(nucleus)
-    if acquired_spin is None:
-        raise ValueError(f"XFSHEAR requires a known observed isotope; got {nucleus!r}")
-    if spin is None:
-        spin = acquired_spin
-    order, ratio, scale = _mqmas_geometry(spin, coherence_order)
-    selection = acquisition.get("multiplex_spam")
-    if selection is not None and (
-        order != selection["coherence_order"]
-        or spin != (selection["phase_count"] - 1) / 4
-    ):
-        raise ValueError(
-            "XFSHEAR spin and coherence order must match the Multiplex SPAM reconstruction"
-        )
-    if spin != acquired_spin:
-        raise ValueError(
-            f"XFSHEAR spin {spin} does not match {nucleus} (spin {acquired_spin})"
+    manual = ratio is not None or f1_scale is not None
+    if manual:
+        if spin is not None or coherence_order not in (None, 3):
+            raise ValueError(
+                "Specify physical shear coefficients or automatic MQMAS spin/order"
+            )
+        if (
+            any(
+                isinstance(value, (bool, np.bool_))
+                or not isinstance(value, Real)
+                or not np.isfinite(value)
+                for value in (ratio, f1_scale)
+            )
+            or f1_scale <= 0
+        ):
+            raise ValueError(
+                "XFSHEAR requires a finite ratio and positive f1_scale together"
+            )
+        ratio, scale = float(ratio), float(f1_scale)
+        order = None
+        kind = _shear_kind(experiment) if experiment is not None else "explicit"
+    else:
+        kind, spin, order, ratio, scale = _automatic_shear(
+            dataset, plan, experiment, spin, coherence_order
         )
     if "f2_phase" not in plan:
         raise ValueError("Apply the common F2 phase with xf2p() before XFSHEAR")
@@ -449,18 +620,40 @@ def xfshear(dataset, *, size, spin, coherence_order, f1_shift):
     if not np.isfinite(spectrum).all():
         raise ValueError("XFSHEAR produced nonfinite spectral values")
 
-    # The AU re-references F1 after shifting the signal in the window.
-    shifted_sf = sf + f1_shift_hz * 1e-6 / scale
+    # The AU re-references quadrupolar F1, but preserves the original
+    # heteronuclear F1 reference for its ZQ-TROSY branch (scale == 1).
+    if kind == "zqtrosy":
+        try:
+            f1_carrier = acquisition["acquisition_frequency_mhz"][0]
+            shifted_sf = acquisition["reference_frequency_mhz"][0]
+            valid = all(
+                isinstance(value, Real)
+                and not isinstance(value, (bool, np.bool_))
+                and np.isfinite(value)
+                and value > 0
+                for value in (f1_carrier, shifted_sf)
+            )
+        except (KeyError, TypeError, IndexError):
+            valid = False
+        if not valid:
+            raise ValueError(
+                "ZQ-TROSY requires normalized F1 acquisition and reference frequencies"
+            )
+    else:
+        shifted_sf = sf + f1_shift_hz * 1e-6 / scale
+        f1_carrier = carrier
     if not np.isfinite(shifted_sf) or shifted_sf <= 0:
         raise ValueError("XFSHEAR F1 shift gives an invalid reference frequency")
-    center_f1 = (carrier - shifted_sf) * 1e6 / shifted_sf
+    center_f1 = (f1_carrier - shifted_sf) * 1e6 / shifted_sf
     coords = {
         "c": Coord(labels=["S_R", "S_I"]),
         "x": dataset.x.copy(),
         "y": Coord(
             center_f1 - (np.arange(sy) - cy) * sw1 / (sy * scale * shifted_sf),
             units="ppm",
-            title="isotropic chemical shift",
+            title="F1 chemical shift"
+            if kind == "zqtrosy"
+            else "isotropic chemical shift",
             rounding=False,
             sigdigits=15,
         ),
@@ -489,7 +682,9 @@ def xfshear(dataset, *, size, spin, coherence_order, f1_shift):
             "td": list(result.shape),
             "mqmas_shearing": {
                 "replay": "topspin-xfshear",
-                "spin": float(spin),
+                "experiment": kind,
+                "coefficient_source": "explicit" if manual else "automatic",
+                "spin": float(spin) if spin is not None else None,
                 "coherence_order": order,
                 "ratio": float(ratio),
                 "scale_divisor": float(scale),
@@ -507,67 +702,32 @@ def xfshear(dataset, *, size, spin, coherence_order, f1_shift):
     return result
 
 
-def stmas_shear(dataset, *, size, f1_shift):
-    """Apply the spin-3/2 DQF-STMAS shear and transform the States F1 signal."""
-    from spectrochempy.core.dataset.coord import Coord
-    from spectrochempy.core.dataset.nddataset import NDDataset
-    from spectrochempy.core.units import ur
-
-    from .topspin_xfb import _positive_fft
-
-    plan = _validated_xf2(dataset)
-    acquisition = dataset.meta.get("acquisition", {})
-    if "stmas" not in acquisition:
-        raise ValueError("STMAS shear requires States data from read_stmas()")
-    if "f2_phase" not in plan:
-        raise ValueError("Apply a common F2 phase with xf2p() before STMAS shear")
-    _, ny, nx = dataset.shape
-    if not _even_size(size) or size < max(4, ny):
-        raise ValueError("STMAS F1 size must be even and fit all acquired increments")
-    if isinstance(f1_shift, bool) or not isinstance(f1_shift, Real):
+def stmas_shear(dataset, *, size, f1_shift, spin=None):
+    """Use the shared reconstruction with automatic inner-satellite STMAS geometry."""
+    if (
+        isinstance(f1_shift, (bool, np.bool_))
+        or not isinstance(f1_shift, Real)
+        or not np.isfinite(f1_shift)
+    ):
         raise ValueError("STMAS requires a finite numerical f1_shift")
-    sw1, sw2 = plan["widths_hz"]
-    sf, carrier = plan["sf_mhz"], plan["carrier_mhz"]
-    ratio, scale = -8 / 9, 17 / 9
-    reference = scale * (sf - f1_shift * carrier * 1e-6)
-    if not np.isfinite(reference) or reference <= 0:
-        raise ValueError("STMAS F1 shift gives an invalid reference frequency")
-    f2 = (np.arange(nx) - nx // 2) * sw2 / nx
-    t1 = np.arange(ny) / sw1
-    cosine, sine = dataset.data.real
-    phase = 2 * np.pi * t1[:, None] * (ratio * f2 - f1_shift * carrier * scale)
-    spectrum = _positive_fft((cosine + 1j * sine) * np.exp(1j * phase), size, -2)
-    if not np.isfinite(spectrum).all():
-        raise ValueError("STMAS shear produced nonfinite spectral values")
-    center = (scale * carrier - reference) * 1e6 / reference
-    f1 = Coord(
-        center - (np.arange(size) - size // 2) * sw1 / (size * reference),
-        units="ppm",
-        title="isotropic chemical shift",
-        rounding=False,
-        sigdigits=15,
+    result = xfshear(
+        dataset,
+        size=size,
+        spin=spin,
+        coherence_order=None,
+        f1_shift=-f1_shift,
+        experiment="stmas",
     )
-    f1.meta["reference_frequency"] = reference * ur.MHz
-    result = NDDataset(spectrum, dims=["y", "x"], name=dataset.name)
-    result.set_coordset(y=f1, x=dataset.x.copy())
-    result.filename = dataset.filename
-    result.history = list(dataset.history)
-    result.history = "Applied spin-3/2 DQF-STMAS shear and F1 Fourier transform"
-    result.meta.update(
-        {
-            "stage": "spectrum",
-            "data_domain": "frequency",
-            "isfreq": [True, True],
-            "iscomplex": [True, False],
-            "acquisition": acquisition,
-            "provenance": dataset.meta.get("provenance"),
-            "stmas_shear": {
-                "ratio": ratio,
-                "scale_divisor": scale,
-                "f1_shift_ppm": float(f1_shift),
-                "f2_phase": plan["f2_phase"],
-                "digital_filter": plan["digital_filter"],
-            },
-        }
-    )
+    readonly = result.meta.readonly
+    result.meta.readonly = False
+    shear = result.meta.mqmas_shearing
+    result.meta.stmas_shear = {
+        "ratio": shear["ratio"],
+        "scale_divisor": shear["scale_divisor"],
+        "f1_shift_ppm": float(f1_shift),
+        "f2_phase": shear["f2_phase"],
+        "digital_filter": result.meta.mqmas_xf2["digital_filter"],
+    }
+    result.meta.readonly = readonly
+    result.history = "Applied STMAS through the common XFSHEAR reconstruction"
     return result

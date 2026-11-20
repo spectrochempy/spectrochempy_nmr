@@ -11,6 +11,7 @@ validation also requires independent checks of the model and its conventions.
 See the adjacent README.pulsar.md for the equations and implementation notes.
 """
 
+from concurrent.futures import ThreadPoolExecutor
 from dataclasses import dataclass
 from functools import lru_cache
 from math import log
@@ -19,6 +20,13 @@ from numbers import Complex, Real
 from operator import index
 
 import numpy as np
+
+from spectrochempy_nmr._pulse_program import available_sequences as available_sequences
+from spectrochempy_nmr._pulse_program import load_sequence as load_sequence
+from spectrochempy_nmr._pulse_program import PulseProgram as PulseProgram
+from spectrochempy_nmr._pulse_program import SequenceError as SequenceError
+from spectrochempy_nmr._pulse_program import parse_sequence as parse_sequence
+from spectrochempy_nmr._pulse_program import read_sequence as read_sequence
 
 
 _RF_PROPAGATOR_CACHE_BYTES = 16 * 1024**2
@@ -92,6 +100,11 @@ def _rotated_csa_harmonics(directions, anisotropy_hz, eta, angle, rotation):
     """Project the CSA tensor in the common quadrupolar rotor frame."""
     eigenvalues = anisotropy_hz * np.array([-(1 + eta) / 2, -(1 - eta) / 2, 1])
     tensor = (rotation * eigenvalues) @ rotation.T
+    return _tensor_harmonics(directions, tensor, angle)
+
+
+def _tensor_harmonics(directions, tensor, angle):
+    """Project a real symmetric Cartesian tensor onto rotor harmonics."""
     x, y, z = directions
     sine = np.hypot(x, y)
     cos_phi = np.divide(x, sine, out=np.ones_like(x), where=sine > 0)
@@ -216,6 +229,17 @@ def _deposit_triangles(axis, frequencies, weights, triangles):
     return spectrum
 
 
+def _resolve_deposition(name):
+    if name == "numpy":
+        return _deposit_triangles
+    if name != "numba":
+        raise ValueError("deposition must be 'numpy' or 'numba'.")
+
+    from spectrochempy_nmr._pulsar_numba_deposition import get_numba_depositor
+
+    return get_numba_depositor() or _deposit_triangles
+
+
 def _real_scalars(*values):
     if not all(isinstance(value, Real) for value in values):
         raise TypeError("PULSAR parameters must be real scalars.")
@@ -318,6 +342,7 @@ def _central_transition_profile(
     transitions="central",
     j_partners=(),
     probe_bandwidth_hz=None,
+    deposition="numpy",
     _normalize=True,
 ):
     points, accuracy, sidebands = index(points), index(accuracy), index(sidebands)
@@ -385,6 +410,7 @@ def _central_transition_profile(
         sidebands,
         _passive_offsets(j_partners),
         _validate_probe_bandwidth(probe_bandwidth_hz),
+        _resolve_deposition(deposition),
     )
     if transitions == "central":
         harmonics = _quadrupolar_harmonics(directions, quadrupolar_eta, angle)
@@ -478,8 +504,9 @@ def _powder_profile(
     spinning_hz,
     accuracy,
     sidebands,
-    passive_offsets=((0.0, 1.0),),
-    probe_bandwidth_hz=None,
+    passive_offsets,
+    probe_bandwidth_hz,
+    deposit,
 ):
     """Integrate the selected orders for a set of vertex harmonics."""
     frequencies = shift_hz + harmonics[0].real
@@ -495,9 +522,7 @@ def _powder_profile(
         for offset, population in passive_offsets:
             frequency = frequencies + offset
             detected = _probe_weights(frequency, weights, probe_bandwidth_hz)
-            spectrum += population * _deposit_triangles(
-                axis, frequency, detected, triangles
-            )
+            spectrum += population * deposit(axis, frequency, detected, triangles)
         return axis, spectrum
 
     rotor_samples = spectral_width_hz / spinning_hz
@@ -540,9 +565,7 @@ def _powder_profile(
             detected = _probe_weights(
                 frequency, weights * intensity, probe_bandwidth_hz
             )
-            spectrum += population * _deposit_triangles(
-                axis, frequency, detected, triangles
-            )
+            spectrum += population * deposit(axis, frequency, detected, triangles)
     return axis, spectrum
 
 
@@ -564,6 +587,7 @@ def simulate_central_transition(
     csa_rotation=None,
     j_partners=(),
     probe_bandwidth_hz=None,
+    deposition="numpy",
 ):
     """Simulate the central transition of an isolated spin as an NDDataset.
 
@@ -581,6 +605,8 @@ def simulate_central_transition(
     to 4096 rotor samples. The table of intensities across powder vertices
     and requested bands is limited to 64 MiB. Optional probe_bandwidth_hz
     is the Lorentzian receiver bandwidth at half height.
+
+    Set deposition="numba" for optional JIT deposition with NumPy fallback.
     """
     axis, profile = _central_transition_profile(
         cq_hz=cq_hz,
@@ -599,6 +625,7 @@ def simulate_central_transition(
         csa_rotation=csa_rotation,
         j_partners=j_partners,
         probe_bandwidth_hz=probe_bandwidth_hz,
+        deposition=deposition,
     )
     return _as_dataset(axis, profile, "PULSAR central transition")
 
@@ -622,6 +649,7 @@ def simulate_quadrupolar(
     csa_rotation=None,
     j_partners=(),
     probe_bandwidth_hz=None,
+    deposition="numpy",
 ):
     """Simulate a selected set of quadrupolar transitions of one spin.
 
@@ -631,6 +659,8 @@ def simulate_quadrupolar(
     second-order shifts. Intensities are normalized once over the
     requested transitions and MAS orders. See simulate_central_transition
     for frequency, powder mesh and CSA conventions.
+
+    Set deposition="numba" for optional JIT deposition with NumPy fallback.
     """
     axis, profile = _central_transition_profile(
         cq_hz=cq_hz,
@@ -650,6 +680,7 @@ def simulate_quadrupolar(
         csa_rotation=csa_rotation,
         j_partners=j_partners,
         probe_bandwidth_hz=probe_bandwidth_hz,
+        deposition=deposition,
     )
     return _as_dataset(axis, profile, "PULSAR quadrupolar spectrum")
 
@@ -667,6 +698,7 @@ def simulate_csa(
     sidebands=0,
     j_partners=(),
     probe_bandwidth_hz=None,
+    deposition="numpy",
 ):
     """Simulate first-order chemical shift anisotropy for an isolated spin.
 
@@ -675,6 +707,8 @@ def simulate_csa(
     A zero MAS rate gives a static powder pattern. Otherwise, the rotor
     angle defaults to 54.736 degrees and sidebands selects the orders on each side.
     The spectrum is normalized over the requested bands.
+
+    Set deposition="numba" for optional JIT deposition with NumPy fallback.
     """
     points, accuracy, sidebands = index(points), index(accuracy), index(sidebands)
     values = (anisotropy_hz, eta, spectral_width_hz, shift_hz, spinning_hz)
@@ -699,6 +733,7 @@ def simulate_csa(
         sidebands,
         _passive_offsets(j_partners),
         _validate_probe_bandwidth(probe_bandwidth_hz),
+        _resolve_deposition(deposition),
     )
     return _as_dataset(
         axis, _normalize_profile(profile), "PULSAR chemical shift anisotropy"
@@ -787,9 +822,13 @@ class Delay:
 
 @dataclass(frozen=True)
 class Coherence:
-    """Keep the matrix elements whose row minus column spin projection is order."""
+    """Keep elements with row-minus-column spin projection equal to order.
+
+    symmetric=True retains only the pair m=+order/2 and m=-order/2.
+    """
 
     order: int
+    symmetric: bool = False
 
 
 @dataclass(frozen=True)
@@ -800,16 +839,20 @@ class PhaseCycle:
     coefficients: tuple | None = None
 
 
-def _prepare_scans(events, *args, **kwargs):
-    if not isinstance(events, PhaseCycle):
-        return ((1.0, _prepare_events(events, *args, **kwargs)),)
-    scans = tuple(events.scans)
+@dataclass(frozen=True)
+class _T1Series:
+    preparation: object
+    times: tuple
+    conversion: tuple
+
+
+def _phase_cycle_coefficients(scans, coefficients):
     if not 1 <= len(scans) <= 256:
         raise ValueError("A phase cycle must contain 1 to 256 scans.")
-    if events.coefficients is None:
+    if coefficients is None:
         coefficients = (1 / len(scans),) * len(scans)
     else:
-        coefficients = tuple(events.coefficients)
+        coefficients = tuple(coefficients)
         if len(coefficients) != len(scans) or not all(
             isinstance(weight, Complex) for weight in coefficients
         ):
@@ -817,6 +860,14 @@ def _prepare_scans(events, *args, **kwargs):
         coefficients = tuple(map(complex, coefficients))
         if not np.isfinite(coefficients).all():
             raise ValueError("Phase-cycle coefficients must be finite.")
+    return coefficients
+
+
+def _prepare_scans(events, *args, **kwargs):
+    if not isinstance(events, PhaseCycle):
+        return ((1.0, _prepare_events(events, *args, **kwargs)),)
+    scans = tuple(events.scans)
+    coefficients = _phase_cycle_coefficients(scans, events.coefficients)
     return tuple(
         (weight, _prepare_events(scan, *args, **kwargs))
         for weight, scan in zip(coefficients, scans, strict=True)
@@ -852,6 +903,7 @@ def _prepare_events(
     max_rf_step_s,
     t2_s,
     *,
+    allow_empty=False,
     rf_solver=None,
     partner=None,
     partner_t2_s=None,
@@ -872,6 +924,10 @@ def _prepare_events(
             if abs(order) > projections.max() - projections.min():
                 raise ValueError("Coherence order is outside the spin manifold.")
             mask = (coherence_order == order) & (partner_order == 0)
+            if not isinstance(event.symmetric, (bool, np.bool_)):
+                raise TypeError("Coherence symmetric must be boolean.")
+            if event.symmetric:
+                mask &= projections[:, None] + projections[None, :] == 0
             if partner is None:
                 prepared.append(("mask", mask))
             else:
@@ -973,7 +1029,7 @@ def _prepare_events(
                     decay,
                 )
             prepared.append(("mask", decay))
-    if not prepared:
+    if not prepared and not allow_empty:
         raise ValueError("Supply at least one sequence event.")
     return prepared
 
@@ -985,7 +1041,7 @@ def _phase_integral(terms, gamma, spinning_hz):
 
 
 def _shared_pulse_keys(scans, spinning_hz, gamma):
-    """Find matching real RF pulses at the same sampled rotor trajectory."""
+    """Find matching RF pulses at the same sampled rotor trajectory."""
     if not spinning_hz or len(scans) < 2:
         return ({},) * len(scans)
 
@@ -1001,16 +1057,15 @@ def _shared_pulse_keys(scans, spinning_hz, gamma):
             elif kind == "pulse":
                 duration, rf, offset, count, *_ = args
                 step = duration / count
-                if np.isrealobj(rf):
-                    key = (
-                        angles.tobytes(),
-                        count,
-                        step,
-                        rf.tobytes(),
-                        offset.tobytes(),
-                    )
-                    keys[event_index] = key
-                    counts[key] = counts.get(key, 0) + 1
+                key = (
+                    angles.tobytes(),
+                    count,
+                    step,
+                    rf.tobytes(),
+                    offset.tobytes(),
+                )
+                keys[event_index] = key
+                counts[key] = counts.get(key, 0) + 1
                 angles = angles + count * (omega * step)
         keys_by_scan.append(keys)
     return tuple(
@@ -1154,6 +1209,344 @@ def _sequence_state_blocks(offsets, terms, initial, scans, spinning_hz, count):
             yield block, coefficient, density, gamma_end
 
 
+def _t1_state_blocks(offsets, terms, initial, scans, spinning_hz, count, tails):
+    for block, coefficient, prepared, gamma_start in _sequence_state_blocks(
+        offsets, terms, initial, scans, spinning_hz, count
+    ):
+        block_terms = None if terms is None else terms[block]
+        block_offsets = offsets[block]
+        for row, events in enumerate(tails):
+            density, gamma_end = _propagate_sequence(
+                block_offsets,
+                block_terms,
+                prepared,
+                events,
+                spinning_hz,
+                gamma_start,
+                {},
+                {},
+                0,
+            )
+            yield row, block, coefficient, density, gamma_end
+
+
+def _t1_rotor_grid(times, spinning_hz, count):
+    """Find a bounded common rotor grid without interpolating the RF dynamics."""
+    from fractions import Fraction
+    from math import lcm
+
+    turns = np.asarray(times) * spinning_hz
+    if np.max(turns) > 4096:
+        return None
+    shifts = np.remainder(turns, 1) * count
+    multiple = 1
+    for shift in shifts:
+        fraction = Fraction(float(shift)).limit_denominator(32)
+        if abs(float(fraction) - shift) > 1e-12:
+            return None
+        multiple = lcm(multiple, fraction.denominator)
+        if multiple > 8 or multiple * count > 4096:
+            return None
+    grid_count = multiple * count
+    indices = np.rint(shifts * multiple).astype(np.intp) % grid_count
+    return grid_count, indices
+
+
+def _conversion_readout(offsets, terms, events, spinning_hz, gamma, selected):
+    """Pull detected coherences back through the conversion by trace duality."""
+    size = offsets.shape[-1] + 1
+    if (
+        events
+        and events[0][0] == "pulse"
+        and all(event[0] == "mask" for event in events[1:])
+    ):
+        # A single RF conversion followed by selections/relaxation needs
+        # only two rows of its complete propagator per detected transition.
+        _, duration, rf, offset, count, frame, basis, solve = events[0]
+        step = duration / count
+        step_phase = 2 * np.pi * spinning_hz * step
+        steps = _mas_pulse_steps(
+            offsets, terms, rf, offset, gamma, step, step_phase, count, solve
+        )
+        pulse = next(steps)
+        for propagator in steps:
+            pulse = propagator @ pulse
+        pulse *= frame[:, 0][:, None]
+        if basis is not None:
+            pulse *= basis[:, 0].conj()[None, :]
+        observable = np.einsum(
+            "vgsi,vgsj->svgij",
+            pulse[..., selected + 1, :].conj(),
+            pulse[..., selected, :],
+        )
+        for _, mask in events[1:]:
+            observable *= mask[selected, selected + 1][:, None, None, None, None]
+        return observable, gamma + count * step_phase
+    shape = (selected.size, offsets.shape[0], gamma.size, size, size)
+    observable = np.zeros(shape, dtype=complex)
+    observable[np.arange(selected.size), :, :, selected + 1, selected] = 1
+    omega = 2 * np.pi * spinning_hz
+    angles = gamma
+    starts = []
+    for kind, *args in events:
+        starts.append(angles)
+        if kind == "delay":
+            angles = angles + omega * args[0]
+        elif kind == "pulse":
+            duration, _, _, count, *_ = args
+            angles = angles + count * (omega * (duration / count))
+    gamma_end = angles
+    for (kind, *args), start in zip(reversed(events), reversed(starts), strict=True):
+        if kind == "mask":
+            observable *= args[0].T
+        elif kind == "ideal":
+            axis, duration = args
+            propagator = _propagator(axis, duration)
+            observable = _apply_propagator(
+                observable, propagator.conj().swapaxes(-1, -2)
+            )
+        elif kind == "delay":
+            duration, decoupled = args
+            end = start + omega * duration
+            phase = (
+                2 * np.pi * (offsets - decoupled)[:, None, :] * duration
+                + _phase_integral(terms, end, spinning_hz)
+                - _phase_integral(terms, start, spinning_hz)
+            )
+            levels = np.concatenate(
+                (np.zeros_like(phase[..., :1]), phase.cumsum(axis=-1)), axis=-1
+            )
+            evolution = np.exp(1j * levels)
+            observable *= evolution[..., :, None] * evolution[..., None, :].conj()
+        else:
+            duration, rf, offset, count, frame, basis, solve = args
+            step = duration / count
+            step_phase = omega * step
+            observable *= frame.T
+            for index in range(count - 1, -1, -1):
+                propagator = next(
+                    _mas_pulse_steps(
+                        offsets,
+                        terms,
+                        rf,
+                        offset,
+                        start + index * step_phase,
+                        step,
+                        step_phase,
+                        1,
+                        solve,
+                    )
+                )
+                observable = _apply_propagator(
+                    observable, propagator.conj().swapaxes(-1, -2)
+                )
+            if basis is not None:
+                observable *= basis.conj().T
+    return observable, gamma_end
+
+
+def _t1_conversion_signals(
+    offsets,
+    terms,
+    strengths,
+    initial,
+    scans,
+    spinning_hz,
+    count,
+    sidebands,
+    evolutions,
+    conversion,
+    selected,
+    grid,
+):
+    """Yield one bounded block of band amplitudes for all indirect times."""
+    grid_count, shifts = grid
+    size = initial.shape[0]
+    block_size = max(1, min(64, 131072 // (grid_count * size**2 * selected.size)))
+    band_orders = np.arange(-sidebands, sidebands + 1)
+    base = np.arange(count) * (grid_count // count)
+    take = (shifts[:, None] + base) % grid_count
+    for start in range(0, offsets.shape[0], block_size):
+        block = slice(start, min(start + block_size, offsets.shape[0]))
+        block_offsets, block_terms = offsets[block], terms[block]
+        signals = np.zeros(
+            (len(evolutions), block_offsets.shape[0], selected.size, band_orders.size),
+            dtype=complex,
+        )
+        readout_start = None
+        for _, coefficient, prepared, gamma_start in _sequence_state_blocks(
+            block_offsets, block_terms, initial, scans, spinning_hz, count
+        ):
+            if readout_start != gamma_start[0]:
+                gamma = gamma_start[0] + 2 * np.pi * np.arange(grid_count) / grid_count
+                observable, gamma_end = _conversion_readout(
+                    block_offsets, block_terms, conversion, spinning_hz, gamma, selected
+                )
+                wave = np.exp(
+                    1j
+                    * _phase_integral(block_terms[:, selected], gamma_end, spinning_hz)
+                ).swapaxes(-1, -2)
+                readout_start = gamma_start[0]
+            active_rows, active_cols = np.nonzero(np.any(prepared != 0, axis=(0, 1)))
+            initial_coherences = prepared[..., active_rows, active_cols]
+            readout = observable[..., active_cols, active_rows]
+            phase_begin = _phase_integral(block_terms, gamma_start, spinning_hz)
+            phase_end = _phase_integral(block_terms, gamma, spinning_hz)
+            levels_begin = np.concatenate(
+                (np.zeros_like(phase_begin[..., :1]), phase_begin.cumsum(axis=-1)),
+                axis=-1,
+            )
+            levels_end = np.concatenate(
+                (np.zeros_like(phase_end[..., :1]), phase_end.cumsum(axis=-1)), axis=-1
+            )
+            levels_iso = np.concatenate(
+                (np.zeros_like(block_offsets[..., :1]), block_offsets.cumsum(axis=-1)),
+                axis=-1,
+            )
+            initial_phase = (
+                levels_begin[..., active_rows] - levels_begin[..., active_cols]
+            )
+            rotor_phase = levels_end[..., active_rows] - levels_end[..., active_cols]
+            frequency = levels_iso[..., active_rows] - levels_iso[..., active_cols]
+            for row, (events, indices) in enumerate(zip(evolutions, take, strict=True)):
+                time = events[0][1]
+                phase = (
+                    2 * np.pi * time * frequency[:, None, :]
+                    + rotor_phase[:, indices]
+                    - initial_phase
+                )
+                coherences = initial_coherences * np.exp(-1j * phase)
+                for _, mask in events[1:]:
+                    coherences *= mask[active_rows, active_cols]
+                coherence = np.einsum(
+                    "svgn,vgn->vsg", readout[:, :, indices], coherences
+                )
+                signal = -1j * np.sqrt(strengths[selected])[None, :, None] * coherence
+                detected = wave[..., indices]
+                detection = np.fft.fft(detected, axis=-1)[..., band_orders] / count
+                preparation = np.fft.ifft(signal * detected.conj(), axis=-1)[
+                    ..., band_orders
+                ]
+                signals[row] += coefficient * detection * preparation
+        yield block, signals
+
+
+def _t1_spectrum(
+    axis,
+    offsets,
+    terms,
+    strengths,
+    initial,
+    scans,
+    spinning_hz,
+    count,
+    sidebands,
+    evolutions,
+    conversion,
+    selected,
+    grid,
+    weights,
+    triangles,
+    bandwidth,
+    deposit,
+    receiver,
+    passive_offsets,
+    workers,
+):
+    """Stream triangle groups so the full series need not retain every orientation."""
+    profiles = np.zeros((len(evolutions), axis.size), dtype=complex)
+    # Each triangle contributes independently, including shared vertex weights.
+    # Retaining only the vertices of each group bounds the signal workspace.
+    slots = len(evolutions) * selected.size * (2 * sidebands + 1)
+    if 3 * slots * np.dtype(complex).itemsize > 32 * 1024**2:
+        raise ValueError(
+            "Series band amplitudes exceed 32 MiB per triangle. Split the times."
+        )
+    vertex_limit = max(3, (32 * 1024**2) // (16 * slots))
+    triangle_count = max(1, min(4096, vertex_limit // 3))
+    errors, callback = np.geterr(), np.geterrcall()
+    for start in range(0, triangles.shape[0], triangle_count):
+        vertices, remap = np.unique(
+            triangles[start : start + triangle_count], return_inverse=True
+        )
+        local_triangles = remap.reshape(-1, 3)
+        local_terms = None if terms is None else terms[vertices]
+        local_offsets = offsets[vertices]
+        signals = np.empty(
+            (len(evolutions), vertices.size, selected.size, 2 * sidebands + 1),
+            dtype=complex,
+        )
+        for offset, population in passive_offsets:
+            shifted = local_offsets + offset
+            signals.fill(0)
+            if grid is None:
+                tails = [events + conversion for events in evolutions]
+                signals = _sequence_signals(
+                    shifted,
+                    local_terms,
+                    strengths[selected],
+                    initial,
+                    scans,
+                    spinning_hz,
+                    count,
+                    sidebands,
+                    readout=(selected, selected + 1),
+                    readout_terms=None if terms is None else local_terms[:, selected],
+                    workers=workers,
+                    tails=tails,
+                    out=signals,
+                )
+            else:
+                edges = np.linspace(
+                    0, vertices.size, min(workers, vertices.size) + 1, dtype=int
+                )
+
+                def process(lo, hi, output):
+                    with np.errstate(call=callback, **errors):
+                        for block, values in _t1_conversion_signals(
+                            shifted[lo:hi],
+                            local_terms[lo:hi],
+                            strengths,
+                            initial,
+                            scans,
+                            spinning_hz,
+                            count,
+                            sidebands,
+                            evolutions,
+                            conversion,
+                            selected,
+                            grid,
+                        ):
+                            output[:, lo + block.start : lo + block.stop] = values
+
+                if workers == 1:
+                    process(0, vertices.size, signals)
+                else:
+                    with ThreadPoolExecutor(max_workers=workers) as pool:
+                        jobs = [
+                            pool.submit(process, lo, hi, signals)
+                            for lo, hi in zip(edges[:-1], edges[1:], strict=True)
+                        ]
+                        for job in jobs:
+                            job.result()
+            signals *= receiver * population
+            for i, transition in enumerate(selected):
+                for j, order in enumerate(range(-sidebands, sidebands + 1)):
+                    frequency = shifted[:, transition] + order * spinning_hz
+                    for profile, row in zip(profiles, signals, strict=True):
+                        signal = _probe_weights(
+                            frequency, weights[vertices] * row[:, i, j], bandwidth
+                        )
+                        profile.real += deposit(
+                            axis, frequency, signal.real, local_triangles
+                        )
+                        profile.imag += deposit(
+                            axis, frequency, signal.imag, local_triangles
+                        )
+        del row, signals
+    return profiles
+
+
 def _powder_density(
     offsets,
     terms,
@@ -1184,11 +1577,15 @@ def _powder_density(
     return density / vertex_weights.sum()
 
 
-def _validate_output(output, sidebands):
+def _validate_output(output, sidebands, workers):
     if output not in ("spectrum", "density"):
         raise ValueError("output must be 'spectrum' or 'density'.")
     if output == "density" and sidebands:
         raise ValueError("Sideband selection applies only to spectral output.")
+    if workers < 1:
+        raise ValueError("workers must be a positive integer.")
+    if output == "density" and workers > 1:
+        raise ValueError("Multiple workers apply only to spectral output.")
 
 
 def _sequence_signals(
@@ -1203,22 +1600,66 @@ def _sequence_signals(
     *,
     readout=None,
     readout_terms=None,
+    workers=1,
+    out=None,
+    tails=None,
 ):
     """Average complex band amplitudes over rotor phase at preparation onset."""
+    if out is None:
+        shape = (offsets.shape[0], strengths.size, 2 * sidebands + 1)
+        out = np.zeros(shape if tails is None else (len(tails), *shape), dtype=complex)
+    rows = out[None] if tails is None else out
+    workers = min(workers, offsets.shape[0])
+    if workers > 1:
+        # Each slice processes the full cycle and writes to its own output range.
+        edges = np.linspace(0, offsets.shape[0], workers + 1, dtype=int)
+        chunks = (slice(lo, hi) for lo, hi in zip(edges[:-1], edges[1:], strict=True))
+        errors, callback = np.geterr(), np.geterrcall()
+
+        def process(chunk):
+            with np.errstate(call=callback, **errors):
+                _sequence_signals(
+                    offsets[chunk],
+                    None if terms is None else terms[chunk],
+                    strengths,
+                    initial,
+                    events,
+                    spinning_hz,
+                    count,
+                    sidebands,
+                    readout=readout,
+                    readout_terms=None
+                    if readout_terms is None
+                    else readout_terms[chunk],
+                    out=rows[0, chunk] if tails is None else rows[:, chunk],
+                    tails=tails,
+                )
+
+        with ThreadPoolExecutor(max_workers=workers) as executor:
+            for _ in executor.map(process, chunks):
+                pass
+        return out
+
     band_orders = np.arange(-sidebands, sidebands + 1)
-    amplitudes = np.zeros(
-        (offsets.shape[0], strengths.size, band_orders.size), dtype=complex
-    )
-    for block, coefficient, density, gamma_end in _sequence_state_blocks(
-        offsets, terms, initial, events, spinning_hz, count
-    ):
+    if tails is None:
+        states = (
+            (0, *state)
+            for state in _sequence_state_blocks(
+                offsets, terms, initial, events, spinning_hz, count
+            )
+        )
+    else:
+        states = _t1_state_blocks(
+            offsets, terms, initial, events, spinning_hz, count, tails
+        )
+    for row, block, coefficient, density, gamma_end in states:
         if readout is None:
             coherence = np.diagonal(density, offset=1, axis1=-2, axis2=-1)
         else:
             coherence = density[..., readout[0], readout[1]]
         signal = -1j * np.sqrt(strengths) * coherence
         if not spinning_hz:
-            amplitudes[block, :, 0] += coefficient * signal
+            rows[row, block, :, 0] += coefficient * signal
             continue
         detected_terms = (terms if readout_terms is None else readout_terms)[block]
         wave = np.exp(
@@ -1229,8 +1670,8 @@ def _sequence_signals(
         preparation = np.fft.ifft(signal.swapaxes(-1, -2) * wave.conj(), axis=-1)[
             ..., band_orders
         ]
-        amplitudes[block] += coefficient * detection * preparation
-    return amplitudes
+        rows[row, block] += coefficient * detection * preparation
+    return out
 
 
 def simulate_rectangular_pulse(
@@ -1255,6 +1696,8 @@ def simulate_rectangular_pulse(
     max_rf_step_s=2e-6,
     probe_bandwidth_hz=None,
     rf_solver="dense",
+    deposition="numpy",
+    workers=1,
 ):
     """Simulate a powder after one finite rectangular RF pulse.
 
@@ -1265,6 +1708,9 @@ def simulate_rectangular_pulse(
     phase are retained. With MAS, midpoint propagation uses time steps
     no longer than max_rf_step_s or 1/32 of a rotor period.
     Set rf_solver="tridiagonal" to use the optional Numba/LAPACK solver.
+
+    Set deposition="numba" for optional JIT deposition with NumPy fallback.
+    Set workers above one to compute groups of powder orientations in threads.
     """
     return simulate_pulse_sequence(
         [Pulse(duration_s, rf_hz, phase_deg)],
@@ -1284,7 +1730,384 @@ def simulate_rectangular_pulse(
         sidebands=sidebands,
         max_rf_step_s=max_rf_step_s,
         probe_bandwidth_hz=probe_bandwidth_hz,
+        deposition=deposition,
         rf_solver=rf_solver,
+        workers=workers,
+    )
+
+
+def _mqmas_rf_profiles(preparation, conversion, coherence_order, **settings):
+    """Compute both States quadratures with one excitation/readout per block."""
+    spin = settings["spin"]
+    spinning = settings["spinning_hz"]
+    points, accuracy, sidebands, workers = (
+        index(settings[name]) for name in ("points", "accuracy", "sidebands", "workers")
+    )
+    width, max_step, receiver_phase = _real_scalars(
+        settings["spectral_width_hz"],
+        settings["max_rf_step_s"],
+        settings["receiver_phase_deg"],
+    )
+    if max_step <= 0:
+        raise ValueError("max_rf_step_s must be positive.")
+    t2 = settings["t2_s"]
+    if t2 is not None:
+        (t2,) = _real_scalars(t2)
+        if t2 <= 0:
+            raise ValueError("t2_s must be positive.")
+    _validate_grid(width, spinning, points, accuracy, sidebands)
+    _validate_output("spectrum", sidebands, workers)
+    bandwidth = _validate_probe_bandwidth(settings["probe_bandwidth_hz"])
+    count = _rf_rotor_count(width, spinning, accuracy, sidebands, int(2 * spin + 1))
+    directions, weights, triangles = _powder_mesh(accuracy, hemisphere=True)
+    angle = np.arccos(1 / np.sqrt(3))
+    slots = directions.shape[1] * (int(2 * spin) * 4 + 2 * (2 * sidebands + 1))
+    if slots * np.dtype(complex).itemsize > 64 * 1024**2:
+        raise ValueError(
+            "MQMAS RF work arrays exceed 64 MiB. Reduce accuracy or sidebands."
+        )
+    table = np.stack(
+        [
+            terms.T
+            for _, _, terms in _transition_harmonics(
+                directions,
+                settings["cq_hz"],
+                settings["eta"],
+                angle,
+                spin,
+                settings["larmor_hz"],
+                0,
+            )
+        ],
+        axis=1,
+    )
+    offsets = table[..., 0].real + settings["shift_hz"]
+    terms = np.ascontiguousarray(table[..., 1:])
+    del table
+    ct = int(spin - 0.5)
+    strength = (spin + 0.5) ** 2
+    axis = np.linspace(-width / 2, width / 2, points)
+    if (
+        offsets[:, ct].min() - sidebands * spinning < axis[0]
+        or offsets[:, ct].max() + sidebands * spinning > axis[-1]
+    ):
+        raise ValueError("The spectral window must contain the requested transitions.")
+    ix, iy, iz = _spin_operators(spin)
+    pulse_args = ix, iy, iz, spinning, max_step, t2
+    solver = _resolve_rf_solver(settings["rf_solver"])
+    scans = _prepare_scans(preparation, *pulse_args, rf_solver=solver, allow_empty=True)
+    conversion = _prepare_events(
+        conversion, *pulse_args, rf_solver=solver, allow_empty=True
+    )
+    upper, lower = int(spin - coherence_order / 2), int(spin + coherence_order / 2)
+    orders = np.arange(-sidebands, sidebands + 1)
+    signals = np.zeros((2, offsets.shape[0], orders.size), dtype=complex)
+    errors, callback = np.geterr(), np.geterrcall()
+
+    def process(lo, hi):
+        with np.errstate(call=callback, **errors):
+            for block, coefficient, density, gamma_start in _sequence_state_blocks(
+                offsets[lo:hi], terms[lo:hi], iz, scans, spinning, count
+            ):
+                observed, gamma_end = _conversion_readout(
+                    offsets[lo:hi][block],
+                    terms[lo:hi][block],
+                    conversion,
+                    spinning,
+                    gamma_start,
+                    np.array([ct]),
+                )
+                positive = density[..., upper, lower] * observed[0, ..., lower, upper]
+                negative = density[..., lower, upper] * observed[0, ..., upper, lower]
+                quadratures = (
+                    -1j
+                    * np.sqrt(strength)
+                    * np.stack(
+                        ((positive + negative) / 2, (positive - negative) / (2j))
+                    )
+                )
+                wave = np.exp(
+                    1j
+                    * _phase_integral(
+                        terms[lo:hi][block, ct : ct + 1], gamma_end, spinning
+                    )[..., 0]
+                )
+                detection = np.fft.fft(wave, axis=-1)[..., orders] / count
+                prepared = np.fft.ifft(quadratures * wave.conj(), axis=-1)[..., orders]
+                signals[:, lo + block.start : lo + min(block.stop, hi - lo)] += (
+                    coefficient * detection * prepared
+                )
+
+    workers = min(workers, offsets.shape[0])
+    edges = np.linspace(0, offsets.shape[0], workers + 1, dtype=int)
+    if workers == 1:
+        process(0, offsets.shape[0])
+    else:
+        with ThreadPoolExecutor(max_workers=workers) as pool:
+            jobs = [
+                pool.submit(process, lo, hi)
+                for lo, hi in zip(edges[:-1], edges[1:], strict=True)
+            ]
+            for job in jobs:
+                job.result()
+    signals *= np.exp(1j * np.deg2rad(receiver_phase))
+    deposit = _resolve_deposition(settings["deposition"])
+    profiles = np.zeros((2, points), dtype=complex)
+    for i, order in enumerate(orders):
+        frequency = offsets[:, ct] + order * spinning
+        for profile, quadrature in zip(profiles, signals, strict=True):
+            mass = _probe_weights(frequency, weights * quadrature[:, i], bandwidth)
+            profile.real += deposit(axis, frequency, mass.real, triangles)
+            profile.imag += deposit(axis, frequency, mass.imag, triangles)
+    profiles /= strength / 2 * weights[triangles].sum()
+    return [_as_dataset(axis, profile, "MQMAS RF transfer") for profile in profiles]
+
+
+class MQMASModel:
+    """Reusable RF-weighted F2 profiles for a direct, sheared MQMAS model.
+
+    Preparation and conversion use the same event objects as
+    simulate_pulse_sequence. The transfer is calculated at t1=0 for the
+    symmetric +/-q/2 pair, with both States quadratures. Rebuild the model
+    when changing the spin system, carrier offset or pulse sequence.
+    spectrum() reuses these profiles for F1 grids and F1/F2 widths.
+
+    The fixed-transfer approximation assumes rotor-synchronized MQ
+    evolution. Conversion-phase modulation and rotor micromotion along t1
+    require comparison with explicit sequence calculations. Frequencies,
+    Pq, Cq and offsets are in Hz. RF phase and absolute transfer losses
+    relative to an ideal central-transition x90 are retained.
+    Requested F2 sidebands share the principal F1 ridge; correlations of
+    rotational sidebands between F1 and F2 are omitted.
+    Finite indirect-acquisition truncation is not modeled by the Gaussian.
+    """
+
+    def __init__(
+        self,
+        preparation,
+        conversion,
+        *,
+        spin,
+        larmor_hz,
+        spinning_hz,
+        spectral_width_hz,
+        cq_hz=0.0,
+        pq_hz=None,
+        eta=0.0,
+        shift_hz=0.0,
+        coherence_order=3,
+        points=8192,
+        accuracy=16,
+        sidebands=0,
+        max_rf_step_s=2e-6,
+        t2_s=None,
+        receiver_phase_deg=0.0,
+        probe_bandwidth_hz=None,
+        rf_solver="dense",
+        deposition="numpy",
+        workers=1,
+    ):
+        from .processing.mqmas import _mqmas_geometry
+
+        coherence_order, ratio, scale = _mqmas_geometry(spin, coherence_order)
+        spin, larmor_hz, spinning_hz, cq_hz, eta, shift_hz = _real_scalars(
+            spin, larmor_hz, spinning_hz, cq_hz, eta, shift_hz
+        )
+        if not 1.5 <= spin <= 15.5 or larmor_hz <= 0 or spinning_hz <= 0:
+            raise ValueError(
+                "Use a half-integer spin from 3/2 to 31/2 and positive Larmor and MAS frequencies."
+            )
+        if not 0 <= eta <= 1:
+            raise ValueError("eta must lie between 0 and 1.")
+        if pq_hz is not None:
+            (pq_hz,) = _real_scalars(pq_hz)
+            if pq_hz < 0 or cq_hz != 0:
+                raise ValueError("Use a nonnegative Pq, with Cq left at zero.")
+            cq_hz = pq_hz / np.sqrt(1 + eta**2 / 3)
+        else:
+            pq_hz = abs(cq_hz) * np.sqrt(1 + eta**2 / 3)
+        quadrupolar_shift = (
+            -3
+            * (spin * (spin + 1) - 0.75)
+            * pq_hz**2
+            / (40 * spin**2 * (2 * spin - 1) ** 2 * larmor_hz)
+        )
+        if isinstance(preparation, PhaseCycle):
+            scans = tuple(tuple(scan) for scan in preparation.scans)
+            coefficients = _phase_cycle_coefficients(scans, preparation.coefficients)
+        else:
+            scans, coefficients = (tuple(preparation),), (1.0,)
+        conversion = tuple(conversion)
+        settings = dict(
+            spin=spin,
+            larmor_hz=larmor_hz,
+            cq_hz=cq_hz,
+            eta=eta,
+            shift_hz=shift_hz,
+            spectral_width_hz=spectral_width_hz,
+            points=points,
+            accuracy=accuracy,
+            spinning_hz=spinning_hz,
+            sidebands=sidebands,
+            max_rf_step_s=max_rf_step_s,
+            t2_s=t2_s,
+            receiver_phase_deg=receiver_phase_deg,
+            probe_bandwidth_hz=probe_bandwidth_hz,
+            rf_solver=rf_solver,
+            deposition=deposition,
+            workers=workers,
+        )
+        self._profiles = _mqmas_rf_profiles(
+            PhaseCycle(scans, coefficients), conversion, coherence_order, **settings
+        )
+        self._parameters = dict(
+            approximation="fixed RF transfer with analytical F1 line",
+            spin=spin,
+            coherence_order=coherence_order,
+            larmor_hz=larmor_hz,
+            cq_hz=cq_hz,
+            pq_hz=pq_hz,
+            eta=eta,
+            shift_hz=shift_hz,
+            isotropic_f1_hz=shift_hz - 10 * quadrupolar_shift / 17,
+            central_transition_qis_hz=quadrupolar_shift,
+            shear_ratio=ratio,
+            f1_scale=scale,
+            transfer_reference_t1_s=0.0,
+            spinning_hz=spinning_hz,
+        )
+
+    @property
+    def f1_position_hz(self):
+        """Analytical F1 position with unit chemical-shift sensitivity."""
+        return self._parameters["isotropic_f1_hz"]
+
+    def spectrum(
+        self,
+        *,
+        f1_spectral_width_hz,
+        f1_points=256,
+        f1_offset_hz=0.0,
+        f1_gaussian_fwhm_hz=100.0,
+        f2_gaussian_fwhm_hz=0.0,
+    ):
+        """Construct a complex F1/F2 map using the stored RF transfer.
+
+        F1 uses a unit-area Gaussian absorption line and its periodic
+        Hilbert dispersion, weighted by the two States RF quadratures.
+        F2 broadening is optional. Values are bin masses and neither
+        RF profile is peak- or area-normalized. The F1 window can truncate
+        the Gaussian tails. Both frequency axes are in Hz.
+        """
+        from scipy.signal import hilbert
+        from scipy.special import ndtr
+
+        from spectrochempy.core.dataset.coord import Coord
+        from spectrochempy.core.dataset.nddataset import NDDataset
+
+        f1_points = index(f1_points)
+        width, center, fwhm1, fwhm2 = _real_scalars(
+            f1_spectral_width_hz,
+            f1_offset_hz,
+            f1_gaussian_fwhm_hz,
+            f2_gaussian_fwhm_hz,
+        )
+        if f1_points < 2 or width <= 0 or fwhm1 <= 0:
+            raise ValueError(
+                "Use at least two F1 points and positive F1 width and Gaussian FWHM."
+            )
+        if fwhm2 < 0:
+            raise ValueError("F2 Gaussian FWHM must be nonnegative.")
+        step = width / f1_points
+        axis = center + (np.arange(f1_points) - f1_points // 2) * step
+        position = self.f1_position_hz
+        if position < axis[0] - step / 2 or position > axis[-1] + step / 2:
+            raise ValueError(
+                "The F1 window must contain the analytical isotropic position."
+            )
+        sigma = fwhm1 / np.sqrt(8 * np.log(2))
+        edges = np.r_[axis - step / 2, axis[-1] + step / 2]
+        absorption = np.diff(ndtr((edges - position) / sigma))
+        dispersion = hilbert(absorption).imag
+        profiles = self._profiles
+        if fwhm2:
+            profiles = [
+                broaden(profile, gaussian_fwhm_hz=fwhm2) for profile in profiles
+            ]
+        result = NDDataset(
+            absorption[:, None] * profiles[0].data[None, :]
+            + dispersion[:, None] * profiles[1].data[None, :],
+            name="PULSAR analytical MQMAS",
+        )
+        result.set_coordset(
+            x=profiles[0].x.copy(),
+            y=Coord(
+                axis,
+                units="Hz",
+                title="F1 isotropic frequency offset",
+                rounding=False,
+                sigdigits=15,
+            ),
+        )
+        result.meta.mqmas_model = dict(
+            self._parameters,
+            f1_gaussian_fwhm_hz=fwhm1,
+            f2_gaussian_fwhm_hz=fwhm2,
+        )
+        return result
+
+
+def simulate_mqmas(
+    preparation,
+    conversion,
+    *,
+    f1_spectral_width_hz,
+    f1_points=256,
+    f1_offset_hz=0.0,
+    f1_gaussian_fwhm_hz=100.0,
+    f2_gaussian_fwhm_hz=0.0,
+    **settings,
+):
+    """Build a direct MQMAS model and return its sheared F1/F2 spectrum.
+
+    settings are those of MQMASModel. For repeated maps with different
+    F1 grids or widths, construct MQMASModel once and call spectrum().
+    """
+    model = MQMASModel(preparation, conversion, **settings)
+    return model.spectrum(
+        f1_spectral_width_hz=f1_spectral_width_hz,
+        f1_points=f1_points,
+        f1_offset_hz=f1_offset_hz,
+        f1_gaussian_fwhm_hz=f1_gaussian_fwhm_hz,
+        f2_gaussian_fwhm_hz=f2_gaussian_fwhm_hz,
+    )
+
+
+def simulate_t1_series(preparation, t1_s, conversion, **settings):
+    """Simulate complex F2 spectra at the given indirect times, in seconds.
+
+    Supply a preparation sequence or PhaseCycle, then conversion events
+    common to the scans. Each row is equivalent to inserting Delay(t1)
+    between preparation and conversion in simulate_pulse_sequence. The
+    preparation is propagated once per scan and powder block. The result
+    is an NDDataset with indirect time on y and frequency offset on x.
+
+    Settings are those of simulate_pulse_sequence for spectral output.
+    For States, call once per quadrature branch and retain the two datasets
+    for reconstruction. Keep the original sampling schedule for nonuniform
+    reconstruction, since core dataset copies can linearize nearly uniform
+    coordinates.
+
+    Powder integration streams groups of triangles with bounded band-amplitude
+    storage. For indirect times that share a bounded rotor grid, conversion
+    readouts are reused across the series without phase interpolation.
+    Other schedules use the ordinary density propagation for each time.
+    """
+    times = _real_scalars(*t1_s)
+    if not times or min(times) < 0:
+        raise ValueError("Supply one or more nonnegative indirect times.")
+    return simulate_pulse_sequence(
+        _T1Series(preparation, times, tuple(conversion)), **settings
     )
 
 
@@ -1313,6 +2136,8 @@ def simulate_pulse_sequence(
     output="spectrum",
     probe_bandwidth_hz=None,
     rf_solver="dense",
+    deposition="numpy",
+    workers=1,
 ):
     """Simulate a sequence of pulses, delays and coherence selections.
 
@@ -1325,6 +2150,10 @@ def simulate_pulse_sequence(
     matrix at the end of preparation, before receiver phase.
     For finite pulses, rf_solver="tridiagonal" uses the optional
     Numba/LAPACK backend when available and falls back to the dense solver.
+
+    Set deposition="numba" for optional JIT deposition with NumPy fallback.
+    For spectral output, set workers above one to compute groups of powder
+    orientations in threads. Scans share propagators within each block.
     """
     points, accuracy, sidebands = index(points), index(accuracy), index(sidebands)
     (
@@ -1367,7 +2196,13 @@ def simulate_pulse_sequence(
     if max_rf_step_s <= 0:
         raise ValueError("max_rf_step_s must be positive.")
     _validate_grid(spectral_width_hz, spinning_hz, points, accuracy, sidebands)
-    _validate_output(output, sidebands)
+    workers = index(workers)
+    _validate_output(output, sidebands, workers)
+    series = events if isinstance(events, _T1Series) else None
+    if series is not None:
+        if output != "spectrum":
+            raise ValueError("simulate_t1_series requires spectral output.")
+        events = series.preparation
     bandwidth = _validate_probe_bandwidth(probe_bandwidth_hz)
     directions, weights, triangles, angle, csa, quadrupolar_eta = _powder_interactions(
         accuracy,
@@ -1395,13 +2230,17 @@ def simulate_pulse_sequence(
         count = _rf_rotor_count(
             spectral_width_hz, spinning_hz, accuracy, sidebands, transition_count + 1
         )
-        order_count = 2 * sidebands + 1 if output == "spectrum" else 0
-        # Bound the two persistent complex arrays before allocating either.
-        storage = offsets.size * (4 + order_count) * np.dtype(complex).itemsize
-        if storage > 64 * 1024**2:
+    row_count = 1 if series is None else len(series.times)
+    order_count = 2 * sidebands + 1 if output == "spectrum" else 0
+    if spinning_hz or series is not None:
+        # Bound the persistent harmonics and signal arrays before allocating either.
+        slots = (4 if spinning_hz else 0) + (0 if series is not None else order_count)
+        if offsets.size * slots * np.dtype(complex).itemsize > 64 * 1024**2:
             raise ValueError(
-                "MAS pulse work arrays exceed 64 MiB. Reduce accuracy or sidebands."
+                "Pulse work arrays exceed 64 MiB. Reduce accuracy, sidebands "
+                "or the number of indirect times per call."
             )
+    if spinning_hz:
         harmonics = np.empty((*offsets.shape, 4), dtype=complex)
     for i, (_, strength, terms) in enumerate(
         _transition_harmonics(
@@ -1413,16 +2252,20 @@ def simulate_pulse_sequence(
         if spinning_hz:
             harmonics[:, i] = terms[1:].T
     ix, iy, iz = _spin_operators(spin)
+    pulse_args = ix, iy, iz, spinning_hz, max_rf_step_s, t2_s
+    solver = _resolve_rf_solver(rf_solver)
     prepared = _prepare_scans(
-        events,
-        ix,
-        iy,
-        iz,
-        spinning_hz,
-        max_rf_step_s,
-        t2_s,
-        rf_solver=_resolve_rf_solver(rf_solver),
+        events, *pulse_args, rf_solver=solver, allow_empty=series is not None
     )
+    tails = None
+    if series is not None:
+        conversion = _prepare_events(
+            series.conversion, *pulse_args, rf_solver=solver, allow_empty=True
+        )
+        evolutions = [
+            _prepare_events((Delay(time),), *pulse_args, rf_solver=solver)
+            for time in series.times
+        ]
     passive_offsets = _passive_offsets(j_partners)
     if output == "density":
         return _powder_density(
@@ -1446,9 +2289,41 @@ def simulate_pulse_sequence(
     ):
         raise ValueError("The spectral window must contain the requested transitions.")
     receiver = np.exp(1j * np.deg2rad(receiver_phase_deg))
-    profile = np.zeros(points, dtype=complex)
+    deposit = _resolve_deposition(deposition)
+    if series is not None:
+        grid = _t1_rotor_grid(series.times, spinning_hz, count) if spinning_hz else None
+        if grid is not None and grid[0] * iz.size * selected.sum() > 131072:
+            grid = None
+        profiles = _t1_spectrum(
+            axis,
+            offsets,
+            harmonics if spinning_hz else None,
+            strengths,
+            iz,
+            prepared,
+            spinning_hz,
+            count if spinning_hz else 1,
+            sidebands,
+            evolutions,
+            conversion,
+            np.flatnonzero(selected),
+            grid,
+            weights,
+            triangles,
+            bandwidth,
+            deposit,
+            receiver,
+            passive_offsets,
+            workers,
+        )
+        profiles /= strengths[selected].sum() / 2 * weights[triangles].sum()
+        return _as_dataset(axis, profiles, "PULSAR t1 series", times=series.times)
+    profiles = np.zeros((row_count, points), dtype=complex)
+    signals = None
     for offset, population in passive_offsets:
         shifted = offsets + offset
+        if signals is not None:
+            signals.fill(0)
         signals = _sequence_signals(
             shifted,
             harmonics if spinning_hz else None,
@@ -1458,25 +2333,27 @@ def simulate_pulse_sequence(
             spinning_hz,
             count if spinning_hz else 1,
             sidebands,
+            workers=workers,
+            out=signals,
+            tails=tails,
         )
-        signals *= receiver * population
+        rows = signals[None] if series is None else signals
+        rows *= receiver * population
         for i in np.flatnonzero(selected):
             for j, order in enumerate(range(-sidebands, sidebands + 1)):
                 frequency = shifted[:, i] + order * spinning_hz
-                signal = _probe_weights(
-                    frequency, weights * signals[:, i, j], bandwidth
-                )
-                profile.real += _deposit_triangles(
-                    axis, frequency, signal.real, triangles
-                )
-                profile.imag += _deposit_triangles(
-                    axis, frequency, signal.imag, triangles
-                )
+                for profile, row in zip(profiles, rows, strict=True):
+                    signal = _probe_weights(
+                        frequency, weights * row[:, i, j], bandwidth
+                    )
+                    profile.real += deposit(axis, frequency, signal.real, triangles)
+                    profile.imag += deposit(axis, frequency, signal.imag, triangles)
     ideal_signal = strengths[selected].sum() / 2
     powder_mass = weights[triangles].sum()
-    return _as_dataset(
-        axis, profile / (ideal_signal * powder_mass), "PULSAR pulse sequence"
-    )
+    profiles /= ideal_signal * powder_mass
+    if series is not None:
+        return _as_dataset(axis, profiles, "PULSAR t1 series", times=series.times)
+    return _as_dataset(axis, profiles[0], "PULSAR pulse sequence")
 
 
 @dataclass(frozen=True)
@@ -1597,7 +2474,9 @@ def simulate_coupled_sequence(
     *,
     observed,
     partner,
-    j_hz,
+    j_hz=0.0,
+    dipolar_hz=0.0,
+    dipolar_axis=(0.0, 0.0, 1.0),
     spectral_width_hz,
     points=8192,
     accuracy=8,
@@ -1610,8 +2489,21 @@ def simulate_coupled_sequence(
     j_partners=(),
     output="spectrum",
     probe_bandwidth_hz=None,
+    deposition="numpy",
+    workers=1,
 ):
-    """Simulate two RF-active spins with a secular isotropic J coupling.
+    """Simulate two RF-active spins with secular J and dipolar coupling.
+
+    dipolar_hz adds D * (3*cos(theta)**2 - 1) * Iz*Sz in Hz,
+    where dipolar_axis is a real unit bond vector in the common sample
+    frame and theta is its angle to the field. This signed D follows
+    historical PyPulsar, not a full dipolar tensor's zz component (2*D).
+    Nonzero D requires a heteronuclear spin-1/2 pair
+    with well-separated Larmor frequencies. Homonuclear flip-flop terms
+    are not included. Under MAS theta follows the rotor trajectory during
+    RF, delays and acquisition. Select sidebands and converge accuracy
+    and max_rf_step_s for the experiment. Delay(decouple_j=True) removes
+    J only, leaving the dipolar interaction active.
 
     The observed spin is detected with the partner projection unchanged.
     Each site's EFG rotation maps its principal axes into the common
@@ -1619,24 +2511,53 @@ def simulate_coupled_sequence(
     Use the partner RF fields on Pulse and IdealPulse to address it.
     output="density" returns the final averaged product density matrix
     with partner indices varying fastest.
+
+    Set deposition="numba" for optional JIT deposition with NumPy fallback.
+    For spectral output, set workers above one to compute groups of powder
+    orientations in threads. Scans share propagators within each block.
     """
     points, accuracy, sidebands = index(points), index(accuracy), index(sidebands)
     (
         j_hz,
+        dipolar_hz,
         spectral_width_hz,
         spinning_hz,
         max_rf_step_s,
         receiver_phase_deg,
     ) = _real_scalars(
-        j_hz, spectral_width_hz, spinning_hz, max_rf_step_s, receiver_phase_deg
+        j_hz,
+        dipolar_hz,
+        spectral_width_hz,
+        spinning_hz,
+        max_rf_step_s,
+        receiver_phase_deg,
     )
     if max_rf_step_s <= 0:
         raise ValueError("max_rf_step_s must be positive.")
     _validate_grid(spectral_width_hz, spinning_hz, points, accuracy, sidebands)
-    _validate_output(output, sidebands)
+    workers = index(workers)
+    _validate_output(output, sidebands, workers)
     bandwidth = _validate_probe_bandwidth(probe_bandwidth_hz)
     site_a, site_b = _site_parameters(observed), _site_parameters(partner)
     spin_a, spin_b = site_a[0], site_b[0]
+    bond = np.asarray(dipolar_axis)
+    if (
+        bond.shape != (3,)
+        or bond.dtype.kind not in "fiu"
+        or not np.isfinite(bond).all()
+        or not np.isclose(np.linalg.norm(bond), 1.0, rtol=0, atol=1e-7)
+    ):
+        raise ValueError("dipolar_axis must be a real unit vector with three entries.")
+    bond = bond.astype(float)
+    bond /= np.linalg.norm(bond)
+    if dipolar_hz:
+        if spin_a != 0.5 or spin_b != 0.5:
+            raise ValueError("Dipolar coupling currently requires two spin-1/2 sites.")
+        if np.isclose(site_a[1], site_b[1], rtol=1e-6, atol=0):
+            raise ValueError(
+                "Dipolar coupling requires a heteronuclear pair with "
+                "well-separated Larmor frequencies."
+            )
     size_a, size_b = int(2 * spin_a + 1), int(2 * spin_b + 1)
     size = size_a * size_b
     if size > 64:
@@ -1651,9 +2572,10 @@ def simulate_coupled_sequence(
         selected = selected[central if transitions == "central" else ~central]
 
     rotated = any(value is not None for value in (*site_a[7:9], *site_b[7:9]))
+    rotated = rotated or bool(dipolar_hz and np.any(bond[:2]))
     directions, weights, triangles = _powder_mesh(
         accuracy,
-        bool(spinning_hz or rotated),
+        bool(spinning_hz or rotated or dipolar_hz),
         full_sphere=bool(spinning_hz and rotated),
     )
     angle = _rotor_angle(rotor_angle_deg, spinning_hz)
@@ -1685,12 +2607,17 @@ def simulate_coupled_sequence(
     ops_a = tuple(np.kron(op, np.eye(size_b)) for op in _spin_operators(spin_a))
     ops_b = tuple(np.kron(np.eye(size_a), op) for op in _spin_operators(spin_b))
     initial = ops_a[2] + (site_b[1] / site_a[1]) * ops_b[2]
-    coupling_levels = j_hz * np.diag(ops_a[2]) * np.diag(ops_b[2])
+    coupling = np.zeros((weights.size, harmonic_count), dtype=complex)
+    coupling[:, 0] = j_hz
+    if dipolar_hz:
+        tensor = dipolar_hz * (3 * np.outer(bond, bond) - np.eye(3))
+        coupling += _tensor_harmonics(directions, tensor, angle)[:harmonic_count].T
+    products = np.diag(ops_a[2]) * np.diag(ops_b[2])
     level_a, level_b = _level_harmonics(a), _level_harmonics(b)
     levels = (level_a[:, :, None, :] + level_b[:, None, :, :]).reshape(
         weights.size, size, harmonic_count
     )
-    levels[..., 0] += coupling_levels
+    levels += coupling[:, None, :] * products[None, :, None]
     level_differences = np.diff(levels, axis=1)
     product_offsets = level_differences[..., 0].real
     product_terms = level_differences[..., 1:] if spinning_hz else None
@@ -1702,7 +2629,7 @@ def simulate_coupled_sequence(
         site_a[-1],
         partner=ops_b,
         partner_t2_s=site_b[-1],
-        coupling_offsets=np.diff(coupling_levels),
+        coupling_offsets=np.diff(j_hz * products),
     )
     passive_offsets = _passive_offsets(j_partners)
     passive_shift = -np.diff(np.diag(ops_a[2]))
@@ -1722,10 +2649,16 @@ def simulate_coupled_sequence(
 
     partner_projections = np.arange(spin_b, -spin_b - 1, -1)
     frequency = (
-        a[:, selected, 0].real[..., None] - j_hz * partner_projections
+        a[:, selected, 0].real[..., None]
+        - coupling[:, 0].real[:, None, None] * partner_projections
     ).reshape(weights.size, -1)
     detected_terms = (
-        np.repeat(a[:, selected, 1:], size_b, axis=1) if spinning_hz else None
+        (
+            a[:, selected, None, 1:]
+            - coupling[:, None, None, 1:] * partner_projections[None, None, :, None]
+        ).reshape(weights.size, -1, harmonic_count - 1)
+        if spinning_hz
+        else None
     )
     rows = (selected[:, None] * size_b + np.arange(size_b)).ravel()
     readout = rows, rows + size_b
@@ -1737,6 +2670,7 @@ def simulate_coupled_sequence(
         or frequency.max() + band_offset + passive_offsets[-1][0] > axis[-1]
     ):
         raise ValueError("The spectral window must contain the requested transitions.")
+    deposit = _resolve_deposition(deposition)
     profile = np.zeros(points, dtype=complex)
     receiver = np.exp(1j * np.deg2rad(receiver_phase_deg))
     for offset, population in passive_offsets:
@@ -1751,6 +2685,7 @@ def simulate_coupled_sequence(
             sidebands,
             readout=readout,
             readout_terms=detected_terms,
+            workers=workers,
         )
         signals *= receiver * population
         for i in range(strengths.size):
@@ -1759,22 +2694,37 @@ def simulate_coupled_sequence(
                 weighted = _probe_weights(
                     shifted, weights * signals[:, i, j], bandwidth
                 )
-                profile.real += _deposit_triangles(
-                    axis, shifted, weighted.real, triangles
-                )
-                profile.imag += _deposit_triangles(
-                    axis, shifted, weighted.imag, triangles
-                )
+                profile.real += deposit(axis, shifted, weighted.real, triangles)
+                profile.imag += deposit(axis, shifted, weighted.imag, triangles)
     norm = strengths.sum() / 2 * weights[triangles].sum()
     return _as_dataset(axis, profile / norm, "PULSAR coupled sequence")
 
 
-def _as_dataset(axis, profile, name):
+def _as_dataset(axis, profile, name, *, times=None):
     from spectrochempy.core.dataset.coord import Coord
     from spectrochempy.core.dataset.nddataset import NDDataset
 
     dataset = NDDataset(profile, name=name)
-    dataset.set_coordset(x=Coord(axis, units="Hz", title="frequency offset"))
+    coords = {"x": Coord(axis, units="Hz", title="frequency offset")}
+    if times is not None:
+        times = np.asarray(times)
+        coords["y"] = Coord(
+            times,
+            units="s",
+            title="indirect evolution time",
+            rounding=False,
+            linearize_below=0,
+            sigdigits=12,
+        )
+    dataset.set_coordset(**coords)
+    if times is not None:
+        dataset.meta.td = list(dataset.shape)
+        # Keep Coord's regular-spacing classification for the FFT, but retain
+        # the exact times used by the propagator if Coord rebuilt the grid.
+        time_coord = dataset.y
+        time_coord._rounding = False
+        if not np.array_equal(time_coord.data, times):
+            time_coord._set_data(times)
     return dataset
 
 

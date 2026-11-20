@@ -81,6 +81,41 @@ _ = scp.plot_multiple(
 # A fixed `seed` makes the simulation reproducible. Increase `samples`
 # and powder `accuracy` separately to check convergence.
 #
+# ## Finite excitation and receiver bandwidth
+#
+# `probe_bandwidth_hz` applies the legacy PULSAR real Lorentzian response
+# about the simulation carrier, before spectral deposition. It defaults
+# to `None` (flat reception). Compare the same ensemble and RF pulse
+# with and without a receiver envelope. The finite-pulse spectra retain
+# excitation losses and receiver attenuation on the same intensity scale.
+
+# %%
+events = (scp.nmr.pulsar.Pulse(0.5e-6, 50e3),)
+rf_settings = {**settings, "samples": 8, "accuracy": 2, "sidebands": 4}
+flat = scp.nmr.czjzek.simulate_czjzek(distribution, events=events, **rf_settings)
+received = scp.nmr.czjzek.simulate_czjzek(
+    distribution, events=events, probe_bandwidth_hz=80e3, **rf_settings
+)
+_ = scp.plot_multiple(
+    [flat.real, received.real],
+    method="pen",
+    labels=["Flat reception", "Receiver bandwidth 80 kHz"],
+    legend="best",
+    figsize=(8, 3),
+    xlim=(-60e3, 60e3),
+    ylabel="Intensity per bin",
+)
+
+# %% [markdown]
+# The envelope is `1 / (1 + (2*f/W)**2)`, with offset `f` and bandwidth
+# `W` in Hz. It changes relative sideband areas. Ideal simulations without
+# an RF sequence still normalize the received ensemble to unit total area.
+# For a two-stage fit, supply the same `probe_bandwidth_hz` when building
+# or loading `CzjzekRFLibrary` and when calling `fit_czjzek`. The bandwidth
+# is fixed for that library; build a new library to change it.
+# This real envelope models amplitude only and is not an independent
+# calibration of an instrument's complex frequency response.
+#
 # ## Experimental limits
 #
 # The public PBG1 benchmark leaves an error on satellite-band areas after

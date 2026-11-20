@@ -3,6 +3,41 @@ name = "spectrochempy-nmr"
 title = "NMR plugin"
 
 [[examples]]
+path = "core/c_importer/plot_read_agilent.py"
+section = "Import / Export"
+section_ref = "examples-importer-index"
+
+[[examples]]
+path = "core/c_importer/plot_read_simpson.py"
+section = "Import / Export"
+section_ref = "examples-importer-index"
+
+[[examples]]
+path = "core/c_importer/plot_read_nmrml.py"
+section = "Import / Export"
+section_ref = "examples-importer-index"
+
+[[examples]]
+path = "processing/nmr/plot_bruker_2d.py"
+section = "NMR processing"
+section_ref = "examples-processing-nmr-index"
+
+[[examples]]
+path = "analysis/nmr/plot_nmr_snip.py"
+section = "Analysis"
+section_ref = "examples-analysis-index"
+
+[[examples]]
+path = "analysis/nmr/plot_nmr_baseline_2d.py"
+section = "Analysis"
+section_ref = "examples-analysis-index"
+
+[[examples]]
+path = "analysis/nmr/plot_nmr_apk2d.py"
+section = "Analysis"
+section_ref = "examples-analysis-index"
+
+[[examples]]
 path = "core/c_importer/plot_read_nmr_from_bruker.py"
 section = "Import / Export"
 section_ref = "examples-importer-index"
@@ -91,3 +126,53 @@ section_ref = "examples-processing-nmr-index"
 path = "processing/nmr/plot_stmas.py"
 section = "NMR processing"
 section_ref = "examples-processing-nmr-index"
+
+[[examples]]
+path = "core/c_importer/plot_exchange_nmr_spectra.py"
+section = "Import / Export"
+section_ref = "examples-importer-index"
+
+[[examples]]
+path = "simulation/plot_csa_static_mas.py"
+section = "NMR simulation"
+section_ref = "examples-simulation-index"
+
+[[examples]]
+path = "simulation/plot_pypulsar_hahn.py"
+section = "NMR simulation"
+section_ref = "examples-simulation-index"
+
+[[examples]]
+path = "simulation/plot_pypulsar_cp_static.py"
+section = "NMR simulation"
+section_ref = "examples-simulation-index"
+
+[[examples]]
+path = "simulation/plot_pypulsar_cp_mas.py"
+section = "NMR simulation"
+section_ref = "examples-simulation-index"
+
+[[examples]]
+path = "processing/nmr/plot_qf_2d.py"
+section = "NMR processing"
+section_ref = "examples-processing-nmr-index"
+
+[[examples]]
+path = "core/c_importer/plot_read_jeol_processed_2d.py"
+section = "Import / Export"
+section_ref = "examples-importer-index"
+
+[[examples]]
+path = "simulation/plot_finite_pulse_excitation.py"
+section = "NMR simulation"
+section_ref = "examples-simulation-index"
+
+[[examples]]
+path = "simulation/plot_mqmas_pulse_optimization.py"
+section = "NMR simulation"
+section_ref = "examples-simulation-index"
+
+[[examples]]
+path = "simulation/plot_rf_pulse_optimization.py"
+section = "NMR simulation"
+section_ref = "examples-simulation-index"

@@ -69,7 +69,11 @@ def _check_public_2d(path, monkeypatch, profile="states"):
         previous = scp.nmr.Experiment(historical)
         assert experiment.ndim == previous.ndim == 2
         assert experiment.domains == previous.domains == domains
-        assert experiment.encoding == previous.encoding
+        if profile == "tppi":
+            assert experiment.encoding == ("TPPI", "QSIM")
+            assert previous.encoding == ("UNVALIDATED:AGILENT-TPPI", "QSIM")
+        else:
+            assert experiment.encoding == previous.encoding
         assert experiment.nuclei == previous.nuclei
         assert experiment.source_kind == previous.source_kind
     if profile != "series":
@@ -176,7 +180,11 @@ def test_synthetic_states_quadrature_auto_and_manual(synthetic_states, monkeypat
     source.write_bytes(b"unverified same-name variant")
     unresolved = scp.nmr.read_agilent(path)
     assert unresolved.meta.acquisition["quadrature_selection"]["mode"] is None
-    np.testing.assert_array_equal(unresolved.data, auto.data)
+    canonical = unresolved.data.conj()
+    canonical[1] *= -1
+    np.testing.assert_array_equal(canonical, auto.data)
+    assert auto.meta.acquisition["states_fft_input_transform"] is None
+    assert auto.meta.applied_operations[-1]["stage"] == "quadrature-normalization"
     with pytest.raises(NotImplementedError, match='quadrature="states"'):
         unresolved.fft(dim="y")
     with pytest.raises(NotImplementedError, match='quadrature="states-tppi"'):

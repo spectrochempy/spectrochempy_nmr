@@ -5,14 +5,19 @@ Guides
    :maxdepth: 2
 
    reading_data
+   reader_workflows
+   exchanging_spectra
    processing_1d
    apodization
    processing_2d
+   bruker_indirect_sampling
    fourier
    quadrupolar
    analysis
    baseline
    pulsar
+   pulsar_scope
+   pulse_programs
 
 See also
 --------

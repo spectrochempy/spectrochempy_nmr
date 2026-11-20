@@ -260,7 +260,7 @@ def test_import_singly_complex_plane_preserves_components(dtype):
     ("field", "value"),
     [
         ("encoding", ("complex", "complex")),
-        ("branch_order", ("ri", "rr")),
+        ("branch_order", ("rr", "rr")),
         ("branch_order", ("rr", "ir")),
         ("channel_axis", 1),
         ("data", np.zeros((4, 3, 8), dtype=np.float32)),
@@ -417,7 +417,7 @@ def test_import_echo_antiecho_preserves_branches(echo_antiecho, dtype):
 @pytest.mark.parametrize(
     ("field", "value"),
     [
-        ("branch_order", ("second", "first")),
+        ("branch_order", ("first", "first")),
         ("channel_axis", False),
         ("domains", ("time", "frequency")),
         ("encoding", ("complex", "complex")),

@@ -309,6 +309,23 @@ spin, in static or MAS simulations. The backend compiles on first use
 and uses SciPy's LP64 LAPACK `DSTEV`. If the backend is unavailable or a
 batch fails in LAPACK, PULSAR uses the dense solver. The default
 `rf_solver="dense"` requires no Numba import.
+
+Set `deposition="numba"` on a PULSAR spectrum simulator to integrate the
+same triangular densities using a JIT-compiled loop. The `[rf]` extra
+provides Numba for ideal and finite RF simulations. The loop compiles
+on first use in each process. The default `deposition="numpy"` also
+serves as the fallback when the JIT is unavailable. This option is
+independent of `rf_solver`.
+
+For spectral output from `simulate_pulse_sequence()`,
+`simulate_rectangular_pulse()` or `simulate_coupled_sequence()`, set
+`workers=2` to process groups of powder orientations in two threads.
+The default is one worker. Each active worker uses its own orientation
+blocks and propagator cache, shared by the scans in each block. The
+blocks are joined in powder mesh order before spectral deposition.
+Extra workers increase peak memory use. With threaded BLAS, limiting
+BLAS to one thread per worker can avoid competition for CPU cores.
+
 Finite preparation can distinguish octant reflections even for aligned
 tensors, so it uses at least four octants. It uses all eight for a
 rotated CSA tensor because a time-ordered RF pulse can distinguish
@@ -339,6 +356,141 @@ per pulse. A batch of rotor phases must also fit within 131,072 matrix
 elements for at least one powder vertex.
 
 ## Pulse sequences and free evolution
+
+`simulate_t1_series(preparation, t1_s, conversion, **settings)` returns a
+complex spectrum for every indirect time. Powder integration processes
+groups of triangles and retains amplitudes only for detected transitions.
+The full series can therefore share preparation at fine powder meshes.
+
+For MAS schedules on a bounded common rotor grid, the conversion is
+applied once to the detection operators in reverse order. Trace duality
+then evaluates each prepared density against those operators. Phase
+indices select the appropriate conversion for each indirect time without
+interpolation. Coherence selections and the eventwise relaxation masks
+are included in this calculation. When the common grid or its matrix
+batch would be too large, each time uses ordinary density propagation.
+Each call applies this choice automatically. Static sequences also use
+ordinary density propagation.
+
+For MQMAS, this explicit sequence model provides a numerical reference for
+validating faster spectral models and for studying sequence-specific RF
+transfer, phases and rotor timing. A direct construction of a sheared MQMAS
+map from isotropic positions, F2 profiles and reusable RF transfer weights
+can support routine interpretation and fitting.
+
+### Direct MQMAS maps
+
+`MQMASModel` calculates the excitation and conversion transfer at
+`t1=0`, for the symmetric pair `m=+q/2, -q/2`. The two States
+quadratures give complex, RF-weighted central-transition F2 profiles.
+The `spectrum()` method combines them with Gaussian absorption and its
+periodic Hilbert dispersion in F1. It retains signed RF intensities and
+phase. Each output value is a bin mass. F2 broadening preserves its
+integral, and a finite F1 window can truncate the Gaussian tails.
+
+For a half-integer spin `I`, define
+
+$$
+P_Q = |C_Q|\sqrt{1+\eta_Q^2/3},\qquad
+\nu_{\mathrm{QIS}} =
+-\frac{3[I(I+1)-3/4]}{40I^2(2I-1)^2}\frac{P_Q^2}{\nu_0}.
+$$
+
+On the isotropic axis with unit chemical-shift sensitivity, the ridge is
+at `shift_hz - (10/17)*nu_QIS`. The shear ratio and scale use the same
+spin/order coefficients as the processing module. Frequencies are in Hz.
+F1 coordinates are bin centers on an FFT-style grid. F2 coordinates keep
+the existing PULSAR grid. The model uses the exact magic angle.
+
+```python
+p = scp.nmr.pulsar
+model = p.MQMASModel(
+    [p.Pulse(12e-6, 110e3)],
+    [p.Pulse(4e-6, 85e3), p.Coherence(1)],
+    spin=2.5, larmor_hz=104.46851646e6, spinning_hz=12500,
+    pq_hz=2.94e6, eta=0.136, shift_hz=1000,
+    spectral_width_hz=24000, points=2048, accuracy=8,
+)
+map_2d = model.spectrum(
+    f1_spectral_width_hz=10000, f1_points=512,
+    f1_gaussian_fwhm_hz=600, f2_gaussian_fwhm_hz=100,
+)
+```
+
+`simulate_mqmas(preparation, conversion, **settings)` builds the model
+and returns one map. Reuse a `MQMASModel` to change grids and widths
+without recalculating RF transfer. Rebuild it when changing Cq, eta,
+isotropic offset or pulses. A Pq input implies positive Cq; supply a
+signed Cq explicitly when its sign matters to the RF response.
+
+The fixed-transfer approximation represents the principal isotropic
+ridge. It assumes rotor-synchronized indirect evolution and omits
+conversion-phase modulation and rotor micromotion along t1. F2 sidebands,
+if requested, share this ridge; correlations of rotational sidebands
+between F1 and F2 are omitted. The F1 Gaussian width is a model parameter;
+finite indirect-acquisition truncation is not modeled. When comparing with
+a finite t1 series, choose an apodization that decays before its last point.
+Use `simulate_t1_series` to qualify these approximations for a sequence.
+Its `Coherence(q, symmetric=True)` selects the same symmetric pair.
+The benchmark script `tools/benchmark_pulsar_mqmas.py` compares both
+complex States quadratures after the same shearing and F1 Gaussian
+apodization, including a deliberately unsynchronized control.
+
+The frequency and shearing conventions follow
+[Frydman, Fundamentals of MQMAS (2002)](https://www.weizmann.ac.il/chembiophys/Frydman_group/sites/chemphys.Frydman_group/files/publications/paper34.pdf).
+
+### Fast MQMAS population kernels
+
+`scp.nmr.mqmas_inversion.mqmas_response` samples the fast model on the
+calibrated ppm axes required by `build_kernel` and `fit`. F1 must be
+uniform, on the isotropic scale with unit chemical-shift sensitivity.
+Both axes can run in either direction. The parameter grid must keep
+the analytical F1 centers inside the observed F1 bin edges.
+
+```python
+inv = scp.nmr.mqmas_inversion
+response = inv.mqmas_response(
+    spectrum.y.to("ppm").data, spectrum.x.to("ppm").data,
+    [p.Pulse(5e-6, 60e3)],
+    [p.Pulse(2.5e-6, 70e3), p.Coherence(1)],
+    spin=1.5, larmor_hz=130.9e6, spinning_hz=20000,
+    spectral_width_hz=24000, points=1024, accuracy=4,
+    f1_gaussian_fwhm_hz=600, f2_gaussian_fwhm_hz=100,
+)
+kernel = inv.build_kernel(
+    spectrum, [-3, 0, 3], [1.2, 1.5, 1.8], response, asymmetry=0.42,
+)
+fit = inv.fit(spectrum, kernel, regularization=0.1)
+```
+
+Supply the phased **real** spectrum, preserving signed intensities.
+`receiver_phase_deg` phases the simulated response; `carrier_ppm`
+references both axes and `f1_offset_ppm` adds a separate F1 reference
+shift. Responses are frequency densities per Hz squared: F1 bin masses
+are divided by their width, and F2 is interpolated at the PULSAR bin
+centers after division by its bin width. Columns retain their RF losses.
+
+The response caches the two RF profiles for each exact shift/Cq/eta
+triple, including eta nodes used by `build_kernel`. The resulting kernel
+matrix is the reusable library for fitting. To scan widths, use
+`response.with_broadening(f1_gaussian_fwhm_hz=700)` and rebuild the matrix;
+the new view shares the RF cache. `response.cache_info()` reports its size.
+`response.cache_clear()` frees the RF profiles for every shared view,
+while built kernels remain usable. A 2,048-point pair of complex profiles
+uses 64 KiB per parameter triple, excluding dataset overhead; kernel
+matrices occupy additional memory.
+
+For a joint fit, construct a 1D kernel on the same shift/Pq grid using
+`inv.mas_response` and pass `mas` and `mas_kernel` to `inv.fit`. MAS gain
+and baseline are fitted separately. Normalize the recovered population
+map by its sum to compare fractions; absolute concentrations require
+additional calibration. The assumed eta weighting, grid spacing and
+regularization can change those fractions.
+
+`tools/qualify_fast_mqmas_inversion.py` compares a known two-site mixture
+against independent, rotor-synchronized full States simulations, then
+refines the inversion grid on the same noisy observations. The ordinary
+fixed-transfer and finite-acquisition limitations above still apply.
 
 `simulate_pulse_sequence` takes an ordered list of immutable events.
 `Pulse(duration_s, rf_hz, phase_deg, offset_hz)` is rectangular;
@@ -412,7 +564,7 @@ $I_z+(\nu_S/\nu_I)S_z$. A `Pulse` can apply both RF channels
 simultaneously using the `partner_rf_hz`, `partner_phase_deg`
 and `partner_offset_hz` fields. `IdealPulse` accepts an
 independent partner flip and phase. `Delay(decouple_j=True)`
-removes the active coupling for that delay. Coherence selection acts
+removes the isotropic J coupling for that delay. Coherence selection acts
 on the observed spin and retains the unaffected partner marginal.
 
 Acquisition detects observed-spin coherences at fixed partner
@@ -422,8 +574,81 @@ The result averages the partner states and can include additional
 passive partners coupled to the observed spin. The manifold limit is
 64 product levels, with further work-array limits in MAS. Tests
 recover the passive limit and check refocusing by a partner π pulse
-or a decoupled delay. Dipolar coupling and nonsecular terms are outside
-this model.
+or a decoupled delay. Nonsecular terms are outside this model.
+
+## Heteronuclear dipolar coupling and cross polarization
+
+For two spin-1/2 sites with well-separated Larmor frequencies, add
+`dipolar_hz=D` and optionally `dipolar_axis=(ux, uy, uz)` to
+`simulate_coupled_sequence`. The axis must be a real unit bond vector in
+the **common sample frame**, independently of either site's EFG/CSA
+rotations. Its default is `(0, 0, 1)`. The secular interaction, in Hz, is
+
+$$H_{IS}/h = [J + D(3(\mathbf{u}\cdot\mathbf{n})^2-1)] I_z S_z,$$
+
+where $\mathbf{n}$ is the field direction for each powder orientation,
+following the rotor trajectory $\mathbf{n}(t)$ in a spinning sample.
+The model uses site parameters rather than isotope names: ¹H–¹³C is
+an example of the general heteronuclear spin-1/2 pair.
+This is the signed **historical PyPulsar** `set_dipole(dip=...)`
+convention: the dipolar tensor's principal values are $(-D,-D,2D)$.
+It differs in sign from the frequently used definition
+$d=-\mu_0\gamma_I\gamma_S\hbar/(8\pi^2r^3)$, for which
+$H_{IS}/h=d(3\cos^2\theta-1)I_zS_z$. State the Hamiltonian when importing
+a coupling from another simulator. The static spin-1/2 doublet splitting
+is $|J+D(3\cos^2\theta-1)|$; with J=0 its powder edges are $\pm|D|$
+and its Pake singularities are at $\pm|D|/2$.
+
+Both finite-pulse propagation and acquisition include this orientation
+dependent interaction. Simultaneous RF on both channels therefore supports
+static cross polarization near the Hartmann–Hahn condition
+$\nu_{1,I}=\nu_{1,S}$. Under MAS, the rank-two modulation includes
+harmonics at $\nu_r$ and $2\nu_r$; first-order zero- and double-quantum
+matches occur at $\nu_{1,I}\pm\nu_{1,S}=n\nu_r$, $n=\pm1,\pm2$.
+See the [RF inhomogeneity study, section 5.2](https://mr.copernicus.org/articles/2/523/2021/mr-2-523-2021.html).
+These conditions emerge from propagating the Hamiltonian; no RF matching
+condition is enforced in code. This is coherent dynamics of an isolated pair:
+there is no proton spin bath, spin diffusion, or $T_{1\rho}$ model.
+It is not a bulk-sample CP build-up/decay model.
+`Delay(decouple_j=True)` leaves the dipolar interaction active. An ideal
+partner π pulse can refocus the static interaction in an echo.
+Nonzero `dipolar_hz` rejects spins other than 1/2; the
+heteronuclear secular approximation must not be used for homonuclear pairs.
+
+Set `spinning_hz` for MAS or variable-angle spinning. At the exact magic
+angle, $\arccos(1/\sqrt{3})$, the dipolar zeroth harmonic vanishes;
+the mean interaction is then J, but the nonzero harmonics still affect
+contacts and acquisition. The detector includes each partner projection's
+dipolar harmonics as well as its mean shift. Select enough `sidebands`
+to capture the spectrum; `sidebands=0` keeps only the central band.
+Spectral sequence amplitudes retain excitation losses and are not
+renormalized after truncating the selected bands. Converge `accuracy`
+(powder mesh and initial rotor phases) and `max_rf_step_s` (RF midpoint
+step) for the chosen coupling, pulse lengths and RF fields. Free delays
+integrate the harmonics analytically and advance the rotor phase.
+
+The [static CP example](../../../examples/simulation/plot_pypulsar_cp_static.py)
+adapts the historical `CP-contact.tpl` and `CP-HartmanHahn.tpl` with a
+5 kHz dipolar coupling. A two-scan phase subtraction reverses only the
+initial proton magnetization, removing the directly excited carbon
+contribution. It plots contact-time and RF-matching curves relative to
+the initial donor magnetization, without per-curve normalization.
+Preparation uses an ideal proton 90° rotation, followed by finite contact
+pulses. Historical broadening and receiver-bandwidth weighting are omitted.
+Tests check the Pake moments and the exact two-spin spin-lock solution,
+integrated independently over uniform $\cos\theta$, plus relative tensor
+orientations. They do not compare against an executed historical binary.
+
+The [MAS CP example](../../../examples/simulation/plot_pypulsar_cp_mas.py)
+uses a 5 kHz dipolar coupling, 10 kHz MAS and 30 kHz proton RF. A carbon
+RF sweep shows first and second rotor-sideband matches near 10, 20, 40
+and 50 kHz. The demonstration uses accuracy 2 and a 1 µs RF step.
+At the 20/30 kHz match and 200 µs contact, increasing accuracy to 4
+changes the donor-normalized transfer by about 0.0014; halving the RF
+step changes it by about 0.00008. These checks apply to that point,
+not all contacts or RF powers. MAS tests compare sideband intensities
+with a direct Cartesian time-domain powder integral, and RF plus delay
+propagation with an independent adaptive density-matrix ODE integration.
 
 ## Density matrix after preparation
 
@@ -865,6 +1090,97 @@ nodes are reused. The zero-noise case reduces to one tensor. Increase
 distribution sampling and orientation accuracy separately when checking
 convergence. Shift/EFG correlations and tensor-relative CSA orientations
 would require extending this initial distribution API.
+
+### Experimental finite-RF library for fit initialization
+
+Build a `CzjzekRFLibrary` for a fixed RF sequence, MAS condition and
+spectral grid. It stores complex powder profiles on a signed `Cq` and
+`eta` grid at two displacements. Use its `simulate()` method in the
+residual function of an initial fit. Keep the seed and sample count fixed
+throughout the fit. Refine the result by running the optimizer again
+from those parameters with `simulate_czjzek(..., events=events, **settings)`
+in the residual function.
+
+```python
+import numpy as np
+
+from spectrochempy_nmr import CzjzekDistribution, CzjzekRFLibrary
+from spectrochempy_nmr.pulsar import Delay, Pulse
+
+events = (Pulse(7e-6, 24e3, 23), Delay(13e-6))
+settings = dict(
+    spin=2.5, larmor_hz=104.468516e6, spectral_width_hz=48e3,
+    spinning_hz=8e3, sidebands=2, points=2048, accuracy=2,
+    probe_bandwidth_hz=80e3,
+)
+grid = dict(
+    cq_grid_hz=np.linspace(1.7e6, 4.2e6, 48),
+    eta_grid=np.linspace(0, 1, 32),
+    shift_hz=325,
+    shift_bins=7,
+)
+library = CzjzekRFLibrary.build(events, **grid, **settings)
+library.save("czjzek-rf.npz")
+library = CzjzekRFLibrary.load("czjzek-rf.npz", events, **grid, **settings)
+model = library.simulate(
+    CzjzekDistribution(180e3, 2.923e6, 0.37, shift_hz=325),
+    samples=128, seed=17,
+)
+```
+
+Loading checks the saved simulation settings against the requested model.
+The optional `probe_bandwidth_hz` fixes the real Lorentzian receiver
+response `1 / (1 + (2*f/W)**2)`, with `f` measured from the simulation
+carrier and `W` in Hz. It is applied before deposition in both shift
+planes and all direct fallbacks. The same setting must be passed to
+`fit_czjzek` so its direct refinement uses the same reception model.
+Omit it or use `None` for a flat response; existing flat-response
+archives remain compatible. Changing the bandwidth requires rebuilding
+the library. Interpolation remains approximate between grid nodes,
+including the shift dependence of reception; check direct refinement.
+
+The library interpolates each sampled coupling, asymmetry and chemical
+shift, including samples from a Gaussian shift distribution. It evaluates
+members directly when any of those coordinates falls outside the grid.
+Within the grids, interpolation can bias fitted distribution
+widths. Check the direct residual and the stability of the refined fit.
+The two 48 × 32 planes in the example contain about 96 MiB of complex data.
+
+Use `fit_czjzek` to initialize a bounded fit with the library and refine
+it with direct RF simulation. The objective receives the current
+parameters and a simulator for one Czjzek distribution. Use the same
+objective to include processing, weights or broadening in both stages.
+
+```python
+import numpy as np
+from spectrochempy_nmr import fit_czjzek
+
+def objective(parameters, simulate):
+    sigma_khz, = parameters
+    distribution = CzjzekDistribution(sigma_khz * 1000, 2.923e6, 0.37, shift_hz=325)
+    residual = simulate(distribution).data - measured.data
+    return np.vdot(residual, residual).real
+
+fit = fit_czjzek(
+    objective, [180], [(100, 350)], events=events, library=library,
+    samples=128, seed=17, **settings,
+)
+sigma_khz, = fit.direct.optimization.x
+```
+
+Here `measured` is a complex spectrum on the simulation grid. Omit
+`library` to fit directly from the supplied starting parameters.
+`fit.direct` and, when available, `fit.interpolated` report the SciPy
+result, elapsed time and exact RF propagation count for each stage.
+Add library construction or loading time when comparing total costs.
+
+The interpolated starting point can change which solution the direct
+optimizer reaches. On PBG1 at 32 Sobol points per component, both direct
+fits gave similar residuals in the fitted region, with different dispersion
+and shift estimates. For parameter inference, compare the direct optima
+from different starting points and check stability as the sample count
+increases. Where available, use bands excluded from the fit to assess
+prediction quality.
 
 ### PBG1 extended Czjzek comparison
 

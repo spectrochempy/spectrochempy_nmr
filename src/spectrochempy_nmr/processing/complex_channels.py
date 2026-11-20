@@ -195,13 +195,13 @@ def process_complex_channels(dataset, *, reconstruction):
 
 
 def extract_complex_components(dataset):
-    """Extract the validated NOESY mathematical components in contract order."""
+    """Extract the mathematical components of an S_R/S_I spectrum."""
     if tuple(dataset.dims) != ("c", "y", "x"):
-        raise ValueError("NOESY channel dataset must have dimensions ('c', 'y', 'x')")
+        raise ValueError("Complex-channel dataset must have dimensions ('c', 'y', 'x')")
     if _meta_value(dataset.meta, "stage") != "spectrum":
-        raise ValueError("NOESY components require a spectrum-stage dataset")
+        raise ValueError("Components require a spectrum-stage dataset")
     if tuple(_meta_value(dataset.meta, "component_labels", ())) != ("S_R", "S_I"):
-        raise ValueError("NOESY spectrum channels must be labelled S_R and S_I")
+        raise ValueError("Spectrum channels must be labelled S_R and S_I")
     if _meta_value(dataset.meta, "quadrature_mode") != STATES_TPPI:
         raise ValueError("spectrum must declare quadrature_mode='states-tppi'")
 

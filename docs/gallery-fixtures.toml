@@ -309,3 +309,42 @@ path = "nmrdata/bruker/tests/nmr/MQMAS_27AL_PST5/51/ser"
 url = "https://raw.githubusercontent.com/spectrochempy/spectrochempy_data/86f8c4b9bf6dcbd512a7d8d0c476c1b2a7e1d18d/testdata/nmrdata/bruker/tests/nmr/MQMAS_27AL_PST5/51/ser"
 sha256 = "eca52a5418efc10cb615f1477376f6d8f6a1f2632c9848e4a32f7dc1cfb7e0a8"
 size = 2752512
+
+[[files]]
+path = "nmrdata/bruker/tests/nmr/topspin_2d/1/acqus"
+sha256 = "eafc9addb8b104c8daa650681481d0d964c105c1d6330a3641036c755ec29d14"
+size = 7329
+
+[[files]]
+path = "nmrdata/bruker/tests/nmr/topspin_2d/1/acqu2s"
+sha256 = "e1cb8111df05077e5685281ae40426013b1431e1022b52b56bb5df9c1d6c02fd"
+size = 510
+
+[[files]]
+path = "nmrdata/bruker/tests/nmr/topspin_2d/1/ser"
+sha256 = "4da89ec781d2a1da254819d4d173fb53fdf2d89e1e9cff8fc749ab912a033015"
+size = 1572864
+
+[[files]]
+path = "nmrdata/bruker/tests/nmr/topspin_2d/1/pdata/1/procs"
+sha256 = "aec60d70a2ab0927335cd80f6d965eae5956deb5648698c5c62fbb295c3aa2a2"
+size = 2200
+
+[[files]]
+path = "nmrdata/bruker/tests/nmr/topspin_2d/1/pdata/1/proc2s"
+sha256 = "3124c8af9239e417a34165278e4aca9124bb5e3dbace50c9245588e4afab67cd"
+size = 2162
+
+# Epicatechin COSY, nmrXiv P33/S192, CC0 1.0 (data PR31).
+
+[[files]]
+path = "nmrdata/jeol/epicatechin_cosy.jdf"
+url = "https://raw.githubusercontent.com/spectrochempy/spectrochempy_data/34448ef343f17a2ee57d2bc06661ac90e2d1ff48/testdata/nmrdata/jeol/epicatechin_cosy.jdf"
+sha256 = "f109351f2102435faa7d302659e073b77ecc1184f1c3ef8817087ca91b9df3aa"
+size = 5271680
+
+[[files]]
+path = "nmrdata/jeol/epicatechin_cosy.jdx"
+url = "https://raw.githubusercontent.com/spectrochempy/spectrochempy_data/34448ef343f17a2ee57d2bc06661ac90e2d1ff48/testdata/nmrdata/jeol/epicatechin_cosy.jdx"
+sha256 = "b77cd1fe72cea1f6d820e40279d91cfdff3424333ca4d669e89b129c566c1152"
+size = 8182161
