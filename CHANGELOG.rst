@@ -4,162 +4,160 @@ Changelog
 This changelog covers the independently versioned ``spectrochempy-nmr``
 distribution. The sections below describe changes in each plugin release.
 
-Unreleased
-----------
+0.5.0
+-----
 
-* Add an installed pulse-program library with ``pulsar.available_sequences()``
-  and ``pulsar.load_sequence(name)``. New finite-RF, RF-duration and 3QMAS
-  pulse-optimisation galleries reuse parameterized templates across scans.
-  (`#167 <https://github.com/spectrochempy/spectrochempy_nmr/pull/167>`_)
+Added
+~~~~~
 
-* Restore heteronuclear dipolar coupling for two spin-½ sites in
-  ``pulsar.simulate_coupled_sequence()``, including finite two-channel RF
-  propagation and dipolar powder spectra in static and spinning samples.
-  Include dipolar rotor modulation during preparation and acquisition,
-  and add static and MAS ¹H–¹³C cross-polarization examples with contact-time
-  and Hartmann–Hahn matching curves. The model accepts general heteronuclear
-  spin-½ pairs; homonuclear dynamics remain unsupported.
+* **Processed-spectrum exchange.** Read and write self-contained CSDF files
+  containing one real or complex 1D/2D spectrum with linear frequency axes,
+  without requiring ``csdmpy``. JCAMP-DX and CSDF guides show exchange with Dmfit.
+  (`#123 <https://github.com/spectrochempy/spectrochempy_nmr/pull/123>`_,
+  `#141 <https://github.com/spectrochempy/spectrochempy_nmr/pull/141>`_)
+* **Isotope properties.** Expose ``scp.nmr.Isotope`` and infer automatic
+  MQMAS/STMAS geometry from the observed F2 nucleus. An unused default
+  isotope in an archived F1 header no longer overrides the observed nucleus.
+  (`#122 <https://github.com/spectrochempy/spectrochempy_nmr/pull/122>`_,
+  `#159 <https://github.com/spectrochempy/spectrochempy_nmr/pull/159>`_,
+  `#161 <https://github.com/spectrochempy/spectrochempy_nmr/pull/161>`_)
+* **Reusable pulse programs.** Parse parameterized PULSAR programs with
+  explicit units, arithmetic, nested loops, simultaneous RF channels and
+  indirect-delay increments. Use ``pulsar.available_sequences()`` and
+  ``pulsar.load_sequence()`` for the installed template library. Simulate
+  indirect-time series with ``pulsar.simulate_t1_series()``.
+  (`#138 <https://github.com/spectrochempy/spectrochempy_nmr/pull/138>`_,
+  `#157 <https://github.com/spectrochempy/spectrochempy_nmr/pull/157>`_,
+  `#167 <https://github.com/spectrochempy/spectrochempy_nmr/pull/167>`_)
+* **Experimental Czjzek fitting.** Build finite-RF spectral libraries,
+  interpolate chemical-shift distributions, and initialize a two-stage fit
+  from a library before direct refinement. Simulations, libraries and fits
+  support a consistent receiver bandwidth through ``probe_bandwidth_hz``.
+  (`#136 <https://github.com/spectrochempy/spectrochempy_nmr/pull/136>`_,
+  `#139 <https://github.com/spectrochempy/spectrochempy_nmr/pull/139>`_,
+  `#150 <https://github.com/spectrochempy/spectrochempy_nmr/pull/150>`_,
+  `#160 <https://github.com/spectrochempy/spectrochempy_nmr/pull/160>`_)
+* **Experimental MQMAS simulation and inversion.** Construct RF-weighted
+  analytical MQMAS maps with ``pulsar.simulate_mqmas()`` and reuse responses
+  through ``pulsar.MQMASModel``. Fit nonnegative populations on isotropic-shift
+  and quadrupolar-product grids, optionally combining MAS and MQMAS data,
+  through ``scp.nmr.mqmas_inversion``. Cached RF profiles and kernels can be
+  reused across parameter grids and linewidth views.
+  (`#149 <https://github.com/spectrochempy/spectrochempy_nmr/pull/149>`_,
+  `#152 <https://github.com/spectrochempy/spectrochempy_nmr/pull/152>`_,
+  `#154 <https://github.com/spectrochempy/spectrochempy_nmr/pull/154>`_)
+* **Heteronuclear dipolar coupling.** Restore coupled propagation for two
+  spin-1/2 sites, including finite two-channel RF and dipolar rotor modulation
+  during preparation and acquisition. Static and MAS cross-polarization
+  examples show contact-time and Hartmann-Hahn matching curves. General
+  heteronuclear spin-1/2 pairs are supported; homonuclear dynamics are not.
   (`#168 <https://github.com/spectrochempy/spectrochempy_nmr/pull/168>`_)
 
-* Derive automatic STMAS spin and shear geometry from the observed F2 nucleus,
-  allowing unused default isotopes in archived F1 headers. Preserve the
-  indirect sampling interval, source metadata, and ZQ-TROSY references.
-  (`#159 <https://github.com/spectrochempy/spectrochempy_nmr/pull/159>`_)
+Changed
+~~~~~~~
 
-* Read reusable PULSAR pulse programs with ``pulsar.read_sequence()`` and
-  ``pulsar.parse_sequence()``. Bind external parameters with explicit units,
-  optional arithmetic, nested loops and per-channel RF/phase/offset settings.
-  Programs support simultaneous pulses on two nuclei and indirect-delay
-  increments for complex States acquisitions, with source-line diagnostics.
-  (`#157 <https://github.com/spectrochempy/spectrochempy_nmr/pull/157>`_)
-
-* Connect fast RF-weighted MQMAS responses to population inversion with
-  ``mqmas_inversion.mqmas_response()``. Cache RF profiles across parameter
-  grids and linewidth views, and reuse built kernels for MQMAS-only or
-  joint MAS/MQMAS fits.
-  (`#154 <https://github.com/spectrochempy/spectrochempy_nmr/pull/154>`_)
-
-* Read uniform two-section JEOL JDF acquisitions with an explicit
-  ``quadrature="qf"`` declaration and process both Fourier dimensions through
-  ``Experiment``. The common QF path supports FFT sizes and physical frequency
-  references independently of the source format. Add generic minimum
-  symmetrization on exchanged frequencies. The historical JEOL magnitude
-  helper delegates to read and common processing; it no longer chooses the
-  reconstruction from the pulse-program name. Four-section and listed JDFs
-  remain unsupported for a complete reconstruction.
-  (`#162 <https://github.com/spectrochempy/spectrochempy_nmr/pull/162>`_)
-
-* Read Multiplex SPAM phase cycles with ``read(..., phase_cycle="paired")``
-  and select 3Q/5Q through ``Experiment.select_coherence()`` before the common
-  XF2, phase and XFSHEAR workflow. The reader retains every complete acquired
-  cycle without projecting a coherence; selection uses physical descriptors,
-  independent of pulse-program names and archived vendor parameters.
-  Automatic shearing inherits the selected order. ``read_multiplex_spam()``
-  remains a compatibility shortcut with unchanged numerical output.
-  (`#151 <https://github.com/spectrochempy/spectrochempy_nmr/pull/151>`_)
-
-* Add experimental MQMAS inversion on isotropic shift and quadrupolar-product
-  grids through ``scp.nmr.mqmas_inversion``. Average PULSAR kernels over
-  asymmetry, fit MQMAS with an optional shared-population MAS spectrum, and
-  profile local populations across candidate MAS widths.
-  (`#149 <https://github.com/spectrochempy/spectrochempy_nmr/pull/149>`_)
-
-* Construct sheared MQMAS maps with analytical F1 positions and finite-RF
-  excitation/conversion weights using ``pulsar.simulate_mqmas()``.
-  ``pulsar.MQMASModel`` retains the RF-weighted F2 quadratures for repeated
-  maps with different grids and widths. ``Coherence(..., symmetric=True)``
-  selects the symmetric multiple-quantum pair for explicit comparisons.
-  (`#152 <https://github.com/spectrochempy/spectrochempy_nmr/pull/152>`_)
-
-* Unify STMAS with the complete MQMAS XFSHEAR reconstruction. Supply
-  ``ratio`` and ``f1_scale`` together to ``Experiment.xfshear()`` for explicit
-  physical coefficients. ``experiment="3QMAS"``, ``"5QMAS"``, ``"STMAS"``
-  and ``"ZQ-TROSY"`` select automatic coefficients; spin comes from normalized
-  metadata or isotope lookup, with an explicit fallback only when absent.
-  ZQ-TROSY retains its independent F1 reference. Automatic MQMAS coefficients
-  remain unchanged.
-  States-TPPI alternation and echo/anti-echo Rance–Kay conversion are applied
-  once by ``xf2()`` before the common path. Real echo/anti-echo XFSHEAR
-  qualification remains open; equivalence is validated on synthetic data.
-  ``stmas_shear()`` delegates with spin-dependent inner-satellite coefficients, retaining its
-  historical F1 shift direction. **STMAS output changes** to two complex
-  channels containing RR/RI/IR/II, with the same Hilbert reconstruction,
-  first-point weighting and central RR correction as MQMAS. Extract a
-  real component or build a magnitude view before plotting.
+* **Common read/process workflow.** Normalize qualified QF, States,
+  States-TPPI, TPPI and echo/anti-echo arrangements at import, then process
+  through ``Experiment`` using quadrature, components and physical axes.
+  Vendor and experiment names do not select the numerical processing path.
+  MQMAS processing also accepts native SCP saves with the required descriptors.
+  (`#144 <https://github.com/spectrochempy/spectrochempy_nmr/pull/144>`_,
+  `#146 <https://github.com/spectrochempy/spectrochempy_nmr/pull/146>`_)
+* **Multiplex and STMAS.** Read paired Multiplex SPAM cycles with
+  ``read(..., phase_cycle="paired")`` and select 3Q/5Q with
+  ``Experiment.select_coherence()`` before XF2, phase and XFSHEAR. STMAS
+  acquisitions use the common States reader with an explicit or imported
+  indirect dwell. ``read_multiplex_spam()`` and ``read_stmas()`` remain
+  compatibility shortcuts.
+  (`#120 <https://github.com/spectrochempy/spectrochempy_nmr/pull/120>`_,
+  `#147 <https://github.com/spectrochempy/spectrochempy_nmr/pull/147>`_,
+  `#151 <https://github.com/spectrochempy/spectrochempy_nmr/pull/151>`_)
+* **Shared shearing geometry.** MQMAS and STMAS share the XFSHEAR
+  reconstruction. ``3QMAS``, ``5QMAS``, ``STMAS`` and ``ZQ-TROSY`` select
+  automatic physical coefficients; explicit ``ratio`` and ``f1_scale`` must
+  be supplied together. ZQ-TROSY retains its independent F1 reference.
   (`#148 <https://github.com/spectrochempy/spectrochempy_nmr/pull/148>`_)
+* **JEOL QF workflow.** Import uniform two-section JDF data with an explicit
+  ``quadrature="qf"`` declaration and process both dimensions through
+  ``Experiment``. FFT sizes, physical references and minimum symmetrization
+  are generic operations. The historical magnitude helper delegates to this
+  path instead of choosing processing from a pulse-program name.
+  (`#132 <https://github.com/spectrochempy/spectrochempy_nmr/pull/132>`_,
+  `#162 <https://github.com/spectrochempy/spectrochempy_nmr/pull/162>`_)
 
-* Read uniformly sampled States pairs for STMAS through ``scp.nmr.read()``
-  with an explicit ``indirect_dwell`` in seconds or from ``IN[0]`` and optional
-  ``use_tdeff=True`` trace selection. ``read_stmas()`` remains a compatibility
-  shortcut. Reading no longer selects a pulse program or requires spin 3/2;
-  the explicitly chosen ``Experiment.stmas_shear()`` operation checks the
-  normalized observed isotope instead. The DQF shear, complex F1 output and
-  referencing are unchanged. Normalized States data can be processed without
-  any reader-specific STMAS marker.
-  (`#147 <https://github.com/spectrochempy/spectrochempy_nmr/pull/147>`_)
+Breaking changes and migration
+~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
 
-* Process MQMAS States data with ``Experiment.xf2()``, ``xf2p()`` and
-  ``xfshear()`` using physical acquisition descriptors instead of a Bruker
-  file profile or archived source parameters. Readers retain the acquired
-  point counts, frequency references, isotope and digital-filter delay.
-  ``scp.nmr.read()`` also opens native SCP saves and completes missing
-  descriptors in older States acquisitions at reading. The qualified
-  Fourier, phase and shearing conventions are unchanged.
-  (`#146 <https://github.com/spectrochempy/spectrochempy_nmr/pull/146>`_)
-
-* Remove the experimental ``process_agilent_noesy_states_tppi()`` and
-  ``extract_noesy_components()`` entry points. Read supported acquisitions
-  with ``scp.nmr.read(path, quadrature="states-tppi")`` when the mode must
-  be selected explicitly, then use ``Experiment(fid).process()`` and
-  ``Experiment(spectrum).RR``, ``RI``, ``IR`` or ``II``. The common workflow
-  uses physical axes and the qualified States-TPPI reconstruction; it does
-  not retain the prototype's transport option or provisional index axes.
-  Agilent acquisition directories ending in ``.fid`` are now recognized
-  before applying SIMPSON file-extension routing.
+* Remove ``process_agilent_noesy_states_tppi()`` and
+  ``extract_noesy_components()``. Use ``scp.nmr.read()`` with an explicit
+  ``quadrature="states-tppi"`` when needed, then ``Experiment(...).process()``
+  and the ``RR``, ``RI``, ``IR`` and ``II`` component accessors. The prototype's
+  transport option and provisional index axes are not retained. Agilent
+  acquisition directories ending in ``.fid`` are recognized before SIMPSON
+  file-extension routing.
   (`#145 <https://github.com/spectrochempy/spectrochempy_nmr/pull/145>`_)
-
-* Normalize qualified raw 2D component arrangements at import and select
-  ordinary Fourier processing by QF, States, States-TPPI, TPPI or
-  echo/anti-echo quadrature, independently of vendor and experiment names.
-  Echo/anti-echo processing now uses Rance–Kay reconstruction by default;
-  the historical ``echo_antiecho="bruker-rance-kay"`` argument remains valid.
-  Digital-filter correction in this path consumes the imported delay
-  descriptor or a caller override.
+* STMAS shearing now returns two complex channels containing RR/RI/IR/II,
+  using the common MQMAS reconstruction. Extract a real component or create
+  a magnitude view before plotting. ``stmas_shear()`` retains its historical
+  F1 shift direction, with spin-dependent inner-satellite coefficients.
+  (`#148 <https://github.com/spectrochempy/spectrochempy_nmr/pull/148>`_)
+* Echo/anti-echo processing uses Rance-Kay reconstruction by default. The
+  historical ``echo_antiecho="bruker-rance-kay"`` argument remains valid.
+  Digital-filter correction consumes the imported delay or a caller override.
   (`#144 <https://github.com/spectrochempy/spectrochempy_nmr/pull/144>`_)
 
-* Reuse RF conversion readouts across indirect times on a common rotor grid
-  in PULSAR series simulations. Stream powder integration with the detected
-  transitions so that fine meshes can retain preparation across all times.
-  (`#142 <https://github.com/spectrochempy/spectrochempy_nmr/pull/142>`_)
+Fixed
+~~~~~
 
-* Simulate indirect evolution series with ``scp.nmr.pulsar.simulate_t1_series()``.
-  Reuse RF preparation across indirect times and return complex F2 spectra
-  for each time in a single dataset.
-  (`#138 <https://github.com/spectrochempy/spectrochempy_nmr/pull/138>`_)
+* Read complete F1 pairs from interrupted Bruker States-TPPI acquisitions
+  with zero-filled trailing storage, reporting the effective complex-point
+  count while preserving the original parameters.
+  (`#121 <https://github.com/spectrochempy/spectrochempy_nmr/pull/121>`_)
+* Preserve Bruker NUS F1 indices in storage order and the full grid size for
+  paired acquisitions. F2 FFT remains available; F1 requires a schedule-aware
+  reconstruction.
+  (`#124 <https://github.com/spectrochempy/spectrochempy_nmr/pull/124>`_)
+* Calibrate F1 and F2 in the JEOL compatibility reader.
+  (`#137 <https://github.com/spectrochempy/spectrochempy_nmr/pull/137>`_)
+* Use the dense/NumPy PULSAR fallbacks when Numba import fails or JIT is
+  disabled. Orientation workers preserve the caller's floating-point policy.
+  (`#131 <https://github.com/spectrochempy/spectrochempy_nmr/pull/131>`_)
 
-* Import JEOL 2D section pairs through interop with explicit F1 and F2
-  times and preserved NUS lists. The physical F1 quadrature remains
-  undetermined. The dedicated JEOL reader retains its interleaved signs.
+Performance
+~~~~~~~~~~~
 
-* **CSDF exchange.** Import processed 1D and 2D NMR spectra with
-  ``scp.nmr.read_csdf()`` or ``scp.nmr.read()``, and export them with
-  ``scp.nmr.write_csdf()``. The plugin supports self-contained files with
-  a single real or complex spectrum and linear frequency axes, without
-  requiring ``csdmpy``.
-  (`#123 <https://github.com/spectrochempy/spectrochempy_nmr/pull/123>`_)
-* Automatically read complete F1 pairs from interrupted Bruker States-TPPI
-  acquisitions with zero-filled trailing storage. Report the effective F1
-  length in complex points and preserve the archived TopSpin parameters.
-* Expose nuclear isotope properties with ``scp.nmr.Isotope`` and infer
-  MQMAS shear spin from the observed isotope by default.
+* Accelerate finite-RF propagation with optional tridiagonal and deposition
+  backends, parallelize powder orientations, and reuse RF preparation and
+  conversion responses across indirect times. The NumPy/dense implementations
+  remain available without the optional Numba dependency.
+  (`#126 <https://github.com/spectrochempy/spectrochempy_nmr/pull/126>`_,
+  `#127 <https://github.com/spectrochempy/spectrochempy_nmr/pull/127>`_,
+  `#130 <https://github.com/spectrochempy/spectrochempy_nmr/pull/130>`_,
+  `#142 <https://github.com/spectrochempy/spectrochempy_nmr/pull/142>`_)
 
-* Preserve Bruker NUS F1 sample indices in storage order and the full grid size
-  for paired acquisitions. Keep F2 FFT available and require a schedule-aware
-  reconstruction for F1.
+Documentation and qualification limits
+~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
 
-* Reconstruct Bruker Multiplex SPAM States FIDs with ``scp.nmr.read_multiplex_spam()``.
-* Read Bruker States STMAS with ``scp.nmr.read_stmas()`` and process the
-  spin-3/2 DQF pathway with ``Experiment.stmas_shear()``.
+* Add complete reader, QF/2D processing, phase and baseline workflows,
+  reusable pulse-sequence examples, CP/recovery guides, and a global
+  relaxation-series fitting example. The shared-profile fitting example
+  requires the core API introduced in SpectroChemPy 1.4.0.
+  (`#164 <https://github.com/spectrochempy/spectrochempy_nmr/pull/164>`_,
+  `#165 <https://github.com/spectrochempy/spectrochempy_nmr/pull/165>`_,
+  `#167 <https://github.com/spectrochempy/spectrochempy_nmr/pull/167>`_)
+* Real echo/anti-echo XFSHEAR qualification remains open; its common-path
+  equivalence is validated on synthetic data. JEOL four-section and listed
+  acquisitions remain unsupported for complete reconstruction. Stored JEOL
+  section pairs and NUS lists do not establish their physical F1 quadrature.
+* The experimental MQMAS generator uses a fixed-transfer, sheared centerband
+  model. It omits conversion changes during indirect evolution and correlated
+  F1/F2 spinning sidebands. Fitted weights alone do not establish quantitative
+  populations, which also depend on excitation, relaxation, broadening and
+  calibration.
+* The Czjzek PBG1 benchmark retains satellite-band area discrepancies after
+  constraining the distribution with 3QMAS. Inferred disorder and predicted
+  intensities remain sensitive to sampling and RF-transfer assumptions.
+
 
 0.4.0
 -----
