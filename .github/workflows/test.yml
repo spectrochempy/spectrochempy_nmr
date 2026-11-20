@@ -281,7 +281,7 @@ jobs:
           fetch_reference exam2d_HC/3 ser acqus acqu2s pdata/1/procs pdata/1/proc2s
           python -I -m pytest -ra \
             tests/test_fft_2d_validation.py::TestExam2DHHQFCOSY \
-            tests/test_fft_2d_validation.py::TestEmFFT2DBrukerEchoAntiecho::test_experiment_requires_explicit_echo_antiecho_reconstruction
+            tests/test_fft_2d_validation.py::TestEmFFT2DBrukerEchoAntiecho::test_experiment_uses_normalized_echo_antiecho_reconstruction
           python -I -m pytest -ra tests/qualification/test_topspin_xfb_roundtrip.py
 
   pinned-core:
