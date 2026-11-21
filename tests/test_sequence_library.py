@@ -33,6 +33,7 @@ PARAMETERS = {
 def test_installed_library_catalog_and_hahn_companion():
     assert pulsar.available_sequences() == (
         "hahn",
+        "ideal",
         "mqmas",
         "mqmas_zfilter",
         "rectangular",

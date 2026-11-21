@@ -130,3 +130,13 @@ _ = scp.plot_multiple(
 #
 # The standard and extended models are described in
 # :cite:p:`despinose2008czjzek,lecaer2010czjzek`.
+
+# %% [raw] raw_mimetype="text/restructuredtext"
+# Continue with
+# -------------
+#
+# .. toctree::
+#    :maxdepth: 1
+#
+#    czjzek_fit
+#    alumina_czjzek
