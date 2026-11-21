@@ -66,7 +66,7 @@ if _release_build:
             "release builds require a commit SHA or spectrochempy-nmr-vX.Y.Z tag"
         )
     if not re.fullmatch(
-        r"(?:spectrochempy-v)?\d+\.\d+(?:\.\d+)?(?:[-+][0-9A-Za-z.-]+)?",
+        r"(?:(?:spectrochempy-)?v)?\d+\.\d+(?:\.\d+)?(?:[-+][0-9A-Za-z.-]+)?",
         core_docs_version,
     ):
         raise RuntimeError("release builds require a fixed NMR_CORE_DOCS_URL")
@@ -157,7 +157,7 @@ html_theme_options = {
     "icon_links": [
         {
             "name": "SpectroChemPy",
-            "url": "https://www.spectrochempy.fr/",
+            "url": f"{core_docs_url}/",
             "icon": "fa-solid fa-house",
         },
         {
