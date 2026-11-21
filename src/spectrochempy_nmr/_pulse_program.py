@@ -42,6 +42,7 @@ _OPTIONS = {
     "partner_phase": "deg",
     "partner_offset": "Hz",
 }
+_IDEAL_OPTIONS = {"phase": "deg", "partner_flip": "deg", "partner_phase": "deg"}
 _OPTION = re.compile(r"\b([A-Za-z_]\w*)\s*=")
 _NAME = re.compile(r"[A-Za-z_]\w*\Z")
 _NUMBER_UNIT = re.compile(r"(?<=\d)\s+(?=(?:s|ms|us|ns|Hz|kHz|MHz|deg|rad)\b)")
@@ -164,13 +165,14 @@ def _parse(text, source):
                 instructions.append(
                     _Instruction(number, kind, (name, _expression(expression)))
                 )
-            elif kind in {"pulse", "delay", "coherence"}:
+            elif kind in {"pulse", "ideal", "delay", "coherence"}:
                 matches = list(_OPTION.finditer(rest))
                 argument = _expression(rest[: matches[0].start()] if matches else rest)
                 options = {}
+                allowed = {"pulse": _OPTIONS, "ideal": _IDEAL_OPTIONS}.get(kind, {})
                 for i, match in enumerate(matches):
                     name = match[1]
-                    if kind != "pulse" or name not in _OPTIONS or name in options:
+                    if name not in allowed or name in options:
                         raise ValueError(
                             f"unsupported or repeated {kind} option '{name}'"
                         )
@@ -189,7 +191,7 @@ def _parse(text, source):
 
 
 def _event(instruction, values):
-    from spectrochempy_nmr.pulsar import Coherence, Delay, Pulse
+    from spectrochempy_nmr.pulsar import Coherence, Delay, IdealPulse, Pulse
 
     value = _evaluate(instruction.argument, values)
     if instruction.kind == "coherence":
@@ -197,6 +199,21 @@ def _event(instruction, values):
         if not order.is_integer():
             raise ValueError("coherence order must be an integer")
         return Coherence(int(order))
+    if instruction.kind == "ideal":
+        flip = _scalar(value, "deg")
+        overrides = dict(instruction.options)
+        angles = {}
+        for name in _IDEAL_OPTIONS:
+            if name in overrides:
+                angle = _evaluate(overrides[name], values)
+            elif name in values:
+                angle = _evaluate(ast.Name(id=name), values)
+            else:
+                angle = 0
+            angles[name] = _scalar(angle, "deg")
+        return IdealPulse(
+            flip, angles["phase"], angles["partner_flip"], angles["partner_phase"]
+        )
     duration = _scalar(value, "s")
     if duration < 0 or (instruction.kind == "pulse" and duration == 0):
         raise ValueError(
@@ -237,8 +254,8 @@ class PulseProgram:
 
     Create with :func:`parse_sequence` or :func:`read_sequence`. Each build
     starts with fresh state. Assignments persist across loop iterations;
-    per-pulse overrides do not change that state. A pulse describes one
-    common interval on the observed and partner RF channels.
+    per-pulse overrides do not change that state. A finite pulse describes
+    one common interval on both RF channels; an ideal rotation has no duration.
     """
 
     source: str
@@ -249,7 +266,7 @@ class PulseProgram:
 
         Supply durations/frequencies as quantities or strings such as
         ``"8 us"`` and ``"10 kHz"``. Numbers are accepted for phases
-        (degrees), coherence orders and loop counts. Expressions support
+        (degrees), ideal flip angles, coherence orders and loop counts. Expressions support
         real arithmetic and units. At most ``max_steps`` instructions and
         loop iterations may be expanded; the default is 100,000.
         """
@@ -317,8 +334,9 @@ def parse_sequence(text, *, source="<sequence>"):
     """Parse sequence text once; parameters are bound by ``program.build``.
 
     Instructions: ``set name=expression``, ``repeat expression``/``end``,
-    ``pulse duration`` with optional channel settings, ``delay duration``, and
-    ``coherence order``. Comments start with ``#``. Whitespace indentation
+    ``pulse duration`` with optional channel settings, ``ideal flip`` with
+    optional phase and partner angles, ``delay duration``, and ``coherence order``.
+    Comments start with ``#``. Whitespace indentation
     is cosmetic; repeat blocks terminate with ``end``.
     """
     if not isinstance(text, str):

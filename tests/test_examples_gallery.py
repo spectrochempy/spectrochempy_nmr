@@ -40,6 +40,8 @@ def _has_nmr_example_data(example: Path) -> bool:
         "plot_exchange_nmr_spectra",
         "plot_csa_static_mas",
         "plot_pypulsar_hahn",
+        "plot_ideal_nitrogen_mas",
+        "plot_two_sodium_sites",
         "plot_finite_pulse_excitation",
         "plot_rf_pulse_optimization",
         "plot_mqmas_pulse_optimization",
