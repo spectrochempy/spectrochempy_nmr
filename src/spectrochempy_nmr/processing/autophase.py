@@ -42,6 +42,11 @@ def autophase(spectrum, *, exclude=None, baseline_options=None, apply=True, **op
     separate baseline on the phased real channel using the core `Baseline` processor.
     For the fit, masked samples are filled by linear interpolation in sample
     index, with nearest valid values at the ends. The output mask is retained.
+    Experimental ``baseline_options={"model": "distribution", "distribution_width": 20}``
+    requires a core build providing that model. It uses sample-point windows;
+    broad weak peaks can be removed as background. Inspect the returned baseline
+    and peak areas. Masked values are interpolated on an unmasked working copy
+    for this fit, and the source mask is restored on the outputs.
     Use the phased complex intermediate for further phase corrections. Its
     linear phase metadata is relative to this call's input, with the previous
     phase state recorded in history.
@@ -72,6 +77,15 @@ def autophase(spectrum, *, exclude=None, baseline_options=None, apply=True, **op
         raise TypeError("use exclude to mask samples for phase estimation")
     if not apply and baseline_options is not None:
         raise ValueError("baseline correction requires apply=True")
+    if (
+        baseline_options is not None
+        and str(baseline_options.get("model", "")).lower() == "distribution"
+        and "distribution" not in Baseline.class_traits()["model"].values
+    ):
+        raise ValueError(
+            "distribution baseline requires a SpectroChemPy build providing "
+            "Baseline(model='distribution')"
+        )
     mask = np.broadcast_to(spectrum.mask, data.shape).copy()
     if exclude is not None:
         exclude = np.asarray(exclude)
@@ -152,8 +166,12 @@ def autophase(spectrum, *, exclude=None, baseline_options=None, apply=True, **op
         )
         fit_input = absorption.copy()
         fit_input.data = filled
+        if processor.model == "distribution":
+            fit_input.remove_masks()
     processor.fit(fit_input)
     baseline = processor.baseline
+    if processor.model == "distribution":
+        baseline.mask = dataset_mask
     corrected = absorption.copy()
     corrected.data = absorption.data - baseline.data
     corrected._append_history_entry(
@@ -165,6 +183,14 @@ def autophase(spectrum, *, exclude=None, baseline_options=None, apply=True, **op
                 key: _history_selection_value(value)
                 for key, value in baseline_options.items()
             },
+            **(
+                {
+                    "experimental": True,
+                    "distribution_width": processor.distribution_width,
+                }
+                if processor.model == "distribution"
+                else {}
+            ),
         },
         message=f"Corrected baseline using {processor.model}",
     )
