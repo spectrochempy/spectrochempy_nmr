@@ -348,3 +348,20 @@ path = "nmrdata/jeol/epicatechin_cosy.jdx"
 url = "https://raw.githubusercontent.com/spectrochempy/spectrochempy_data/34448ef343f17a2ee57d2bc06661ac90e2d1ff48/testdata/nmrdata/jeol/epicatechin_cosy.jdx"
 sha256 = "b77cd1fe72cea1f6d820e40279d91cfdff3424333ca4d669e89b129c566c1152"
 size = 8182161
+
+# Alumine 800 C/12, supplied with permission by Christian Fernandez, CC BY 4.0.
+[[files]]
+path = "nmrdata/bruker/tests/nmr/alumina_800C/12/acqus"
+url = "https://raw.githubusercontent.com/spectrochempy/spectrochempy_data/34448ef343f17a2ee57d2bc06661ac90e2d1ff48/testdata/nmrdata/bruker/tests/nmr/alumina_800C/12/acqus"
+sha256 = "c49f35da77265a9a67da0cf1d2f1ea809cbddba37c2f35084e0d0cbb3a27e184"
+size = 7513
+[[files]]
+path = "nmrdata/bruker/tests/nmr/alumina_800C/12/pdata/1/procs"
+url = "https://raw.githubusercontent.com/spectrochempy/spectrochempy_data/34448ef343f17a2ee57d2bc06661ac90e2d1ff48/testdata/nmrdata/bruker/tests/nmr/alumina_800C/12/pdata/1/procs"
+sha256 = "cb786dd5221fd9027f40dc6626acb40c304386350f7cf524ae1d2436ba9c39dd"
+size = 2043
+[[files]]
+path = "nmrdata/bruker/tests/nmr/alumina_800C/12/pdata/1/1r"
+url = "https://raw.githubusercontent.com/spectrochempy/spectrochempy_data/34448ef343f17a2ee57d2bc06661ac90e2d1ff48/testdata/nmrdata/bruker/tests/nmr/alumina_800C/12/pdata/1/1r"
+sha256 = "90549dd4af55a6ac33c94f9fb92167eca36e4b2085820c3f314a8582ae364f19"
+size = 65536

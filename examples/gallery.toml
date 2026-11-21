@@ -186,3 +186,13 @@ section_ref = "examples-simulation-index"
 path = "simulation/plot_two_sodium_sites.py"
 section = "NMR simulation"
 section_ref = "examples-simulation-index"
+
+[[examples]]
+path = "simulation/plot_czjzek_library.py"
+section = "NMR simulation"
+section_ref = "examples-simulation-index"
+
+[[examples]]
+path = "simulation/plot_fit_czjzek.py"
+section = "NMR simulation"
+section_ref = "examples-simulation-index"
