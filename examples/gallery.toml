@@ -176,3 +176,13 @@ section_ref = "examples-simulation-index"
 path = "simulation/plot_rf_pulse_optimization.py"
 section = "NMR simulation"
 section_ref = "examples-simulation-index"
+
+[[examples]]
+path = "simulation/plot_ideal_nitrogen_mas.py"
+section = "NMR simulation"
+section_ref = "examples-simulation-index"
+
+[[examples]]
+path = "simulation/plot_two_sodium_sites.py"
+section = "NMR simulation"
+section_ref = "examples-simulation-index"

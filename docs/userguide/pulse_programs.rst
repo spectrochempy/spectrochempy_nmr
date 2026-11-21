@@ -32,6 +32,9 @@ template, for example ``library:rectangular:3``.
    * - ``rectangular``
      - One finite pulse
      - ``p1``, ``rf1``, ``ph1``
+   * - ``ideal``
+     - Instantaneous rotation, reusable across sites
+     - ``a1`` (flip angle), ``ph1``
    * - ``hahn``
      - Selected Hahn echo, optionally repeated
      - ``p1``, ``p2``, ``d1``, ``d2``, ``rf1``, ``ph1``, ``ph2``, ``l1``
@@ -74,8 +77,33 @@ omit the old Lorentzian display broadening and per-spectrum peak
 normalisation. Powder accuracies are demonstration settings, not convergence
 qualifications. No historical binary parity is claimed.
 
-The historical ideal-pulse ``Simple.tpl`` and multisite ``TwoNuclei.tpl``
-remain future adaptations of the ideal-preparation/site-mixture workflow.
+The :doc:`nitrogen-14 ideal MAS example
+<../examples/gallery/simulation/plot_ideal_nitrogen_mas>` rewrites
+``Simple.tpl`` using the ``ideal`` program at 90 degrees. It retains the
+spin-1 site, Cq=200 kHz, eta=0.3, 1 ppm shift, 10 kHz MAS, the historical
+57.792 MHz isotope frequency at 800 MHz proton frequency, and accuracy 12.
+It uses 8,192 points and 20 explicit sideband orders in the 1 MHz window;
+the original chose sidebands automatically. The old 10 Hz Lorentzian
+display broadening is omitted.
+
+The :doc:`two-sodium-site example
+<../examples/gallery/simulation/plot_two_sodium_sites>` rewrites
+``TwoNuclei.tpl`` with the same ideal program and independent sites:
+Cq=1.5/3 MHz, eta=0.3/1, shifts=2/-20 ppm at 105.804 MHz,
+5 kHz MAS and raw relative populations 0.75/1.0. It retains all transitions.
+A 4 MHz computational window sets sufficiently dense rotor sampling for
+the first-order satellite modulation; 131,072 points resolve the central
+region. Eight explicit sideband orders are calculated and only the central
+30 kHz are displayed. This is a selected-region demonstration, not a full
+satellite-manifold or powder-convergence qualification.
+
+Site spectra are added linearly as complex datasets before plotting their
+real parts. They are not individually renormalised, and the populations
+are not divided by their sum. The fraction of signal inside a displayed
+region can differ between sites. The old 100 Hz Lorentzian display
+broadening and peak normalisation are omitted. These are adaptations of
+the experiments, without numerical parity against an executed old binary.
+
 The two historical ``CP`` templates are adapted in the
 :doc:`static CP example <../examples/gallery/simulation/plot_pypulsar_cp_static>`
 and :doc:`MAS CP example <../examples/gallery/simulation/plot_pypulsar_cp_mas>`.
@@ -132,6 +160,28 @@ unless the program explicitly relates them. Unit names are ``s``, ``ms``,
 ``us``, ``ns``, ``Hz``, ``kHz``, ``MHz``, ``deg`` and ``rad``; both
 ``10 kHz`` and ``10*kHz`` are accepted. The syntax supports scalar arithmetic,
 not Python function calls or arbitrary Python execution.
+
+Ideal rotations
+-----------------
+
+Use ``ideal angle`` for an instantaneous rotation, expressed in degrees
+by a bare number or by a quantity in degrees/radians::
+
+    ideal a1 phase=ph1
+    delay d1
+    ideal a2 phase=ph2
+
+An ideal event produces ``IdealPulse`` and has no duration or RF power.
+RF/offset options on that instruction are rejected. Phase defaults to the
+current ``phase`` setting, or zero. Simultaneous ideal rotations on two
+channels use independent angles and phases::
+
+    ideal a1 phase=ph1 partner_flip=a2 partner_phase=ph2
+
+A zero observed angle permits a partner-only rotation. ``partner_flip``
+and ``partner_phase`` default to their current settings or zero. Negative
+angles are allowed, and every angle must be a finite scalar. Per-event
+options do not change settings for subsequent events.
 
 Loops and changing RF settings
 -------------------------------
