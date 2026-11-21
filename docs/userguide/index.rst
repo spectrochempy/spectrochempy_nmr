@@ -15,6 +15,7 @@ Guides
    quadrupolar
    analysis
    baseline
+   distribution_baseline
    pulsar
    pulsar_scope
    pulse_programs

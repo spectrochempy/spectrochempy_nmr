@@ -7,6 +7,14 @@ distribution. The sections below describe changes in each plugin release.
 Unreleased
 ----------
 
+* Allow the optional experimental core distribution baseline through
+  ``autophase(..., baseline_options={"model": "distribution"})`` when the core
+  provides it. Preserve masks on outputs while fitting an interpolated working
+  copy, retain the complex intermediate and record effective parameters.
+  A core without the model receives an explicit requirement error.
+  Broad weak peaks can be removed as background; existing defaults are unchanged.
+  (`#175 <https://github.com/spectrochempy/spectrochempy_nmr/pull/175>`_)
+
 * Add parameterized instantaneous rotations through ``ideal`` pulse-program
   instructions and an installed ``ideal`` template. New nitrogen-14 and
   two-sodium-site galleries show ideal MAS excitation and complex spectral
