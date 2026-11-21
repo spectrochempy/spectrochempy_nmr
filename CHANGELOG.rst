@@ -11,6 +11,7 @@ Unreleased
   instructions and an installed ``ideal`` template. New nitrogen-14 and
   two-sodium-site galleries show ideal MAS excitation and complex spectral
   superposition with unnormalised relative site populations.
+  (`#173 <https://github.com/spectrochempy/spectrochempy_nmr/pull/173>`_)
 
 
 0.5.0
