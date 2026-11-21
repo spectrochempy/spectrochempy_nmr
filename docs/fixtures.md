@@ -27,7 +27,14 @@ from [spectrochempy_data revision 34448ef](https://github.com/spectrochempy/spec
 also under CC0 1.0. They support the common QF guide and the two COSY gallery
 examples. Their hashes and source provenance are recorded in that dataset.
 
-The selected files total about 22.8 MiB. Run the same fetch as the RTD
+The processed `alumina_800C/12` spectrum and its `acqus`/`procs` parameters
+come from [the same immutable data revision](https://github.com/spectrochempy/spectrochempy_data/tree/34448ef343f17a2ee57d2bc06661ac90e2d1ff48/testdata/nmrdata/bruker/tests/nmr/alumina_800C).
+Christian Fernandez authorised redistribution under CC BY 4.0; see that
+revision's `testdata/nmrdata/PROVENANCE.md`. The archived parameters disagree
+about the MAS rate. The Czjzek overlay is explicitly illustrative and does
+not qualify site populations or satellite areas.
+
+The selected files total about 22.9 MiB. Run the same fetch as the RTD
 pre-build job locally with:
 
 ```console
