@@ -1,0 +1,86 @@
+name: Documentation Pages build
+
+on:
+  workflow_dispatch:
+  release:
+    types: [published]
+  push:
+    branches: [master]
+    tags: ['spectrochempy-nmr-v*', 'v*']
+  pull_request:
+    branches: [master]
+
+concurrency:
+  group: docs-pages-build-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: true
+
+env:
+  SCPY_PAGES: "1"
+  SCPY_DOCS_CONTEXT: ${{ github.event_name == 'pull_request' && 'preview' || (github.ref_type == 'tag' && 'stable' || 'development') }}
+  SCPY_DOCS_PREVIEW_NAME: ${{ github.event.pull_request.number }}
+
+permissions:
+  contents: read
+
+jobs:
+  helpers:
+    if: vars.DOCS_PAGES_ENABLED == 'true' || github.event_name == 'workflow_dispatch'
+    runs-on: ubuntu-24.04
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          ref: ${{ github.event.pull_request.head.sha || github.sha }}
+          persist-credentials: false
+      - uses: actions/setup-python@v7
+        with:
+          python-version: "3.13"
+      - run: python -m pip install pytest
+      - run: python -m pytest --noconftest -o addopts= tests/test_docs/test_pages_publication.py -q
+      - run: node --test .github/pages/test_resolve.cjs
+  build:
+    needs: helpers
+    if: vars.DOCS_PAGES_ENABLED == 'true' || github.event_name == 'workflow_dispatch'
+    runs-on: ubuntu-24.04
+    timeout-minutes: 60
+    env:
+      NMR_DOCS_EXECUTE: "1"
+      NMR_DOCS_GITHUB_REF: ${{ github.event.pull_request.head.sha || github.sha }}
+      NMR_DOCS_RELEASE: ${{ github.ref_type == 'tag' && '1' || '' }}
+      NMR_CORE_DOCS_URL: ${{ github.ref_type == 'tag' && vars.DOCS_CORE_RELEASE_URL || vars.DOCS_CORE_URL || 'https://spectrochempy.github.io/spectrochempy/latest/' }}
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          ref: ${{ github.event.pull_request.head.sha || github.sha }}
+          fetch-depth: 0
+          persist-credentials: false
+      - uses: actions/setup-python@v7
+        with:
+          python-version: "3.13"
+      - name: Install documentation dependencies
+        run: |
+          sudo apt-get update
+          sudo apt-get install --yes pandoc
+          python -m pip install -r docs/requirements-rtd.txt
+          python -m pip install .
+      - name: Fetch gallery data
+        run: python docs/fetch_gallery_data.py
+      - name: Build documentation with executed examples
+        run: python -m sphinx -T -W --keep-going -b html -d _build/doctrees docs _build/html
+      - name: Record documentation release tag
+        env:
+          DOCS_TAG: ${{ github.ref_type == 'tag' && github.ref_name || '' }}
+          HTML_OUTPUT: _build/html
+        run: |
+          python - <<'PY'
+          import json, os
+          from pathlib import Path
+          (Path(os.environ['HTML_OUTPUT']) / '.pages-build.json').write_text(json.dumps({'tag': os.environ['DOCS_TAG']}))
+          PY
+      - uses: actions/upload-artifact@v7
+        with:
+          name: pages-html
+          include-hidden-files: true
+          path: _build/html
+          if-no-files-found: error
+          retention-days: 14
