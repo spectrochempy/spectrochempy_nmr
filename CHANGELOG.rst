@@ -13,6 +13,7 @@ Unreleased
   copy, retain the complex intermediate and record effective parameters.
   A core without the model receives an explicit requirement error.
   Broad weak peaks can be removed as background; existing defaults are unchanged.
+  (`#175 <https://github.com/spectrochempy/spectrochempy_nmr/pull/175>`_)
 
 * Add parameterized instantaneous rotations through ``ideal`` pulse-program
   instructions and an installed ``ideal`` template. New nitrogen-14 and
