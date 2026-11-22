@@ -388,11 +388,6 @@ for strength in (0, 0.001, 0.01, 0.1):
 # that regularizes response amplitudes; joint fits use population units and
 # reject that option. The amplitude map and population map are distinct when
 # RF sensitivity varies between cells.
-#
-# The measured PBG1 application below uses a larger acquisition-specific
-# model and separate processing choices. Its runtime and scientific limits
-# belong to that application; this small matched-model example does not
-# qualify PBG1 site populations.
 
 # %% [raw] raw_mimetype="text/restructuredtext"
 # Continue with
@@ -400,8 +395,3 @@ for strength in (0, 0.001, 0.01, 0.1):
 #
 # * :doc:`Short synthetic workflow </examples/gallery/analysis/plot_mqmas_joint_inversion>`.
 # * :doc:`API and parameter conventions </reference/mqmas_inversion>`.
-#
-# .. toctree::
-#    :maxdepth: 1
-#
-#    mqmas_inversion
