@@ -2,8 +2,8 @@ MQMAS inversion
 ~~~~~~~~~~~~~~~
 
 Access the module through ``scp.nmr.mqmas_inversion``. See
-:doc:`../userguide/mqmas_inversion` for an executed PBG1 comparison of
-3QMAS-only and joint MAS fitting.
+:doc:`../userguide/mqmas_inversion_synthetic` for the small synthetic workflow
+and :doc:`../userguide/mqmas_inversion` for the measured PBG1 application.
 
 The inversion accepts phased, real ``NDDataset`` spectra with calibrated
 ppm coordinates and optional masks. The MQMAS input is two-dimensional

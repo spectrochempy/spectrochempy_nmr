@@ -47,6 +47,7 @@ def _has_nmr_example_data(example: Path) -> bool:
         "plot_mqmas_pulse_optimization",
         "plot_nmr_baseline_2d",
         "plot_czjzek_library",
+        "plot_mqmas_joint_inversion",
         "plot_fit_czjzek",
         "plot_pypulsar_cp_static",
         "plot_pypulsar_cp_mas",
@@ -66,6 +67,10 @@ def _has_nmr_example_data(example: Path) -> bool:
     if example.stem in {"plot_read_nmrpipe_2d", "plot_analyze_cosy_2d"}:
         return (root / "nmrpipe" / "nmrpipe_2d_cosy_example.ft2").is_file()
     bruker = root / "bruker" / "tests" / "nmr"
+    if example.stem == "plot_stmas":
+        return (bruker / "RbNO3" / "15" / "ser").is_file()
+    if example.stem == "plot_multiplex_spam":
+        return (bruker / "MULTIPLEX" / "4" / "ser").is_file()
     if example.stem == "plot_alumina_czjzek":
         return (bruker / "alumina_800C" / "12" / "pdata" / "1" / "1r").is_file()
     if example.stem == "plot_bruker_2d":

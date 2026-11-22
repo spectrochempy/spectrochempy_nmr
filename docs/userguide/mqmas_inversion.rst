@@ -21,6 +21,10 @@ population map. For each averaging node, the simulator uses
 weights in shift and :math:`P_Q`. An individual asymmetry remains available
 as a parameter for a subsequent line-shape fit.
 
+For a short synthetic introduction, start with
+:doc:`mqmas_inversion_synthetic`. This page is the detailed measured-data
+application; its downloadable script runs outside the short gallery.
+
 Get the PBG1 spectra
 --------------------
 

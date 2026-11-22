@@ -40,8 +40,8 @@
 # slots. Its processing status gives ``TDeff = 110``. Pass ``use_tdeff=True`` to
 # ``scp.nmr.read()`` to select those 55 complete pairs. The last
 # acquired trace has no partner and the
-# remaining slots are padding. Keep the acquisition status, pulse program
-# and processing status together to distinguish these counts.
+# remaining slots are padding. The licensed datadir fixture includes the
+# acquisition and processing status files needed to distinguish these counts.
 #
 # Pass ``indirect_dwell="IN[0]"`` to calibrate F1 with the acquisition
 # increment used in this dataset. A positive number supplies the time step
@@ -92,27 +92,22 @@
 # See the :doc:`short STMAS workflow </examples/gallery/nmr/plot_stmas>`.
 
 # %%
-import os
 from cmath import phase as phase_angle
 from math import degrees
-from pathlib import Path
 
 import spectrochempy as scp
 
 
-root = os.environ.get("SCP_RBNO3_DATA")
-if root:
-    states = scp.nmr.read(Path(root) / "15", use_tdeff=True, indirect_dwell="IN[0]")
-    xf2 = scp.nmr.Experiment(states).xf2(size=1024)
-    peak = xf2.data[abs(xf2).argmax()]
-    phased = scp.nmr.Experiment(xf2).xf2p(phc0=-degrees(phase_angle(peak)))
-    spectrum = scp.nmr.Experiment(phased).xfshear(
-        size=512, experiment="STMAS", f1_shift=-0.1
-    )
-    view = scp.nmr.Experiment(spectrum)
-    _ = abs(view.RR + 1j * view.RI)[:, -10.0:-60.0].plot(method="contour")
-else:
-    print("Set SCP_RBNO3_DATA to the directory containing RbNO₃/15.")
+root = scp.preferences.datadir / "nmrdata/bruker/tests/nmr/RbNO3"
+states = scp.nmr.read(root / "15", use_tdeff=True, indirect_dwell="IN[0]")
+xf2 = scp.nmr.Experiment(states).xf2(size=1024)
+peak = xf2.data[abs(xf2).argmax()]
+phased = scp.nmr.Experiment(xf2).xf2p(phc0=-degrees(phase_angle(peak)))
+spectrum = scp.nmr.Experiment(phased).xfshear(
+    size=512, experiment="STMAS", f1_shift=-0.1
+)
+view = scp.nmr.Experiment(spectrum)
+_ = abs(view.RR + 1j * view.RI)[:, -10.0:-60.0].plot(method="contour")
 
 # %% [raw] raw_mimetype="text/restructuredtext"
 # Comparison with MQMAS
