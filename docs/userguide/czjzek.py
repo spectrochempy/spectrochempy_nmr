@@ -118,11 +118,9 @@ _ = scp.plot_multiple(
 #
 # ## Experimental limits
 #
-# The public PBG1 benchmark leaves an error on satellite-band areas after
-# constraining the distribution with 3QMAS. The inferred disorder and
-# predicted intensities are sensitive to sampling and assumptions about RF
-# transfer. See the PBG1 benchmark in
-# `src/spectrochempy_nmr/README.pulsar.md` for the protocol and comparisons.
+# Inferred disorder and predicted intensities depend on powder sampling,
+# excitation and RF-transfer assumptions. Compare convergence and spectral
+# residuals before assigning quantitative populations to a measured sample.
 
 # %% [raw] raw_mimetype="text/restructuredtext"
 # References

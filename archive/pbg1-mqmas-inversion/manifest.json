@@ -1,0 +1,12 @@
+{
+  "source_commit": "20778b28898cf82a811c03067d9dac4216156cda",
+  "files_sha256": {
+    "docs/userguide/mqmas_inversion.rst": "f05178e3212ed8cb1a7e9396edc2d7b20c236251dfd54b3b047a95598341dda4",
+    "examples/analysis/pbg1_mqmas_inversion.py": "e67b969c476fa40c73d7fb4c2ba53a7e49225c3e6977853b7de4ea795c51ea4e",
+    "docs/_static/pbg1-inversion/mas-comparison.png": "e14fac628ea2b0747dacc089414ecbe8e5e07af82b6fdeb04b76c6fc385e3332",
+    "docs/_static/pbg1-inversion/metrics.rst": "7c460e5ef3700f777424b9e2236eb299f92af31501dfba3e2d4b847791c7242b",
+    "docs/_static/pbg1-inversion/mqmas-residuals.png": "0320dcf7d4c40f0440a1a8c9ca64bb4e2acd9df90fd48889a31ff9ca80f6f460",
+    "docs/_static/pbg1-inversion/populations.png": "31d4350304bbd3f072fe0b56253ccdec4ec48ca171140e666be5c9c40d87a69a",
+    "docs/userguide/czjzek.py": "e9eb82b1926b83808631c44631986e3c6925d5509c8ef0c31ff6bda04507210b"
+  }
+}
