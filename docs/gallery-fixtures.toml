@@ -365,3 +365,175 @@ path = "nmrdata/bruker/tests/nmr/alumina_800C/12/pdata/1/1r"
 url = "https://raw.githubusercontent.com/spectrochempy/spectrochempy_data/34448ef343f17a2ee57d2bc06661ac90e2d1ff48/testdata/nmrdata/bruker/tests/nmr/alumina_800C/12/pdata/1/1r"
 sha256 = "90549dd4af55a6ac33c94f9fb92167eca36e4b2085820c3f314a8582ae364f19"
 size = 65536
+
+# RbNO3/STMAS and Multiplex: permission Christian Fernandez, CC BY 4.0.
+[[files]]
+path = "nmrdata/bruker/tests/nmr/RbNO3/15/acqu"
+url = "https://raw.githubusercontent.com/spectrochempy/spectrochempy_data/34448ef343f17a2ee57d2bc06661ac90e2d1ff48/testdata/nmrdata/bruker/tests/nmr/RbNO3/15/acqu"
+sha256 = "0aa6d1bb9107bff0c0dba44627cf331b343ab221c4eb00877b7090e8413d7248"
+size = 7361
+[[files]]
+path = "nmrdata/bruker/tests/nmr/RbNO3/15/acqu2"
+url = "https://raw.githubusercontent.com/spectrochempy/spectrochempy_data/34448ef343f17a2ee57d2bc06661ac90e2d1ff48/testdata/nmrdata/bruker/tests/nmr/RbNO3/15/acqu2"
+sha256 = "a775abed8ee3fd2ddebe899ba13ead2272f21df5c1e47109e5f374df791824b0"
+size = 513
+[[files]]
+path = "nmrdata/bruker/tests/nmr/RbNO3/15/acqu2s"
+url = "https://raw.githubusercontent.com/spectrochempy/spectrochempy_data/34448ef343f17a2ee57d2bc06661ac90e2d1ff48/testdata/nmrdata/bruker/tests/nmr/RbNO3/15/acqu2s"
+sha256 = "cb63bd1a01f8a766599004b04a6aa2017467eafb3ee8a4c1681e8c65de921f98"
+size = 529
+[[files]]
+path = "nmrdata/bruker/tests/nmr/RbNO3/15/acqus"
+url = "https://raw.githubusercontent.com/spectrochempy/spectrochempy_data/34448ef343f17a2ee57d2bc06661ac90e2d1ff48/testdata/nmrdata/bruker/tests/nmr/RbNO3/15/acqus"
+sha256 = "bfd58b3fde835290450985b58f755bb42aa530f03271919f32f0ec7c10c695ef"
+size = 7444
+[[files]]
+path = "nmrdata/bruker/tests/nmr/RbNO3/15/pdata/1/proc2s"
+url = "https://raw.githubusercontent.com/spectrochempy/spectrochempy_data/34448ef343f17a2ee57d2bc06661ac90e2d1ff48/testdata/nmrdata/bruker/tests/nmr/RbNO3/15/pdata/1/proc2s"
+sha256 = "7cf85ee8e67d7c19b8b8003332eb17ebec1bba7e0e5250d66e1e225d123d59a0"
+size = 1988
+[[files]]
+path = "nmrdata/bruker/tests/nmr/RbNO3/15/pdata/1/procs"
+url = "https://raw.githubusercontent.com/spectrochempy/spectrochempy_data/34448ef343f17a2ee57d2bc06661ac90e2d1ff48/testdata/nmrdata/bruker/tests/nmr/RbNO3/15/pdata/1/procs"
+sha256 = "3afa55affac43c41c347117a99e8db0ecc9f9222bb02a0c59b11bde60882815f"
+size = 2048
+[[files]]
+path = "nmrdata/bruker/tests/nmr/RbNO3/15/ser"
+url = "https://raw.githubusercontent.com/spectrochempy/spectrochempy_data/34448ef343f17a2ee57d2bc06661ac90e2d1ff48/testdata/nmrdata/bruker/tests/nmr/RbNO3/15/ser"
+sha256 = "8a65eece1c11da323f8b66c4246e55a9e2a4ae538be132a1e4d5b6c9d3c171ef"
+size = 1048576
+[[files]]
+path = "nmrdata/bruker/tests/nmr/RbNO3/206/acqu"
+url = "https://raw.githubusercontent.com/spectrochempy/spectrochempy_data/34448ef343f17a2ee57d2bc06661ac90e2d1ff48/testdata/nmrdata/bruker/tests/nmr/RbNO3/206/acqu"
+sha256 = "48645c0788c0acf45371683c364fb6339438d4b7488ebc8a9db59730e4a6750c"
+size = 7413
+[[files]]
+path = "nmrdata/bruker/tests/nmr/RbNO3/206/acqu2"
+url = "https://raw.githubusercontent.com/spectrochempy/spectrochempy_data/34448ef343f17a2ee57d2bc06661ac90e2d1ff48/testdata/nmrdata/bruker/tests/nmr/RbNO3/206/acqu2"
+sha256 = "fd2ad4b3ddffd60928ed01c9c4122779799510e8fd1e6116e2f3d8c19310f09d"
+size = 508
+[[files]]
+path = "nmrdata/bruker/tests/nmr/RbNO3/206/acqu2s"
+url = "https://raw.githubusercontent.com/spectrochempy/spectrochempy_data/34448ef343f17a2ee57d2bc06661ac90e2d1ff48/testdata/nmrdata/bruker/tests/nmr/RbNO3/206/acqu2s"
+sha256 = "b24a3e1647bb78180b729718f36a643b34bac5fb639707eff2f7677e19a2cb06"
+size = 514
+[[files]]
+path = "nmrdata/bruker/tests/nmr/RbNO3/206/acqu3"
+url = "https://raw.githubusercontent.com/spectrochempy/spectrochempy_data/34448ef343f17a2ee57d2bc06661ac90e2d1ff48/testdata/nmrdata/bruker/tests/nmr/RbNO3/206/acqu3"
+sha256 = "23dda7e0c0f62b400ccff9e09cf920ed3fc6a5cfb895667ef2a85a287e8f3579"
+size = 508
+[[files]]
+path = "nmrdata/bruker/tests/nmr/RbNO3/206/acqu3s"
+url = "https://raw.githubusercontent.com/spectrochempy/spectrochempy_data/34448ef343f17a2ee57d2bc06661ac90e2d1ff48/testdata/nmrdata/bruker/tests/nmr/RbNO3/206/acqu3s"
+sha256 = "a085b68ddab72f8e275cc6e256876eb4f82cdd07e32c3579cef8159b7ff722f0"
+size = 514
+[[files]]
+path = "nmrdata/bruker/tests/nmr/RbNO3/206/acqus"
+url = "https://raw.githubusercontent.com/spectrochempy/spectrochempy_data/34448ef343f17a2ee57d2bc06661ac90e2d1ff48/testdata/nmrdata/bruker/tests/nmr/RbNO3/206/acqus"
+sha256 = "09f431fd5f774c9db3732201d2e26f93a56fe3c11dd465e92b743eeb15a1e66b"
+size = 7508
+[[files]]
+path = "nmrdata/bruker/tests/nmr/RbNO3/206/pdata/1/proc2s"
+url = "https://raw.githubusercontent.com/spectrochempy/spectrochempy_data/34448ef343f17a2ee57d2bc06661ac90e2d1ff48/testdata/nmrdata/bruker/tests/nmr/RbNO3/206/pdata/1/proc2s"
+sha256 = "cb968a2167d6f477e54f85d9d33f69848b87c3cc8d50b17d26511f94ff68a102"
+size = 1894
+[[files]]
+path = "nmrdata/bruker/tests/nmr/RbNO3/206/pdata/1/procs"
+url = "https://raw.githubusercontent.com/spectrochempy/spectrochempy_data/34448ef343f17a2ee57d2bc06661ac90e2d1ff48/testdata/nmrdata/bruker/tests/nmr/RbNO3/206/pdata/1/procs"
+sha256 = "7a6fae3ccd82f3ac20ef9af2b8adc1e8e7bb31434e63ba4fc81607aeba144518"
+size = 1988
+[[files]]
+path = "nmrdata/bruker/tests/nmr/RbNO3/206/ser"
+url = "https://raw.githubusercontent.com/spectrochempy/spectrochempy_data/34448ef343f17a2ee57d2bc06661ac90e2d1ff48/testdata/nmrdata/bruker/tests/nmr/RbNO3/206/ser"
+sha256 = "a0979f92715e65bd13e0baa4829f25477882192736e249fb2468e4d90dfa975b"
+size = 14680064
+[[files]]
+path = "nmrdata/bruker/tests/nmr/MULTIPLEX/3/acqu"
+url = "https://raw.githubusercontent.com/spectrochempy/spectrochempy_data/34448ef343f17a2ee57d2bc06661ac90e2d1ff48/testdata/nmrdata/bruker/tests/nmr/MULTIPLEX/3/acqu"
+sha256 = "9fca7026effc9ad1bb71e8ee2078cca4e4ee38ef23e9237de2045674fbef3042"
+size = 8165
+[[files]]
+path = "nmrdata/bruker/tests/nmr/MULTIPLEX/3/acqu2"
+url = "https://raw.githubusercontent.com/spectrochempy/spectrochempy_data/34448ef343f17a2ee57d2bc06661ac90e2d1ff48/testdata/nmrdata/bruker/tests/nmr/MULTIPLEX/3/acqu2"
+sha256 = "5c5bafc2242bf383df422c3819ba078c7903ae50f0d62e452307274d0da7073c"
+size = 8222
+[[files]]
+path = "nmrdata/bruker/tests/nmr/MULTIPLEX/3/acqu2s"
+url = "https://raw.githubusercontent.com/spectrochempy/spectrochempy_data/34448ef343f17a2ee57d2bc06661ac90e2d1ff48/testdata/nmrdata/bruker/tests/nmr/MULTIPLEX/3/acqu2s"
+sha256 = "445d3b8ed129ca590062ffa8bf54b626eee5bc6d69cdee1c26623ae434630fc9"
+size = 8232
+[[files]]
+path = "nmrdata/bruker/tests/nmr/MULTIPLEX/3/acqu3"
+url = "https://raw.githubusercontent.com/spectrochempy/spectrochempy_data/34448ef343f17a2ee57d2bc06661ac90e2d1ff48/testdata/nmrdata/bruker/tests/nmr/MULTIPLEX/3/acqu3"
+sha256 = "e72070250fa1ebc2c460846260fbbd8a30efc0b89e63564f4364dc528b8afe60"
+size = 8247
+[[files]]
+path = "nmrdata/bruker/tests/nmr/MULTIPLEX/3/acqu3s"
+url = "https://raw.githubusercontent.com/spectrochempy/spectrochempy_data/34448ef343f17a2ee57d2bc06661ac90e2d1ff48/testdata/nmrdata/bruker/tests/nmr/MULTIPLEX/3/acqu3s"
+sha256 = "720627b02b7e65e808187d53ee7931ad5f07e09cc4a8a24bd2ef2acf9f25b540"
+size = 8248
+[[files]]
+path = "nmrdata/bruker/tests/nmr/MULTIPLEX/3/acqus"
+url = "https://raw.githubusercontent.com/spectrochempy/spectrochempy_data/34448ef343f17a2ee57d2bc06661ac90e2d1ff48/testdata/nmrdata/bruker/tests/nmr/MULTIPLEX/3/acqus"
+sha256 = "db50855977da9ba8ab0c35ab21e6a53635cb2ee6da4aa0b43ef5a70251490018"
+size = 8209
+[[files]]
+path = "nmrdata/bruker/tests/nmr/MULTIPLEX/3/pdata/1/proc2s"
+url = "https://raw.githubusercontent.com/spectrochempy/spectrochempy_data/34448ef343f17a2ee57d2bc06661ac90e2d1ff48/testdata/nmrdata/bruker/tests/nmr/MULTIPLEX/3/pdata/1/proc2s"
+sha256 = "d1964d8966a63dea07265132d9b3ce673b4c06bdb1b00e9cbc1ce7e2fee1faa4"
+size = 1530
+[[files]]
+path = "nmrdata/bruker/tests/nmr/MULTIPLEX/3/pdata/1/procs"
+url = "https://raw.githubusercontent.com/spectrochempy/spectrochempy_data/34448ef343f17a2ee57d2bc06661ac90e2d1ff48/testdata/nmrdata/bruker/tests/nmr/MULTIPLEX/3/pdata/1/procs"
+sha256 = "586b2074306daf35b5ff8be88fd48d47818f923e945e4b588a13ee6b2ebdfd9e"
+size = 1602
+[[files]]
+path = "nmrdata/bruker/tests/nmr/MULTIPLEX/3/ser"
+url = "https://raw.githubusercontent.com/spectrochempy/spectrochempy_data/34448ef343f17a2ee57d2bc06661ac90e2d1ff48/testdata/nmrdata/bruker/tests/nmr/MULTIPLEX/3/ser"
+sha256 = "1aa80a00cdaf2437bfbdbdb52e7bc7b8d85ff2e25b864d531943725dfbf97171"
+size = 34603008
+[[files]]
+path = "nmrdata/bruker/tests/nmr/MULTIPLEX/4/acqu"
+url = "https://raw.githubusercontent.com/spectrochempy/spectrochempy_data/34448ef343f17a2ee57d2bc06661ac90e2d1ff48/testdata/nmrdata/bruker/tests/nmr/MULTIPLEX/4/acqu"
+sha256 = "119a428ebff2252b81033946cf87f88c03e20304957a1519d419514663dc1691"
+size = 8189
+[[files]]
+path = "nmrdata/bruker/tests/nmr/MULTIPLEX/4/acqu2"
+url = "https://raw.githubusercontent.com/spectrochempy/spectrochempy_data/34448ef343f17a2ee57d2bc06661ac90e2d1ff48/testdata/nmrdata/bruker/tests/nmr/MULTIPLEX/4/acqu2"
+sha256 = "f0844c040df7e0ca55addd07cc204e5c4076f8a465ca6e39642d356b6e8dd7f4"
+size = 8223
+[[files]]
+path = "nmrdata/bruker/tests/nmr/MULTIPLEX/4/acqu2s"
+url = "https://raw.githubusercontent.com/spectrochempy/spectrochempy_data/34448ef343f17a2ee57d2bc06661ac90e2d1ff48/testdata/nmrdata/bruker/tests/nmr/MULTIPLEX/4/acqu2s"
+sha256 = "e5a3261c9e1dbd48aa238d1a8755377533d8ef624e555ccdf532684bd16ec6e6"
+size = 8222
+[[files]]
+path = "nmrdata/bruker/tests/nmr/MULTIPLEX/4/acqu3"
+url = "https://raw.githubusercontent.com/spectrochempy/spectrochempy_data/34448ef343f17a2ee57d2bc06661ac90e2d1ff48/testdata/nmrdata/bruker/tests/nmr/MULTIPLEX/4/acqu3"
+sha256 = "2e45928ae6bd7a41fe1afbed2c23c1d27b7c67921bce529162503eb94b4c0a26"
+size = 8247
+[[files]]
+path = "nmrdata/bruker/tests/nmr/MULTIPLEX/4/acqu3s"
+url = "https://raw.githubusercontent.com/spectrochempy/spectrochempy_data/34448ef343f17a2ee57d2bc06661ac90e2d1ff48/testdata/nmrdata/bruker/tests/nmr/MULTIPLEX/4/acqu3s"
+sha256 = "71cf180085a9bdda8c01c85f766331695dc598ccfeb026536220675d6466b28e"
+size = 8237
+[[files]]
+path = "nmrdata/bruker/tests/nmr/MULTIPLEX/4/acqus"
+url = "https://raw.githubusercontent.com/spectrochempy/spectrochempy_data/34448ef343f17a2ee57d2bc06661ac90e2d1ff48/testdata/nmrdata/bruker/tests/nmr/MULTIPLEX/4/acqus"
+sha256 = "84209e5609c126bf3a865b6a639e12ab8cfbb24051b9ca6cda3a9f59a28aec82"
+size = 8225
+[[files]]
+path = "nmrdata/bruker/tests/nmr/MULTIPLEX/4/pdata/1/proc2s"
+url = "https://raw.githubusercontent.com/spectrochempy/spectrochempy_data/34448ef343f17a2ee57d2bc06661ac90e2d1ff48/testdata/nmrdata/bruker/tests/nmr/MULTIPLEX/4/pdata/1/proc2s"
+sha256 = "d1964d8966a63dea07265132d9b3ce673b4c06bdb1b00e9cbc1ce7e2fee1faa4"
+size = 1530
+[[files]]
+path = "nmrdata/bruker/tests/nmr/MULTIPLEX/4/pdata/1/procs"
+url = "https://raw.githubusercontent.com/spectrochempy/spectrochempy_data/34448ef343f17a2ee57d2bc06661ac90e2d1ff48/testdata/nmrdata/bruker/tests/nmr/MULTIPLEX/4/pdata/1/procs"
+sha256 = "c8223c440400381b5500ae5ed694e97b706cce652e10939cb9710cd141f88bb3"
+size = 1594
+[[files]]
+path = "nmrdata/bruker/tests/nmr/MULTIPLEX/4/ser"
+url = "https://raw.githubusercontent.com/spectrochempy/spectrochempy_data/34448ef343f17a2ee57d2bc06661ac90e2d1ff48/testdata/nmrdata/bruker/tests/nmr/MULTIPLEX/4/ser"
+sha256 = "cafcd4a866e33decd7c167905c10e7c006d253b95a588adb6b626ff03e40cee0"
+size = 44040192

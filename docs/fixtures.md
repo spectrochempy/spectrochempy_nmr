@@ -34,7 +34,17 @@ revision's `testdata/nmrdata/PROVENANCE.md`. The archived parameters disagree
 about the MAS rate. The Czjzek overlay is explicitly illustrative and does
 not qualify site populations or satellite areas.
 
-The selected files total about 22.9 MiB. Run the same fetch as the RTD
+The STMAS and Multiplex workflows use `RbNO3/15`, `RbNO3/206`,
+`MULTIPLEX/3` and `MULTIPLEX/4` from the same immutable revision
+`34448ef343f17a2ee57d2bc06661ac90e2d1ff48`. Their binaries and acquisition/
+processing parameters are covered by Christian Fernandez's explicit
+CC BY 4.0 permission in `testdata/nmrdata/PROVENANCE.md`. No pulse-program
+source is fetched. `MULTIPLEX/3` has an interrupted final phase cycle,
+handled explicitly with `allow_partial=True`; STMAS uses `use_tdeff=True`.
+These datasets are read from `preferences.datadir`, without environment
+variables. The historical RbNO3 comparison remains an archived replay.
+
+The complete immutable fixture sizes are recorded in the manifest. Run the same fetch as the RTD
 pre-build job locally with:
 
 ```console

@@ -37,7 +37,7 @@
 # For spin 5/2 it contains 11 phases and 22 FIDs. Bruker stores the number
 # of FIDs per cycle in ``acqu3s:TD`` and the number of indirect increments
 # in ``acqu2s:TD``. Retain the acquisition status files, the archived
-# ``pulseprogram`` and the processing status file ``pdata/1/procs`` with the
+# pulse-program identifier in ``acqus`` and the processing status file ``pdata/1/procs`` with the
 # SER. The reader takes the indirect dwell from ``acqus:IN[0]``, the direct
 # width from ``acqus:SW_h`` and the direct reference from ``procs:SF``.
 #
@@ -92,11 +92,14 @@
 # cycle determines the available orders, and the observed spin determines
 # their shearing coefficients. The original F1 time grid remains required.
 
+# %% [markdown]
+# The displayed F2 window is selected explicitly from +15 to -15 ppm after
+# processing. The original spectrum retains the full acquisition bandwidth.
+# The licensed acquisition is in `preferences.datadir` as `MULTIPLEX/4`.
+
 # %%
-import os
 from cmath import phase as phase_angle
 from math import degrees
-from pathlib import Path
 
 import numpy as np
 import spectrochempy as scp
@@ -105,18 +108,19 @@ from spectrochempy_nmr.processing.bruker_filter import resolve_bruker_delay
 from spectrochempy_nmr.processing.mqmas import _mqecho_weights
 
 
-path = os.environ.get("SCP_MSM_DATA")
-if path:
-    raw = scp.nmr.read(path, phase_cycle="paired")
-    states = scp.nmr.Experiment(raw).select_coherence(3)
-    xf2 = scp.nmr.Experiment(states).xf2(size=4096)
-    row = xf2[0, 0].squeeze()
-    phc0 = -degrees(phase_angle(row.data[abs(row).argmax()]))
-    phased = scp.nmr.Experiment(xf2).xf2p(phc0=phc0)
-    spectrum = scp.nmr.Experiment(phased).xfshear(size=256)
-    _ = scp.nmr.Experiment(spectrum).RR.plot(method="contour")
-else:
-    print("Set SCP_MSM_DATA to the MQMultiplex32 experiment directory.")
+path = scp.preferences.datadir / "nmrdata/bruker/tests/nmr/MULTIPLEX/4"
+raw = scp.nmr.read(path, phase_cycle="paired")
+states = scp.nmr.Experiment(raw).select_coherence(3)
+xf2 = scp.nmr.Experiment(states).xf2(size=4096)
+row = xf2[0, 0].squeeze()
+phc0 = -degrees(phase_angle(row.data[abs(row).argmax()]))
+phased = scp.nmr.Experiment(xf2).xf2p(phc0=phc0)
+spectrum = scp.nmr.Experiment(phased).xfshear(size=256)
+_ = (
+    scp.nmr.Experiment(spectrum)
+    .RR[:, 15.0:-15.0]
+    .plot(method="contour", start=0.05, nlevels=10)
+)
 
 # %% [raw] raw_mimetype="text/restructuredtext"
 # If the SER contains a single interrupted cycle after the declared
@@ -126,19 +130,21 @@ else:
 # ``states.meta.acquisition["multiplex_spam"]`` for the selected coherence.
 # Complete extra cycles and noncontiguous tails are rejected.
 #
-# For an eleven-phase acquisition, select both coherences without rereading:
+# For the eleven-phase acquisition MULTIPLEX/3, select both coherences
+# from one read. Its interrupted final cycle requires `allow_partial=True`:
 #
 # %%
-if path and raw.shape[0] == 22:
-    three_q = scp.nmr.Experiment(raw).select_coherence(3)
-    five_q = scp.nmr.Experiment(raw).select_coherence(5)
+aluminum = scp.preferences.datadir / "nmrdata/bruker/tests/nmr/MULTIPLEX/3"
+raw_3q5q = scp.nmr.read(aluminum, phase_cycle="paired", allow_partial=True)
+three_q = scp.nmr.Experiment(raw_3q5q).select_coherence(3)
+five_q = scp.nmr.Experiment(raw_3q5q).select_coherence(5)
 
 # %% [raw] raw_mimetype="text/restructuredtext"
 # ``read_multiplex_spam()`` remains a compatibility shortcut that performs the
 # same read and selection. Existing 3Q/5Q amplitudes, phase conventions and
 # subsequent XF2/XFSHEAR results are preserved. The new path is validated on
-# synthetic phase cycles; the earlier archived real-data qualification is
-# described below and has not been rerun for this refactor.
+# synthetic phase cycles and the executable acquired-data workflow above.
+# The historical real-data comparison is described separately below.
 #
 # The pulse program and method are described by :cite:t:`malicki2005multiplex`.
 #
@@ -213,9 +219,9 @@ if path and raw.shape[0] == 22:
 # Reproduce the archived comparisons
 # ----------------------------------
 #
-# Set ``SCP_RBNO3_DATA`` to the directory containing experiments 15 and 206.
-# Make the public PST-5 experiment available in the SpectroChemPy data directory.
-# To use a local copy, set ``SCP_MQMAS_SER`` to its SER file.
+# The public RbNO₃ experiments 15 and 206 and PST-5 experiment 51 are
+# loaded from the usual SpectroChemPy ``datadir``. The documentation fixture
+# fetch includes their licensed acquisition and processing parameters.
 # The cells below replay the historical calculations used for the figures and
 # the peak-width table above. They use the original phase and filtering conventions
 # for that comparison. The short workflow above uses the current plugin API.
@@ -231,9 +237,7 @@ if path and raw.shape[0] == 22:
 #    <span class="fold-notebook-input" data-summary="Historical processing functions" hidden></span>
 
 # %% jupyter={"source_hidden": true}
-PST5_SER = os.environ.get(
-    "SCP_MQMAS_SER", "nmrdata/bruker/tests/nmr/MQMAS_27AL_PST5/51/ser"
-)
+PST5_SER = scp.preferences.datadir / "nmrdata/bruker/tests/nmr/MQMAS_27AL_PST5/51/ser"
 
 
 def read_traces(path):
@@ -512,31 +516,28 @@ def compare_mqecho(root):
 #    <span class="fold-notebook-input" data-summary="Code for the three-spectrum comparison" hidden></span>
 
 # %% jupyter={"source_hidden": true}
-data_root = os.environ.get("SCP_RBNO3_DATA")
-if data_root:
-    pst5 = replay_pst5()
-    multiplex, stmas = replay(Path(data_root))
-    panels = (
-        ("²⁷Al PST-5\nConventional 3Q MQMAS (RR)", pst5),
-        ("⁸⁷Rb RbNO₃/206\n3Q MQMAS from multiplex", multiplex[:, -10.0:-60.0]),
-        ("⁸⁷Rb RbNO₃/15\nSTMAS", stmas[:, -10.0:-60.0]),
-    )
-    _ = scp.multiplot(
-        [dataset / dataset.max() for _, dataset in panels],
-        ncol=3,
-        method="contour",
-        labels=[title for title, _ in panels],
-        levels=[0.10, 0.18, 0.30, 0.50, 0.70, 0.90],
-        cmap="viridis",
-        x_reverse=True,
-        y_reverse=True,
-        xlabel="F2 (ppm)",
-        ylabel="Isotropic F1 (ppm)",
-        equal_aspect=False,
-        figsize=(12, 4),
-    )
-else:
-    print("Set SCP_RBNO3_DATA to the directory containing RbNO3/15 and RbNO3/206.")
+data_root = scp.preferences.datadir / "nmrdata/bruker/tests/nmr/RbNO3"
+pst5 = replay_pst5()
+multiplex, stmas = replay(data_root)
+panels = (
+    ("²⁷Al PST-5\nConventional 3Q MQMAS (RR)", pst5),
+    ("⁸⁷Rb RbNO₃/206\n3Q MQMAS from multiplex", multiplex[:, -10.0:-60.0]),
+    ("⁸⁷Rb RbNO₃/15\nSTMAS", stmas[:, -10.0:-60.0]),
+)
+_ = scp.multiplot(
+    [dataset / dataset.max() for _, dataset in panels],
+    ncol=3,
+    method="contour",
+    labels=[title for title, _ in panels],
+    levels=[0.10, 0.18, 0.30, 0.50, 0.70, 0.90],
+    cmap="viridis",
+    x_reverse=True,
+    y_reverse=True,
+    xlabel="F2 (ppm)",
+    ylabel="Isotropic F1 (ppm)",
+    equal_aspect=False,
+    figsize=(12, 4),
+)
 
 # %% [raw] raw_mimetype="text/restructuredtext"
 # .. raw:: html
@@ -544,5 +545,4 @@ else:
 #    <span class="fold-notebook-input" data-summary="Code for the echo weighting comparison" hidden></span>
 
 # %% jupyter={"source_hidden": true}
-if data_root:
-    compare_mqecho(Path(data_root))
+compare_mqecho(data_root)
