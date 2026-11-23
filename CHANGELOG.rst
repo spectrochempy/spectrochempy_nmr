@@ -7,6 +7,12 @@ distribution. The sections below describe changes in each plugin release.
 Unreleased
 ----------
 
+* Reject a States conversion profile that contradicts the normalized
+  acquisition's declared indirect sampling. Add qualified JCAMP States-family
+  and real processed-plane workflows, with signed reference tests and SCP
+  round trips. The paired provider extensions are development features.
+  (`#180 <https://github.com/spectrochempy/spectrochempy_nmr/pull/180>`_)
+
 * Allow the optional experimental core distribution baseline through
   ``autophase(..., baseline_options={"model": "distribution"})`` when the core
   provides it. Preserve masks on outputs while fitting an interpolated working

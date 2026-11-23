@@ -543,6 +543,12 @@ def _from_states(result, data, profile):
             f"{mode} requires normalized F1/F2 time-domain component planes"
         )
 
+    declared = result.acquisition.get("indirect_sampling")
+    if declared is not None and declared != profile:
+        raise ValueError(
+            "States conversion profile conflicts with declared indirect sampling"
+        )
+
     if profile == "states":
         if result.acquisition.get("tppi_alternation") is not None:
             raise ValueError(
