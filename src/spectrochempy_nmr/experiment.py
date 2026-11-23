@@ -1350,7 +1350,6 @@ class Experiment:
                         pow,
                         size,
                         phase,
-                        reference,
                         replay,
                     )
                 )
@@ -1360,10 +1359,17 @@ class Experiment:
                 raise ValueError("TPPI processing supports FFT and referencing only")
             from .processing.tppi import process_tppi  # noqa: PLC0415
 
+            if reference is not None and tppi_reference is not None:
+                raise ValueError("choose point anchors or tppi_reference, not both")
             result = process_tppi(ds, self._nmr_meta.spectral_width_hz, tppi_reference)
             requested = (
                 {} if tppi_reference is None else {"tppi_reference": tppi_reference}
             )
+            if reference is not None:
+                from .processing.interop_reference import _reference_interop_2d  # noqa: PLC0415
+
+                result = _reference_interop_2d(result, reference)
+                requested["reference"] = dict(result.meta.frequency_reference["axes"])
             return self._attach_scp_processing_trace(
                 result,
                 requested=requested,

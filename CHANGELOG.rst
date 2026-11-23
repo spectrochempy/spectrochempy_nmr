@@ -7,6 +7,12 @@ distribution. The sections below describe changes in each plugin release.
 Unreleased
 ----------
 
+* Process explicitly normalized JCAMP TPPI/QSEQ FIDs through the common TPPI
+  FFT, with optional F1/F2 point anchors. Preserve signed components and reject
+  declared unknown or nonzero filter delays instead of silently ignoring them.
+  Qualification uses controlled synthetic references; native Bruker TPPI/QSEQ
+  experiments and full vendor-recipe replay remain outside this scope.
+
 
 0.6.0 (2026-11-23)
 ------------------

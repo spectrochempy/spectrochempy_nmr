@@ -265,3 +265,50 @@ Experimental entry points
    read_agilent_interop
    reference_agilent_1d
    reference_interop_1d
+
+
+TPPI and QSEQ JCAMP processing
+~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+
+Development nmrglue-ng builds support declared TPPI and QSEQ JCAMP FIDs with
+direct DQD acquisition. Supply the physical dwell between successive F1
+samples from acquisition provenance. Do not infer it from the exported T1
+interval. QSEQ sign alternation is applied once by normalization, producing
+the common TPPI representation; the original scheme remains in metadata.
+
+For a validated acquisition whose physical indirect dwell is known:
+
+.. code-block:: python
+
+   raw = scp.nmr.read(
+       "qseq.dx", protocol="interop", profile="jcampdx-fid-2d",
+       normalize_options={
+           "quadrature": "qseq", "conjugation": "conjugate",
+           "indirect_dwell_s": physical_indirect_dwell_s,
+       },
+   )
+   spectrum = scp.nmr.Experiment(raw).process()
+
+This explicit conjugation matches the controlled TopSpin convention; establish
+the sign convention for another acquisition. A declared filter descriptor
+must record an unapplied, explicitly known zero group delay for this FFT
+path. Unknown or nonzero delays are rejected. Filtering, windows, manual
+phasing, variable FFT sizes and vendor-recipe replay are outside this path.
+The default output consists of four signed planes ``rr, ri, ir, ii`` on
+relative Hz grids. ``process(reference={"F1": ..., "F2": ...})`` accepts the
+same explicit point anchors documented above, without changing components.
+Choose either point anchors or ``tppi_reference``, not both.
+
+Saved SCP data preserves this processing contract without the provider or
+original files. Controlled synthetic TopSpin references and independent matrix
+DFTs check the numerical transforms; experimental native Bruker TPPI/QSEQ
+acquisitions and absolute experimental phases remain unqualified. TopSpin
+presentation uses ``RR, -IR, -RI, II`` and replaces the central ``2rr`` bin
+with its two F1 neighbors' average. The common FFT preserves that bin rather
+than applying this vendor display operation.
+
+The acquisition-mode definitions are documented in the Bruker
+`Acquisition Reference <https://nmrcore.chem.kuleuven.be/media/files/guides/bruker_manuals_4.2.0/acquisition-reference.pdf>`_
+under ``FnMODE``. The Bruker
+`Processing Reference <https://nmr.chem.ucsb.edu/docs/Bruker_NMR_Manuals/processing-reference_v007.pdf>`_
+distinguishes the real F1 transforms used by TPPI and QSEQ.

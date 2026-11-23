@@ -1,5 +1,7 @@
 """TPPI Fourier processing from quadrature, components and physical widths."""
 
+from collections.abc import Mapping
+
 import numpy as np
 
 import spectrochempy as scp
@@ -10,6 +12,20 @@ from .qf_interop import _fft_stage
 def process_tppi(dataset, spectral_widths, reference):
     """Return RR, RI, IR and II in F1, F2 order."""
     samples = np.asarray(dataset.data)
+    digital_filter = dataset.meta.get("acquisition", {}).get("digital_filter")
+    if digital_filter is not None and (
+        not isinstance(digital_filter, Mapping)
+        or digital_filter.get("applied") is not False
+        or isinstance(digital_filter.get("group_delay_points"), (bool, np.bool_))
+        or not isinstance(
+            digital_filter.get("group_delay_points"),
+            (int, float, np.integer, np.floating),
+        )
+        or digital_filter.get("group_delay_points") != 0
+    ):
+        raise ValueError(
+            "TPPI FFT requires an explicitly known zero digital-filter delay"
+        )
     if (
         tuple(dataset.dims) != ("y", "x")
         or min(samples.shape) < 2
