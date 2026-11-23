@@ -352,3 +352,51 @@ def test_tppi_inconsistent_physical_acquisition_refuses_before_processing(invali
         Experiment(source).process()
     np.testing.assert_array_equal(source.data, before.data)
     np.testing.assert_array_equal(source.y.data, before.y.data)
+
+
+def test_tppi_point_anchors_preserve_components_and_reject_conflicting_references():
+    source = _tppi_fid()
+    expected = Experiment(source).process()
+    refs = {
+        role: {"reference_frequency_mhz": 100.0, "point_index": 1, "ppm": 8.0}
+        for role in ("F1", "F2")
+    }
+    result = Experiment(source).process(reference=refs)
+    np.testing.assert_array_equal(result.data, expected.data)
+    for dim in ("y", "x"):
+        assert result.coordset[dim].data[1] == 8.0
+    with pytest.raises(ValueError, match="not both"):
+        Experiment(source).process(reference=refs, tppi_reference=((100, 8), (400, 4)))
+    with pytest.raises(ValueError, match="F1 and F2"):
+        Experiment(source).process(reference={"F1": refs["F1"]})
+
+
+@pytest.mark.parametrize(
+    "descriptor",
+    [
+        "unknown",
+        {"applied": False, "group_delay_points": 0j},
+        {"applied": False},
+        {"applied": False, "group_delay_points": 1},
+        {"applied": False, "group_delay_points": True},
+        {"applied": False, "group_delay_points": float("nan")},
+        {"applied": True, "group_delay_points": 0},
+    ],
+)
+def test_tppi_declared_digital_filter_cannot_be_silently_ignored(descriptor):
+    source = _tppi_fid()
+    source.meta.acquisition["digital_filter"] = descriptor
+    before = source.data.copy()
+    with pytest.raises(ValueError, match="zero digital-filter delay"):
+        Experiment(source).process()
+    np.testing.assert_array_equal(source.data, before)
+
+
+def test_tppi_explicit_zero_delay_preserves_fft():
+    source = _tppi_fid()
+    expected = Experiment(source).process()
+    source.meta.acquisition["digital_filter"] = {
+        "applied": False,
+        "group_delay_points": 0.0,
+    }
+    np.testing.assert_array_equal(Experiment(source).process().data, expected.data)
