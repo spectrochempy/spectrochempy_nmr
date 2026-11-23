@@ -7,6 +7,11 @@ distribution. The sections below describe changes in each plugin release.
 Unreleased
 ----------
 
+* Reject nonfinite or collapsed ppm grids before historical TopSpin XFB
+  replay, including stored plans. Share the same coordinate guard with
+  explicit recipes; valid grids and spectral values remain unchanged.
+  (`#183 <https://github.com/spectrochempy/spectrochempy_nmr/pull/183>`_)
+
 * Support explicit F1/F2 ppm point anchors after the common normalized 2D
   FFT through ``Experiment.process(reference={...})``. Preserve signed
   components, default Hz grids and separate reference/acquisition provenance.

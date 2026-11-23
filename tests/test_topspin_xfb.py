@@ -380,3 +380,23 @@ def test_qf_xfb_rejects_unqualified_prediction(qf_fid, axis, changes, message):
 
     with pytest.raises(ValueError, match=message):
         Experiment(qf_fid).process(replay="topspin")
+
+
+@pytest.mark.parametrize("axis", ["procs", "proc2s"])
+@pytest.mark.parametrize(
+    "field,value", [("SF", 1e-320), ("SF", 1e300), ("OFFSET", 1e300)]
+)
+@pytest.mark.parametrize("captured", [False, True])
+def test_historical_xfb_rejects_unrepresentable_ppm(
+    qf_fid, axis, field, value, captured
+):
+    qf_fid.meta.source_metadata[axis][field] = value
+    if captured:
+        plan = capture_xfb_plan(qf_fid)
+        assert plan is not None
+        qf_fid.meta.nmr_processing = {"vendor_profile": {"xfb_plan": plan}}
+        qf_fid.meta.source_metadata = {}
+    before = qf_fid.data.copy()
+    with pytest.raises(ValueError, match="ppm"):
+        Experiment(qf_fid).process(replay="topspin")
+    np.testing.assert_array_equal(qf_fid.data, before)
