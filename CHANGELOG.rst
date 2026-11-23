@@ -12,6 +12,7 @@ Unreleased
   declared unknown or nonzero filter delays instead of silently ignoring them.
   Qualification uses controlled synthetic references; native Bruker TPPI/QSEQ
   experiments and full vendor-recipe replay remain outside this scope.
+  (`#188 <https://github.com/spectrochempy/spectrochempy_nmr/pull/188>`_)
 
 
 0.6.0 (2026-11-23)
