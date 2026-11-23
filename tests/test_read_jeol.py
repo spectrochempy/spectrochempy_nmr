@@ -11,6 +11,7 @@ import os
 from importlib import import_module
 from inspect import signature
 from pathlib import Path
+from types import SimpleNamespace
 
 import numpy as np
 import pytest
@@ -345,8 +346,7 @@ def _assert_public_jeol_fid_interop_parity(
         (Experiment(actual).process(), Experiment(historical).process()),
     ):
         np.testing.assert_array_equal(migrated.data, legacy.data)
-        np.testing.assert_array_equal(migrated.x.data, legacy.x.data)
-        assert migrated.x.units == legacy.x.units
+        _assert_jeol_coordinate_parity(migrated.x, legacy.x)
         assert migrated.x.title == legacy.x.title
         assert migrated.units == legacy.units
 
@@ -523,3 +523,38 @@ def test_guess_udic_heteronuclear_axes_follow_numpy_order():
         assert udic[index]["obs"] == frequency
         assert udic[index]["car"] == carrier
         assert udic[index]["encoding"] == encoding
+
+
+def _assert_jeol_coordinate_parity(actual, expected):
+    assert actual.units == expected.units
+    if actual.units.is_compatible_with(scp.ur.s):
+        atol = (1e-15 * scp.ur.s).to(actual.units).magnitude
+        np.testing.assert_allclose(actual.data, expected.data, rtol=0, atol=atol)
+    else:
+        np.testing.assert_array_equal(actual.data, expected.data)
+
+
+@pytest.mark.parametrize("unit", ["s", "us"])
+def test_jeol_time_parity_allows_only_femtosecond_roundoff(unit):
+    values = (np.array([0.0, 99.84, 199.68]) * scp.ur.us).to(unit).magnitude
+    expected = SimpleNamespace(data=values, units=scp.ur.Unit(unit))
+    rounded = SimpleNamespace(data=np.nextafter(values, np.inf), units=expected.units)
+    _assert_jeol_coordinate_parity(rounded, expected)
+    displaced = values.copy()
+    displaced[1] += (5e-15 * scp.ur.s).to(unit).magnitude
+    with pytest.raises(AssertionError):
+        _assert_jeol_coordinate_parity(
+            SimpleNamespace(data=displaced, units=expected.units), expected
+        )
+
+
+@pytest.mark.parametrize("unit", ["Hz", "ppm"])
+def test_jeol_frequency_parity_requires_exact_coordinates(unit):
+    values = np.array([100.0, 90.0, 80.0])
+    expected = SimpleNamespace(data=values, units=scp.ur.Unit(unit))
+    _assert_jeol_coordinate_parity(expected, expected)
+    with pytest.raises(AssertionError):
+        _assert_jeol_coordinate_parity(
+            SimpleNamespace(data=np.nextafter(values, np.inf), units=expected.units),
+            expected,
+        )
