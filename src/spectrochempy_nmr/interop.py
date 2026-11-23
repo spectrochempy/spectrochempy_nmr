@@ -78,7 +78,7 @@ def _axis_coordinate(axis, size, dim, **coord_options):
     return scp.Coord(np.array(values, copy=True), **kwargs, **coord_options)
 
 
-def _frequency_coordinate(axis, size, **coord_options):
+def _frequency_coordinate(axis, size, *, reference_only=False, **coord_options):
     """Preserve an explicitly calibrated normalized frequency grid."""
     import spectrochempy as scp  # noqa: PLC0415
 
@@ -141,7 +141,10 @@ def _frequency_coordinate(axis, size, **coord_options):
             raise ValueError(
                 "normalized reference frequency must be a positive MHz scalar"
             )
-        coord.meta["acquisition_frequency"] = float(frequency) * scp.ur.MHz
+        key = "reference_frequency" if reference_only else "acquisition_frequency"
+        coord.meta[key] = float(frequency) * scp.ur.MHz
+        if reference_only and reference.source == "acquisition":
+            coord.meta["acquisition_frequency"] = float(frequency) * scp.ur.MHz
         coord.meta["reference_source"] = reference.source
     return coord
 
@@ -355,7 +358,12 @@ def _from_2d(result, data):
         ]
     else:
         coords = [
-            _frequency_coordinate(axis, size, linearize_below=0.0)
+            _frequency_coordinate(
+                axis,
+                size,
+                reference_only="axis_reference" in result.acquisition,
+                linearize_below=0.0,
+            )
             for axis, size in zip(result.axes, plane.shape[-2:], strict=True)
         ]
     if paired_spectrum:

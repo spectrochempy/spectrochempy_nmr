@@ -149,6 +149,31 @@ export only the real ``2rr`` plane, with no imaginary pages. This route does
 not reconstruct 2ri/2ir/2ii or apply additional NC_proc or scan/gain scaling.
 Its axes remain the declared Hz or ppm grids; no chemical zero is inferred.
 
+Development nmrglue-ng can explicitly calibrate both declared Hz axes to ppm:
+
+.. code-block:: python
+
+   spectrum = scp.nmr.read(
+       "processed.dx", protocol="interop", profile="jcampdx-spectrum-2d",
+       normalize_options={"axis_reference": {
+           "F1": {"reference_frequency_mhz": 100.0, "point_index": 0,
+                  "ppm": 12.0, "source": "processing"},
+           "F2": {"reference_frequency_mhz": 400.0, "point_index": 0,
+                  "ppm": 10.0, "source": "processing"},
+       }},
+   )
+
+Replace these illustrative values with a known zero-based point and reference
+frequency for each axis. For native Bruker processed grids, use ``proc2s``
+(F1) and ``procs`` (F2): ``SF`` in MHz, index zero and ``OFFSET`` in ppm.
+Processing ``SF`` can differ from acquisition ``SFO1``. The affine conversion
+preserves intensities and sample order. Coordinate ``reference_frequency``
+retains the supplied MHz value; it is also called ``acquisition_frequency``
+only when explicitly declared as acquisition provenance. Ppm coordinates survive ``.scp``
+save/reload. Both axes must initially be in Hz. No chemical origin or vendor
+parameter-to-axis mapping is inferred. This option does not reference raw
+FID Fourier transforms.
+
 .. currentmodule:: spectrochempy_nmr
 
 .. autosummary::
