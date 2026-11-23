@@ -238,11 +238,21 @@ def _positive_fft(data, size, axis):
     return np.fft.fftshift(np.fft.ifft(data, n=size, axis=axis) * size, axes=axis)
 
 
+def _xfb_axis_values(params):
+    size = params["fft_size"]
+    with np.errstate(over="ignore", invalid="ignore", divide="ignore"):
+        values = params["first_point_ppm"] - (np.arange(size) / size) * (
+            params["spectral_width_hz"] / params["reference_frequency_mhz"]
+        )
+        differences = np.diff(values)
+    if not np.isfinite(values).all() or not np.all(differences < 0):
+        raise ValueError("XFB plan requires finite strictly decreasing ppm coordinates")
+    return values
+
+
 def _processed_axis(params, source_axis):
-    bins = np.arange(params["fft_size"]) / params["fft_size"]
     axis = Coord(
-        params["first_point_ppm"]
-        - bins * (params["spectral_width_hz"] / params["reference_frequency_mhz"]),
+        _xfb_axis_values(params),
         units="ppm",
         title=source_axis.title,
         rounding=False,
@@ -307,20 +317,6 @@ def replay_xfb(source, *, plan=None, mode=None):
         ):
             raise ValueError("XFB plan spectral widths disagree with the acquisition")
         _validate_stored_xfb_plan(plan, mode, (ny, nx), recorded_widths)
-        for name in ("f1", "f2"):
-            axis_plan = plan[name]
-            size = axis_plan["fft_size"]
-            with np.errstate(over="ignore", invalid="ignore", divide="ignore"):
-                values = axis_plan["first_point_ppm"] - (np.arange(size) / size) * (
-                    axis_plan["spectral_width_hz"]
-                    / axis_plan["reference_frequency_mhz"]
-                )
-                differences = np.diff(values)
-            if not np.isfinite(values).all() or not np.all(differences < 0):
-                raise ValueError(
-                    "XFB plan requires finite strictly decreasing ppm coordinates"
-                )
-
     else:
         processing = meta.get("nmr_processing") or {}
         if not isinstance(processing, Mapping):
@@ -335,6 +331,8 @@ def replay_xfb(source, *, plan=None, mode=None):
             )
         else:
             _validate_stored_xfb_plan(plan, mode, (ny, nx), widths)
+    for name in ("f1", "f2"):
+        _xfb_axis_values(plan[name])
     result, applied = _execute_xfb(source, data, plan)
     if explicit_plan:
         applied["input_widths_hz"] = tuple(float(w) for w in widths)
