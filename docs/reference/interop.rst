@@ -61,7 +61,7 @@ Saving the raw dataset as SCP retains its processing contract.
 Echo/anti-echo processing
 ~~~~~~~~~~~~~~~~~~~~~~~~~
 
-Development nmrglue-ng also supports declared echo/anti-echo FIDs with direct
+nmrglue-ng 1.5.0 also supports declared echo/anti-echo FIDs with direct
 simultaneous DQD acquisition. Confirm that each adjacent trace pair belongs
 to one physical indirect increment, and establish the time between pairs
 from acquisition provenance. Do not infer it by simply subsampling the stored
@@ -104,7 +104,7 @@ requiring the source reader or original vendor metadata during processing.
 States and States-TPPI processing
 ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
 
-Development nmrglue-ng also normalizes declared States and States-TPPI DQD
+nmrglue-ng 1.5.0 also normalizes declared States and States-TPPI DQD
 FID pages. Use the matching ``quadrature`` and ``conversion_profile``;
 confirm adjacent pairs and provide the physical dwell from acquisition
 provenance, just as for echo/anti-echo. Four stored component planes are
@@ -177,7 +177,7 @@ spectral widths (relative tolerance ``1e-12`` for serialization roundoff)
 and uncorrected uniform time grids. Both input and recipe widths are recorded.
 An explicit QF ``normalize_options={"quadrature": "qf", "conjugation": "none",
 "indirect_dwell_s": physical_dwell}`` can establish a known acquisition T1
-step when the JCAMP grid differs; this requires development nmrglue-ng.
+step when the JCAMP grid differs; this requires nmrglue-ng 1.5.0.
 A genuine width mismatch is rejected. It rejects incompatible
 plans and individual processing overrides. It interprets no raw vendor
 parameters from JCAMP metadata. The serialized plan can be kept separately
@@ -193,7 +193,7 @@ read with truncated points or unsupported processing status is insufficient.
 Processed real 2D exports
 ~~~~~~~~~~~~~~~~~~~~~~~~~
 
-Development nmrglue-ng accepts native TopSpin real-plane NTUPLES with a
+nmrglue-ng 1.5.0 accepts native TopSpin real-plane NTUPLES with a
 per-page dependent dimension. Import them as frequency-domain data:
 
 .. code-block:: python
@@ -208,7 +208,7 @@ export only the real ``2rr`` plane, with no imaginary pages. This route does
 not reconstruct 2ri/2ir/2ii or apply additional NC_proc or scan/gain scaling.
 Its axes remain the declared Hz or ppm grids; no chemical zero is inferred.
 
-Development nmrglue-ng can explicitly calibrate both declared Hz axes to ppm:
+nmrglue-ng 1.5.0 can explicitly calibrate both declared Hz axes to ppm:
 
 .. code-block:: python
 
