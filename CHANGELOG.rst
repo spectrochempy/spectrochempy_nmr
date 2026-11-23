@@ -7,6 +7,19 @@ distribution. The sections below describe changes in each plugin release.
 Unreleased
 ----------
 
+* Support explicit F1/F2 ppm point anchors after the common normalized 2D
+  FFT through ``Experiment.process(reference={...})``. Preserve signed
+  components, default Hz grids and separate reference/acquisition provenance.
+  Accept validated serialized XFB recipes through ``process(replay=plan)``
+  for normalized QF, States, States-TPPI and echo/anti-echo inputs; reject
+  incompatible acquisitions and unrepresentable ppm coordinates. States
+  uses its signed component arrangement without TPPI alternation. Recipes
+  retain the supported XFB operations and require matching complete status;
+  they do not infer missing vendor parameters or intensity normalization.
+  A development nmrglue-ng extension allows an explicit physical QF indirect
+  dwell when the declared JCAMP T1 step differs. Existing defaults remain
+  unchanged, and TPPI/QSEQ are outside these processing paths.
+
 * Reject a States conversion profile that contradicts the normalized
   acquisition's declared indirect sampling. Add qualified JCAMP States-family
   and real processed-plane workflows, with signed reference tests and SCP

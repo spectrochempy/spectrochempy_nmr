@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 from collections.abc import Mapping
+from numbers import Integral
 
 import numpy as np
 
@@ -128,5 +129,100 @@ def reference_interop_1d(dataset, *, reference, units="ppm"):
         "units": units,
     }
     result.history = f"Explicit interop 1D reference: {reference}, output {units}"
+    result.meta.readonly = readonly
+    return result
+
+
+def _reference_interop_2d(dataset, reference):
+    """Apply explicit point anchors to the two frequency axes after a common FFT."""
+    import spectrochempy as scp  # noqa: PLC0415
+
+    if not isinstance(reference, Mapping) or set(reference) != {"F1", "F2"}:
+        raise ValueError("2D reference requires explicit F1 and F2 mappings")
+    if (
+        dataset.meta.get("data_domain") != "frequency"
+        or tuple(dataset.dims[-2:]) != ("y", "x")
+        or tuple(dataset.meta.get("isfreq", ()))[-2:] != (True, True)
+        or tuple(dataset.meta.get("axis_roles", ()))[-2:] != ("F1", "F2")
+    ):
+        raise ValueError("2D reference requires two normalized frequency axes")
+    if dataset.meta.get("frequency_reference"):
+        raise ValueError("this spectrum is already referenced")
+    result = dataset.copy()
+    records = {}
+    coordinates = {}
+    required = {"reference_frequency_mhz", "point_index", "ppm"}
+    for role, dim in (("F1", "y"), ("F2", "x")):
+        spec = reference[role]
+        if (
+            not isinstance(spec, Mapping)
+            or not required <= set(spec)
+            or set(spec) - required - {"source"}
+        ):
+            raise ValueError("each 2D reference requires MHz, point_index and ppm")
+        frequency = _number(spec, "reference_frequency_mhz", positive=True)
+        ppm = _number(spec, "ppm")
+        index = spec["point_index"]
+        source = spec.get("source", "unknown")
+        axis = dataset.coordset[dim]
+        hz = np.asarray(axis.data)
+        if (
+            axis.units != scp.ur.Hz
+            or hz.ndim != 1
+            or hz.size < 2
+            or hz.dtype.kind not in "iuf"
+            or not np.isfinite(hz).all()
+            or not (np.all(np.diff(hz) > 0) or np.all(np.diff(hz) < 0))
+        ):
+            raise ValueError("2D reference requires finite monotonic Hz coordinates")
+        if (
+            isinstance(index, (bool, np.bool_))
+            or not isinstance(index, Integral)
+            or not 0 <= index < hz.size
+            or source not in ("processing", "acquisition", "unknown")
+        ):
+            raise ValueError("invalid 2D reference point_index or source")
+        with np.errstate(over="ignore", divide="ignore", invalid="ignore"):
+            values = ppm + (hz - hz[index]) / frequency
+            steps = np.diff(values)
+        if not np.isfinite(values).all() or not (
+            np.all(steps > 0) or np.all(steps < 0)
+        ):
+            raise ValueError("2D reference must retain finite monotonic coordinates")
+        coord = scp.Coord(
+            values,
+            units="ppm",
+            title="chemical shift",
+            rounding=False,
+            sigdigits=15,
+            linearize_below=0.0,
+        )
+        coord.meta.update(dict(axis.meta.copy()))
+        coord.meta.reference_frequency = frequency * scp.ur.MHz
+        coord.meta.reference_source = source
+        coordinates[dim] = coord
+        records[role] = {
+            "reference_frequency_mhz": frequency,
+            "point_index": int(index),
+            "ppm": ppm,
+            "source": source,
+            "input_anchor_hz": float(hz[index]),
+        }
+    readonly = result.meta.readonly
+    result.meta.readonly = False
+    result.set_coordset(**coordinates)
+    for dim in coordinates:
+        values = result.coordset[dim].data
+        if not np.isfinite(values).all() or not (
+            np.all(np.diff(values) > 0) or np.all(np.diff(values) < 0)
+        ):
+            raise ValueError(
+                "2D reference cannot be represented at coordinate precision"
+            )
+    result.meta.frequency_reference = {
+        "profile": "normalized-2d-point-reference-v1",
+        "axes": records,
+    }
+    result.history = "Explicit point calibration of both 2D FFT axes to ppm"
     result.meta.readonly = readonly
     return result
