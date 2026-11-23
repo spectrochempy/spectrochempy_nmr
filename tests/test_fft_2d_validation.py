@@ -269,11 +269,23 @@ class TestFFT2DAgilent:
         assert np.isfinite(mag).all(), "Non-finite values after Agilent 2D TPPI FFT"
         assert maxval > 0, "No peak found after Agilent 2D TPPI FFT"
 
-    def test_agilent_2d_indirect_fft_rejects_unvalidated_profiles(self):
-        for name in ("agilent_2d", "agilent_2d_tppi"):
-            ds = scp.read_agilent(EXTRA_NMR / "agilent" / name)
-            with pytest.raises(NotImplementedError, match="UNVALIDATED"):
-                ds.fft(dim="x").fft(dim="y")
+    @pytest.mark.parametrize(
+        ("name", "message"),
+        [
+            ("agilent_2d", "F1 acquisition mode is ambiguous"),
+            ("agilent_2d_tppi", "UNVALIDATED:AGILENT-TPPI"),
+        ],
+    )
+    def test_agilent_2d_indirect_fft_rejects_unvalidated_profiles(self, name, message):
+        ds = scp.read_agilent(EXTRA_NMR / "agilent" / name)
+        direct = ds.fft(dim="x")
+        before = direct.data.copy()
+        with pytest.raises(NotImplementedError, match=message) as error:
+            direct.fft(dim="y")
+        if name == "agilent_2d":
+            assert 'quadrature="states"' in str(error.value)
+            assert 'quadrature="states-tppi"' in str(error.value)
+        np.testing.assert_array_equal(direct.data, before)
 
     def test_agilent_2d_fft_encoding_preserved(self):
         ds = scp.read_agilent(EXTRA_NMR / "agilent" / "agilent_2d")
