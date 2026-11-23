@@ -301,3 +301,27 @@ def test_jeol_single_section_pair_requires_full_regular_grid(sampling, nominal):
     }
     with pytest.raises(ValueError, match="JEOL.*full regular sampling grid"):
         from_interop(source)
+
+
+@pytest.mark.parametrize(
+    "declared,profile", [("states", "states-tppi"), ("states-tppi", "states")]
+)
+def test_states_profile_cannot_override_declared_sampling(declared, profile):
+    source = _normalized(np.ones((4, 2, 3), dtype=float))
+    source.axes = (
+        _normalized(axis_values=np.arange(2) / 500).axes[0],
+        _normalized(axis_values=np.arange(3) / 1000).axes[0],
+    )
+    source.dimensions = ("channels", "F1", "F2")
+    source.physical_dimensions = ("F1", "F2")
+    source.domains = ("time", "time")
+    source.encoding = ("complex", "complex")
+    source.quadrature_mode = "stored-components-2d"
+    source.branch_order = ("rr", "ri", "ir", "ii")
+    source.channel_axis = 0
+    source.acquisition = {
+        "spectral_width_hz": (500, 1000),
+        "indirect_sampling": declared,
+    }
+    with pytest.raises(ValueError, match="conflicts with declared indirect sampling"):
+        from_interop(source, profile=profile)

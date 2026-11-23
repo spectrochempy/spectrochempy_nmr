@@ -101,7 +101,53 @@ this qualifies the stated operations, not an absolute experimental phase or
 ppm reference. Time-domain correction is also checked against the native
 Bruker route. Saved SCP data retains the common processing contract, without
 requiring the source reader or original vendor metadata during processing.
-States and States-TPPI JCAMP normalization remain unsupported.
+States and States-TPPI processing
+~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+
+Development nmrglue-ng also normalizes declared States and States-TPPI DQD
+FID pages. Use the matching ``quadrature`` and ``conversion_profile``;
+confirm adjacent pairs and provide the physical dwell from acquisition
+provenance, just as for echo/anti-echo. Four stored component planes are
+adapted into E1/E2 complex channels. States-TPPI alternation is applied by
+processing, not by reading.
+
+For an acquisition whose established indirect width is ``indirect_width_hz``:
+
+.. code-block:: python
+
+   raw = scp.nmr.read(
+       "states_tppi.dx", protocol="interop", profile="jcampdx-fid-2d",
+       conversion_profile="states-tppi",
+       normalize_options={
+           "quadrature": "states-tppi", "conjugation": "none",
+           "confirm_adjacent_pairs": True,
+           "indirect_dwell_s": 1.0 / indirect_width_hz,
+       },
+   )
+   spectrum = scp.nmr.Experiment(raw).process()
+
+For pure States, use ``"states"`` in both options. The same common FFT engine
+handles the imported channels without vendor or experiment-name dispatch.
+SCP round trips preserve this contract. Results have four signed planes and
+relative Hz axes; absolute phase and ppm references remain unqualified.
+
+Processed real 2D exports
+~~~~~~~~~~~~~~~~~~~~~~~~~
+
+Development nmrglue-ng accepts native TopSpin real-plane NTUPLES with a
+per-page dependent dimension. Import them as frequency-domain data:
+
+.. code-block:: python
+
+   spectrum = scp.nmr.read(
+       "processed.dx", protocol="interop", profile="jcampdx-spectrum-2d",
+   )
+
+The declared F1/F2 coordinates and YFACTOR-scaled exported intensities are
+preserved. Do not apply another FFT. Native TopSpin 4.5.0 RSPEC+ISPEC examples
+export only the real ``2rr`` plane, with no imaginary pages. This route does
+not reconstruct 2ri/2ir/2ii or apply additional NC_proc or scan/gain scaling.
+Its axes remain the declared Hz or ppm grids; no chemical zero is inferred.
 
 .. currentmodule:: spectrochempy_nmr
 
