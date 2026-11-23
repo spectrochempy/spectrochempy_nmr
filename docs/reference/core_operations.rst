@@ -17,7 +17,7 @@ use each operation on an acquisition or spectrum.
        :external+core:py:func:`~spectrochempy.sp`
      - Apply exponential, Gaussian or sine-bell weighting to time-domain
        data. For explicit 1D processing with a recorded trace, see
-       :doc:`/userguide/processing_1d`.
+       :doc:`/userguide/processing_1d_details`.
    * - :external+core:py:func:`~spectrochempy.zf_size`
      - Set the number of points before Fourier transformation. Zero filling
        makes the frequency grid denser while retaining the acquisition's
@@ -60,7 +60,7 @@ parameters from an array-based workflow.
      - SpectroChemPy workflow
    * - ``proc_base`` apodization, zero filling, FFT, phase
      - Dataset methods ``em()``, ``gm()``, ``sp()``, ``zf_size()``, ``fft()``
-       and ``pk()``. See :doc:`/userguide/processing_1d`.
+       and ``pk()``. See :doc:`/userguide/processing_1d_details`.
    * - ``pipe_proc`` processing with metadata
      - Process a dataset with calibrated coordinates and history. See
        :doc:`/userguide/processing_2d` for quadrature and transform order.

@@ -1,29 +1,35 @@
 Guides
 ======
 
+Choose a task below. For your first figure, start with
+:doc:`Your first spectrum </getting_started/quickstart>`.
+
 .. toctree::
-   :maxdepth: 2
+   :caption: Open and process
+   :maxdepth: 1
 
    reading_data
-   reader_workflows
-   exchanging_spectra
    processing_1d
-   apodization
    processing_2d
-   bruker_indirect_sampling
-   fourier
    quadrupolar
+   apodization
+
+.. toctree::
+   :caption: Measure and analyze
+   :maxdepth: 1
+
    analysis
    baseline
    distribution_baseline
+
+.. toctree::
+   :caption: Simulate and exchange
+   :maxdepth: 1
+
    pulsar
-   pulsar_scope
    pulse_programs
+   exchanging_spectra
+   reader_workflows
 
-See also
---------
-
-* :external+core:doc:`NMR plugin in SpectroChemPy <userguide/plugins/nmr>`
-* :external+core:doc:`Core plotting guide <userguide/plotting/index>`
-* :external+core:doc:`Core processing guide <userguide/processing/index>`
-* :external+core:doc:`Core analysis guide <userguide/analysis/index>`
+For format conventions and reference checks, see the
+:doc:`technical appendices </appendices/index>`.
