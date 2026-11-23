@@ -8,3 +8,4 @@ About
    changelog
    bibliography
    devguide/index
+   appendices/index

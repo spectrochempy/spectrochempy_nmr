@@ -79,7 +79,7 @@ first and fit the baseline on its real absorption channel:
 
 Keep ``result.phased`` for any later phase correction; the imaginary channel
 has not undergone this real-only baseline subtraction. Phase estimation has
-its own reference and exclusion options; see :doc:`processing_1d`.
+its own reference and exclusion options; see :doc:`processing_1d_details`.
 
 For this fit, the plugin interpolates masked absorption values in sample
 index on a separate unmasked working copy, with nearest valid values at the

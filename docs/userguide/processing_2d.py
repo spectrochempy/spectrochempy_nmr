@@ -15,33 +15,22 @@
 # Processing 2D NMR data
 # ======================
 #
-# Use the plugin's :doc:`reader <reading_data>` to load the 2D dataset.
-# The reader arranges the components and records the physical quadrature.
-# The common processing path uses this information, independently of the
-# instrument, source format, or experiment name (COSY, HSQC, and so on).
-# See :doc:`/concepts/quadrature` for the supported conventions and
-# :ref:`nmr-processing-validation` for the distinction between runtime checks
-# and qualification against reference data.
+# Display a 2D spectrum from a public Bruker acquisition. Run the cells in
+# order. This example shows a magnitude map, which is useful for seeing the
+# peaks without choosing phase angles. It is not a substitute for a phased
+# absorption spectrum when measuring signed peak areas.
 #
-# For an interrupted States-TPPI acquisition or a nonuniformly sampled
-# Bruker SER, see :doc:`bruker_indirect_sampling` before transforming F1.
+# The plugin handles the acquisition mode when it is known from the file.
+# For an interrupted or nonuniformly sampled acquisition, follow
+# :doc:`bruker_indirect_sampling` before processing your own data.
 #
-# Process the direct dimension (F2) before the indirect dimension (F1) for
-# supported paired acquisitions. The plugin uses the acquisition metadata to
-# select the quadrature convention and check the transform order. When
-# processing explicitly on a supported dataset, you can inspect the
-# mixed-domain result after F2 before transforming F1.
-
 # %% [raw] raw_mimetype="text/restructuredtext"
 # Process an acquired Bruker HMQC
-# --------------------------------
+# -------------------------------
 #
-# The PST-5 aluminium/phosphorus HMQC in the common datadir has a qualified
-# States-TPPI reconstruction. Reading retains its complete acquired pairs,
-# corrects the direct digital-filter delay once, and supplies the common
-# representation. Apply the windows to the acquired samples before the two
-# transforms. This workflow uses SpectroChemPy processing settings, rather
-# than replaying the archived TopSpin recipe.
+# This PST-5 aluminium/phosphorus HMQC is included in the public example
+# data. Read the signal, smooth it along both axes, then transform it into
+# a spectrum. The map below displays frequency offsets in Hz.
 
 # %%
 import spectrochempy as scp
@@ -62,41 +51,17 @@ _ = magnitude.plot(
 )
 
 # %% [raw] raw_mimetype="text/restructuredtext"
-# The result has four real spectral components. Their Euclidean norm gives
-# the displayed hypercomplex magnitude without choosing phase angles.
-# Squared cosine windows (``ssb=2, pow=2``) retain the start of each FID.
-# Magnitude loses phase and sign information; retain ``spectrum`` and phase
-# the components before extracting RR for absorptive peak integration.
-# Both coordinates are carrier-relative frequency offsets in Hz. The reader
-# retains 73 complete F1 pairs from this interrupted uniform acquisition.
-# Windowing and the FFT use that acquired prefix, without constructing
-# missing samples. See :doc:`bruker_indirect_sampling` for the stored counts
-# and the distinct archived-recipe replay. Data: Christian Fernandez, LCS,
-# CC BY 4.0, distributed through spectrochempy_data.
+# The contours show the positions and relative heights of the visible
+# resonances. ``start=0.15`` hides low-level contours below 15% of the
+# maximum; lower it to see weaker peaks, or raise it to hide more noise.
+# ``nlevels`` sets the number of contour levels. The axes show offsets in Hz.
 #
-# The :doc:`short gallery workflow </examples/gallery/nmr/plot_bruker_2d>`
-# runs these same operations. Choose a topic below for the detailed method.
-
-
-# %% [raw] raw_mimetype="text/restructuredtext"
-# Choose a processing topic
-# --------------------------
+# This map is a magnitude: it does not retain the sign of each resonance.
+# Keep ``spectrum`` for phase correction before quantitative integration.
+# Data: Christian Fernandez, LCS, CC BY 4.0, distributed through
+# spectrochempy_data.
 #
-# * :doc:`quadrature_2d`: how QF, States, States-TPPI, echo/anti-echo and TPPI
-#   encode F1, with Fourier and calibration conventions.
-# * :doc:`phase_2d`: automatic common or individual F2 phases and a before/after
-#   comparison on a spectral series.
-# * :doc:`components_2d`: RR/RI/IR/II planes, slices and replacement of traces.
-# * :doc:`baseline`: SNIP in 1D and polynomial corrections along F1 and F2.
-# * :doc:`replay_2d`: recorded TopSpin settings and digital-filter policy.
-# * :doc:`qf_2d`: a complete QF magnitude workflow on a JEOL COSY acquisition.
-#
-# .. toctree::
-#    :hidden:
-#    :maxdepth: 1
-#
-#    quadrature_2d
-#    phase_2d
-#    components_2d
-#    replay_2d
-#    qf_2d
+# Continue with :doc:`phase_2d` to adjust phase, :doc:`components_2d` to
+# inspect sections, or :doc:`analysis` to measure a phased spectrum.
+# Acquisition-specific conventions and the reference dataset are described
+# in the :doc:`technical appendices </appendices/index>`.
