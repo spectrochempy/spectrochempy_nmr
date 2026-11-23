@@ -7,6 +7,10 @@ distribution. The sections below describe changes in each plugin release.
 Unreleased
 ----------
 
+
+0.6.0 (2026-11-23)
+------------------
+
 * Reject nonfinite or collapsed ppm grids before historical TopSpin XFB
   replay, including stored plans. Share the same coordinate guard with
   explicit recipes; valid grids and spectral values remain unchanged.
@@ -21,7 +25,7 @@ Unreleased
   uses its signed component arrangement without TPPI alternation. Recipes
   retain the supported XFB operations and require matching complete status;
   they do not infer missing vendor parameters or intensity normalization.
-  A development nmrglue-ng extension allows an explicit physical QF indirect
+  An nmrglue-ng 1.5.0 extension allows an explicit physical QF indirect
   dwell when the declared JCAMP T1 step differs. Existing defaults remain
   unchanged, and TPPI/QSEQ are outside these processing paths.
   (`#182 <https://github.com/spectrochempy/spectrochempy_nmr/pull/182>`_)
@@ -29,7 +33,7 @@ Unreleased
 * Reject a States conversion profile that contradicts the normalized
   acquisition's declared indirect sampling. Add qualified JCAMP States-family
   and real processed-plane workflows, with signed reference tests and SCP
-  round trips. The paired provider extensions are development features.
+  round trips. The paired provider extensions require nmrglue-ng 1.5.0.
   (`#180 <https://github.com/spectrochempy/spectrochempy_nmr/pull/180>`_)
 
 * Allow the optional experimental core distribution baseline through
