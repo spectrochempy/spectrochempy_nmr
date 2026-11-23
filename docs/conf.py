@@ -51,7 +51,7 @@ templates_path = ["_templates"]
 core_docs_url = os.environ.get(
     "NMR_CORE_DOCS_URL",
     (
-        "https://www.spectrochempy.fr/spectrochempy-v1.4.0/"
+        "https://www.spectrochempy.fr/1.4.0/"
         if _tagged_release
         else "https://www.spectrochempy.fr/latest/"
     ),
