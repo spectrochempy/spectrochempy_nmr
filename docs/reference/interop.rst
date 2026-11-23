@@ -319,7 +319,7 @@ under ``FnMODE``. The Bruker
 distinguishes the real F1 transforms used by TPPI and QSEQ.
 
 Public experimental TPPI qualification
-~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
 
 The Young lab's `2025-indole-azo-sterics dataset
 <https://github.com/the-young-lab/2025-indole-azo-sterics/tree/73af741bff1059a2a8491254a5f765644b985952>`_
