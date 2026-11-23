@@ -19,6 +19,7 @@ Unreleased
   A development nmrglue-ng extension allows an explicit physical QF indirect
   dwell when the declared JCAMP T1 step differs. Existing defaults remain
   unchanged, and TPPI/QSEQ are outside these processing paths.
+  (`#182 <https://github.com/spectrochempy/spectrochempy_nmr/pull/182>`_)
 
 * Reject a States conversion profile that contradicts the normalized
   acquisition's declared indirect sampling. Add qualified JCAMP States-family
