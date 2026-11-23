@@ -108,10 +108,11 @@ def test_xfb_replays_captured_plan_after_reload(qf_fid, tmp_path):
     ("mode", "labels", "ft_mode"),
     [
         ("states-tppi", ("E1", "E2"), 4),
+        ("states", ("E1", "E2"), 6),
         ("echo-antiecho", ("first", "second"), 6),
     ],
 )
-def test_xfb_reloads_both_paired_profiles(qf_fid, tmp_path, mode, labels, ft_mode):
+def test_xfb_reloads_paired_profiles(qf_fid, tmp_path, mode, labels, ft_mode):
     # Keep both acquisition branches asymmetric so a swap or conjugation
     # changes the expected components.
     first = qf_fid.data
@@ -153,7 +154,7 @@ def test_xfb_reloads_both_paired_profiles(qf_fid, tmp_path, mode, labels, ft_mod
         imag_pair[1] *= -1
     real = indirect_dft @ real_pair
     imag = indirect_dft @ imag_pair
-    if mode == "states-tppi":
+    if mode in ("states", "states-tppi"):
         rr, ri, ir, ii = real.real.copy(), -real.imag, -imag.real, imag.imag
     else:
         rr, ri, ir, ii = real.imag.copy(), real.real, -imag.imag, -imag.real

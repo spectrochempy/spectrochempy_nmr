@@ -14,6 +14,7 @@ never references Bruker-specific field names (``nuc1``, ``pulprog``,
 from __future__ import annotations
 
 import re
+from collections.abc import Mapping
 from numbers import Real
 from typing import TYPE_CHECKING
 from typing import cast
@@ -1088,11 +1089,11 @@ class Experiment:
         phase: str | None = _DEFAULT_PHASE,
         phc0: float = _DEFAULT_PHC0,
         phc1: float = _DEFAULT_PHC1,
-        reference: str | None = None,
+        reference: str | Mapping | None = None,
         echo_antiecho: str | None = None,
         digital_filter: str | None = None,
         bruker_group_delay: float | None = None,
-        replay: str | None = None,
+        replay: str | Mapping | None = None,
         tppi_reference: tuple[tuple[float, float], tuple[float, float]] | None = None,
     ) -> NDDataset:
         """
@@ -1140,8 +1141,12 @@ class Experiment:
         phc1 : float
             First-order phase correction in degrees (manual mode).
 
-        reference : str, optional
-            Explicit normalized frequency-axis candidate. Interop spectra stay
+        reference : str or mapping, optional
+            For normalized 2D FFTs, supply F1 and F2 mappings with a positive
+            ``reference_frequency_mhz``, zero-based ``point_index`` and known
+            ``ppm``. Optional ``source`` records processing/acquisition/unknown.
+            This calibrates coordinates after FFT without changing data.
+            For 1D, select an explicit normalized frequency-axis candidate. Interop spectra stay
             on the core Hz grid when omitted; no chemical zero is guessed.
         echo_antiecho : str, optional
             The normalized echo/anti-echo component arrangement uses
@@ -1160,8 +1165,11 @@ class Experiment:
             Override the group delay in complex F2 samples. With a method
             selected, the default is to resolve it from acquisition metadata.
             Supplying a delay alone selects "phase".
-        replay : str, optional
-            Select "topspin" to replay recorded DQD 1D EFP or supported
+        replay : str or mapping, optional
+            A serialized ``topspin-xfb-v1`` plan can be supplied explicitly for
+            normalized QF, States, States-TPPI or echo/anti-echo input. Its shape,
+            widths and quadrature must match. It supplies all processing
+            parameters; individual overrides are rejected. Select "topspin" to replay recorded DQD 1D EFP or supported
             uniform 2D XFB processing parameters.
             Read the uncorrected acquisition. Replay uses the
             processing ppm grid and retains the FID's scan/gain normalization.
@@ -1210,8 +1218,8 @@ class Experiment:
         }
 
         if replay is not None:
-            if replay != "topspin":
-                raise ValueError('replay must be "topspin"')
+            if not isinstance(replay, Mapping) and replay != "topspin":
+                raise ValueError('replay must be "topspin" or an explicit XFB plan')
             if any(explicit_arguments.values()) or any(
                 value is not None
                 for value in (
@@ -1219,10 +1227,40 @@ class Experiment:
                     echo_antiecho,
                     digital_filter,
                     bruker_group_delay,
+                    tppi_reference,
                 )
             ):
                 raise ValueError(
                     "TopSpin replay uses only the recorded processing parameters"
+                )
+            if isinstance(replay, Mapping):
+                from .interop import _normalize_states_components, _plain  # noqa: PLC0415
+                from .processing.topspin_xfb import replay_xfb  # noqa: PLC0415
+
+                mode = {
+                    ("QF", "DQD"): "qf",
+                    ("STATES-TPPI", "DQD"): "states-tppi",
+                    ("STATES", "DQD"): "states",
+                    ("ECHO-ANTIECHO", "DQD"): "echo-antiecho",
+                }.get(tuple(self.encoding or ()))
+                if (
+                    not self._nmr_meta.normalized_interop
+                    or not self.is_time_domain
+                    or mode is None
+                ):
+                    raise ValueError(
+                        "XFB plan requires a qualified normalized raw 2D acquisition"
+                    )
+                result, applied = replay_xfb(
+                    _normalize_states_components(ds), plan=replay, mode=mode
+                )
+                return self._attach_scp_processing_trace(
+                    result,
+                    requested={
+                        "replay": "explicit-topspin-xfb-plan",
+                        "plan": _plain(replay),
+                    },
+                    applied=applied,
                 )
             from spectrochempy_nmr.processing.topspin_replay import (  # noqa: PLC0415
                 replay_dqd_efp,
@@ -1345,7 +1383,7 @@ class Experiment:
             if (
                 any(
                     value is not None
-                    for value in (apodization, lb, gb, ssb, pow, phase, reference)
+                    for value in (apodization, lb, gb, ssb, pow, phase)
                 )
                 or (size is not None and not self._supports_qf_fft)
                 or phc0
@@ -1401,6 +1439,13 @@ class Experiment:
                     result = process_states_fft(ds, widths, alternate=alternate)
                     if alternate:
                         indirect_fft = "NMRPipe FT -alt"
+                if reference is not None:
+                    from .processing.interop_reference import _reference_interop_2d  # noqa: PLC0415
+
+                    result = _reference_interop_2d(result, reference)
+                    reconstruction["reference"] = dict(
+                        result.meta.frequency_reference["axes"]
+                    )
                 return self._attach_scp_processing_trace(
                     result,
                     requested=reconstruction,
@@ -1420,13 +1465,25 @@ class Experiment:
             from .processing.qf_interop import process_qf_fft  # noqa: PLC0415
 
             result = process_qf_fft(ds, self._nmr_meta.spectral_width_hz, size=size)
+            reference_trace = {}
+            if reference is not None:
+                from .processing.interop_reference import _reference_interop_2d  # noqa: PLC0415
+
+                result = _reference_interop_2d(result, reference)
+                reference_trace = {
+                    "reference": dict(result.meta.frequency_reference["axes"])
+                }
             return self._attach_scp_processing_trace(
                 result,
-                requested={} if size is None else {"size": tuple(result.shape)},
+                requested={
+                    **({} if size is None else {"size": tuple(result.shape)}),
+                    **reference_trace,
+                },
                 applied={
                     "fft": True,
                     "fft_order": ("F2", "F1"),
                     "fft_convention": ("NMRPipe FT -nodf", "NMRPipe FT -neg"),
+                    **reference_trace,
                 },
             )
 

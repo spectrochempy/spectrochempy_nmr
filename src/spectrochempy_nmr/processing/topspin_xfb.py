@@ -14,6 +14,7 @@ from spectrochempy_nmr.processing.linear_prediction import _burg_predict_after
 _PROFILES = {
     "bruker-ser-qf-2d-v1": "qf",
     "bruker-ser-states-tppi-2d-v1": "states-tppi",
+    "bruker-ser-states-2d-v1": "states",
     "bruker-ser-echo-antiecho-2d-v1": "echo-antiecho",
 }
 _PLAN_SCHEMA = "topspin-xfb-v1"
@@ -251,9 +252,14 @@ def _processed_axis(params, source_axis):
     return axis
 
 
-def replay_xfb(source):
+def replay_xfb(source, *, plan=None, mode=None):
     meta = source.meta
-    mode = _PROFILES.get(meta.get("normalization_profile"))
+    explicit_plan = plan is not None
+    if explicit_plan:
+        if mode not in ("qf", "states", "states-tppi", "echo-antiecho"):
+            raise ValueError("XFB plan requires a qualified physical quadrature")
+    else:
+        mode = _PROFILES.get(meta.get("normalization_profile"))
     qf = mode == "qf"
     dims = ("y", "x") if qf else ("c", "y", "x")
     if (
@@ -273,7 +279,9 @@ def replay_xfb(source):
     if not np.iscomplexobj(data) or np.any(source.mask) or not np.isfinite(data).all():
         raise ValueError("TopSpin XFB requires finite unmasked complex samples")
     if not qf:
-        labels = ("E1", "E2") if mode == "states-tppi" else ("first", "second")
+        labels = (
+            ("E1", "E2") if mode in ("states", "states-tppi") else ("first", "second")
+        )
         if (
             data.shape[0] != 2
             or source.c is None
@@ -289,18 +297,50 @@ def replay_xfb(source):
         ):
             raise ValueError("TopSpin XFB requires the original calibrated time grids")
 
-    processing = meta.get("nmr_processing") or {}
-    if not isinstance(processing, Mapping):
-        raise ValueError("Invalid stored NMR processing metadata")
-    profile = processing.get("vendor_profile") or {}
-    if not isinstance(profile, Mapping):
-        raise ValueError("Invalid stored TopSpin vendor profile")
-    plan = profile.get("xfb_plan")
-    if plan is None:
-        plan = _build_xfb_plan(meta.get("source_metadata", {}), mode, (ny, nx), widths)
+    if explicit_plan:
+        recorded_widths = plan.get("widths_hz")
+        if (
+            not isinstance(recorded_widths, (tuple, list))
+            or len(recorded_widths) != 2
+            or any(not _finite_plan_number(w) or w <= 0 for w in recorded_widths)
+            or not np.allclose(recorded_widths, widths, rtol=1e-12, atol=0)
+        ):
+            raise ValueError("XFB plan spectral widths disagree with the acquisition")
+        _validate_stored_xfb_plan(plan, mode, (ny, nx), recorded_widths)
+        for name in ("f1", "f2"):
+            axis_plan = plan[name]
+            size = axis_plan["fft_size"]
+            with np.errstate(over="ignore", invalid="ignore", divide="ignore"):
+                values = axis_plan["first_point_ppm"] - (np.arange(size) / size) * (
+                    axis_plan["spectral_width_hz"]
+                    / axis_plan["reference_frequency_mhz"]
+                )
+                differences = np.diff(values)
+            if not np.isfinite(values).all() or not np.all(differences < 0):
+                raise ValueError(
+                    "XFB plan requires finite strictly decreasing ppm coordinates"
+                )
+
     else:
-        _validate_stored_xfb_plan(plan, mode, (ny, nx), widths)
-    return _execute_xfb(source, data, plan)
+        processing = meta.get("nmr_processing") or {}
+        if not isinstance(processing, Mapping):
+            raise ValueError("Invalid stored NMR processing metadata")
+        profile = processing.get("vendor_profile") or {}
+        if not isinstance(profile, Mapping):
+            raise ValueError("Invalid stored TopSpin vendor profile")
+        plan = profile.get("xfb_plan")
+        if plan is None:
+            plan = _build_xfb_plan(
+                meta.get("source_metadata", {}), mode, (ny, nx), widths
+            )
+        else:
+            _validate_stored_xfb_plan(plan, mode, (ny, nx), widths)
+    result, applied = _execute_xfb(source, data, plan)
+    if explicit_plan:
+        applied["input_widths_hz"] = tuple(float(w) for w in widths)
+        applied["recipe_widths_hz"] = tuple(float(w) for w in plan["widths_hz"])
+        applied["width_match_rtol"] = 1e-12
+    return result, applied
 
 
 def _finite_plan_number(value):
@@ -517,7 +557,7 @@ def _execute_xfb(source, data, plan):
             cross[:, 1::2] *= -1
         cross = _prepare_f1(cross, f1_window, f1_points, lp_order)
         a, b = _positive_fft(cross, sy, -2)
-        if mode == "states-tppi":
+        if mode in ("states", "states-tppi"):
             rr_ir, ri_ii = a.real - 1j * b.real, -a.imag + 1j * b.imag
         else:
             rr_ir, ri_ii = a.imag - 1j * b.imag, a.real - 1j * b.real
@@ -562,7 +602,7 @@ def _execute_xfb(source, data, plan):
         result.meta.quadrature_mode = "complex-channel-pair-2d"
         if mode == "states-tppi":
             result.meta.tppi_alternation_state = "applied"
-        else:
+        elif mode == "echo-antiecho":
             result.meta.echo_antiecho_reconstruction = "bruker-rance-kay"
     result.meta.readonly = readonly
     applied = {

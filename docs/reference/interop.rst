@@ -131,6 +131,65 @@ handles the imported channels without vendor or experiment-name dispatch.
 SCP round trips preserve this contract. Results have four signed planes and
 relative Hz axes; absolute phase and ppm references remain unqualified.
 
+Explicit ppm references after the common 2D FFT
+~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+
+Normalized QF, States, States-TPPI and echo/anti-echo FIDs can be calibrated
+with explicit point anchors after their common FFT:
+
+.. code-block:: python
+
+   spectrum = scp.nmr.Experiment(raw).process(reference={
+       "F1": {"reference_frequency_mhz": 100.0, "point_index": 0,
+              "ppm": 12.0, "source": "processing"},
+       "F2": {"reference_frequency_mhz": 400.0, "point_index": 0,
+              "ppm": 10.0, "source": "processing"},
+   })
+
+Replace these illustrative values with known references. The zero-based
+indices refer to the output FFT grid, including any requested QF zero-fill.
+For each axis, ``ppm[j] = ppm_anchor + (Hz[j] - Hz_anchor) / MHz``.
+The supplied reference frequency is distinct from the acquisition observation
+frequency. ``source`` defaults to ``unknown``. Intensities, signed components
+and sample order are unchanged; axes and reference provenance survive SCP
+save/reload. Without ``reference``, the existing Hz grids are preserved.
+Calibration does not establish phases or reproduce a full vendor recipe.
+
+Explicit processing recipes for raw JCAMP data
+~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+
+For QF, States, States-TPPI and echo/anti-echo inputs, ``replay`` also accepts a
+serialized ``topspin-xfb-v1`` plan captured from a matching native read:
+
+.. code-block:: python
+
+   native = scp.read_topspin(
+       "native/ser", local_only=True,
+       remove_digital_filter=False, remove_dc_offset=False,
+   )
+   plan = native.meta.nmr_processing["vendor_profile"]["xfb_plan"]
+   spectrum = scp.nmr.Experiment(raw).process(replay=plan)
+
+The plan must exist and describe the intended acquisition and recipe. It
+contains the supported windows, sizes, digital-filter delay, phases and ppm
+calibration. The processor verifies the physical quadrature, original shape,
+spectral widths (relative tolerance ``1e-12`` for serialization roundoff)
+and uncorrected uniform time grids. Both input and recipe widths are recorded.
+An explicit QF ``normalize_options={"quadrature": "qf", "conjugation": "none",
+"indirect_dwell_s": physical_dwell}`` can establish a known acquisition T1
+step when the JCAMP grid differs; this requires development nmrglue-ng.
+A genuine width mismatch is rejected. It rejects incompatible
+plans and individual processing overrides. It interprets no raw vendor
+parameters from JCAMP metadata. The serialized plan can be kept separately
+and reused after saving/reloading the raw dataset as SCP.
+
+JCAMP import applies its declared YFACTOR; recipe execution does not infer
+scan/gain normalization from missing acquisition parameters. Compare data on
+the same declared intensity scale. Passing a plan does not broaden the supported XFB operations. States uses
+the States-family signed-plane arrangement without TPPI alternation.
+Capture requires a complete native status and a non-null plan; a legacy
+read with truncated points or unsupported processing status is insufficient.
+
 Processed real 2D exports
 ~~~~~~~~~~~~~~~~~~~~~~~~~
 
