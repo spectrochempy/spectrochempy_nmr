@@ -34,7 +34,7 @@ entry points.
 JCAMP-DX FID pages and QF processing
 ------------------------------------
 
-With development nmrglue-ng providing ``jcampdx-fid-2d``, use the explicit
+With nmrglue-ng 1.4.0 or later providing ``jcampdx-fid-2d``, use the explicit
 interop reader for regular ``T1,T2,R,I`` FID pages. Confirm QF from the
 acquisition convention; the declared scheme must also be non-phase-sensitive.
 The complex-sign choice is explicit. For a TopSpin export whose stored
@@ -58,9 +58,50 @@ apply phasing, apodization or magnitude. Inspect any recorded group delay
 and qualify its correction before interpreting phases or intensities.
 Saving the raw dataset as SCP retains its processing contract.
 
-Echo/anti-echo HSQC pages can be decoded by the provider, but this profile
-rejects their normalization as QF. The existence of a generic echo/anti-echo
-processor does not establish a qualified JCAMP component mapping for it.
+Echo/anti-echo processing
+~~~~~~~~~~~~~~~~~~~~~~~~~
+
+Development nmrglue-ng also supports declared echo/anti-echo FIDs with direct
+simultaneous DQD acquisition. Confirm that each adjacent trace pair belongs
+to one physical indirect increment, and establish the time between pairs
+from acquisition provenance. Do not infer it by simply subsampling the stored
+T1 row coordinates. The reader preserves the pair as two complex channels;
+``Experiment.process()`` performs the existing Rance-Kay reconstruction.
+
+For the qualified EPFL HSQC acquisition, the indirect spectral width checked
+against TopSpin import is 16608.16082508 Hz. For another acquisition, replace
+this value with its established width:
+
+.. code-block:: python
+
+   indirect_width_hz = 16608.16082508
+   raw = scp.nmr.read(
+       "echo_antiecho_fid.dx", protocol="interop", profile="jcampdx-fid-2d",
+       normalize_options={
+           "quadrature": "echo-antiecho", "conjugation": "none",
+           "confirm_adjacent_pairs": True,
+           "indirect_dwell_s": 1.0 / indirect_width_hz,
+       },
+   )
+   spectrum = scp.nmr.Experiment(raw).process()
+
+The result has four signed component planes (rr, ri, ir, ii), with relative
+Hz axes. No filter correction or chemical-shift referencing is implicit.
+If an unapplied positive group delay is recorded and its meaning has been
+established, phase-domain correction can be requested explicitly:
+
+.. code-block:: python
+
+   corrected = scp.nmr.Experiment(raw).process(digital_filter="phase")
+
+The EPFL reference records a delay of 76 complex direct points. Four TopSpin
+compression modes give identical normalized data and processed planes.
+The planes were compared to NMRPipe with and without phase-domain correction;
+this qualifies the stated operations, not an absolute experimental phase or
+ppm reference. Time-domain correction is also checked against the native
+Bruker route. Saved SCP data retains the common processing contract, without
+requiring the source reader or original vendor metadata during processing.
+States and States-TPPI JCAMP normalization remain unsupported.
 
 .. currentmodule:: spectrochempy_nmr
 
