@@ -7,6 +7,12 @@ distribution. The sections below describe changes in each plugin release.
 Unreleased
 ----------
 
+* Allow ``digital_filter="none"`` for a TPPI FFT that explicitly retains a
+  known unapplied delay, with provenance in the processing trace. Keep default
+  rejection and reject unknown/invalid/already-corrected descriptors. Add a
+  reproducible public CC0 native TPPI qualification tool; QSEQ experimental
+  acquisitions and filter correction remain unqualified.
+
 * Process explicitly normalized JCAMP TPPI/QSEQ FIDs through the common TPPI
   FFT, with optional F1/F2 point anchors. Preserve signed components and reject
   declared unknown or nonzero filter delays instead of silently ignoring them.
