@@ -1161,6 +1161,8 @@ class Experiment:
             This mode uses the processing ppm reference, supports exponential
             apodization and optional manual phase angles at the first bin,
             and defaults to the recorded FFT size when ``size`` is omitted.
+            For TPPI, "none" explicitly retains a known unapplied delay
+            without correction; the default still rejects nonzero delays.
         bruker_group_delay : float, optional
             Override the group delay in complex F2 samples. With a method
             selected, the default is to resolve it from acquisition metadata.
@@ -1288,6 +1290,8 @@ class Experiment:
         phc0 = 0.0 if phc0 is _UNSET_ZERO else phc0
         phc1 = 0.0 if phc1 is _UNSET_ZERO else phc1
 
+        if self._supports_tppi_fft and digital_filter not in (None, "none"):
+            raise ValueError("TPPI digital_filter must be None or 'none'")
         if digital_filter == "pknl":
             if self.is_multi_dataset:
                 raise ValueError("QSIM PKNL requires one FID at a time")
@@ -1323,12 +1327,16 @@ class Experiment:
             raise ValueError(
                 "echo_antiecho requires an imported raw echo/anti-echo FID"
             )
-        if digital_filter not in (None, "phase", "time"):
+        if digital_filter not in (None, "phase", "time") and not (
+            self._supports_tppi_fft and digital_filter == "none"
+        ):
             raise ValueError('digital_filter must be "phase", "time" or "pknl"')
         prepare_time_filter = digital_filter == "time" and self.ndim == 1
         if prepare_time_filter:
             ds = self.prepare_fid(digital_filter="time")
-        if digital_filter is not None and not (supports_echo or prepare_time_filter):
+        if digital_filter is not None and not (
+            supports_echo or prepare_time_filter or self._supports_tppi_fft
+        ):
             raise ValueError(
                 "digital_filter requires a supported 1D or echo/anti-echo acquisition"
             )
@@ -1361,10 +1369,23 @@ class Experiment:
 
             if reference is not None and tppi_reference is not None:
                 raise ValueError("choose point anchors or tppi_reference, not both")
-            result = process_tppi(ds, self._nmr_meta.spectral_width_hz, tppi_reference)
+            result = process_tppi(
+                ds,
+                self._nmr_meta.spectral_width_hz,
+                tppi_reference,
+                digital_filter=digital_filter,
+            )
             requested = (
                 {} if tppi_reference is None else {"tppi_reference": tppi_reference}
             )
+            filter_trace = {}
+            if digital_filter is not None:
+                requested["digital_filter"] = digital_filter
+                filter_trace["digital_filter"] = {
+                    **dict(ds.meta.acquisition["digital_filter"]),
+                    "method": "none",
+                    "applied": False,
+                }
             if reference is not None:
                 from .processing.interop_reference import _reference_interop_2d  # noqa: PLC0415
 
@@ -1383,6 +1404,7 @@ class Experiment:
                         "FT -real",
                     ),
                     **requested,
+                    **filter_trace,
                 },
             )
         if self._supports_qf_fft or self._supports_states_fft or supports_echo:

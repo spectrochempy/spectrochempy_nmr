@@ -387,7 +387,7 @@ def test_tppi_declared_digital_filter_cannot_be_silently_ignored(descriptor):
     source = _tppi_fid()
     source.meta.acquisition["digital_filter"] = descriptor
     before = source.data.copy()
-    with pytest.raises(ValueError, match="zero digital-filter delay"):
+    with pytest.raises(ValueError, match="digital-filter delay"):
         Experiment(source).process()
     np.testing.assert_array_equal(source.data, before)
 
@@ -400,3 +400,40 @@ def test_tppi_explicit_zero_delay_preserves_fft():
         "group_delay_points": 0.0,
     }
     np.testing.assert_array_equal(Experiment(source).process().data, expected.data)
+
+
+@pytest.mark.parametrize(
+    "descriptor",
+    [
+        None,
+        "unknown",
+        {"applied": False},
+        {"applied": False, "group_delay_points": True},
+        {"applied": False, "group_delay_points": 0j},
+        {"applied": True, "group_delay_points": 0},
+    ],
+)
+def test_explicit_unfiltered_tppi_refuses_missing_or_corrected_filter(descriptor):
+    source = _tppi_fid()
+    source.meta.acquisition["digital_filter"] = descriptor
+    with pytest.raises(ValueError, match="known unapplied digital-filter delay"):
+        Experiment(source).process(digital_filter="none")
+
+
+def test_explicit_unfiltered_tppi_preserves_values_and_trace():
+    source = _tppi_fid()
+    expected = Experiment(source).process()
+    source.meta.acquisition["digital_filter"] = {
+        "applied": False,
+        "group_delay_points": 1.5,
+    }
+    result = Experiment(source).process(digital_filter="none")
+    np.testing.assert_array_equal(result.data, expected.data)
+    trace = result.meta.nmr_processing["scp_processing"]
+    assert trace["requested"]["digital_filter"] == "none"
+    assert trace["applied"]["digital_filter"] == {
+        "applied": False,
+        "group_delay_points": 1.5,
+        "method": "none",
+    }
+    assert not source.meta.acquisition["digital_filter"]["applied"]

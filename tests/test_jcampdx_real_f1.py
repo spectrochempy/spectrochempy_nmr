@@ -38,11 +38,13 @@ def _read(path, mode, delay=0):
 
 
 @pytest.mark.parametrize("mode", ["tppi", "qseq"])
+@pytest.mark.parametrize("delay", [0, 2])
 def test_real_f1_public_processing_and_scp_without_provider(
-    tmp_path, monkeypatch, mode
+    tmp_path, monkeypatch, mode, delay
 ):
     path = tmp_path / "real.dx"
-    source, raw = _read(path, mode)
+    source, raw = _read(path, mode, delay)
+    options = {"digital_filter": "none"} if delay else {}
     before = source.data.copy()
     if mode == "qseq":
         raw[2::4] *= -1
@@ -53,7 +55,7 @@ def test_real_f1_public_processing_and_scp_without_provider(
     indirect = np.exp(-2j * np.pi * np.outer(np.arange(ny), np.arange(ny)) / (2 * ny))
     a, b = indirect @ f2.real, indirect @ f2.imag
     expected = np.stack((a.real, b.real, -a.imag, -b.imag))
-    result = Experiment(source).process()
+    result = Experiment(source).process(**options)
     np.testing.assert_allclose(result.data, expected, rtol=0, atol=1e-9)
     np.testing.assert_array_equal(source.data, before)
     np.testing.assert_allclose(source.y.data, np.arange(ny) / 2000, rtol=0, atol=1e-15)
@@ -62,17 +64,23 @@ def test_real_f1_public_processing_and_scp_without_provider(
         role: {"reference_frequency_mhz": freq, "point_index": 0, "ppm": ppm}
         for role, freq, ppm in [("F1", 100, 8), ("F2", 400, 4)]
     }
-    referenced = Experiment(source).process(reference=anchors)
+    referenced = Experiment(source).process(reference=anchors, **options)
     np.testing.assert_array_equal(referenced.data, result.data)
     for role, dim in [("F1", "y"), ("F2", "x")]:
         assert referenced.coordset[dim].data[0] == anchors[role]["ppm"]
+    if delay:
+        trace = result.meta.nmr_processing["scp_processing"]
+        assert trace["requested"]["digital_filter"] == "none"
+        assert trace["applied"]["digital_filter"]["applied"] is False
+        assert trace["applied"]["digital_filter"]["group_delay_points"] == delay
+        assert source.meta.acquisition["digital_filter"]["applied"] is False
     saved = tmp_path / "raw.scp"
     source.write(saved, confirm=False)
     restored = read(saved)
     monkeypatch.setitem(sys.modules, "nmrglue", None)
     restored.origin = "unknown provenance"
     restored.meta.normalization_profile = "unknown provenance"
-    again = Experiment(restored).process(reference=anchors)
+    again = Experiment(restored).process(reference=anchors, **options)
     np.testing.assert_array_equal(again.data, referenced.data)
     np.testing.assert_array_equal(again.y.data, referenced.y.data)
     np.testing.assert_array_equal(again.x.data, referenced.x.data)
@@ -85,6 +93,24 @@ def test_public_real_f1_does_not_ignore_unknown_or_nonzero_filter(
 ):
     source, _ = _read(tmp_path / "filter.dx", mode, delay)
     before = source.data.copy()
-    with pytest.raises(ValueError, match="zero digital-filter delay"):
+    with pytest.raises(ValueError, match="digital-filter delay"):
         Experiment(source).process()
     np.testing.assert_array_equal(source.data, before)
+
+
+@pytest.mark.parametrize("delay", [None, -1, 6, 68, float("nan"), float("inf")])
+def test_explicit_unfiltered_tppi_still_requires_a_valid_delay(tmp_path, delay):
+    source, _ = _read(tmp_path / "filter.dx", "tppi", 0)
+    source.meta.acquisition["digital_filter"] = {
+        "applied": False,
+        "group_delay_points": delay,
+    }
+    with pytest.raises(ValueError, match="known unapplied digital-filter delay"):
+        Experiment(source).process(digital_filter="none")
+
+
+@pytest.mark.parametrize("method", ["time", "phase", "pknl", "unknown"])
+def test_tppi_does_not_advertise_filter_correction(tmp_path, method):
+    source, _ = _read(tmp_path / "filter.dx", "tppi", 2)
+    with pytest.raises(ValueError, match="TPPI digital_filter"):
+        Experiment(source).process(digital_filter=method)

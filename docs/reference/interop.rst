@@ -292,8 +292,12 @@ For a validated acquisition whose physical indirect dwell is known:
 This explicit conjugation matches the controlled TopSpin convention; establish
 the sign convention for another acquisition. A declared filter descriptor
 must record an unapplied, explicitly known zero group delay for this FFT
-path. Unknown or nonzero delays are rejected. Filtering, windows, manual
-phasing, variable FFT sizes and vendor-recipe replay are outside this path.
+path by default. Unknown or nonzero delays are rejected. For a known finite,
+unapplied delay shorter than F2, ``process(digital_filter="none")`` explicitly
+retains the delay without correction and records this choice. This diagnostic
+FFT does not remove the filter or provide an absorptive spectrum. Filtering,
+windows, manual phasing, variable FFT sizes and vendor-recipe replay are outside
+this path.
 The default output consists of four signed planes ``rr, ri, ir, ii`` on
 relative Hz grids. ``process(reference={"F1": ..., "F2": ...})`` accepts the
 same explicit point anchors documented above, without changing components.
@@ -301,8 +305,9 @@ Choose either point anchors or ``tppi_reference``, not both.
 
 Saved SCP data preserves this processing contract without the provider or
 original files. Controlled synthetic TopSpin references and independent matrix
-DFTs check the numerical transforms; experimental native Bruker TPPI/QSEQ
-acquisitions and absolute experimental phases remain unqualified. TopSpin
+DFTs check the numerical transforms. The public native TPPI qualification below
+also checks an uncorrected FFT on experimental acquisitions. Native QSEQ,
+absolute experimental phases and filter correction remain unqualified. TopSpin
 presentation uses ``RR, -IR, -RI, II`` and replaces the central ``2rr`` bin
 with its two F1 neighbors' average. The common FFT preserves that bin rather
 than applying this vendor display operation.
@@ -312,3 +317,49 @@ The acquisition-mode definitions are documented in the Bruker
 under ``FnMODE``. The Bruker
 `Processing Reference <https://nmr.chem.ucsb.edu/docs/Bruker_NMR_Manuals/processing-reference_v007.pdf>`_
 distinguishes the real F1 transforms used by TPPI and QSEQ.
+
+Public experimental TPPI qualification
+~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+
+The Young lab's `2025-indole-azo-sterics dataset
+<https://github.com/the-young-lab/2025-indole-azo-sterics/tree/73af741bff1059a2a8491254a5f765644b985952>`_
+is CC0. Under ``Data for SI/1H and 2D NOESY NMR``, the acquisitions
+``OMe-PAI-H cis NOESY`` and ``OMe-PAI-H trans NOESY/1`` explicitly record
+``acqu2s.FnMODE=3`` (pure TPPI), ``acqus.AQ_mod=3`` (DQD), and
+``GRPDLY=76``. Each raw matrix has 256 F1 samples and 1024 complex F2 samples.
+These are original experimental acquisitions, not relabelled States-TPPI data.
+
+Validation uses copies processed with TopSpin 4.5.0: F1/F2 ``SI=256/1024``,
+``TDeff=256/2048``, ``WDW=BC_mod=ME_mod=PHC0=PHC1=TDoff=STSR=0``,
+``FCOR=1``, ``PKNL=no``, ``REVERSE=no``, ``STSI=SI`` and ``xfb y nodisp``.
+Keep the native acquisition parameters, including filter metadata, unchanged.
+This produces a reference with no windows, phase or filter correction.
+Do not compare this FFT to the study's original phased/windowed spectra.
+
+Export each copy's raw data as FIX, PACKED, SQUEEZED and DIFF/DUP, and its
+processed real plane as DIFF/DUP. With a Bruker current-data parameter file
+``curdat`` pointing to that copy, the installed exporter accepts:
+
+.. code-block:: bash
+
+   "$XWINNMRHOME/prog/bin/jcampdx" curdat tojdx sample-FIX.dx 0 0 TPPI Young CC0
+   # Raw mode 0; codec index 0/1/2/3 = FIX/PACKED/SQUEEZED/DIFF_DUP.
+   "$XWINNMRHOME/prog/bin/jcampdx" curdat tojdx sample-processed.dx 2 3 TPPI Young CC0
+
+Name the other exports ``sample-PACKED.dx``, ``sample-SQUEEZED.dx`` and
+``sample-DIFF_DUP.dx``. From a plugin source checkout, run the read-only tool:
+
+.. code-block:: bash
+
+   python tools/qualify_public_tppi.py ORIGINAL COPY/pdata/1 EXPORTS --prefix sample
+
+The tool verifies processing settings, exact native/raw-JCAMP equality for all
+four encodings, the common public FFT's four signed planes, both ppm grids,
+exact processed-JCAMP/TopSpin stored RR equality, and unchanged input hashes.
+It supplies ``1/(2*acqu2s.SW_h)`` as the physical F1 dwell for these Bruker TPPI
+references; the JCAMP T1 interval alone is insufficient. It compares absolute
+raw-count amplitudes with TopSpin's recorded ``NC_proc`` scale, without fitting
+an amplitude or dividing by NS/RG. This does not establish scan/gain-normalized
+physical intensities or absolute phase. The central RR presentation operation
+is applied only to a comparison copy. QSEQ remains covered by controlled
+synthetic references; no native indirect-QSEQ acquisition is claimed here.

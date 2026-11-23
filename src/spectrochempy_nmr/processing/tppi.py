@@ -9,23 +9,30 @@ import spectrochempy as scp
 from .qf_interop import _fft_stage
 
 
-def process_tppi(dataset, spectral_widths, reference):
+def process_tppi(dataset, spectral_widths, reference, *, digital_filter=None):
     """Return RR, RI, IR and II in F1, F2 order."""
     samples = np.asarray(dataset.data)
-    digital_filter = dataset.meta.get("acquisition", {}).get("digital_filter")
-    if digital_filter is not None and (
-        not isinstance(digital_filter, Mapping)
-        or digital_filter.get("applied") is not False
-        or isinstance(digital_filter.get("group_delay_points"), (bool, np.bool_))
-        or not isinstance(
-            digital_filter.get("group_delay_points"),
-            (int, float, np.integer, np.floating),
-        )
-        or digital_filter.get("group_delay_points") != 0
-    ):
-        raise ValueError(
-            "TPPI FFT requires an explicitly known zero digital-filter delay"
-        )
+    if digital_filter not in (None, "none"):
+        raise ValueError("TPPI digital_filter must be None or 'none'")
+    descriptor = dataset.meta.get("acquisition", {}).get("digital_filter")
+    if descriptor is not None or digital_filter == "none":
+        if (
+            not isinstance(descriptor, Mapping)
+            or descriptor.get("applied") is not False
+            or isinstance(descriptor.get("group_delay_points"), (bool, np.bool_))
+            or not isinstance(
+                descriptor.get("group_delay_points"),
+                (int, float, np.integer, np.floating),
+            )
+            or not np.isfinite(descriptor["group_delay_points"])
+            or not 0 <= descriptor["group_delay_points"] < samples.shape[-1]
+        ):
+            raise ValueError("TPPI FFT requires a known unapplied digital-filter delay")
+        if digital_filter is None and descriptor["group_delay_points"] != 0:
+            raise ValueError(
+                "TPPI FFT requires an explicitly known zero digital-filter delay; "
+                "use digital_filter='none' to retain a known delay without correction"
+            )
     if (
         tuple(dataset.dims) != ("y", "x")
         or min(samples.shape) < 2
