@@ -91,8 +91,14 @@ class TestJeolNMRGlue:
         dic, data = read_jeol(str(JEOL_DIR / "HSQC.jdf"))
         udic = guess_udic(dic, data)
         assert udic["ndim"] == 2
-        assert udic[0]["label"] == "1H"
-        assert udic[1]["label"] == "13C"
+        assert dic["parameters"]["x_domain"] == "1H"
+        assert dic["parameters"]["y_domain"] == "13C"
+        assert udic[0]["label"] == "13C"
+        assert udic[1]["label"] == "1H"
+        for index, axis in enumerate(("y", "x")):
+            assert udic[index]["size"] == data.shape[index]
+            assert udic[index]["sw"] == dic["parameters"][f"{axis}_sweep"]
+            assert udic[index]["obs"] == dic["parameters"][f"{axis}_freq"] / 1e6
 
     def test_header_fields(self):
         from nmrglue.fileio.jeol import read as read_jeol
@@ -481,3 +487,39 @@ def test_public_jeol_listed_preserves_trace_pairs(
     )
     with pytest.raises(ValueError, match="time coordinate for each trace pair"):
         from_interop(contradictory)
+
+
+def test_guess_udic_heteronuclear_axes_follow_numpy_order():
+    from nmrglue.fileio.jeol import guess_udic
+
+    metadata = {
+        "header": {
+            "data_axis_type": ["complex", "real_complex"],
+            "data_dimension_exist": [True, True],
+        },
+        "parameters": {
+            "x_domain": "1H",
+            "y_domain": "13C",
+            "x_freq": 400e6,
+            "y_freq": 100e6,
+            "x_sweep": 8000.0,
+            "y_sweep": 20000.0,
+            "x_offset": 5.0,
+            "y_offset": 70.0,
+        },
+    }
+    data = np.zeros((6, 16), dtype=complex)
+    udic = guess_udic(metadata, data)
+    assert udic["ndim"] == 2
+    for index, (label, size, width, frequency, carrier, encoding) in enumerate(
+        (
+            ("13C", 6, 20000.0, 100.0, 7000.0, "real_complex"),
+            ("1H", 16, 8000.0, 400.0, 2000.0, "complex"),
+        )
+    ):
+        assert udic[index]["label"] == label
+        assert udic[index]["size"] == size
+        assert udic[index]["sw"] == width
+        assert udic[index]["obs"] == frequency
+        assert udic[index]["car"] == carrier
+        assert udic[index]["encoding"] == encoding
