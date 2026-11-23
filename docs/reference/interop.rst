@@ -31,6 +31,37 @@ quadrature. This contract does not qualify additional file formats or modes.
 Recorded TopSpin replay and specialized experimental helpers remain separate
 entry points.
 
+JCAMP-DX FID pages and QF processing
+------------------------------------
+
+With development nmrglue-ng providing ``jcampdx-fid-2d``, use the explicit
+interop reader for regular ``T1,T2,R,I`` FID pages. Confirm QF from the
+acquisition convention; the declared scheme must also be non-phase-sensitive.
+The complex-sign choice is explicit. For a TopSpin export whose stored
+complex samples are to be retained:
+
+.. code-block:: python
+
+   import spectrochempy as scp
+
+   raw = scp.nmr.read(
+       "qf_fid.dx", protocol="interop", profile="jcampdx-fid-2d",
+       normalize_options={"quadrature": "qf", "conjugation": "none"},
+   )
+   spectrum = scp.nmr.Experiment(raw).process()
+
+The existing generic QF processor consumes the normalized components and
+time grids; it does not recognize COSY or HMBC names. Results have relative
+frequency coordinates in Hz. Reading does not remove the digital filter or
+establish a chemical-shift reference, and this FFT-only example does not
+apply phasing, apodization or magnitude. Inspect any recorded group delay
+and qualify its correction before interpreting phases or intensities.
+Saving the raw dataset as SCP retains its processing contract.
+
+Echo/anti-echo HSQC pages can be decoded by the provider, but this profile
+rejects their normalization as QF. The existence of a generic echo/anti-echo
+processor does not establish a qualified JCAMP component mapping for it.
+
 .. currentmodule:: spectrochempy_nmr
 
 .. autosummary::
