@@ -12,6 +12,7 @@ Unreleased
   rejection and reject unknown/invalid/already-corrected descriptors. Add a
   reproducible public CC0 native TPPI qualification tool; QSEQ experimental
   acquisitions and filter correction remain unqualified.
+  (`#189 <https://github.com/spectrochempy/spectrochempy_nmr/pull/189>`_)
 
 * Process explicitly normalized JCAMP TPPI/QSEQ FIDs through the common TPPI
   FFT, with optional F1/F2 point anchors. Preserve signed components and reject
