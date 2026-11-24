@@ -16,7 +16,8 @@ The PEG 600 PFG recipe uses acquisition
 The author is Cassandre Kouvatas, confirmed by the maintainer.
 The earlier attribution to Christian Fernandez as measurement author was
 incorrect. The maintainer confirms that this acquisition uses CC BY 4.0, the same
-licence as his files. Attribute the measurement to Cassandre Kouvatas.
+licence as his files. Attribute the measurement to Cassandre Kouvatas; see
+[data PR #32](https://github.com/spectrochempy/spectrochempy_data/pull/32).
 No pulse-program text is included in this fixture.
 
 The JEOL epicatechin 1D acquisition and the processed NMRPipe

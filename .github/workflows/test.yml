@@ -258,6 +258,9 @@ jobs:
       - name: Test Multiplex SPAM, MQMAS and STMAS processing
         run: python -I -m pytest -ra tests/test_multiplex_spam.py tests/test_multiplex_common.py tests/test_jeol_common.py tests/test_jeol_cosy_processing.py tests/test_mqmas.py tests/test_mqmas_common.py tests/test_shared_xfshear.py tests/test_automatic_xfshear.py tests/test_stmas.py tests/test_isotopes.py
 
+      - name: Test public PFG diffusion measurements
+        run: python -I -m pytest -ra tests/test_diffusion.py
+
       - name: Test CSDF exchange through the public plugin API
         run: python -I -m pytest -ra tests/test_csdf.py
 

@@ -73,7 +73,6 @@ on 24 November 2026. The acquisition records name the shared
 ``Cassandre/13C_PEG600_8mm_diff/102``. The archived processing log records
 another F2 processing on 30 June 2023 under the ``Cassandre`` Windows account.
 
-
 Christian Fernandez imported the files through `data PR 22
 <https://github.com/spectrochempy/spectrochempy_data/pull/22>`_ on 5 July 2023.
 That contribution does not establish experimental authorship. The previous

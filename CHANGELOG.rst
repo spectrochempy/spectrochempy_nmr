@@ -7,6 +7,12 @@ distribution. The sections below describe changes in each plugin release.
 Unreleased
 ----------
 
+* Add ``scp.nmr.Diffusion`` for a unit-aware, single-band PFG measurement,
+  with measured/fitted areas, residuals and processing provenance. Provide a
+  short PEG 600 recipe using scp alone and a separate technical appendix.
+  Credit Cassandre Kouvatas under CC BY 4.0.
+  (`#197 <https://github.com/spectrochempy/spectrochempy_nmr/pull/197>`_)
+
 * Add a checksum-pinned, read-only qualification tool comparing distribution
   baseline correction with published quinine integrals and known digital
   additions on experimental spectra. Report sampling sensitivity and signed
