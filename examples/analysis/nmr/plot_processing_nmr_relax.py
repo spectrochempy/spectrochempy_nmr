@@ -3,10 +3,9 @@ Fit four components across a recovery series
 =============================================
 
 Process F2 and fit four Voigt profiles with saturation-recovery amplitudes.
-The detailed :doc:`/userguide/relaxation_t1` explains processing, bounds,
-shared parameters and residuals. This recipe requires the development Core
-API from `PR #1905 <https://github.com/spectrochempy/spectrochempy/pull/1905>`_;
-the documentation environment pins its tested revision.
+The detailed :doc:`/userguide/recovery_details` explains processing, bounds,
+shared parameters and residuals. The global fit was tested with Core 1.4.0;
+see the :doc:`installation guide </getting_started/installation>`.
 """
 
 import spectrochempy as scp
