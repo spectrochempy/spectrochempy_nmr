@@ -19,7 +19,16 @@ Install the NMR plugin
 Open the terminal for the environment you prepared using the Core guide.
 The following command goes in that terminal, not in a notebook.
 
-Install the plugin with the versions used by these recipes:
+Use the command matching the tool you used in the Core guide. These commands
+install the versions used by the recipes.
+
+**If you used uv:**
+
+.. code-block:: console
+
+   uv pip install "spectrochempy[nmr]==1.4.0" "spectrochempy-nmr==0.6.0"
+
+**If you used pip:**
 
 .. code-block:: console
 
