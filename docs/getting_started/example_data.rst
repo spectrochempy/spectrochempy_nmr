@@ -26,8 +26,8 @@ Keep the old copy and download a complete one
 
 Rename the downloaded example folder to ``15-backup`` or ``206-backup`` so its
 contents remain available. Rerun the recipe with an internet connection.
-Its preparation block downloads a new complete folder under the original
-name, then continues processing.
+The read downloads a new complete folder under the original name, then
+continues processing.
 
 These steps apply to the public examples. For your own measurements, keep
 the full experiment export from the spectrometer, including its parameter

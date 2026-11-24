@@ -1368,6 +1368,16 @@ def _bruker_nus_schedule(directory, indirect, trace_count, *, paired):
     return {"indices": indices, "full_points": full_points}
 
 
+def _require_specialized_ser(path):
+    if not path.exists():
+        if path.parent.is_dir() and any(path.parent.iterdir()):
+            raise SpectroChemPyError(
+                f"Missing raw SER: {path}. Keep the complete experiment folder, "
+                "including its signal and parameter files."
+            )
+        raise FileNotFoundError(path)
+
+
 @_importer_method
 def _read_topspin(*args, **kwargs):
     _check_nmrglue_installation()
@@ -1375,6 +1385,7 @@ def _read_topspin(*args, **kwargs):
     if kwargs.get("phase_cycle") == "paired":
         if path.name != "ser":
             raise SpectroChemPyError("Paired phase-cycle reading requires a raw SER")
+        _require_specialized_ser(path)
         from .multiplex_spam import read_paired_fids
 
         try:
@@ -1384,7 +1395,14 @@ def _read_topspin(*args, **kwargs):
                 allow_partial=kwargs.get("allow_partial", False),
                 indirect_dwell=kwargs.get("indirect_dwell"),
             )
-        except (ValueError, FileNotFoundError) as exc:
+        except FileNotFoundError as exc:
+            raise SpectroChemPyError(
+                f"{exc}. Keep the complete experiment folder, including its "
+                "parameter files. For an incomplete downloaded example, see "
+                "https://www.spectrochempy.fr/projects/nmr/latest/"
+                "getting_started/example_data.html"
+            ) from exc
+        except ValueError as exc:
             raise SpectroChemPyError(str(exc)) from exc
         apply_reader_metadata_options(dataset, kwargs, default_origin="topspin")
         dataset.meta.readonly = True
@@ -1400,6 +1418,7 @@ def _read_topspin(*args, **kwargs):
             raise SpectroChemPyError(
                 "Read States pairs uncorrected, then process with Experiment"
             )
+        _require_specialized_ser(path)
         from .states_fids import read_states_fids
 
         try:
@@ -1410,7 +1429,14 @@ def _read_topspin(*args, **kwargs):
                 indirect_dwell=kwargs.get("indirect_dwell"),
                 quadrature=kwargs.get("quadrature"),
             )
-        except (ValueError, FileNotFoundError) as exc:
+        except FileNotFoundError as exc:
+            raise SpectroChemPyError(
+                f"{exc}. Keep the complete experiment folder, including its "
+                "parameter files. For an incomplete downloaded example, see "
+                "https://www.spectrochempy.fr/projects/nmr/latest/"
+                "getting_started/example_data.html"
+            ) from exc
+        except ValueError as exc:
             raise SpectroChemPyError(str(exc)) from exc
         apply_reader_metadata_options(dataset, kwargs, default_origin="topspin")
         dataset.meta.readonly = True

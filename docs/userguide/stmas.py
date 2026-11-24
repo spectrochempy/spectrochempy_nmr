@@ -20,8 +20,8 @@
 # straighten the pattern and plot a real plane.
 #
 # This recipe uses RbNO3 experiment 15 with its acquisition and processing
-# parameter files. The first block downloads the complete example folder
-# if needed; keep an internet connection for that first run.
+# parameter files. The read downloads the complete example folder if needed;
+# keep an internet connection for that first run.
 #
 # Read, process and display
 # -------------------------
@@ -30,8 +30,6 @@
 import spectrochempy as scp
 
 path = scp.preferences.datadir / "nmrdata/bruker/tests/nmr/RbNO3/15/ser"
-if not path.exists():
-    _ = scp.nmr.read(path, download_only=True)
 raw = scp.nmr.read(path, use_tdeff=True, indirect_dwell="IN[0]")
 xf2 = scp.nmr.Experiment(raw).xf2(size=1024)
 phased = scp.nmr.Experiment(xf2).apk2d(order=0)
@@ -62,8 +60,7 @@ _ = scp.nmr.Experiment(phased).rsr(1).real.plot(xlim=(-60.0, -10.0))
 # -----------------
 #
 # * Replace the quoted path with your complete experiment's ``ser`` file.
-#   For your own data, omit the two-line download block and keep the
-#   acquisition and processing parameter files alongside the signal.
+#   Keep the acquisition and processing parameter files alongside the signal.
 # * ``size`` sets the number of FFT points. Increasing it does not create
 #   experimental resolution that was not acquired.
 # * ``f1_shift`` moves the result within the isotropic F1 window, in ppm;
