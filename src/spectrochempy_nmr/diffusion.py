@@ -12,9 +12,14 @@ from spectrochempy.core.units import DimensionalityError
 
 def _b_coord(values, count):
     if isinstance(values, scp.Coord):
-        coord = values.copy()
+        coord = scp.Coord(
+            values.data, units=values.units, rounding=False, sigdigits=15
+        )
+        coord.mask = values.mask
     elif hasattr(values, "units") and hasattr(values, "magnitude"):
-        coord = scp.Coord(values.magnitude, units=values.units, rounding=False)
+        coord = scp.Coord(
+            values.magnitude, units=values.units, rounding=False, sigdigits=15
+        )
     else:
         raise ValueError("Supply b as a Coord or quantity with units of s/m^2")
     try:
@@ -65,7 +70,7 @@ def _exported_b(path):
         raise ValueError("diff.xml must contain indexed diffusion weights B") from exc
     if indices != list(range(count)) or len(values) != count:
         raise ValueError("diff.xml row indices must match the acquired spectrum order")
-    return scp.Coord(values, units="s/m^2", rounding=False)
+    return scp.Coord(values, units="s/m^2", rounding=False, sigdigits=15)
 
 
 def _validate_spectra(spectra):
@@ -134,10 +139,16 @@ class DiffusionFit:
             units=self.areas.units,
             title="Integrated area",
         )
+        residual = scp.NDDataset(
+            self.residual.data[order][None, :],
+            coordset=[scp.Coord(labels=["Residual"]), axis.copy()],
+            units=self.residual.units,
+            title="Area residual",
+        )
         kwargs.setdefault("ylabel", f"Area / {self.areas.units:~P}")
         kwargs.setdefault("figsize", (8, 6))
         return scp.multiplot(
-            [curves, self.residual[order]],
+            [curves, residual],
             nrow=2,
             ncol=1,
             labels=["Measured (blue) and fitted (orange) areas", "Residual"],
@@ -341,7 +352,7 @@ class Diffusion:
         bscale = float(np.max(self._b.data))
         data = scp.NDDataset(
             values / scale,
-            coordset=[scp.Coord(self._b.data / bscale, rounding=False)],
+            coordset=[scp.Coord(self._b.data / bscale, rounding=False, sigdigits=15)],
         )
         optimizer = scp.Optimize(usermodels={"pfg_decay": _decay})
         optimizer.script = """
