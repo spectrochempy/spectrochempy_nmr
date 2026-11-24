@@ -1,6 +1,8 @@
 """Independent numeric oracles for the external-data qualification metrics."""
 
 import importlib.util
+import runpy
+import sys
 from pathlib import Path
 
 import numpy as np
@@ -42,3 +44,21 @@ def test_external_qualification_refuses_unverified_archive(tmp_path):
     archive.write_bytes(b"not the published acquisition archive")
     with pytest.raises(ValueError, match="does not match Zenodo"):
         qualification.qualify(archive)
+
+
+@pytest.mark.parametrize("hardlink", [False, True])
+def test_cli_cannot_overwrite_input_through_the_same_path_or_a_hardlink(
+    tmp_path, monkeypatch, capsys, hardlink
+):
+    archive = tmp_path / "input.zip"
+    archive.write_bytes(b"preserve this source archive")
+    output = archive
+    if hardlink:
+        output = tmp_path / "output.zip"
+        output.hardlink_to(archive)
+    monkeypatch.setattr(sys, "argv", [str(path), str(archive), "--output", str(output)])
+    with pytest.raises(SystemExit) as error:
+        runpy.run_path(str(path), run_name="__main__")
+    assert error.value.code == 2
+    assert "must not replace the source archive" in capsys.readouterr().err
+    assert archive.read_bytes() == b"preserve this source archive"

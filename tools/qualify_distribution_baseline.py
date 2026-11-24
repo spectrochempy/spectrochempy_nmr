@@ -200,6 +200,12 @@ if __name__ == "__main__":
     parser.add_argument("archive", type=Path)
     parser.add_argument("--output", type=Path, required=True)
     arguments = parser.parse_args()
+    if arguments.output.resolve() == arguments.archive.resolve() or (
+        arguments.archive.exists()
+        and arguments.output.exists()
+        and arguments.output.samefile(arguments.archive)
+    ):
+        parser.error("output must not replace the source archive")
     arguments.output.write_text(
         json.dumps(qualify(arguments.archive), indent=2, allow_nan=False) + "\n"
     )
