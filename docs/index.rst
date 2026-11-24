@@ -4,12 +4,14 @@ SpectroChemPy NMR
 Open, process, measure and simulate NMR spectra with SpectroChemPy.
 All the first recipes use one import: ``import spectrochempy as scp``.
 
-New to Python?
---------------
+Install the NMR plugin
+----------------------
 
-Follow :doc:`Getting started <getting_started/index>` to install the tools
-and display your first spectrum. Each recipe gives complete code, an example
-figure and the settings you can change.
+Start with :doc:`Install the NMR plugin <getting_started/installation>`.
+The page links to the Core installation guide for Python and SpectroChemPy,
+then shows how to add the NMR plugin and open a notebook.
+Then follow :doc:`Your first spectrum <getting_started/quickstart>`.
+Each recipe gives complete code, an example figure and the settings you can change.
 
 What would you like to do?
 --------------------------

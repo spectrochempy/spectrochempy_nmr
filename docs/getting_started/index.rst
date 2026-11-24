@@ -5,7 +5,8 @@ You can follow these recipes without writing a Python program from scratch.
 Copy the cells in order, run them, then change the settings indicated below
 each example.
 
-1. :doc:`Install the tools and open a notebook <installation>`.
+1. :doc:`Install the NMR plugin <installation>`,
+   then open a notebook using the instructions on that page.
 2. :doc:`Display, zoom and save your first spectrum <quickstart>`.
 3. :doc:`Turn a recorded signal into a spectrum </userguide/processing_1d>`.
 

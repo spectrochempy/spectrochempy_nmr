@@ -1,44 +1,43 @@
-Install and open a notebook
-===========================
+Install the NMR plugin
+======================
 
-You need Python 3.11 or later. If Python is not installed yet, follow the
-`Python installation guide <https://www.python.org/about/gettingstarted/>`_
-for your operating system, then return here.
+NMR support is provided by the ``spectrochempy-nmr`` plugin.
 
-Install the tools
------------------
+Prepare Python and SpectroChemPy
+--------------------------------
 
-Open a terminal (Command Prompt on Windows). These commands go in the terminal,
-not in a notebook. Create a folder for your NMR work, open a terminal in that
-folder, then create a separate Python environment:
+Follow the `SpectroChemPy installation guide
+<https://www.spectrochempy.fr/stable/gettingstarted/install/index.html>`_
+for your operating system. It explains how to prepare your Python environment
+and install SpectroChemPy and JupyterLab.
 
-.. code-block:: console
+Then return here to add the NMR plugin in the same environment.
 
-   python -m venv .venv
+Install the NMR plugin
+----------------------
 
-Activate it using the command for your system.
+Open the terminal for the environment you prepared using the Core guide.
+The following command goes in that terminal, not in a notebook.
 
-**Windows (Command Prompt):**
+Use the command matching the tool you used in the Core guide. These commands
+install the versions used by the recipes.
 
-.. code-block:: console
-
-   .venv\Scripts\activate.bat
-
-**macOS or Linux:**
+**If you used uv:**
 
 .. code-block:: console
 
-   source .venv/bin/activate
+   uv pip install "spectrochempy[nmr]==1.4.0" "spectrochempy-nmr==0.6.0"
 
-On Windows, open Command Prompt for the activation command above. On macOS
-or Linux, use ``python3`` in place of ``python`` if that is how Python is
-installed on your computer.
-
-Now install SpectroChemPy, the NMR plugin and the notebook application:
+**If you used pip:**
 
 .. code-block:: console
 
-   python -m pip install "spectrochempy[nmr]==1.4.0" "spectrochempy-nmr==0.6.0" jupyterlab
+   python -m pip install "spectrochempy[nmr]==1.4.0" "spectrochempy-nmr==0.6.0"
+
+**If you used conda / mamba:** follow the `Core instructions for installing
+the NMR plugin with conda / mamba
+<https://www.spectrochempy.fr/stable/gettingstarted/install/install_adds.html#install-adds-plugins>`_,
+then continue below.
 
 Open a notebook
 ---------------
@@ -61,8 +60,8 @@ for that first run.
 Coming back later
 -----------------
 
-Open a terminal in your NMR folder, activate ``.venv`` again using the command
-above, and run ``python -m jupyter lab``. Your notebooks stay in that folder.
+Reopen the environment you prepared using the Core installation guide, then
+run ``python -m jupyter lab``. Open your saved notebook to continue.
 
 If installation or opening a notebook fails, see
 :doc:`installation troubleshooting <troubleshooting>`.
