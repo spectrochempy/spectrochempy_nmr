@@ -1,5 +1,5 @@
 Changelog
-==
+=========
 
 This changelog covers the independently versioned ``spectrochempy-nmr``
 distribution. The sections below describe changes in each plugin release.
