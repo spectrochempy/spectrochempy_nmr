@@ -21,7 +21,7 @@
 #
 # This recipe uses RbNO3 experiment 206, recorded on the same sample and
 # at the same magnetic field as the :doc:`stmas` example.
-# The first block downloads its complete experiment folder if needed.
+# The read downloads its complete experiment folder if needed.
 # Keep an internet connection for that first run.
 #
 # Read, process and display
@@ -31,8 +31,6 @@
 import spectrochempy as scp
 
 path = scp.preferences.datadir / "nmrdata/bruker/tests/nmr/RbNO3/206/ser"
-if not path.exists():
-    _ = scp.nmr.read(path, download_only=True)
 raw = scp.nmr.read(path, phase_cycle="paired")
 states = scp.nmr.Experiment(raw).select_coherence(3)
 xf2 = scp.nmr.Experiment(states).xf2(size=4096)
@@ -64,8 +62,7 @@ _ = scp.nmr.Experiment(phased).rsr(1).real.plot(xlim=(-60.0, -10.0))
 # -----------------
 #
 # * Replace the quoted path with your complete experiment's ``ser`` file.
-#   For your own data, omit the two-line download block and keep the
-#   acquisition and processing parameter files alongside the signal.
+#   Keep the acquisition and processing parameter files alongside the signal.
 # * ``select_coherence(3)`` selects 3Q. The available orders depend on the
 #   recorded phase cycle; see the detailed method before choosing 5Q.
 # * ``size`` sets the number of FFT points. It does not create experimental

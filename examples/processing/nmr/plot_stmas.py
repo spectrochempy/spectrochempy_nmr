@@ -11,8 +11,6 @@ Data: Christian Fernandez, LCS, spectrochempy_data, CC BY 4.0.
 import spectrochempy as scp
 
 path = scp.preferences.datadir / "nmrdata/bruker/tests/nmr/RbNO3/15/ser"
-if not path.exists():
-    _ = scp.nmr.read(path, download_only=True)
 raw = scp.nmr.read(path, use_tdeff=True, indirect_dwell="IN[0]")
 xf2 = scp.nmr.Experiment(raw).xf2(size=1024)
 phased = scp.nmr.Experiment(xf2).apk2d(order=0)

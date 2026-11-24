@@ -7,6 +7,12 @@ distribution. The sections below describe changes in each plugin release.
 Unreleased
 ----------
 
+* Download complete absent STMAS and Multiplex examples directly through
+  ``scp.nmr.read(...)``, without a separate preparation step. Reuse complete
+  local acquisitions and report incomplete local folders without downloading
+  replacements. Simplify the corresponding guides and gallery recipes.
+  (`#193 <https://github.com/spectrochempy/spectrochempy_nmr/pull/193>`_)
+
 * Allow ``digital_filter="none"`` for a TPPI FFT that explicitly retains a
   known unapplied delay, with provenance in the processing trace. Keep default
   rejection and reject unknown/invalid/already-corrected descriptors. Add a
