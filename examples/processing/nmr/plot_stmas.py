@@ -1,25 +1,23 @@
 """
-Process a States STMAS spectrum
-===============================
+Process an STMAS spectrum
+=========================
 
-Read RbNO₃ experiment ``15`` from the usual SpectroChemPy ``datadir``.
-This workflow uses its acquisition and processing status files.
-See :doc:`/userguide/stmas` for pair selection, the shear and referencing.
+Run the public example through reading, common F2 phase correction and
+shearing. See :doc:`/userguide/stmas` for the expected result and settings.
+
+Data: Christian Fernandez, LCS, spectrochempy_data, CC BY 4.0.
 """
-
-from cmath import phase as phase_angle
-from math import degrees
 
 import spectrochempy as scp
 
-
-root = scp.preferences.datadir / "nmrdata/bruker/tests/nmr/RbNO3"
-states = scp.nmr.read(root / "15", use_tdeff=True, indirect_dwell="IN[0]")
-xf2 = scp.nmr.Experiment(states).xf2(size=1024)
-peak = xf2.data[abs(xf2).argmax()]
-phased = scp.nmr.Experiment(xf2).xf2p(phc0=-degrees(phase_angle(peak)))
+path = scp.preferences.datadir / "nmrdata/bruker/tests/nmr/RbNO3/15/ser"
+if not path.exists():
+    _ = scp.nmr.read(path, download_only=True)
+raw = scp.nmr.read(path, use_tdeff=True, indirect_dwell="IN[0]")
+xf2 = scp.nmr.Experiment(raw).xf2(size=1024)
+phased = scp.nmr.Experiment(xf2).apk2d(order=0)
 spectrum = scp.nmr.Experiment(phased).xfshear(
     size=512, experiment="STMAS", f1_shift=-0.1
 )
-view = scp.nmr.Experiment(spectrum)
-_ = abs(view.RR + 1j * view.RI)[:, -10.0:-60.0].plot(method="contour")
+plane = scp.nmr.Experiment(spectrum).RR
+_ = plane[:, -10.0:-60.0].plot(method="contour", start=0.1, nlevels=8)

@@ -10,6 +10,7 @@ an unsupported input. For everyday work, start with
    :maxdepth: 1
 
    ../getting_started/troubleshooting
+   ../getting_started/example_data
    ../userguide/reading_details
    ../userguide/processing_1d_details
    ../userguide/processing_2d_details
@@ -17,3 +18,7 @@ an unsupported input. For everyday work, start with
    ../userguide/bruker_indirect_sampling
    ../userguide/fourier
    ../userguide/pulsar_scope
+   ../userguide/mqmas_details
+   ../userguide/stmas_details
+   ../userguide/multiplex_spam_details
+   ../userguide/recovery_details

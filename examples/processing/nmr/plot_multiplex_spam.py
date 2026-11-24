@@ -1,28 +1,22 @@
 """
-Reconstruct and shear a Multiplex SPAM spectrum
-===============================================
+Process a Multiplex SPAM spectrum
+=================================
 
-Read the archived ⁸⁷Rb MQMultiplex32 acquisition and select 3Q.
-Use ``MULTIPLEX/4`` in the usual SpectroChemPy ``datadir``. See :doc:`/userguide/multiplex_spam` for the acquisition
-layout and the phase-cycle reconstruction.
+Run the public example through reading, common F2 phase correction and
+shearing. See :doc:`/userguide/multiplex_spam` for the expected result and settings.
+
+Data: Christian Fernandez, LCS, spectrochempy_data, CC BY 4.0.
 """
-
-from cmath import phase as phase_angle
-from math import degrees
 
 import spectrochempy as scp
 
-
-path = scp.preferences.datadir / "nmrdata/bruker/tests/nmr/MULTIPLEX/4"
+path = scp.preferences.datadir / "nmrdata/bruker/tests/nmr/RbNO3/206/ser"
+if not path.exists():
+    _ = scp.nmr.read(path, download_only=True)
 raw = scp.nmr.read(path, phase_cycle="paired")
 states = scp.nmr.Experiment(raw).select_coherence(3)
 xf2 = scp.nmr.Experiment(states).xf2(size=4096)
-row = xf2[0, 0].squeeze()
-phc0 = -degrees(phase_angle(row.data[abs(row).argmax()]))
-phased = scp.nmr.Experiment(xf2).xf2p(phc0=phc0)
-spectrum = scp.nmr.Experiment(phased).xfshear(size=256)
-_ = (
-    scp.nmr.Experiment(spectrum)
-    .RR[:, 15.0:-15.0]
-    .plot(method="contour", start=0.05, nlevels=10)
-)
+phased = scp.nmr.Experiment(xf2).apk2d(order=0)
+spectrum = scp.nmr.Experiment(phased).xfshear(size=512, f1_shift=7.0)
+plane = scp.nmr.Experiment(spectrum).RR
+_ = plane[:, -10.0:-60.0].plot(method="contour", start=0.1, nlevels=8)

@@ -70,7 +70,7 @@ def _has_nmr_example_data(example: Path) -> bool:
     if example.stem == "plot_stmas":
         return (bruker / "RbNO3" / "15" / "ser").is_file()
     if example.stem == "plot_multiplex_spam":
-        return (bruker / "MULTIPLEX" / "4" / "ser").is_file()
+        return (bruker / "RbNO3" / "206" / "ser").is_file()
     if example.stem == "plot_alumina_czjzek":
         return (bruker / "alumina_800C" / "12" / "pdata" / "1" / "1r").is_file()
     if example.stem == "plot_bruker_2d":
