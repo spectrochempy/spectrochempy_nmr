@@ -27,7 +27,7 @@ def test_known_diffusion_is_recovered_with_units_and_residual(reverse):
     original = spectra.copy()
     experiment = scp.nmr.Diffusion(spectra, b=b)
     result = experiment.fit(region=(1.7, 2.3))
-    assert result.D.to("m^2/s").magnitude == pytest.approx(8e-12, rel=1e-4)
+    assert result.D.to("m^2/s").magnitude == pytest.approx(8e-12, rel=1e-4, abs=0)
     assert result.diagnostics["success"]
     assert result.I0.units == scp.ur.count * scp.ur.ppm
     np.testing.assert_allclose(result.areas.x.data, b.data)
@@ -44,7 +44,7 @@ def test_b_units_are_converted_and_ambiguous_numbers_refused():
     spectra, b = spectra_and_b()
     experiment = scp.nmr.Diffusion(spectra, b=b.to("s/cm^2"))
     assert experiment.fit(region=(1.7, 2.3)).D.magnitude == pytest.approx(
-        8e-12, rel=1e-4
+        8e-12, rel=1e-4, abs=0
     )
     for invalid in [
         None,
@@ -130,7 +130,7 @@ def test_peg600_reference_and_reprocessing():
     assert first.shape == (12, 65536)
     assert first.y.units == scp.ur("s/m^2").units
     result = experiment.fit(region=(72.649, 72.916))
-    assert result.D.magnitude == pytest.approx(7.559092e-12, rel=0.01)
+    assert result.D.magnitude == pytest.approx(7.559092e-12, rel=0.01, abs=0)
     assert result.provenance["b_source"].endswith("diff.xml")
     assert result.provenance["processing"]["group_delay_points"] == pytest.approx(
         67.9839477539062
@@ -138,7 +138,7 @@ def test_peg600_reference_and_reprocessing():
     # Editing a returned view must not change the stored spectra or a later fit.
     first.data[:] = 0
     assert experiment.fit(region=(72.916, 72.649)).D.magnitude == pytest.approx(
-        result.D.magnitude
+        result.D.magnitude, rel=1e-10, abs=0
     )
     for options in [dict(size=1024), dict(size=True), dict(lb=-1), dict(phc0=np.nan)]:
         with pytest.raises(ValueError):

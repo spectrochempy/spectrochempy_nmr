@@ -280,12 +280,27 @@ class Diffusion:
         corrected = correct_delay_time(self._raw.data, delay)
         fid = self._raw[:, : corrected.shape[-1]].copy()
         fid.data = corrected
+        readonly = fid.meta.readonly
+        fid.meta.readonly = False
+        for name, value in (
+            ("phased", True),
+            ("phc0", 0 * scp.ur.degree),
+            ("phc1", 0 * scp.ur.degree),
+            ("exptc", 0),
+            ("pivot", 0),
+            ("physical_pivots", False),
+        ):
+            values = list(fid.meta.get(name) or [value] * fid.ndim)
+            values[-1] = value
+            fid.meta[name] = values
+        fid.meta.readonly = readonly
         if broadening.magnitude:
             fid = fid.em(lb=broadening, dim="x")
         fft = fid.fft(dim="x", size=int(size))
         fraction = delay - np.floor(delay)
         spectra = fft.pk(
             dim="x",
+            pivot=0,
             phc0=(phases[0] - 180 * fraction) * scp.ur.degree,
             phc1=(phases[1] + 360 * fraction) * scp.ur.degree,
         ).real

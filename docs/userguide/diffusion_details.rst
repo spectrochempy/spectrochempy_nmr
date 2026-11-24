@@ -33,7 +33,9 @@ those spectra together with calibrated b; see :doc:`/reference/diffusion`.
 For the raw workflow, ``process()`` removes the integer part of the recorded
 Bruker digital delay with the existing time-domain correction and compensates
 the fractional remainder on the final F2 grid. It uses the saved common phase
-unless overridden, with no exponential broadening by default. Each call
+unless overridden, with no exponential broadening by default. Before F2,
+inherited phase state is reset so the saved common phase is applied exactly
+once, including on older Core versions that phase during FFT. Each call
 starts from the original SER. Phase and integration choices are recorded in
 the spectra and fitted curves' diffusion metadata.
 
