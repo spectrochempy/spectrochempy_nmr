@@ -12,10 +12,10 @@ from .qf_interop import _fft_stage
 def process_tppi(dataset, spectral_widths, reference, *, digital_filter=None):
     """Return RR, RI, IR and II in F1, F2 order."""
     samples = np.asarray(dataset.data)
-    if digital_filter not in (None, "none"):
-        raise ValueError("TPPI digital_filter must be None or 'none'")
+    if digital_filter not in (None, "none", "phase"):
+        raise ValueError("TPPI digital_filter must be None, 'none' or 'phase'")
     descriptor = dataset.meta.get("acquisition", {}).get("digital_filter")
-    if descriptor is not None or digital_filter == "none":
+    if descriptor is not None or digital_filter is not None:
         if (
             not isinstance(descriptor, Mapping)
             or descriptor.get("applied") is not False
@@ -71,8 +71,14 @@ def process_tppi(dataset, spectral_widths, reference, *, digital_filter=None):
     ):
         raise ValueError("TPPI requires the original acquisition grids")
 
+    if digital_filter == "phase":
+        from .digital_filter import resolve_group_delay
+
+        delay, _ = resolve_group_delay(dataset, None)
     # Convert the stored TPPI sample convention for the positive-exponent FFT.
     f2 = _fft_stage(samples.conj(), -1, direct=True)
+    if digital_filter == "phase":
+        f2 *= np.exp(-2j * np.pi * delay * np.arange(n2) / n2)
     # Zero-fill the real F1 sequences to 2N and retain bins [0, N).
     rr_ir = np.fft.rfft(f2.real, n=2 * n1, axis=0)[:n1].conj()
     ri_ii = np.fft.rfft(f2.imag, n=2 * n1, axis=0)[:n1].conj()
@@ -105,6 +111,17 @@ def process_tppi(dataset, spectral_widths, reference, *, digital_filter=None):
         x=scp.Coord(values[1], units=units, title="F2", rounding=False, sigdigits=15),
     )
     result.meta.update(dict(dataset.meta.copy()))
+    if digital_filter == "phase":
+        result.meta.acquisition = {
+            **dict(dataset.meta.acquisition),
+            "digital_filter": {
+                **dict(descriptor),
+                "method": "phase",
+                "applied": True,
+                "removed_points": 0,
+                "domain": "F2-frequency",
+            },
+        }
     result.meta.data_domain = "frequency"
     result.meta.stage = "spectrum"
     result.meta.component_labels = labels

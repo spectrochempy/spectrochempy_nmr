@@ -295,9 +295,13 @@ must record an unapplied, explicitly known zero group delay for this FFT
 path by default. Unknown or nonzero delays are rejected. For a known finite,
 unapplied delay shorter than F2, ``process(digital_filter="none")`` explicitly
 retains the delay without correction and records this choice. This diagnostic
-FFT does not remove the filter or provide an absorptive spectrum. Filtering,
-windows, manual phasing, variable FFT sizes and vendor-recipe replay are outside
-this path.
+FFT does not remove the filter or provide an absorptive spectrum.
+``process(digital_filter="phase")`` instead compensates the known delay on the
+shifted F2 frequency grid, before the real F1 transform. It keeps all F2 points
+and records the correction as applied; missing, invalid or already-applied
+filter descriptors are rejected. No delay override is inferred. Windows,
+manual phasing, variable FFT sizes, time-domain filter trimming and vendor-recipe
+replay remain outside this path.
 The default output consists of four signed planes ``rr, ri, ir, ii`` on
 relative Hz grids. ``process(reference={"F1": ..., "F2": ...})`` accepts the
 same explicit point anchors documented above, without changing components.
@@ -306,8 +310,8 @@ Choose either point anchors or ``tppi_reference``, not both.
 Saved SCP data preserves this processing contract without the provider or
 original files. Controlled synthetic TopSpin references and independent matrix
 DFTs check the numerical transforms. The public native TPPI qualification below
-also checks an uncorrected FFT on experimental acquisitions. Native QSEQ,
-absolute experimental phases and filter correction remain unqualified. TopSpin
+also checks uncorrected and phase-compensated FFTs on experimental acquisitions.
+Native QSEQ and absolute experimental phases remain unqualified. TopSpin
 presentation uses ``RR, -IR, -RI, II`` and replaces the central ``2rr`` bin
 with its two F1 neighbors' average. The common FFT preserves that bin rather
 than applying this vendor display operation.
@@ -363,3 +367,44 @@ an amplitude or dividing by NS/RG. This does not establish scan/gain-normalized
 physical intensities or absolute phase. The central RR presentation operation
 is applied only to a comparison copy. QSEQ remains covered by controlled
 synthetic references; no native indirect-QSEQ acquisition is claimed here.
+
+
+TPPI digital-filter phase compensation
+~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+
+The same two public TPPI acquisitions are qualified against TopSpin 4.5.0 with
+all the settings above, except ``PKNL=yes`` on F2 (F1 remains ``PKNL=no``).
+The original ``SER``, ``acqus`` and ``acqu2s`` stay byte-identical, including
+``GRPDLY=76``. Keep this corrected reference in a separate copy from the
+uncorrected reference. Export its processed RR into a separate export directory;
+the four raw JCAMP exports can be reused unchanged.
+
+.. code-block:: python
+
+   # raw is the explicitly normalized TPPI FID from the example above.
+   corrected = scp.nmr.Experiment(raw).process(
+       digital_filter="phase",
+   )
+
+Use the same read-only qualification tool with ``--digital-filter phase``
+and the corrected reference/export paths. It verifies F2 ``PKNL=yes``, F1
+``PKNL=no``, exact raw decoding and processed RR, unchanged source hashes,
+four signed FFT planes and both ppm axes. Relative L2 errors on each plane
+are below ``2.81e-7`` for cis and ``2.28e-7`` for trans (threshold ``2e-6``).
+There is no fitted scale, shift or phase. Only the TopSpin central RR display
+operation is applied to a comparison copy, as for the uncorrected reference.
+
+For F2 FFT size N and stored delay g, the compensation multiplies shifted
+complex F2 bin k by ``exp(-2j*pi*g*k/N)``. It precedes F1 because F1 transforms
+the real and imaginary F2 sequences separately. No samples are trimmed; default
+Hz grids and explicit ppm anchors are preserved. The returned acquisition and
+processing trace record an applied phase correction with zero removed points;
+the input FID remains unchanged. Saved SCP FIDs can reproduce the calculation
+without the provider; saved spectra preserve the applied state.
+
+Independent matrix DFT tests cover zero, integer and fractional delays. Vendor
+parity is established for these two native 76-point-delay acquisitions only;
+other digital filters, time-domain correction, absolute experimental phase,
+scan/gain-normalized physical intensities and full TPPI XFB replay require
+separate qualification. This is a group-delay correction, not a proof that the
+remaining experimental spectrum is correctly phased.
