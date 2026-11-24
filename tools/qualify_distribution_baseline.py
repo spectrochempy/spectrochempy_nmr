@@ -27,7 +27,7 @@ from spectrochempy import Baseline
 
 
 ARCHIVE_MD5 = "2eceea1029bb1c43aa15292cc618ce72"
-SAMPLES = ("quinine-s06-1", "quinine-s07-1", "quinine-s11-1")
+SAMPLES = (("quinine-s07-1", 29), ("quinine-s06-1", 100), ("quinine-s11-1", 101))
 ANCHORS = [(-2.0, -1.0), (10.5, 11.5), (14.0, 15.0)]
 CASES = (
     ("narrow_positive", 12.0, 0.003, 0.5),
@@ -87,6 +87,30 @@ def corrected(source, options):
     return processor.corrected.data.copy()
 
 
+def regions_from_export(text, *, integrals):
+    """Read integral values or only exported bounds; do not invent a reference."""
+    if integrals:
+        rows = [
+            tuple(map(float, match))
+            for match in re.findall(
+                r"^\s*\d+\s+([-\d.]+)\s+([-\d.]+)\s+([-\d.]+)\s*$", text, re.M
+            )
+        ]
+        if not rows or rows[0][2] <= 0:
+            raise ValueError("expected a positive exported integral reference")
+        reference = rows[0][2]
+        return [(low, high, value / reference) for low, high, value in rows]
+    rows = []
+    for line in text.splitlines():
+        if not line.strip() or line.lstrip().startswith(("#", "A", "P")):
+            continue
+        low, high = map(float, line.split()[:2])
+        rows.append((low, high, None))
+    if not rows:
+        raise ValueError("expected exported integration bounds")
+    return rows
+
+
 def qualify(archive):
     """Verify the original archive; return JSON-serializable evidence and metrics."""
     with archive.open("rb") as stream:
@@ -102,37 +126,48 @@ def qualify(archive):
         "integrals": [],
         "recovery": [],
         "inputs_sha256": {},
+        "unique_real_spectra": 0,
     }
+    real_hashes, fid_hashes = set(), set()
     with ZipFile(archive) as bundle, tempfile.TemporaryDirectory() as temporary:
         root = Path(temporary)
-        for sample in SAMPLES:
-            prefix = f"NMR Data/{sample}/29/"
+        prepared = []
+        for name, experiment in SAMPLES:
+            sample = f"{name}/{experiment}"
+            prefix = f"NMR Data/{sample}/"
+            has_integrals = prefix + "pdata/1/integrals.txt" in bundle.namelist()
+            export = "pdata/1/integrals.txt" if has_integrals else "pdata/1/intrng"
             for suffix in (
+                "fid",
                 "acqu",
                 "acqus",
                 "pdata/1/proc",
                 "pdata/1/procs",
                 "pdata/1/1r",
                 "pdata/1/1i",
-                "pdata/1/integrals.txt",
+                export,
             ):
                 member = prefix + suffix
                 content = bundle.read(member)
                 report["inputs_sha256"][member] = hashlib.sha256(content).hexdigest()
-                target = root / sample / "29" / suffix
+                target = root / sample / suffix
                 target.parent.mkdir(parents=True, exist_ok=True)
                 target.write_bytes(content)
-            table = (root / sample / "29/pdata/1/integrals.txt").read_text()
-            regions = [
-                tuple(map(float, match))
-                for match in re.findall(
-                    r"^\s*\d+\s+([-\d.]+)\s+([-\d.]+)\s+([-\d.]+)\s*$", table, re.M
+            real_hash = report["inputs_sha256"][prefix + "pdata/1/1r"]
+            fid_hash = report["inputs_sha256"][prefix + "fid"]
+            if real_hash in real_hashes or fid_hash in fid_hashes:
+                raise ValueError(
+                    "qualification requires distinct real spectra and FIDs"
                 )
-            ]
-            if not regions or regions[0][2] != 1:
-                raise ValueError("expected TopSpin relative integral reference of one")
+            real_hashes.add(real_hash)
+            fid_hashes.add(fid_hash)
+            regions = regions_from_export(
+                (root / sample / export).read_text(), integrals=has_integrals
+            )
+            prepared.append((sample, regions, export))
+        for sample, regions, export in prepared:
             native = scp.nmr.read(
-                root / sample / "29/pdata/1/1r",
+                root / sample / "pdata/1/1r",
                 processed=True,
                 proc_axis=True,
                 local_only=True,
@@ -154,6 +189,7 @@ def qualify(archive):
                                 "region": number,
                                 "limits_ppm": [low, high],
                                 "published_relative": published,
+                                "export": export,
                                 "relative_to_uncorrected_first": area(
                                     x, control, (low, high)
                                 )
@@ -188,6 +224,7 @@ def qualify(archive):
                                 ),
                             }
                         )
+    report["unique_real_spectra"] = len(real_hashes)
     with archive.open("rb") as stream:
         unchanged = hashlib.file_digest(stream, "md5").hexdigest() == digest
     if not unchanged:

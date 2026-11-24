@@ -39,6 +39,21 @@ def test_recovery_rejects_zero_reference():
         qualification.recovery_metrics(np.arange(4), np.zeros(4), np.ones(4), (0, 3))
 
 
+def test_export_values_are_normalized_to_the_exported_reference():
+    result = qualification.regions_from_export(
+        "1 8.8 8.5 0.5\n2 7.6 7.4 1.0\n", integrals=True
+    )
+    assert result == [(8.8, 8.5, 1.0), (7.6, 7.4, 2.0)]
+
+
+@pytest.mark.parametrize("header", ["A 1.0 # regions", "P 0"])
+def test_exported_bounds_without_values_do_not_claim_known_areas(header):
+    result = qualification.regions_from_export(
+        header + "\n# low high bias slope\n8.8 8.5 0 0\n", integrals=False
+    )
+    assert result == [(8.8, 8.5, None)]
+
+
 def test_external_qualification_refuses_unverified_archive(tmp_path):
     archive = tmp_path / "invalid.zip"
     archive.write_bytes(b"not the published acquisition archive")
