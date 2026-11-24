@@ -12,9 +12,7 @@ from spectrochempy.core.units import DimensionalityError
 
 def _b_coord(values, count):
     if isinstance(values, scp.Coord):
-        coord = scp.Coord(
-            values.data, units=values.units, rounding=False, sigdigits=15
-        )
+        coord = scp.Coord(values.data, units=values.units, rounding=False, sigdigits=15)
         coord.mask = values.mask
     elif hasattr(values, "units") and hasattr(values, "magnitude"):
         coord = scp.Coord(
