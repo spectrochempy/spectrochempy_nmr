@@ -170,6 +170,11 @@ html[data-theme="dark"] {
   color: var(--scp-sidebar-heading);
 }
 
+.bd-sidebar-primary .bd-links__title a {
+  color: inherit;
+  display: block;
+}
+
 .bd-sidebar-primary .toctree-toggle,
 .bd-sidebar-primary .sidebar-primary-items__start {
   border-color: rgba(255, 255, 255, 0.14);

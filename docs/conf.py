@@ -214,6 +214,7 @@ if os.environ.get("NMR_DOCS_EXECUTE") == "1":
 def _set_section_title(app, pagename, templatename, context, doctree):
     """Label the sidebar and menu with the page's top-level toctree title."""
     env = app.env
+    context["section_docname"] = env.config.root_doc
 
     def contains(docname, seen):
         if docname == pagename:
@@ -228,6 +229,7 @@ def _set_section_title(app, pagename, templatename, context, doctree):
     for section in env.toctree_includes.get(env.config.root_doc, ()):
         if contains(section, set()):
             context["section_title"] = env.titles[section].astext()
+            context["section_docname"] = section
             break
 
 

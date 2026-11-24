@@ -2,7 +2,9 @@
 {% set show_nav_level = meta['html_theme.show_nav_level'] if (meta is defined and meta is not none and 'html_theme.show_nav_level' in meta) else theme_show_nav_level %}
 <nav class="bd-docs-nav bd-links"
      aria-label="{{ section_title or _('Section Navigation') }}">
-  <p class="bd-links__title" role="heading" aria-level="1">{{ section_title or _('Section Navigation') }}</p>
+  <p class="bd-links__title" role="heading" aria-level="1">
+    <a href="{{ pathto(section_docname) }}">{{ section_title or _('Section Navigation') }}</a>
+  </p>
   <div class="bd-toc-item navbar-nav">
     {{- generate_toctree_html(
       "sidebar",
