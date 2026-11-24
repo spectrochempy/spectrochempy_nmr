@@ -16,8 +16,10 @@ import numpy as np
 from spectrochempy_nmr import Experiment, read
 
 
-def qualify(acquisition, processed, exports, prefix):
-    """Check raw codecs, four uncorrected FFT planes, ppm and processed RR."""
+def qualify(acquisition, processed, exports, prefix, *, digital_filter="none"):
+    """Check raw codecs, four FFT planes, optional phase correction, ppm and RR."""
+    if digital_filter not in ("none", "phase"):
+        raise ValueError("Qualification digital_filter must be 'none' or 'phase'")
     paths = [acquisition / name for name in ("ser", "acqus", "acqu2s")]
     paths += [
         processed / name for name in ("procs", "proc2s", "2rr", "2ri", "2ir", "2ii")
@@ -54,7 +56,7 @@ def qualify(acquisition, processed, exports, prefix):
             "FCOR": 1,
             "PHC0": 0,
             "PHC1": 0,
-            "PKNL": False,
+            "PKNL": key == "procs" and digital_filter == "phase",
             "STSR": 0,
             "STSI": size,
             "TDoff": 0,
@@ -87,7 +89,9 @@ def qualify(acquisition, processed, exports, prefix):
         for role, key in (("F1", "proc2s"), ("F2", "procs"))
     }
     original = source.data.copy()
-    result = Experiment(source).process(digital_filter="none", reference=anchors)
+    result = Experiment(source).process(
+        digital_filter=digital_filter, reference=anchors
+    )
     np.testing.assert_array_equal(source.data, original)
     planes = np.stack(
         (result.data[0], -result.data[2], -result.data[1], result.data[3])
@@ -121,7 +125,8 @@ def qualify(acquisition, processed, exports, prefix):
         "raw_codecs_exact": 4,
         "processed_rr_exact": True,
         "ppm_axes": True,
-        "filter_correction_applied": False,
+        "filter_correction_applied": digital_filter == "phase",
+        "digital_filter": digital_filter,
         "group_delay_points": status["acqus"]["GRPDLY"],
         "intensity_scale": "raw counts, TopSpin NC_proc scaling only; no fitted scale or scan/gain division",
         "input_sha256": before,
@@ -134,10 +139,17 @@ if __name__ == "__main__":
     parser.add_argument("processed", type=Path)
     parser.add_argument("exports", type=Path)
     parser.add_argument("--prefix", required=True)
+    parser.add_argument("--digital-filter", choices=("none", "phase"), default="none")
     args = parser.parse_args()
     print(
         json.dumps(
-            qualify(args.acquisition, args.processed, args.exports, args.prefix),
+            qualify(
+                args.acquisition,
+                args.processed,
+                args.exports,
+                args.prefix,
+                digital_filter=args.digital_filter,
+            ),
             indent=2,
         )
     )

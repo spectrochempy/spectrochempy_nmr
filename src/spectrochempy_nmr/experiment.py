@@ -1162,7 +1162,9 @@ class Experiment:
             apodization and optional manual phase angles at the first bin,
             and defaults to the recorded FFT size when ``size`` is omitted.
             For TPPI, "none" explicitly retains a known unapplied delay
-            without correction; the default still rejects nonzero delays.
+            without correction, or "phase" compensates it on the F2 FFT grid
+            before the real F1 transform, without trimming samples. The default
+            still rejects nonzero TPPI delays.
         bruker_group_delay : float, optional
             Override the group delay in complex F2 samples. With a method
             selected, the default is to resolve it from acquisition metadata.
@@ -1290,8 +1292,8 @@ class Experiment:
         phc0 = 0.0 if phc0 is _UNSET_ZERO else phc0
         phc1 = 0.0 if phc1 is _UNSET_ZERO else phc1
 
-        if self._supports_tppi_fft and digital_filter not in (None, "none"):
-            raise ValueError("TPPI digital_filter must be None or 'none'")
+        if self._supports_tppi_fft and digital_filter not in (None, "none", "phase"):
+            raise ValueError("TPPI digital_filter must be None, 'none' or 'phase'")
         if digital_filter == "pknl":
             if self.is_multi_dataset:
                 raise ValueError("QSIM PKNL requires one FID at a time")
@@ -1382,9 +1384,8 @@ class Experiment:
             if digital_filter is not None:
                 requested["digital_filter"] = digital_filter
                 filter_trace["digital_filter"] = {
-                    **dict(ds.meta.acquisition["digital_filter"]),
-                    "method": "none",
-                    "applied": False,
+                    **dict(result.meta.acquisition["digital_filter"]),
+                    "method": digital_filter,
                 }
             if reference is not None:
                 from .processing.interop_reference import _reference_interop_2d  # noqa: PLC0415
@@ -1399,7 +1400,7 @@ class Experiment:
                     "fft_order": ("F2", "F1"),
                     "fft_convention": (
                         "var2pipe -noaswap",
-                        "FT -nodf",
+                        "FT -df" if digital_filter == "phase" else "FT -nodf",
                         "ZF 2N",
                         "FT -real",
                     ),

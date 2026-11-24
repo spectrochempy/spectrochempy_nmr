@@ -13,6 +13,13 @@ Unreleased
   replacements. Simplify the corresponding guides and gallery recipes.
   (`#193 <https://github.com/spectrochempy/spectrochempy_nmr/pull/193>`_)
 
+* Compensate a known TPPI digital-filter delay with explicit
+  ``process(digital_filter="phase")`` before F1, preserving F2 size and grids.
+  Record the applied correction, reject repeated/invalid correction and retain
+  the default delay guard. Qualify four signed planes and ppm axes against
+  TopSpin PKNL on both public native CC0 NOESY acquisitions.
+  (`#194 <https://github.com/spectrochempy/spectrochempy_nmr/pull/194>`_)
+
 * Allow ``digital_filter="none"`` for a TPPI FFT that explicitly retains a
   known unapplied delay, with provenance in the processing trace. Keep default
   rejection and reject unknown/invalid/already-corrected descriptors. Add a
