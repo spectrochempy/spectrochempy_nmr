@@ -11,6 +11,7 @@ one function or class.
 
    readers
    experiment
+   diffusion
    isotopes
    interop
    core_operations

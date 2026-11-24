@@ -258,6 +258,35 @@ jobs:
       - name: Test Multiplex SPAM, MQMAS and STMAS processing
         run: python -I -m pytest -ra tests/test_multiplex_spam.py tests/test_multiplex_common.py tests/test_jeol_common.py tests/test_jeol_cosy_processing.py tests/test_mqmas.py tests/test_mqmas_common.py tests/test_shared_xfshear.py tests/test_automatic_xfshear.py tests/test_stmas.py tests/test_isotopes.py
 
+      - name: Test public PFG diffusion measurements
+        run: |
+          python - <<'PYTHON'
+          import hashlib
+          import tomllib
+          from pathlib import Path
+          from urllib.request import urlopen
+          import spectrochempy as scp
+
+          manifest = tomllib.loads(Path("docs/gallery-fixtures.toml").read_text())
+          repository = manifest["source_repository"].removeprefix("https://github.com/")
+          base = (
+              f"https://raw.githubusercontent.com/{repository}/"
+              f"{manifest['source_commit']}/{manifest['source_root']}"
+          )
+          for entry in manifest["files"]:
+              if not entry["path"].startswith("nmrdata/bruker/tests/nmr/relax/102/"):
+                  continue
+              with urlopen(f"{base}/{entry['path']}", timeout=60) as response:
+                  payload = response.read()
+              assert len(payload) == entry["size"]
+              assert hashlib.sha256(payload).hexdigest() == entry["sha256"]
+              target = Path(scp.preferences.datadir) / entry["path"]
+              target.parent.mkdir(parents=True, exist_ok=True)
+              target.write_bytes(payload)
+          assert (Path(scp.preferences.datadir) / "nmrdata/bruker/tests/nmr/relax/102/ser").is_file()
+          PYTHON
+          python -I -m pytest -ra tests/test_diffusion.py
+
       - name: Test CSDF exchange through the public plugin API
         run: python -I -m pytest -ra tests/test_csdf.py
 

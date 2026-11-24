@@ -24,6 +24,8 @@ What would you like to do?
   continue to :doc:`MQMAS, STMAS and Multiplex SPAM <userguide/quadrupolar>`.
 * **Measure spectra:** :doc:`correct a baseline <userguide/baseline>`,
   :doc:`find peaks, integrate and fit lines <userguide/analysis>`.
+* **Measure diffusion:** :doc:`estimate a diffusion coefficient <userguide/diffusion_pfg>`
+  from a PFG series.
 * **Analyze a series:** follow
   :doc:`signal recovery <userguide/relaxation_t1>` or
   :doc:`cross-polarization buildup <userguide/cp_buildup>`.

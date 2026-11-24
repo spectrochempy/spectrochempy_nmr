@@ -724,6 +724,10 @@ def __getattr__(name: str):
         from .units import set_nmr_context  # noqa: PLC0415
 
         return set_nmr_context
+    if name in {"Diffusion", "DiffusionFit"}:
+        from . import diffusion
+
+        return getattr(diffusion, name)
     if name == "Experiment":
         from .experiment import Experiment  # noqa: PLC0415
 
@@ -772,6 +776,8 @@ def __dir__() -> list[str]:
     return [
         "NMRPlugin",
         "Experiment",
+        "Diffusion",
+        "DiffusionFit",
         "Isotope",
         "pulsar",
         "mqmas_inversion",
