@@ -34,6 +34,11 @@ install the versions used by the recipes.
 
    python -m pip install "spectrochempy[nmr]==1.4.0" "spectrochempy-nmr==0.6.0"
 
+**If you used conda / mamba:** follow the `Core instructions for installing
+the NMR plugin with conda / mamba
+<https://www.spectrochempy.fr/stable/gettingstarted/install/install_adds.html#install-adds-plugins>`_,
+then continue below.
+
 Open a notebook
 ---------------
 
