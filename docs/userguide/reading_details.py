@@ -62,7 +62,8 @@ agilent = scp.nmr.read("path/to/fid", protocol="agilent")
 #      - :py:func:`scp.nmr.read_simpson(path) <spectrochempy_nmr.read_simpson>`
 #      - Simulated FIDs and spectra, or a simulation input with a sibling output
 #    * - CSDF
-#      - ``scp.nmr.read_csdf(path)`` or ``scp.nmr.read(path)``
+#      - :py:func:`scp.nmr.read_csdf(path) <spectrochempy_nmr.read_csdf>`
+#        or :py:func:`scp.nmr.read(path) <spectrochempy_nmr.read>`
 #      - Self-contained processed 1D or 2D spectra on linear frequency axes
 #    * - NMRPipe
 #      - :py:func:`scp.nmr.read(path, protocol="interop") <spectrochempy_nmr.read>`
