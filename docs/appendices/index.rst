@@ -22,3 +22,4 @@ an unsupported input. For everyday work, start with
    ../userguide/stmas_details
    ../userguide/multiplex_spam_details
    ../userguide/recovery_details
+   ../userguide/diffusion_details

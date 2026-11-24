@@ -537,3 +537,72 @@ path = "nmrdata/bruker/tests/nmr/MULTIPLEX/4/ser"
 url = "https://raw.githubusercontent.com/spectrochempy/spectrochempy_data/34448ef343f17a2ee57d2bc06661ac90e2d1ff48/testdata/nmrdata/bruker/tests/nmr/MULTIPLEX/4/ser"
 sha256 = "cafcd4a866e33decd7c167905c10e7c006d253b95a588adb6b626ff03e40cee0"
 size = 44040192
+
+# PFG PEG 600: measurement and parameters only (no pulse-program source).
+# Author and CC BY 4.0 licence confirmed by the maintainer, 2026-11-24.
+[[files]]
+path = "nmrdata/bruker/tests/nmr/relax/102/acqu"
+sha256 = "e3c1f58ddbfbe0e2706fba714a750d317f24003e15a1d6ad203b4518b83bd6b2"
+size = 7773
+license = "CC BY 4.0"
+attribution = "Cassandre Kouvatas"
+[[files]]
+path = "nmrdata/bruker/tests/nmr/relax/102/acqus"
+sha256 = "9957acf7b64ab7215516a3189063219dd6c1e47aed553ceb1ebc04e49535510f"
+size = 7895
+license = "CC BY 4.0"
+attribution = "Cassandre Kouvatas"
+[[files]]
+path = "nmrdata/bruker/tests/nmr/relax/102/acqu2"
+sha256 = "12d80f2efbdd08be209175d97103acba8f09974fbaba86a4b3407599ea9e4666"
+size = 512
+license = "CC BY 4.0"
+attribution = "Cassandre Kouvatas"
+[[files]]
+path = "nmrdata/bruker/tests/nmr/relax/102/acqu2s"
+sha256 = "a0c9ef95e4da9d7cc6e4506f20d4c1f883a48db1c6beca7c4d6558c11c20bb17"
+size = 509
+license = "CC BY 4.0"
+attribution = "Cassandre Kouvatas"
+[[files]]
+path = "nmrdata/bruker/tests/nmr/relax/102/ser"
+sha256 = "28aeb05367ba8656af427379e13707b17f5c1a90588e227d72bbdd6461a68c7a"
+size = 1572864
+license = "CC BY 4.0"
+attribution = "Cassandre Kouvatas"
+[[files]]
+path = "nmrdata/bruker/tests/nmr/relax/102/diff.xml"
+sha256 = "4b39e4fb7e1b625447d1ae65f86da7001bb5adff5d4399af7517b18aa7357fbd"
+size = 2803
+license = "CC BY 4.0"
+attribution = "Cassandre Kouvatas"
+[[files]]
+path = "nmrdata/bruker/tests/nmr/relax/102/difflist"
+sha256 = "61c692284116b5dd9f88fc5690e197a7a36ab2a82044471ed126aad379e88492"
+size = 93
+license = "CC BY 4.0"
+attribution = "Cassandre Kouvatas"
+[[files]]
+path = "nmrdata/bruker/tests/nmr/relax/102/pdata/1/proc"
+sha256 = "b0037611c8de07bb9e07fa348bed548d11ec9d28c664145cb91e35732b5627fe"
+size = 1990
+license = "CC BY 4.0"
+attribution = "Cassandre Kouvatas"
+[[files]]
+path = "nmrdata/bruker/tests/nmr/relax/102/pdata/1/procs"
+sha256 = "3e881ac64972906d276ce64715776fd40ace11fa2a17253a32aa75c84a2d06c3"
+size = 2374
+license = "CC BY 4.0"
+attribution = "Cassandre Kouvatas"
+[[files]]
+path = "nmrdata/bruker/tests/nmr/relax/102/pdata/1/proc2"
+sha256 = "5a81dcdb67f7769a3700f46405893497da7f91d42f7d1537d7977d992f5f9922"
+size = 1901
+license = "CC BY 4.0"
+attribution = "Cassandre Kouvatas"
+[[files]]
+path = "nmrdata/bruker/tests/nmr/relax/102/pdata/1/proc2s"
+sha256 = "e19b607423c765f3a2d7158d6937f8a80d34b3f8a10380e884de9dee033bc255"
+size = 2267
+license = "CC BY 4.0"
+attribution = "Cassandre Kouvatas"

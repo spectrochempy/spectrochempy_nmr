@@ -6,6 +6,9 @@ The gallery contains executable examples for importing, processing and
 analyzing NMR data. See the :doc:`reader guide <userguide/reading_data>`
 to find the reader for your acquisition.
 
+For a complete PFG measurement, follow
+:doc:`Measure a diffusion coefficient <userguide/diffusion_pfg>`.
+
 .. warning::
 
    The NMR gallery is under active development, and examples may change

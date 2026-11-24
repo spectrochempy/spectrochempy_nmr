@@ -19,6 +19,7 @@ Choose a task below. For your first figure, start with
    :maxdepth: 1
 
    analysis
+   diffusion_pfg
    baseline
    distribution_baseline
 
