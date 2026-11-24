@@ -7,6 +7,11 @@ distribution. The sections below describe changes in each plugin release.
 Unreleased
 ----------
 
+* Add a checksum-pinned, read-only qualification tool comparing distribution
+  baseline correction with published quinine integrals and known digital
+  additions on experimental spectra. Report sampling sensitivity and signed
+  area recovery separately from unknown absolute baseline accuracy.
+
 * Download complete absent STMAS and Multiplex examples directly through
   ``scp.nmr.read(...)``, without a separate preparation step. Reuse complete
   local acquisitions and report incomplete local folders without downloading
