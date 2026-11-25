@@ -13,7 +13,7 @@ pytestmark = pytest.mark.skipif(
 )
 
 
-def _read(path, mode, delay=0):
+def _read(path, mode, delay=0, direct="SIMULTANEOUS (DQD)"):
     from spectrochempy_nmr.processing.fft_validation import _require_fft_prevalidation
 
     try:
@@ -23,6 +23,7 @@ def _read(path, mode, delay=0):
     samples = np.random.default_rng(7063).integers(-100, 101, size=(8, 6, 2))
     raw = samples[..., 0] + 1j * samples[..., 1]
     _write(path, raw, mode.upper())
+    path.write_text(path.read_text().replace("SIMULTANEOUS (DQD)", direct))
     record = "" if delay is None else f"##$GRPDLY={delay}\n"
     path.write_text(path.read_text().replace("##NTUPLES=", record + "##NTUPLES="))
     return read(
@@ -39,11 +40,12 @@ def _read(path, mode, delay=0):
 
 @pytest.mark.parametrize("mode", ["tppi", "qseq"])
 @pytest.mark.parametrize("delay,method", [(0, None), (2, "none"), (1.5, "phase")])
+@pytest.mark.parametrize("direct", ["SIMULTANEOUS (DQD)", "SIMULTANEOUS"])
 def test_real_f1_public_processing_and_scp_without_provider(
-    tmp_path, monkeypatch, mode, delay, method
+    tmp_path, monkeypatch, mode, delay, method, direct
 ):
     path = tmp_path / "real.dx"
-    source, raw = _read(path, mode, delay)
+    source, raw = _read(path, mode, delay, direct)
     options = {"digital_filter": method} if method else {}
     before = source.data.copy()
     if mode == "qseq":
