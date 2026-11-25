@@ -16,7 +16,7 @@ Unreleased
 * Qualify the public QSEQ/QSIM JCAMP route against a TopSpin-generated
   pseudo-raw reference. Check codecs, signed FFT planes, ppm axes and explicit
   native NC scaling without changing the JCAMP sample units.
-  (`#TBD <https://github.com/spectrochempy/spectrochempy_nmr/pull/TBD>`_)
+  (`#199 <https://github.com/spectrochempy/spectrochempy_nmr/pull/199>`_)
 
 * Add ``scp.nmr.Diffusion`` for a unit-aware, single-band PFG measurement,
   with measured/fitted areas, residuals and processing provenance. Provide a
