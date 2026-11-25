@@ -271,7 +271,7 @@ TPPI and QSEQ JCAMP processing
 ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
 
 Development nmrglue-ng builds support declared TPPI and QSEQ JCAMP FIDs with
-direct DQD acquisition. Supply the physical dwell between successive F1
+direct simultaneous QSIM or DQD acquisition. Supply the physical dwell between successive F1
 samples from acquisition provenance. Do not infer it from the exported T1
 interval. QSEQ sign alternation is applied once by normalization, producing
 the common TPPI representation; the original scheme remains in metadata.
@@ -408,3 +408,60 @@ other digital filters, time-domain correction, absolute experimental phase,
 scan/gain-normalized physical intensities and full TPPI XFB replay require
 separate qualification. This is a group-delay correction, not a proof that the
 remaining experimental spectrum is correctly phased.
+
+
+.. _qseq-qsim-generated-reference:
+
+QSEQ/QSIM generated reference
+~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+
+Development nmrglue-ng builds also accept the direct JCAMP declaration
+``SIMULTANEOUS`` (QSIM) for TPPI/QSEQ; ``SIMULTANEOUS (DQD)`` remains
+supported. Use the explicit normalization and processing example above.
+The caller still establishes the conjugation and physical indirect dwell.
+QSIM does not establish a zero digital-filter delay.
+
+This route is qualified using a **pseudo-raw**, not experimentally acquired,
+QSEQ F1 / QSIM F2 dataset produced by TopSpin 4.5.0. Its source is the
+PKNL-corrected four-plane spectrum of the public CC0 cis NOESY identified
+above. On a copy, with windows, baseline correction, phase and PKNL disabled,
+set ``1 FT_mod iqr`` and ``2 FT_mod iqc``, then run ``xtrfp nodisp`` and
+``genser 2 n``. The Bruker processing reference documents this inverse-mode
+conversion in the ``xtrf``, ``xif`` and ``genser`` sections. Verify the
+effective inverse modes (3 and 2 respectively) before generating the data.
+
+``genser`` inherits acquisition metadata. In the new pseudo-raw dataset,
+describe the generated samples with F1 ``FnMODE=2``, F2 ``AQ_mod=1`` (QSIM),
+``DIGMOD=0`` and ``GRPDLY=0``. Keep the original experimental dataset intact.
+Inherited sequence names, instrument details and acquisition dates do not
+make this an experimental QSEQ acquisition. The new SER has 512 by 1024
+complex samples, integer storage (``DTYPA=0``) and ``NC=2``.
+
+With FCOR=1, no phase/window/baseline/filter operations, SI F1/F2=256/1024
+and TDeff=512/2048, TopSpin ``xfb y nodisp`` reproduces the source four
+planes with maximum relative errors below 5.8e-7 and unchanged native axes.
+A second processing copy with SI F1=512 matches the plugin's default size.
+Export its raw data in FIX, PACKED, SQUEEZED and DIFF_DUP and its processed
+RR as described above, then run:
+
+.. code-block:: console
+
+   python tools/qualify_public_tppi.py generated/2 generated/2/pdata/2 exports \
+       --prefix qseq --quadrature qseq
+
+All four raw codecs equal the stored SER samples and the processed RR export
+equals the stored 2rr. The public ``read``/``Experiment.process`` route
+compares four signed planes and two ppm grids with the TopSpin reference.
+As for the TPPI check, only the comparison copy receives TopSpin's central
+RR interpolation. The normalizer preserves the JCAMP sample units. For
+comparison, the tool applies processed ``NC_proc`` scaling and divides the
+native planes by ``2**NC`` (4 for this generated integer SER). It fits no
+amplitude, phase, shift or scan/gain factor. On this generated dataset, the
+four relative L2 plane errors are below 3.06e-7 and both ppm axes agree
+within 1e-9 ppm. Float64 references are currently
+limited to ``NC=0``; unsupported native representations are rejected.
+
+This reference qualifies the generated QSEQ/QSIM route and its unit
+comparison. It does not qualify an experimental QSEQ acquisition, a QSIM
+digital filter, arbitrary windows/phases/FFT sizes or complete vendor recipes.
+The automatic native Bruker TPPI/QSEQ processing guards remain unchanged.
