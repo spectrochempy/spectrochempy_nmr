@@ -25,7 +25,7 @@ What would you like to do?
 * **Measure spectra:** :doc:`correct a baseline <userguide/baseline>`,
   :doc:`find peaks, integrate and fit lines <userguide/analysis>`.
 * **Measure diffusion:** :doc:`estimate a diffusion coefficient <userguide/diffusion_pfg>`
-  from a PFG series.
+  from a PFG series, then :doc:`display a DOSY map <userguide/diffusion_dosy>`.
 * **Analyze a series:** follow
   :doc:`signal recovery <userguide/relaxation_t1>` or
   :doc:`cross-polarization buildup <userguide/cp_buildup>`.

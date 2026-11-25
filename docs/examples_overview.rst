@@ -8,6 +8,8 @@ to find the reader for your acquisition.
 
 For a complete PFG measurement, follow
 :doc:`Measure a diffusion coefficient <userguide/diffusion_pfg>`.
+Then :doc:`Build a DOSY map <userguide/diffusion_dosy>`
+in the same acquisition.
 
 .. warning::
 

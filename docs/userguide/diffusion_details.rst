@@ -61,23 +61,48 @@ rule and exact source of the remaining difference are unresolved.
 DOSY inversion
 ---------------
 
-A diffusion distribution or a DOSY map requires a separate inversion and
-validation. PALMA and NNLS were evaluated experimentally outside the public
-plugin API. This recipe provides neither solver and makes no claim of
-resolving multiple diffusion components.
+Start with :doc:`diffusion_dosy` for the experimental map recipe.
+
+The DOSY recipe applies the same 1 Hz exponential F2 apodization to all
+rows before the FFT. On PEG 600, the RMS after removing a straight
+background in 73.8–73.3 ppm falls from 23.04 to 10.05 signal units across
+the twelve rows. The monoexponential D in 72.649–72.916 ppm changes from
+7.58610 × 10⁻¹² to 7.58665 × 10⁻¹² m²/s (+0.0074%). These are comparisons
+for this acquisition and window, not an uncertainty estimate. Apodization
+correlates noise and broadens lines; increasing it can mix nearby signals
+and change finite-window areas. No per-row rescaling is applied.
+The PFG reference recipe keeps ``lb=0`` for its archived comparison.
+
+For each ppm column, the map fits nonnegative amplitudes on a uniform
+logarithmic D grid with K(b, D) = exp(-b D). The objective is
+mean((K a - signal)²) + λ sum(a²), with λ = 0.001 by default. The
+implementation uses `SciPy's nonnegative least-squares solver
+<https://docs.scipy.org/doc/scipy/reference/generated/scipy.optimize.nnls.html>`_ on the
+augmented matrix; no extra library import is needed in the recipe.
+Map values are signal amplitudes per log-D bin, not probability densities.
+Changing the grid or penalty changes the apparent width and separation.
+The method applies no baseline correction, clipping, per-row normalization
+or offset. Positive and negative residuals are retained.
+
+The result provides ``map``, ``measured``, ``fitted``, ``residual`` and
+``diagnostics``. The latter includes the amplitude fraction in the first
+and last D bins for every ppm column; appreciable boundary intensity calls
+for reviewing the grid and data. A successful inversion does not establish
+component count, molecular identity, diffusion resolution or uncertainty.
+A small residual alone cannot establish these either.
+Noise and imperfect baselines can accumulate intensity at the grid edges.
+Summing all ppm columns, including baseline, is therefore not a measure of
+the sample's diffusion distribution. The plot starts at 5% of the strongest
+map intensity; this changes the display only.
+
+The PEG 600 example checks the map on a real acquisition; it does not
+establish the separation of different species. Numerical tests use
+simulated mixtures with known D, noise, overlapping peaks, reversed axes
+and reconstruction checks. PALMA remains outside this public workflow.
 
 Dataset provenance
 -------------------
 
-The measurement author is **Cassandre Kouvatas**, confirmed by the maintainer
-on 24 November 2026. The acquisition records name the shared
-``nmr`` account on ``lcs175n`` on 16 June 2023. Their dataset path contains
-``Cassandre/13C_PEG600_8mm_diff/102``. The archived processing log records
-another F2 processing on 30 June 2023 under the ``Cassandre`` Windows account.
-
-Christian Fernandez imported the files through `data PR 22
-<https://github.com/spectrochempy/spectrochempy_data/pull/22>`_ on 5 July 2023.
-That contribution does not establish experimental authorship. The previous
-credit to Christian Fernandez as the measurement author is withdrawn.
-The maintainer confirms that this acquisition is licensed under CC BY 4.0,
-the same licence as his files. Credit Cassandre Kouvatas as the author.
+* File: ``nmrdata/bruker/tests/nmr/relax/102/ser``
+* Author: Cassandre Kouvatas
+* Licence: CC BY 4.0

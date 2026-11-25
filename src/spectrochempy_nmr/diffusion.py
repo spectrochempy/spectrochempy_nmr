@@ -154,6 +154,33 @@ class DiffusionFit:
         )
 
 
+@dataclass(frozen=True)
+class DOSYResult:
+    """Experimental nonnegative diffusion map on a uniform log-D grid.
+
+    ``map`` contains signal amplitude per log-D bin, not a probability
+    density. ``measured``, ``fitted`` and ``residual`` retain the measured
+    b/ppm axes. ``diagnostics`` includes signal at the grid boundaries.
+    No diffusion resolution, component count or uncertainty is inferred.
+    """
+
+    map: object
+    measured: object
+    fitted: object
+    residual: object
+    provenance: dict
+    diagnostics: dict
+
+    def plot(self, **kwargs):
+        """Plot chemical shift horizontally and diffusion vertically."""
+        kwargs.setdefault("method", "contour")
+        kwargs.setdefault("yscale", "log")
+        kwargs.setdefault("colorbar", True)
+        kwargs.setdefault("start", 0.05)
+        kwargs.setdefault("nlevels", 12)
+        return self.map.plot(**kwargs)
+
+
 class Diffusion:
     """Measure an apparent diffusion coefficient from a PFG series.
 
@@ -172,7 +199,8 @@ class Diffusion:
 
     Notes
     -----
-    This is a single-band monoexponential measurement, not a DOSY inversion.
+    ``fit`` measures one apparent D; ``dosy`` constructs an experimental
+    nonnegative diffusion map.
     Automatic raw processing is currently limited to Bruker diffSte QF series
     with DQD direct acquisition, known digital delay and saved phase.
     """
@@ -327,6 +355,154 @@ class Diffusion:
         self._spectra = spectra
         self._set_b()
         return self._spectra.copy()
+
+    def dosy(self, *, region, D, points=80, regularization=1e-3):
+        """Build an experimental diffusion map with nonnegative amplitudes.
+
+        Parameters
+        ----------
+        region : pair of float
+            Chemical-shift limits in ppm, in either order, nearest bins inclusive.
+        D : pair of float or Quantity
+            Positive increasing diffusion limits, in m²/s for bare numbers.
+            A quantity convertible to m²/s is also accepted.
+        points : int, optional
+            Number of equally spaced log-D bins (default 80, minimum 8).
+        regularization : float, optional
+            Positive ridge penalty (default 0.001). The objective per ppm
+            column is mean((K @ a - signal)**2) + regularization * sum(a**2),
+            with K = exp(-b * D), a >= 0. The same settings apply to every
+            column, without row normalization, clipping or baseline correction.
+
+        Returns
+        -------
+        DOSYResult
+            Map amplitudes per log-D bin, reconstruction, residual and grid
+            boundary diagnostics. This fixed regularization is a numerical
+            choice, not an automatic estimate of noise or resolving power.
+        """
+        from scipy.optimize import nnls
+
+        bounds = D.to("m^2/s").magnitude if hasattr(D, "to") else D
+        bounds = np.asarray(bounds, dtype=float)
+        if (
+            bounds.shape != (2,)
+            or not np.isfinite(bounds).all()
+            or not 0 < bounds[0] < bounds[1]
+        ):
+            raise ValueError("D must contain two positive increasing limits in m^2/s")
+        if (
+            isinstance(points, bool)
+            or not isinstance(points, (int, np.integer))
+            or points < 8
+        ):
+            raise ValueError("points must be an integer of at least 8")
+        if (
+            not np.isscalar(regularization)
+            or not np.isfinite(regularization)
+            or regularization <= 0
+        ):
+            raise ValueError("regularization must be a finite positive number")
+        if self._spectra is None:
+            self.process()
+        start, stop, low, high = self._region(region)
+        measured = self._spectra[:, start : stop + 1].copy()
+        values = np.asarray(measured.data, dtype=float)
+        if values[np.argmin(self._b.data)].max() <= 0:
+            raise ValueError("Check the phase: no positive signal at the lowest b")
+        grid = np.geomspace(*bounds, points)
+        kernel = np.exp(-self._b.data[:, None] * grid[None, :])
+        # Scale the data term by row count so the penalty has the documented
+        # meaning independently of the number of acquired gradients.
+        nrows, ncolumns = values.shape
+        matrix = np.vstack(
+            [kernel / np.sqrt(nrows), np.sqrt(regularization) * np.eye(points)]
+        )
+        amplitudes = np.empty((points, ncolumns))
+        for column in range(ncolumns):
+            scale = float(np.max(np.abs(values[:, column])))
+            if scale == 0:
+                amplitudes[:, column] = 0
+                continue
+            target = np.r_[values[:, column] / scale / np.sqrt(nrows), np.zeros(points)]
+            try:
+                amplitudes[:, column] = (
+                    nnls(matrix, target, maxiter=10 * points)[0] * scale
+                )
+            except RuntimeError as exc:
+                raise RuntimeError(
+                    f"DOSY inversion failed at ppm column {column}"
+                ) from exc
+        axis = scp.Coord(
+            grid,
+            units="m^2/s",
+            title="Diffusion coefficient",
+            rounding=False,
+            sigdigits=15,
+        )
+        distribution = scp.NDDataset(
+            amplitudes,
+            coordset=[axis, measured.x.copy()],
+            units=measured.units,
+            title="Signal per log-D bin",
+        )
+        fitted = measured.copy()
+        fitted.data = kernel @ amplitudes
+        fitted.title = "Reconstructed diffusion series"
+        residual = measured - fitted
+        residual.title = "DOSY residual"
+        totals = amplitudes.sum(axis=0)
+        boundary = np.divide(
+            amplitudes[[0, -1]].sum(axis=0),
+            totals,
+            out=np.zeros_like(totals),
+            where=totals > 0,
+        )
+        provenance = {
+            **self._source,
+            "processing": dict(self._processing),
+            "region_ppm": (low, high),
+            "method": "nonnegative ridge, exp(-b*D), no offset",
+            "regularization": float(regularization),
+            "D_limits_m2_s": bounds.tolist(),
+            "points": int(points),
+            "map_convention": "amplitude per uniform log-D bin",
+        }
+        for dataset in (distribution, measured, fitted, residual):
+            readonly = dataset.meta.readonly
+            dataset.meta.readonly = False
+            dataset.meta["diffusion"] = provenance.copy()
+            dataset.meta.readonly = readonly
+        return DOSYResult(
+            distribution,
+            measured,
+            fitted,
+            residual,
+            provenance,
+            {
+                "success": True,
+                "boundary_fraction": boundary,
+                "rmse": float(np.sqrt(np.mean(residual.data**2))),
+            },
+        )
+
+    def _region(self, region):
+        """Resolve an inclusive nearest-bin region on prepared spectra."""
+        bounds = np.asarray(region, dtype=float)
+        if (
+            bounds.shape != (2,)
+            or not np.isfinite(bounds).all()
+            or bounds[0] == bounds[1]
+        ):
+            raise ValueError("region must contain two different finite ppm limits")
+        x = np.asarray(self._spectra.x.data, dtype=float)
+        low, high = sorted(bounds)
+        if low < x.min() or high > x.max():
+            raise ValueError("region lies outside the measured ppm axis")
+        start, stop = sorted(int(np.argmin(np.abs(x - value))) for value in bounds)
+        if stop <= start:
+            raise ValueError("region must span at least two spectral points")
+        return start, stop, float(low), float(high)
 
     def fit(self, *, region):
         """Integrate a ppm band and fit I(b) = I0 exp(-b D).

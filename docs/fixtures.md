@@ -11,14 +11,11 @@ the TopSpin 1D, 2D, CP and relaxation measurements as LCS data released under CC
 `__index__` files are intentionally not fetched because they are excluded from
 that grant or are generated metadata.
 
-The PEG 600 PFG recipe uses acquisition
-`nmrdata/bruker/tests/nmr/relax/102` from that pinned repository revision.
-The author is Cassandre Kouvatas, confirmed by the maintainer.
-The earlier attribution to Christian Fernandez as measurement author was
-incorrect. The maintainer confirms that this acquisition uses CC BY 4.0, the same
-licence as his files. Attribute the measurement to Cassandre Kouvatas; see
-[data PR #32](https://github.com/spectrochempy/spectrochempy_data/pull/32).
-No pulse-program text is included in this fixture.
+PEG 600 PFG:
+
+- File: `nmrdata/bruker/tests/nmr/relax/102/ser`
+- Author: Cassandre Kouvatas
+- Licence: CC BY 4.0
 
 The JEOL epicatechin 1D acquisition and the processed NMRPipe
 gossypol COSY plane come from [nmrXiv project P33](https://doi.org/10.57992/nmrxiv.p33)

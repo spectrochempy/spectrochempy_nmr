@@ -80,7 +80,10 @@ result.D
 # This recipe estimates one apparent D for the selected signal. It does not
 # produce a DOSY map or separate several diffusion components. For supported
 # inputs and other prepared series, see :doc:`/reference/diffusion`.
+# Continue with :doc:`diffusion_dosy` to display a diffusion map.
 # The :doc:`diffusion appendix <diffusion_details>` contains the reference
 # comparison and measurement conventions.
 #
-# Data: Cassandre Kouvatas, distributed through spectrochempy_data, CC BY 4.0.
+# File: ``nmrdata/bruker/tests/nmr/relax/102/ser``
+#
+# Author: Cassandre Kouvatas · Licence: CC BY 4.0.

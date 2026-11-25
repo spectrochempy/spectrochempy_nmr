@@ -20,6 +20,7 @@ Choose a task below. For your first figure, start with
 
    analysis
    diffusion_pfg
+   diffusion_dosy
    baseline
    distribution_baseline
 
