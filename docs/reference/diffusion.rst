@@ -6,15 +6,7 @@ Use ``scp.nmr.Diffusion`` for a PFG measurement or an experimental DOSY map. Fol
 and qualifications are in :doc:`/userguide/diffusion_details`.
 Continue with :doc:`/userguide/diffusion_dosy` for the map.
 
-Availability
--------------
-
-``Diffusion`` and ``DiffusionFit`` are development APIs and are not included
-in the 0.6.0 release. Use a checkout containing these APIs, installed in your
-SpectroChemPy environment with ``python -m pip install -e .`` (or
-``uv pip install -e .``). General environment setup remains in the
-`Core installation guide
-<https://www.spectrochempy.fr/stable/gettingstarted/install/index.html>`_.
+For installation, see :doc:`/getting_started/installation`.
 
 Prepared spectra
 -----------------

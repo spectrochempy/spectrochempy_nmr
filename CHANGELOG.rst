@@ -7,6 +7,9 @@ distribution. The sections below describe changes in each plugin release.
 Unreleased
 ----------
 
+0.7.0 (2026-11-25)
+------------------
+
 * Add an experimental ``Diffusion.dosy`` workflow with a nonnegative
   diffusion map, reconstructed spectra and residuals, accompanied by a
   short DOSY recipe using only ``scp``.

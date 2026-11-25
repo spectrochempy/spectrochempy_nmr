@@ -26,13 +26,13 @@ install the versions used by the recipes.
 
 .. code-block:: console
 
-   uv pip install "spectrochempy[nmr]==1.4.0" "spectrochempy-nmr==0.6.0"
+   uv pip install "spectrochempy[nmr]==1.4.0" "spectrochempy-nmr==0.7.0"
 
 **If you used pip:**
 
 .. code-block:: console
 
-   python -m pip install "spectrochempy[nmr]==1.4.0" "spectrochempy-nmr==0.6.0"
+   python -m pip install "spectrochempy[nmr]==1.4.0" "spectrochempy-nmr==0.7.0"
 
 **If you used conda / mamba:** follow the `Core instructions for installing
 the NMR plugin with conda / mamba

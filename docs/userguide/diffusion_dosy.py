@@ -19,11 +19,6 @@
 # The horizontal axis is chemical shift; the vertical axis is diffusion D.
 # Smaller D means slower motion.
 #
-# .. note::
-#
-#    This experimental recipe requires the development version containing
-#    ``Diffusion.dosy``. It is not available in plugin version 0.6.0.
-#
 # Open and process
 # ----------------
 #
