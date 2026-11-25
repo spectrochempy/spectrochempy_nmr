@@ -11,6 +11,7 @@ Unreleased
   diffusion map, reconstructed spectra and residuals, accompanied by a
   short DOSY recipe using only ``scp``.
   Reduce PFG data credits to file, author and licence.
+  (`#198 <https://github.com/spectrochempy/spectrochempy_nmr/pull/198>`_)
 
 * Add ``scp.nmr.Diffusion`` for a unit-aware, single-band PFG measurement,
   with measured/fitted areas, residuals and processing provenance. Provide a
