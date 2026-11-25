@@ -285,7 +285,7 @@ jobs:
               target.write_bytes(payload)
           assert (Path(scp.preferences.datadir) / "nmrdata/bruker/tests/nmr/relax/102/ser").is_file()
           PYTHON
-          python -I -m pytest -ra tests/test_diffusion.py
+          python -I -m pytest -ra tests/test_diffusion.py tests/test_dosy.py
 
       - name: Test CSDF exchange through the public plugin API
         run: python -I -m pytest -ra tests/test_csdf.py

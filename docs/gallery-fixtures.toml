@@ -539,7 +539,7 @@ sha256 = "cafcd4a866e33decd7c167905c10e7c006d253b95a588adb6b626ff03e40cee0"
 size = 44040192
 
 # PFG PEG 600: measurement and parameters only (no pulse-program source).
-# Author and CC BY 4.0 licence confirmed by the maintainer, 2026-11-24.
+# Author: Cassandre Kouvatas; licence: CC BY 4.0.
 [[files]]
 path = "nmrdata/bruker/tests/nmr/relax/102/acqu"
 sha256 = "e3c1f58ddbfbe0e2706fba714a750d317f24003e15a1d6ad203b4518b83bd6b2"

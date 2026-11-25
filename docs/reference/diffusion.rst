@@ -1,9 +1,10 @@
 Diffusion measurements
 =======================
 
-Use ``scp.nmr.Diffusion`` for a single-band PFG measurement. Follow
+Use ``scp.nmr.Diffusion`` for a PFG measurement or an experimental DOSY map. Follow
 :doc:`/userguide/diffusion_pfg` for the first figure; processing conventions
 and qualifications are in :doc:`/userguide/diffusion_details`.
+Continue with :doc:`/userguide/diffusion_dosy` for the map.
 
 Availability
 -------------
@@ -34,8 +35,11 @@ for their common phase, relative intensity scaling and calibrated b axis.
 .. currentmodule:: spectrochempy_nmr
 
 .. autoclass:: Diffusion
-   :members: b, process, fit
+   :members: b, process, fit, dosy
 
 .. autoclass:: DiffusionFit
    :members: plot
    :exclude-members: D, I0, areas, fitted, residual, rmse, provenance, diagnostics
+
+.. autoclass:: DOSYResult
+   :members: plot
