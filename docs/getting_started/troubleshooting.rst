@@ -31,7 +31,7 @@ lets pip restore any shared files removed during uninstallation.
 .. code-block:: console
 
    python -m pip uninstall nmrglue nmrglue-ng
-   python -m pip install "spectrochempy[nmr]==1.4.0" "spectrochempy-nmr==0.6.0"
+   python -m pip install "spectrochempy[nmr]==1.4.0" "spectrochempy-nmr==0.7.0"
 
 If you use SpectroChemPy 1.2.0, install ``spectrochempy-nmr`` directly.
 The ``nmr`` extra in that version selects the plugin's 0.2 series.

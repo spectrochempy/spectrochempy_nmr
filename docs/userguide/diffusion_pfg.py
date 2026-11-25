@@ -22,11 +22,6 @@
 # Start with the public carbon-13 PEG 600 example below. You do not need to
 # type gradients, calculate diffusion weights or write a fitting function.
 #
-# .. note::
-#
-#    This recipe uses the development version of the plugin. Version 0.6.0
-#    does not provide ``Diffusion``; see :doc:`/reference/diffusion`.
-#
 # Open and display the series
 # ---------------------------
 #

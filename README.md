@@ -25,7 +25,7 @@ for installation, readers, processing and supported acquisition profiles.
 Install SpectroChemPy and the NMR plugin:
 
 ```bash
-python -m pip install "spectrochempy[nmr]==1.4.0" "spectrochempy-nmr==0.6.0"
+python -m pip install "spectrochempy[nmr]==1.4.0" "spectrochempy-nmr==0.7.0"
 ```
 
 The plugin installs `nmrglue-ng`. If you use the original `nmrglue`, install
