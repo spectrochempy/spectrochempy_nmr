@@ -13,7 +13,11 @@ from test_processed_interop import _real_plane, _spectrum
 
 @pytest.fixture(autouse=True)
 def identity_handler(monkeypatch):
+    from spectrochempy.core.readers import importer
     from spectrochempy.plugins import manager
+
+    if not hasattr(importer, "_import_identities"):
+        pytest.skip("requires the Core importer.measurement_identity extension")
 
     registry = manager.plugin_manager.registry
     original = registry.get_handler
