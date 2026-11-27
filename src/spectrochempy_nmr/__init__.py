@@ -652,6 +652,7 @@ class NMRPlugin(SpectroChemPyPlugin):
 
     def register_handlers(self) -> dict[str, Callable]:
         """Register handler overrides for core extension points."""
+        from .import_identity import _measurement_identity
         from .processing.fft_encodings import _fft_encoding_handler  # noqa: PLC0415
         from .processing.fft_postprocess import _fft_postprocess_result  # noqa: PLC0415
         from .processing.fft_validation import _fft_validate_input  # noqa: PLC0415
@@ -663,6 +664,7 @@ class NMRPlugin(SpectroChemPyPlugin):
             "fft.encoding": _fft_encoding_handler,
             "fft.validate_input": _fft_validate_input,
             "fft.postprocess_result": _fft_postprocess_result,
+            "importer.measurement_identity": _measurement_identity,
             "importer.infer_filetype_key": _infer_nmr_filetype_key,
             "importer.remote_download_target": _topspin_remote_download_target,
             "importer.resolve_directory_target": _resolve_nmr_directory_target,
