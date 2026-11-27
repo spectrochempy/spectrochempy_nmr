@@ -27,7 +27,10 @@ With both updates, automatic assembly (including ``merge=True``) checks known
 nuclear species, time/frequency domains and decoded real/complex representation.
 Nucleus spellings such as ``H1`` and ``1H`` identify the same isotope. Vendor
 acquisition codes such as QSIM and DQD do not establish a contradiction once
-they describe the same decoded 1D complex representation. Missing or
+they describe the same decoded 1D complex representation. For mergeable 1D
+traces and observation series, representation follows the current data:
+``spectrum.real`` is real even if acquisition metadata still says complex.
+Missing or
 unrecognized facts remain unknown; these checks do not certify complete
 scientific comparability.
 

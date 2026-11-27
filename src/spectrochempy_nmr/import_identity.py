@@ -68,8 +68,12 @@ def _measurement_identity(dataset):
             and identity.domains[index] in {"time", "frequency"}
         ):
             constraints[f"{prefix}.domain"] = identity.domains[index]
-        # Compare decoded representation, not vendor acquisition code numbers.
-        if identity.iscomplex and index < len(identity.iscomplex):
+        if series or single or identity.ndim == 1:
+            if getattr(dataset.dtype, "kind", None) in {"b", "i", "u", "f", "c"}:
+                constraints[f"{prefix}.representation"] = (
+                    "complex" if dataset.is_complex else "real"
+                )
+        elif identity.iscomplex and index < len(identity.iscomplex):
             state = identity.iscomplex[index]
             if isinstance(state, bool):
                 constraints[f"{prefix}.representation"] = "complex" if state else "real"

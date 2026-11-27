@@ -72,7 +72,7 @@ def test_known_domain_or_representation_contradiction(field):
     if field == "domain":
         second.meta.data_domain = "frequency"
     else:
-        second.meta.quadrature_mode = "real-1d"
+        second = second.real
     with pytest.warns(UserWarning, match=f"nmr.F2.{field} differ"):
         assert len(merge_datasets([first, second], merge=True)) == 2
 
@@ -135,8 +135,11 @@ def test_non_nmr_and_vendor_name_alone_do_not_supply_nmr_facts():
     assert _measurement_identity(dataset) is None
 
 
-def test_legacy_topspin_metadata_supplies_normalized_facts():
-    dataset = scp.NDDataset([1, 2, 3])
+@pytest.mark.parametrize("complex_data", [False, True])
+def test_legacy_topspin_metadata_supplies_normalized_facts(complex_data):
+    dataset = scp.NDDataset([1 + 1j, 2 + 2j, 3 + 3j])
+    if not complex_data:
+        dataset = dataset.real
     dataset.meta.update(
         {
             "origin": "topspin",
@@ -149,7 +152,7 @@ def test_legacy_topspin_metadata_supplies_normalized_facts():
     facts = _measurement_identity(dataset)["constraints"]
     assert facts["nmr.F2.nucleus"] == "1H"
     assert facts["nmr.F2.domain"] == "time"
-    assert facts["nmr.F2.representation"] == "complex"
+    assert facts["nmr.F2.representation"] == ("complex" if complex_data else "real")
 
 
 def test_legacy_unknown_domain_is_not_inferred_as_time():
@@ -273,3 +276,43 @@ def test_public_paired_acquisitions_keep_physical_channels_separate(
         assert actual.shape == expected.shape
         np.testing.assert_array_equal(actual.data, expected.data)
         assert tuple(actual.meta.axis_roles) == tuple(expected.meta.axis_roles)
+
+
+@pytest.mark.parametrize("native", [False, True])
+@pytest.mark.parametrize("frequency", [False, True])
+def test_public_real_component_uses_current_representation(tmp_path, native, frequency):
+    first = from_interop(_spectrum()) if frequency else fid()
+    second = first.real
+    assert second.meta.quadrature_mode == "complex-1d"
+    assert not second.is_complex
+    assert (
+        _measurement_identity(second)["constraints"]["nmr.F2.representation"] == "real"
+    )
+    with pytest.warns(UserWarning, match="nmr.F2.representation differ"):
+        if native:
+            paths = [
+                ds.dump(tmp_path / f"{i}.scp") for i, ds in enumerate([first, second])
+            ]
+            result = scp.read(paths, merge=True, sortbydate=False)
+        else:
+            result = merge_datasets([first, second], merge=True, sortbydate=False)
+    assert len(result) == 2
+    assert sorted(ds.is_complex for ds in result) == [False, True]
+    for dataset in result:
+        expected = first if dataset.is_complex else second
+        np.testing.assert_array_equal(dataset.data, expected.data)
+
+
+def test_real_observation_series_still_merge_with_other_real_series():
+    real_series = series().real
+    other = real_series.copy()
+    assert (
+        _measurement_identity(real_series)["constraints"]["nmr.F2.representation"]
+        == "real"
+    )
+    merged = merge_datasets([real_series, other], merge=True, sortbydate=False)
+    assert len(merged) == 1
+    assert merged[0].shape == (4, 3)
+    assert not merged[0].is_complex
+    with pytest.warns(UserWarning, match="nmr.F2.representation differ"):
+        assert len(merge_datasets([series(), real_series], merge=True)) == 2
