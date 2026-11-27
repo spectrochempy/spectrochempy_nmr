@@ -454,7 +454,7 @@ jobs:
       - uses: actions/checkout@v7
         with:
           repository: spectrochempy/spectrochempy
-          ref: 16f22b010072019bf3a76b462c81cac054158add
+          ref: 565447526d7387527e9b06facc87a7c950dd298a
           path: identity-core
           fetch-depth: 0
           persist-credentials: false

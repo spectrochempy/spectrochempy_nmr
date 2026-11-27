@@ -240,8 +240,9 @@ def test_unrelated_collection_metadata_is_not_claimed_by_nmr():
 
 @pytest.mark.parametrize("quadrature", ["states", "states-tppi"])
 @pytest.mark.parametrize("component", [False, True])
+@pytest.mark.parametrize("strip_counts", [False, True])
 def test_public_paired_acquisitions_keep_physical_channels_separate(
-    tmp_path, quadrature, component
+    tmp_path, quadrature, component, strip_counts
 ):
     from spectrochempy_nmr import read
     from test_jcampdx_states import _write
@@ -267,6 +268,8 @@ def test_public_paired_acquisitions_keep_physical_channels_separate(
         for path in paths
     ]
     assert first.shape == (2, 2, 3)
+    if strip_counts:
+        first.meta.td = second.meta.td = None
     if component:
         first, second = first[0].squeeze(), second[0].squeeze()
     expected_reason = (
@@ -348,3 +351,69 @@ def test_sliced_native_inputs_remain_readable_when_acquisition_axes_are_stale(
         assert restored.units == dataset.units
         assert restored.coordset == dataset.coordset
         np.testing.assert_array_equal(restored.data, dataset.data)
+
+
+def sparse_legacy(nucleus, vendor):
+    dataset = scp.NDDataset(
+        [1 + 1j, 2 + 2j, 3 + 3j],
+        coordset=[scp.Coord([0, 1, 2], units="s")],
+        origin="sparse acquisition",
+    )
+    dataset.meta.origin = vendor
+    field = "nuc1" if vendor == "topspin" else "nucleus"
+    dataset.meta[field] = [nucleus]
+    return dataset
+
+
+@pytest.mark.parametrize("vendor", ["topspin", "agilent", "jeol", "tecmag", "simpson"])
+@pytest.mark.parametrize("route", ["direct", "native", "nested"])
+def test_sparse_legacy_nuclei_do_not_depend_on_optional_domain_fields(
+    tmp_path, vendor, route
+):
+    first, second = sparse_legacy("1H", vendor), sparse_legacy("13C", vendor)
+    facts = _measurement_identity(first)["constraints"]
+    assert facts["nmr.F2.nucleus"] == "1H"
+    assert "nmr.F2.domain" not in facts
+    if route != "direct":
+        paths = []
+        for i, dataset in enumerate([first, second]):
+            directory = tmp_path / str(i) if route == "nested" else tmp_path
+            directory.mkdir(exist_ok=True)
+            path = dataset.dump(directory / f"{i}.scp")
+            paths.append(directory if route == "nested" else path)
+    with pytest.warns(UserWarning, match="nmr.F2.nucleus differ"):
+        result = (
+            merge_datasets([first, second], merge=True, sortbydate=False)
+            if route == "direct"
+            else scp.read(paths, merge=True, sortbydate=False)
+        )
+    assert len(result) == 2
+    assert all(dataset.shape == (3,) for dataset in result)
+    assert all("_import_measurement_identity" not in ds.__dict__ for ds in result)
+
+
+@pytest.mark.parametrize("vendor", ["topspin", "agilent", "jeol", "tecmag", "simpson"])
+def test_sparse_legacy_unknown_nucleus_can_merge_with_known_nucleus(vendor):
+    result = merge_datasets(
+        [sparse_legacy(None, vendor), sparse_legacy("13C", vendor)],
+        merge=True,
+        sortbydate=False,
+    )
+    assert len(result) == 1
+    assert result[0].shape == (2, 3)
+
+
+@pytest.mark.parametrize("vendor", ["topspin", "agilent", "jeol", "tecmag", "simpson"])
+def test_sparse_legacy_domains_remain_constraints_without_nuclei(vendor):
+    first, second = sparse_legacy(None, vendor), sparse_legacy(None, vendor)
+    first.meta.isfreq = [False]
+    second.meta.isfreq = [True]
+    with pytest.warns(UserWarning, match="nmr.F2.domain differ"):
+        assert len(merge_datasets([first, second], merge=True)) == 2
+
+
+def test_normalized_physical_2d_stays_separate_without_optional_trace_counts():
+    plane = from_interop(_real_plane())
+    plane.meta.td = None
+    with pytest.warns(UserWarning, match="physical multidimensional NMR"):
+        assert len(merge_datasets([plane, plane.copy()], merge=True)) == 2

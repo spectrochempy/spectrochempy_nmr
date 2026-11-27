@@ -30,6 +30,25 @@ def _measurement_identity(dataset):
             "reason": "current NMR dimensions differ from declared acquisition axes",
         }
     identity = extract_nmr_metadata(meta, ndim=1 if single else dataset.ndim)
+    physical_ndim = len(physical) if normalized else identity.ndim
+    if not physical_ndim:
+        counts = {
+            len(values)
+            for values in (
+                identity.domains,
+                identity.nuclei,
+                identity.encoding,
+                identity.iscomplex,
+            )
+            if values
+        }
+        if counts:
+            if dataset.ndim != 1 or counts != {1}:
+                return {
+                    "constraints": {},
+                    "reason": "NMR physical axes cannot be established from partial metadata",
+                }
+            physical_ndim = 1
     series = normalized and meta.get("quadrature_mode") == "series-stored-2d"
     roles = tuple(meta.get("axis_roles", ()))
     reason = None
@@ -39,7 +58,7 @@ def _measurement_identity(dataset):
                 "NMR series must have the observation axis first for automatic merging"
             )
         axes = [(roles.index("F2"), "F2")]
-    elif single or identity.ndim == 1:
+    elif single or physical_ndim == 1:
         axes = [(0, "F2")]
         if dataset.ndim == 2 and dataset.dims[-1] != "x":
             reason = (
@@ -47,7 +66,7 @@ def _measurement_identity(dataset):
             )
         if dataset.ndim > 2:
             reason = "NMR series with multiple observation axes cannot be automatically merged"
-    elif identity.ndim > 1:
+    elif physical_ndim > 1:
         axes = list(enumerate(physical or ("F1", "F2")))
         reason = (
             "physical multidimensional NMR acquisitions require a separate series axis"
@@ -79,7 +98,7 @@ def _measurement_identity(dataset):
             and identity.domains[index] in {"time", "frequency"}
         ):
             constraints[f"{prefix}.domain"] = identity.domains[index]
-        if series or single or identity.ndim == 1:
+        if series or single or physical_ndim == 1:
             if getattr(dataset.dtype, "kind", None) in {"b", "i", "u", "f", "c"}:
                 constraints[f"{prefix}.representation"] = (
                     "complex" if dataset.is_complex else "real"

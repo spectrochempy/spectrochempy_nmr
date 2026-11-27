@@ -32,7 +32,10 @@ traces and observation series, representation follows the current data:
 ``spectrum.real`` is real even if acquisition metadata still says complex.
 Missing or
 unrecognized facts remain unknown; these checks do not certify complete
-scientific comparability.
+scientific comparability. Partial legacy declarations are checked independently:
+a known nucleus on an unambiguous 1D trace still constrains assembly when domain
+and encoding fields are absent. If partial declarations cannot establish the
+physical axis assignment, automatic assembly keeps inputs separate.
 
 Compatible 1D spectra and observation-first series can be assembled when their
 retained coordinates also agree. Physical multidimensional NMR acquisitions
