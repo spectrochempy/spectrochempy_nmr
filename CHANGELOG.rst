@@ -7,6 +7,13 @@ distribution. The sections below describe changes in each plugin release.
 Unreleased
 ----------
 
+* With the matching development Core, automatic import assembly checks known
+  NMR nuclei, domains and decoded real/complex representations, including native
+  files and nested imports. Compatible 1D series remain mergeable; physical
+  multidimensional acquisitions stay separate until an explicit series axis
+  can be created. Missing identities remain unknown.
+  (`#201 <https://github.com/spectrochempy/spectrochempy_nmr/pull/201>`_)
+
 0.7.0 (2026-11-25)
 ------------------
 
