@@ -37,6 +37,9 @@ scientific comparability.
 Compatible 1D spectra and observation-first series can be assembled when their
 retained coordinates also agree. Physical multidimensional NMR acquisitions
 stay separate: concatenating a physical axis would not create a series axis.
+Slicing can retain the original acquisition axis declarations. When these no
+longer describe the current dimensions, inputs stay separate instead of
+aborting the import or guessing their physical identity.
 A warning explains why inputs could not be combined. Use ``merge=False`` to
 keep all inputs separate. Explicit ``stack`` and ``concatenate`` retain their
 existing behavior and require the caller to choose scientifically valid axes.

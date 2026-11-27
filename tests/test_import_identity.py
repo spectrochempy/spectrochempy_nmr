@@ -239,8 +239,9 @@ def test_unrelated_collection_metadata_is_not_claimed_by_nmr():
 
 
 @pytest.mark.parametrize("quadrature", ["states", "states-tppi"])
+@pytest.mark.parametrize("component", [False, True])
 def test_public_paired_acquisitions_keep_physical_channels_separate(
-    tmp_path, quadrature
+    tmp_path, quadrature, component
 ):
     from spectrochempy_nmr import read
     from test_jcampdx_states import _write
@@ -266,10 +267,17 @@ def test_public_paired_acquisitions_keep_physical_channels_separate(
         for path in paths
     ]
     assert first.shape == (2, 2, 3)
+    if component:
+        first, second = first[0].squeeze(), second[0].squeeze()
+    expected_reason = (
+        "current NMR dimensions differ"
+        if component
+        else "physical multidimensional NMR"
+    )
     saved = [
         ds.dump(tmp_path / f"paired-{i}.scp") for i, ds in enumerate([first, second])
     ]
-    with pytest.warns(UserWarning, match="physical multidimensional NMR"):
+    with pytest.warns(UserWarning, match=expected_reason):
         result = scp.read(saved, merge=True)
     assert len(result) == 2
     for actual, expected in zip(result, [first, second], strict=True):
@@ -316,3 +324,27 @@ def test_real_observation_series_still_merge_with_other_real_series():
     assert not merged[0].is_complex
     with pytest.warns(UserWarning, match="nmr.F2.representation differ"):
         assert len(merge_datasets([series(), real_series], merge=True)) == 2
+
+
+@pytest.mark.parametrize("merge", [None, True, False])
+@pytest.mark.parametrize("axis", ["row", "column"])
+def test_sliced_native_inputs_remain_readable_when_acquisition_axes_are_stale(
+    tmp_path, merge, axis
+):
+    plane = from_interop(_real_plane())
+    dataset = (plane[0] if axis == "row" else plane[:, 0]).squeeze()
+    assert dataset.ndim == 1
+    paths = [dataset.dump(tmp_path / f"slice-{i}.scp") for i in range(2)]
+    options = {} if merge is None else {"merge": merge}
+    if merge is False:
+        result = scp.read(paths, **options)
+    else:
+        with pytest.warns(UserWarning, match="current NMR dimensions differ"):
+            result = scp.read(paths, **options)
+    assert len(result) == 2
+    for restored in result:
+        assert restored.shape == dataset.shape
+        assert restored.dims == dataset.dims
+        assert restored.units == dataset.units
+        assert restored.coordset == dataset.coordset
+        np.testing.assert_array_equal(restored.data, dataset.data)

@@ -18,6 +18,17 @@ def _measurement_identity(dataset):
     physical = tuple(meta.get("interop_physical_dimensions", ()))
     # A series can add observation dimensions without changing its acquisition.
     single = normalized and physical == ("F2",)
+    if normalized and (
+        dataset.ndim == 0
+        or (
+            not single
+            and dataset.ndim != len(tuple(meta.get("interop_dimensions", ())))
+        )
+    ):
+        return {
+            "constraints": {},
+            "reason": "current NMR dimensions differ from declared acquisition axes",
+        }
     identity = extract_nmr_metadata(meta, ndim=1 if single else dataset.ndim)
     series = normalized and meta.get("quadrature_mode") == "series-stored-2d"
     roles = tuple(meta.get("axis_roles", ()))
